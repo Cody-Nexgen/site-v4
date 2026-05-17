@@ -18,6 +18,8 @@ import DashboardPage from "@/components/dashboard-page";
 import ManageSubscriptionPage from "@/components/manage-subscription";
 import BlockedPage from "@/components/blocked-page";
 import OnboardingModal from "@/components/onboarding-modal";
+import ScheduleBookingPage from "@/components/schedule-booking-page";
+import { isScheduleRoute } from "@/lib/routing";
 // -----------------------------------------------------------------------------
 // SAFE PLACEHOLDER DASHBOARD
 // -----------------------------------------------------------------------------
@@ -81,9 +83,15 @@ function DashboardUnavailable({ onLogout }: { onLogout: () => void }) {
 // -----------------------------------------------------------------------------
 // MAIN APP
 // -----------------------------------------------------------------------------
-export default function App() {
+function FocuzNowApp() {
   const [currentView, setCurrentView] = useState<
-    "landing" | "login" | "dashboard" | "manage_subscription" | "blocked" | "notion-auth"
+    | "landing"
+    | "login"
+    | "dashboard"
+    | "manage_subscription"
+    | "blocked"
+    | "notion-auth"
+    | "schedule"
   >("landing");
   const [session, setSession] = useState<any>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -117,6 +125,7 @@ export default function App() {
       const isBlockedPath = path === "/blocked" || hash === "#blocked" || viewQuery === "blocked";
       const isLoginPath = path === "/login" || path === "/signup" || hash === "#login" || hash === "#signup" || viewQuery === "login" || viewQuery === "signup";
       const isNotionAuth = path === "/notion-auth" || viewQuery === "notion-auth";
+      const isSchedulePath = /^\/schedule\/[^/]+/.test(path);
 
       if (isNotionAuth) {
         setCurrentView("notion-auth");
@@ -124,14 +133,25 @@ export default function App() {
         return; // Skip authentication logic entirely for the proxy
       }
 
-      if (session) {
-        syncSessionWithExtension(session);
+      if (isSchedulePath) {
+        setCurrentView("schedule");
+        setLoading(false);
+        return;
+      }
 
-        // Immediate Redirection Logic
-        if (document.documentElement.getAttribute('data-focuznow-extension')) {
+      if (session) {
+        if (!isSchedulePath) {
+          syncSessionWithExtension(session);
+        }
+
+        // Never hijack public booking URLs — extension users can still book on web
+        if (
+          !isSchedulePath &&
+          document.documentElement.getAttribute('data-focuznow-extension')
+        ) {
           console.log('[App] Session + Extension detected. Redirecting...');
           redirectToExtension();
-          setLoading(false); // Stop loading and allow redirect to happen
+          setLoading(false);
           return;
         }
 
@@ -169,7 +189,13 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) syncSessionWithExtension(session);
+      if (session && !isScheduleRoute()) {
+        syncSessionWithExtension(session);
+      }
+      if (isScheduleRoute()) {
+        setCurrentView("schedule");
+        setLoading(false);
+      }
     });
 
     // Listen for Extension Ready
@@ -215,8 +241,11 @@ export default function App() {
     };
   }, []);
 
-  // When session AND extension are both ready, trigger the final redirect out of here
   useEffect(() => {
+    if (isScheduleRoute()) {
+      setCurrentView("schedule");
+      return;
+    }
     if (session && hasExtension && currentView === "dashboard") {
       console.log('[App] Session + Extension confirmed. Redirecting out...');
       redirectToExtension();
@@ -301,6 +330,10 @@ export default function App() {
         <LoaderThree className="h-screen" />
       </div>
     );
+  }
+
+  if (currentView === "schedule") {
+    return <ScheduleBookingPage />;
   }
 
   // ---------------------------------------------------------------------------
@@ -771,4 +804,12 @@ export default function App() {
       )}
     </div>
   );
+}
+
+/** Booking pages skip auth/dashboard routing entirely so guests are never redirected home. */
+export default function App() {
+  if (typeof window !== "undefined" && isScheduleRoute()) {
+    return <ScheduleBookingPage />;
+  }
+  return <FocuzNowApp />;
 }

@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+          '@focuznow-ext': path.resolve(__dirname, '../src/src'),
         }
       }
     };
