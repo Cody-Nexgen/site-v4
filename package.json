@@ -1,0 +1,40 @@
+{
+  "name": "focuznow",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-progress": "^1.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-switch": "^1.2.6",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@supabase/supabase-js": "2.39.3",
+    "@tabler/icons-react": "latest",
+    "@tsparticles/engine": "latest",
+    "@tsparticles/react": "latest",
+    "@tsparticles/slim": "latest",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "latest",
+    "lucide-react": "^0.555.0",
+    "motion": "^12.23.24",
+    "qss": "latest",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-markdown": "9.0.1",
+    "recharts": "2.12.7",
+    "tailwind-merge": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
