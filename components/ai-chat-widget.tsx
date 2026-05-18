@@ -1,435 +1,228 @@
 "use client";
+
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { IconMessage, IconX, IconSend, IconRobot, IconPlus, IconClock, IconBan, IconCheck } from "@tabler/icons-react";
-import ReactMarkdown from "https://esm.sh/react-markdown@9.0.1?external=react,react-dom";
-import { supabase, supabaseUrl } from "@/lib/supabase";
-import type { ChatMessage, ActionPreviewData, UsageStats } from "../lib/ai-types";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+    IconMessage,
+    IconX,
+    IconSend,
+    IconSparkles,
+    IconMinus,
+} from "@tabler/icons-react";
+import ReactMarkdown from "react-markdown";
+import { supabase } from "@/lib/supabase";
+import type { ChatMessage } from "@/lib/ai-types";
 
-interface ActionPreviewProps {
-  data: ActionPreviewData;
-}
-
-const ActionPreview: React.FC<ActionPreviewProps> = ({ data }) => {
-  if (data.action_type === 'timer') {
-    return (
-      <div className="mt-2 p-3 bg-purple-900/30 border border-purple-500/30 rounded-lg flex items-center gap-2">
-        <IconClock size={20} className="text-purple-400" />
-        <div className="flex-1">
-          <p className="text-sm font-medium text-purple-300">Timer Set</p>
-          <p className="text-xs text-neutral-400">
-            {data.data.domain} blocked for {data.data.minutes} minutes
-          </p>
-        </div>
-        <IconCheck size={16} className="text-green-400" />
-      </div>
-    );
-  }
-
-  if (data.action_type === 'block') {
-    return (
-      <div className="mt-2 p-3 bg-red-900/30 border border-red-500/30 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <IconBan size={20} className="text-red-400" />
-          <p className="text-sm font-medium text-red-300">Sites Blocked</p>
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {data.data.domains?.map((domain, idx) => (
-            <span key={idx} className="px-2 py-0.5 bg-red-500/20 text-red-300 text-xs rounded">
-              {domain}
-            </span>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (data.action_type === 'unblock') {
-    return (
-      <div className="mt-2 p-3 bg-green-900/30 border border-green-500/30 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <IconCheck size={20} className="text-green-400" />
-          <p className="text-sm font-medium text-green-300">Sites Unblocked</p>
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {data.data.domains?.map((domain, idx) => (
-            <span key={idx} className="px-2 py-0.5 bg-green-500/20 text-green-300 text-xs rounded">
-              {domain}
-            </span>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (data.action_type === 'blocks_list') {
-    return (
-      <div className="mt-2 p-3 bg-neutral-800/50 border border-neutral-600/30 rounded-lg">
-        <p className="text-sm font-medium text-neutral-300 mb-2">Active Blocks</p>
-        {data.data.blocks && data.data.blocks.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {data.data.blocks.map((domain, idx) => (
-              <span key={idx} className="px-2 py-0.5 bg-neutral-700 text-neutral-300 text-xs rounded">
-                {domain}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-neutral-500">No sites currently blocked</p>
-        )}
-      </div>
-    );
-  }
-
-  return null;
+const WELCOME: ChatMessage = {
+    role: "assistant",
+    content:
+        "Hi — I'm **FocuzNow Coach**. Ask about focus habits, blocking distractions, or how to get the most from the extension.",
 };
 
-export const AiChatWidget = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "assistant", content: "Hi! I'm your **FocuzNow** productivity coach. I can help you block sites, set timers, and stay focused. What can I do for you?" }
-  ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [usage, setUsage] = useState<UsageStats | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+export function AiChatWidget() {
+    const [isOpen, setIsOpen] = useState(false);
+    const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
+    const [input, setInput] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [user, setUser] = useState<{ email?: string } | null>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages, loading]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setUser(session?.user ?? null);
+        });
+        const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+            setUser(session?.user ?? null);
+        });
+        return () => sub.subscription.unsubscribe();
+    }, []);
 
-  // Check authentication and load session
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        await loadOrCreateSession(session.user.id);
-      }
-    };
-    checkAuth();
-  }, []);
+    const handleSend = async () => {
+        const text = input.trim();
+        if (!text || loading) return;
 
-  const loadOrCreateSession = async (userId: string) => {
-    // Get most recent session
-    const { data: sessions } = await supabase
-      .from('ai_chat_sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false })
-      .limit(1);
+        const nextMessages: ChatMessage[] = [...messages, { role: "user", content: text }];
+        setInput("");
+        setMessages(nextMessages);
+        setLoading(true);
 
-    if (sessions && sessions.length > 0) {
-      const session = sessions[0];
-      setSessionId(session.id);
+        try {
+            const res = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messages: nextMessages.map((m) => ({
+                        role: m.role,
+                        content: m.content,
+                    })),
+                }),
+            });
 
-      // Load messages
-      const { data: msgs } = await supabase
-        .from('ai_chat_messages')
-        .select('*')
-        .eq('session_id', session.id)
-        .order('created_at', { ascending: true });
-
-      if (msgs && msgs.length > 0) {
-        setMessages(msgs.map(m => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-          action_data: m.action_data
-        })));
-      }
-    } else {
-      // Create new session
-      await createNewSession(userId);
-    }
-  };
-
-  const createNewSession = async (userId: string) => {
-    const { data: session } = await supabase
-      .from('ai_chat_sessions')
-      .insert({ user_id: userId, title: 'New Chat' })
-      .select()
-      .single();
-
-    if (session) {
-      setSessionId(session.id);
-      setMessages([
-        { role: "assistant", content: "Hi! I'm your **FocuzNow** productivity coach. I can help you block sites, set timers, and stay focused. What can I do for you?" }
-      ]);
-    }
-  };
-
-  const handleNewChat = async () => {
-    if (!user) return;
-    await createNewSession(user.id);
-  };
-
-  const handleSend = async () => {
-    if (!input.trim() || !user || !sessionId) return;
-
-    const userMsg = input;
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
-    setLoading(true);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
-      // Get current browsing context from extension
-      let context = { history: '', screenTime: {} };
-      try {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
-          const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
-          if (response?.ok) {
-            // Extract context from extension state
-            context = {
-              history: '',
-              screenTime: {}
+            const data = (await res.json()) as {
+                error?: string;
+                message?: { content: string };
             };
-          }
+
+            if (!res.ok) {
+                throw new Error(data.error || "Chat request failed");
+            }
+
+            setMessages((prev) => [
+                ...prev,
+                {
+                    role: "assistant",
+                    content: data.message?.content || "No response.",
+                },
+            ]);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Something went wrong";
+            setMessages((prev) => [
+                ...prev,
+                {
+                    role: "assistant",
+                    content: `Sorry — I couldn't reply right now.\n\n_${msg}_`,
+                },
+            ]);
+        } finally {
+            setLoading(false);
         }
-      } catch (e) {
-        console.log('Not in extension context');
-      }
+    };
 
-      const response = await fetch(`${supabaseUrl}/functions/v1/chat-with-groq`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${session.access_token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          messages: [...messages, { role: "user", content: userMsg }],
-          context,
-          session_id: sessionId
-        })
-      });
+    const clearChat = () => setMessages([WELCOME]);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        if (response.status === 429) {
-          setMessages((prev) => [...prev, {
-            role: "assistant",
-            content: errorData.choices?.[0]?.message?.content || "You've reached your daily usage limit. Please try again tomorrow!"
-          }]);
-          if (errorData.usage) {
-            setUsage(errorData.usage);
-          }
-          return;
-        }
-        throw new Error(`API Error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const aiText = data.choices[0]?.message?.content || "I'm having trouble thinking right now.";
-      const actionData = data.action_data;
-
-      // Update usage stats
-      if (data.usage) {
-        setUsage(data.usage);
-      }
-
-      // If there's action data, execute it via extension
-      if (actionData) {
-        await executeAction(actionData);
-      }
-
-      setMessages((prev) => [...prev, {
-        role: "assistant",
-        content: aiText,
-        action_data: actionData
-      }]);
-    } catch (error: any) {
-      console.error(error);
-      setMessages((prev) => [...prev, {
-        role: "assistant",
-        content: "**Error:** I couldn't process that request. Please try again."
-      }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const executeAction = async (actionData: ActionPreviewData) => {
-    if (typeof chrome === 'undefined' || !chrome.runtime) {
-      console.log('Not in extension context, skipping action execution');
-      return;
-    }
-
-    try {
-      switch (actionData.action_type) {
-        case 'timer':
-          await chrome.runtime.sendMessage({
-            type: 'TIMER_START',
-            domain: actionData.data.domain,
-            durationMinutes: actionData.data.minutes
-          });
-          break;
-
-        case 'block':
-          for (const domain of actionData.data.domains || []) {
-            await chrome.runtime.sendMessage({
-              type: 'ADD_BLOCK',
-              domain
-            });
-          }
-          break;
-
-        case 'unblock':
-          for (const domain of actionData.data.domains || []) {
-            await chrome.runtime.sendMessage({
-              type: 'REMOVE_BLOCK',
-              domain
-            });
-          }
-          break;
-
-        case 'blocks_list':
-          const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
-          if (response?.ok && response.state?.blocklist) {
-            actionData.data.blocks = Object.keys(response.state.blocklist);
-          }
-          break;
-      }
-    } catch (e) {
-      console.error('Failed to execute action:', e);
-    }
-  };
-
-  if (!user) {
     return (
-      <button
-        onClick={() => window.location.href = '/login'}
-        className="fixed bottom-6 right-6 z-50 p-4 rounded-full bg-purple-600 text-white shadow-2xl hover:bg-purple-500 transition-transform hover:scale-110 flex"
-      >
-        <IconMessage size={28} />
-      </button>
-    );
-  }
-
-  return (
-    <>
-      <button
-        onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-50 p-4 rounded-full bg-purple-600 text-white shadow-2xl hover:bg-purple-500 transition-transform hover:scale-110 ${isOpen ? "hidden" : "flex"}`}
-      >
-        <IconMessage size={28} />
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 50, scale: 0.9 }}
-            className="fixed bottom-6 right-6 z-[60] w-[350px] md:w-[400px] h-[500px] bg-[#1a1820] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          >
-            {/* Header */}
-            <div className="p-4 bg-purple-900/20 border-b border-white/10 flex justify-between items-center">
-              <div className="flex items-center gap-2 flex-1">
-                <div className="bg-purple-500 p-1.5 rounded-lg">
-                  <IconRobot size={18} className="text-white" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-white text-sm">FocuzNow Coach</h3>
-                  {usage && (
-                    <p className="text-xs text-neutral-400">
-                      {usage.request_count}/{usage.limit} requests today
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={handleNewChat}
-                  className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-                  title="New Chat"
-                >
-                  <IconPlus size={18} className="text-neutral-400" />
-                </button>
-              </div>
-              <button onClick={() => setIsOpen(false)} className="text-neutral-400 hover:text-white ml-2">
-                <IconX size={20} />
-              </button>
-            </div>
-
-            {/* Chat Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-900/50">
-              {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[85%] ${msg.role === "user" ? "" : "w-full"
-                      }`}
-                  >
-                    <div
-                      className={`p-3 rounded-2xl text-sm ${msg.role === "user"
-                        ? "bg-purple-600 text-white rounded-tr-sm"
-                        : "bg-[#2e2b38] text-neutral-200 border border-white/5 rounded-tl-sm"
-                        }`}
+        <>
+            <AnimatePresence>
+                {!isOpen && (
+                    <motion.button
+                        type="button"
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.9, opacity: 0 }}
+                        onClick={() => setIsOpen(true)}
+                        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full border border-violet-500/30 bg-[#121018] px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-950/50 hover:border-violet-400/50 hover:bg-[#18141f] transition-colors"
+                        aria-label="Open chat"
                     >
-                      {msg.role === "assistant" ? (
-                        <div className="prose prose-invert prose-sm max-w-none">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
-                        </div>
-                      ) : (
-                        msg.content
-                      )}
-                    </div>
-                    {msg.action_data && (
-                      <ActionPreview data={msg.action_data} />
-                    )}
-                  </div>
-                </div>
-              ))}
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="bg-[#2e2b38] p-3 rounded-2xl rounded-tl-sm flex gap-1">
-                    <span className="w-1.5 h-1.5 bg-neutral-500 rounded-full animate-bounce" />
-                    <span className="w-1.5 h-1.5 bg-neutral-500 rounded-full animate-bounce delay-75" />
-                    <span className="w-1.5 h-1.5 bg-neutral-500 rounded-full animate-bounce delay-150" />
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600">
+                            <IconMessage size={18} />
+                        </span>
+                        Ask FocuzNow
+                    </motion.button>
+                )}
+            </AnimatePresence>
 
-            {/* Input */}
-            <div className="p-3 bg-[#1a1820] border-t border-white/10">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSend();
-                }}
-                className="flex gap-2"
-              >
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask me to block sites, set timers..."
-                  className="flex-1 bg-[#2e2b38] border border-transparent focus:border-purple-500 rounded-xl px-4 py-2 text-sm text-white outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={loading || !input.trim()}
-                  className="bg-purple-600 hover:bg-purple-500 text-white p-2 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <IconSend size={18} />
-                </button>
-              </form>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
-  );
-};
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 24, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 24, scale: 0.96 }}
+                        transition={{ type: "spring", damping: 26, stiffness: 320 }}
+                        className="fixed bottom-6 right-6 z-[60] flex h-[min(560px,85vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0c0b10] shadow-2xl shadow-black/60"
+                    >
+                        <header className="flex items-center gap-3 border-b border-white/[0.06] bg-[#100e16] px-4 py-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600">
+                                <IconSparkles size={18} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-sm font-bold text-white">FocuzNow Coach</h3>
+                                <p className="truncate text-[11px] text-zinc-500">
+                                    {user?.email ? `Signed in · ${user.email}` : "Powered by Groq · free to ask"}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={clearChat}
+                                className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+                                title="Clear chat"
+                            >
+                                <IconMinus size={18} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsOpen(false)}
+                                className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white"
+                                aria-label="Close"
+                            >
+                                <IconX size={18} />
+                            </button>
+                        </header>
+
+                        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-3">
+                            {messages.map((msg, idx) => (
+                                <div
+                                    key={idx}
+                                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                                >
+                                    <div
+                                        className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
+                                            msg.role === "user"
+                                                ? "bg-violet-600 text-white rounded-br-md"
+                                                : "bg-[#1a1822] text-zinc-200 border border-white/[0.06] rounded-bl-md"
+                                        }`}
+                                    >
+                                        {msg.role === "assistant" ? (
+                                            <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-ul:my-1">
+                                                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                            </div>
+                                        ) : (
+                                            msg.content
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                            {loading && (
+                                <div className="flex justify-start">
+                                    <div className="flex gap-1 rounded-2xl rounded-bl-md border border-white/[0.06] bg-[#1a1822] px-4 py-3">
+                                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:0ms]" />
+                                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:120ms]" />
+                                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:240ms]" />
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                void handleSend();
+                            }}
+                            className="border-t border-white/[0.06] bg-[#0a090d] p-3"
+                        >
+                            <div className="flex gap-2 rounded-xl border border-white/[0.08] bg-[#141218] p-1 focus-within:border-violet-500/40">
+                                <input
+                                    type="text"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    placeholder="Ask about focus, blocking, habits…"
+                                    className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
+                                    disabled={loading}
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={loading || !input.trim()}
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white transition hover:bg-violet-500 disabled:opacity-40"
+                                >
+                                    <IconSend size={16} />
+                                </button>
+                            </div>
+                            {!user && (
+                                <p className="mt-2 text-center text-[10px] text-zinc-600">
+                                    <a href="/login" className="text-violet-400/90 hover:underline">
+                                        Sign in
+                                    </a>{" "}
+                                    to sync with your extension account
+                                </p>
+                            )}
+                        </form>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </>
+    );
+}

@@ -8,6 +8,7 @@ import { syncSessionWithExtension } from "@/lib/extension-utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { AnimatedInput } from "@/components/ui/AnimatedInput";
+import { AUTH_SLIDES } from "@/lib/auth-slides";
 
 // TOGGLE THIS TO FALSE TO STOP LOGS
 const DEBUG_MODE = true;
@@ -17,21 +18,6 @@ interface LoginPageProps {
   onLoginSuccess: () => void; // New prop for redirecting
   initialLoginState?: boolean;
 }
-
-const images = [
-  {
-    src: "https://images.unsplash.com/photo-1464802686167-b939a6910659?q=80&w=2000&auto=format&fit=crop",
-    text: "Capturing Moments,\nCreating Memories"
-  },
-  {
-    src: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=2000&auto=format&fit=crop",
-    text: "Focus Deeply,\nAchieve More"
-  },
-  {
-    src: "https://images.unsplash.com/photo-1555421689-d68471e189f2?q=80&w=2000&auto=format&fit=crop",
-    text: "Your Productivity,\nSupercharged"
-  }
-];
 
 export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = true }: LoginPageProps) {
   const [isLogin, setIsLogin] = useState(initialLoginState);
@@ -57,7 +43,7 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentImage((prev) => (prev + 1) % images.length);
+      setCurrentImage((prev) => (prev + 1) % AUTH_SLIDES.length);
     }, 5000);
     return () => clearInterval(timer);
   }, []);
@@ -224,24 +210,32 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 z-10" />
             <img
-              src={images[currentImage].src}
-              alt="Login visual"
+              src={AUTH_SLIDES[currentImage].src}
+              alt=""
               className="w-full h-full object-cover"
             />
-            <div className="absolute bottom-20 left-12 z-20">
+            <div className="absolute bottom-20 left-12 z-20 max-w-md">
               <motion.h2
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                className="text-4xl font-bold leading-tight whitespace-pre-line"
+                className="text-3xl sm:text-4xl font-bold leading-tight"
               >
-                {images[currentImage].text}
+                {AUTH_SLIDES[currentImage].title}
               </motion.h2>
+              <motion.p
+                initial={{ y: 12, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.08 }}
+                className="mt-3 text-lg text-zinc-300/90 leading-relaxed"
+              >
+                {AUTH_SLIDES[currentImage].subtitle}
+              </motion.p>
             </div>
           </motion.div>
         </AnimatePresence>
 
         <div className="absolute bottom-8 left-12 z-20 flex gap-2">
-          {images.map((_, idx) => (
+          {AUTH_SLIDES.map((_, idx) => (
             <button
               key={idx}
               onClick={() => setCurrentImage(idx)}

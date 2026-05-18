@@ -10,6 +10,8 @@ import { LinkPreview } from "@/components/ui/link-preview";
 import FeaturesList from "@/components/features-list";
 import LoginPage from "@/components/login-page";
 import { AiChatWidget } from "@/components/ai-chat-widget";
+import ExtensionRequiredScreen from "@/components/extension-required-screen";
+import { CHROME_EXTENSION_STORE_URL } from "@/lib/site-config";
 import { IconBrandGoogle, IconEye, IconEyeOff, IconCheck, IconMail, IconLock, IconUser, IconHome, IconChartBar, IconCurrencyDollar } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
@@ -20,66 +22,6 @@ import BlockedPage from "@/components/blocked-page";
 import OnboardingModal from "@/components/onboarding-modal";
 import ScheduleBookingPage from "@/components/schedule-booking-page";
 import { isScheduleRoute } from "@/lib/routing";
-// -----------------------------------------------------------------------------
-// SAFE PLACEHOLDER DASHBOARD
-// -----------------------------------------------------------------------------
-function DashboardUnavailable({ onLogout }: { onLogout: () => void }) {
-  return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Decorative Elements */}
-      <div className="absolute top-1/4 -left-1/4 w-1/2 h-1/2 bg-purple-600/10 blur-[120px] rounded-full animate-pulse" />
-      <div className="absolute bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-indigo-600/10 blur-[120px] rounded-full animate-pulse" />
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-full max-w-xl"
-      >
-        <div className="bg-zinc-900/40 backdrop-blur-3xl border border-white/5 p-12 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] text-center flex flex-col items-center">
-          {/* Animated Icon Container */}
-          <div className="relative mb-10">
-            <div className="absolute inset-0 bg-purple-500 blur-2xl opacity-20 animate-pulse rounded-full" />
-            <div className="relative w-24 h-24 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-[2rem] flex items-center justify-center shadow-2xl">
-              <IconLock size={48} className="text-white" />
-            </div>
-
-            {/* Pulsing rings */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 border border-purple-500/20 rounded-full animate-ping" />
-          </div>
-
-          <h1 className="text-4xl font-black mb-4 tracking-tight leading-tight">
-            Extension <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-400">Required</span>
-          </h1>
-
-          <p className="text-zinc-400 text-lg mb-10 max-w-sm font-medium leading-relaxed">
-            Please install the FocuzNow extension to sync your focus sessions and access your dashboard.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 w-full">
-            <button
-              onClick={() => window.location.reload()}
-              className="flex-1 px-8 py-5 rounded-2xl bg-white text-black font-black text-lg hover:bg-zinc-200 active:scale-95 transition-all shadow-xl"
-            >
-              Refresh Page
-            </button>
-
-            <button
-              onClick={onLogout}
-              className="flex-1 px-8 py-5 rounded-2xl bg-zinc-800/50 text-white font-bold text-lg hover:bg-zinc-800 border border-white/5 active:scale-95 transition-all"
-            >
-              Sign Out
-            </button>
-          </div>
-
-          <p className="mt-8 text-xs text-zinc-600 font-bold uppercase tracking-widest">
-            Browser integration is mandatory for safety
-          </p>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
 // -----------------------------------------------------------------------------
 // MAIN APP
 // -----------------------------------------------------------------------------
@@ -317,7 +259,7 @@ function FocuzNowApp() {
     if (document.documentElement.getAttribute('data-focuznow-extension')) {
       alert("Extension is already installed! Open it from your browser toolbar.");
     } else {
-      window.open('https://chrome.google.com/webstore/detail/your-extension-id', '_blank');
+      window.open(CHROME_EXTENSION_STORE_URL, '_blank');
     }
   };
 
@@ -394,9 +336,11 @@ function FocuzNowApp() {
     }
 
     return (
-      <DashboardUnavailable onLogout={() => {
-        supabase.auth.signOut().then(() => goLanding());
-      }} />
+      <ExtensionRequiredScreen
+        onLogout={() => {
+          supabase.auth.signOut().then(() => goLanding());
+        }}
+      />
     );
   }
 
