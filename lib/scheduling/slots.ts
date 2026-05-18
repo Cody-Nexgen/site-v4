@@ -19,7 +19,16 @@ export function formatSlotLabel(startMin: number): string {
     return `${hr}:${String(m).padStart(2, '0')} ${ap}`;
 }
 
-function windowForDay(link: SchedulingLink, day: Date): { start: number; end: number } | null {
+function defaultWindow(link: SchedulingLink): { start: number; end: number } {
+    const { startHour, startMin, endHour, endMin } = link.availability;
+    return {
+        start: startHour * 60 + startMin,
+        end: endHour * 60 + endMin,
+    };
+}
+
+/** Resolve bookable hours for a calendar day (per-date overrides, then weekday, then defaults). */
+export function windowForDay(link: SchedulingLink, day: Date): { start: number; end: number } | null {
     const dow = day.getDay();
     const dateKey = format(day, 'yyyy-MM-dd');
 
@@ -32,7 +41,11 @@ function windowForDay(link: SchedulingLink, day: Date): { start: number; end: nu
     }
 
     if (link.type === 'oneoff' && link.specificDates?.length) {
-        if (!link.specificDates.includes(dateKey)) return null;
+        if (!link.specificDates.includes(dateKey)) {
+            if (!link.weekdayAvailability?.[dow] && !link.availability.days.includes(dow)) {
+                return null;
+            }
+        }
     }
 
     if (link.weekdayAvailability?.[dow]) {
@@ -45,11 +58,7 @@ function windowForDay(link: SchedulingLink, day: Date): { start: number; end: nu
 
     if (!link.availability.days.includes(dow)) return null;
 
-    const { startHour, startMin, endHour, endMin } = link.availability;
-    return {
-        start: startHour * 60 + startMin,
-        end: endHour * 60 + endMin,
-    };
+    return defaultWindow(link);
 }
 
 export function isDayBookable(link: SchedulingLink, day: Date, now = new Date()): boolean {
@@ -66,6 +75,7 @@ export function isDayBookable(link: SchedulingLink, day: Date, now = new Date())
     return windowForDay(link, day) !== null;
 }
 
+/** Only returns slots that are actually bookable (not taken, past notice, within window). */
 export function slotsForDay(
     link: SchedulingLink,
     day: Date,
@@ -75,7 +85,7 @@ export function slotsForDay(
     if (!isDayBookable(link, day, now)) return [];
 
     const window = windowForDay(link, day);
-    if (!window) return [];
+    if (!window || window.end <= window.start) return [];
 
     const dateKey = format(day, 'yyyy-MM-dd');
     const bookedSet = new Set(
@@ -88,11 +98,22 @@ export function slotsForDay(
             ? now.getHours() * 60 + now.getMinutes() + noticeMin
             : 0;
 
+    const step = Math.max(link.durationMin + (link.bufferMin ?? 0), link.durationMin);
     const out: TimeSlot[] = [];
-    for (let t = window.start; t + link.durationMin <= window.end; t += link.durationMin + link.bufferMin) {
+
+    for (let t = window.start; t + link.durationMin <= window.end; t += step) {
         if (t < earliest) continue;
         if (bookedSet.has(t)) continue;
         out.push({ label: formatSlotLabel(t), startMin: t });
     }
     return out;
+}
+
+export function daysWithSlots(
+    link: SchedulingLink,
+    days: Date[],
+    booked: BookedSlot[] = [],
+    now = new Date(),
+): Date[] {
+    return days.filter((d) => slotsForDay(link, d, booked, now).length > 0);
 }

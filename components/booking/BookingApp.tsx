@@ -1,24 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-    addDays,
-    eachDayOfInterval,
-    endOfMonth,
-    endOfWeek,
-    format,
-    isSameDay,
-    isSameMonth,
-    startOfMonth,
-    startOfWeek,
-} from 'date-fns';
-import { ChevronLeft, ChevronRight, Globe, Link2, MapPin, Phone } from 'lucide-react';
+import { addDays, format } from 'date-fns';
+import { Check, ChevronLeft, Clock, Globe, Link2, MapPin, Phone, User } from 'lucide-react';
 import type { SchedulingLink } from '@/lib/scheduling/types';
 import {
     createSchedulingBooking,
     fetchBookedSlots,
     fetchSchedulingLink,
+    notifySchedulingBooking,
 } from '@/lib/scheduling/api';
-import { isDayBookable, slotsForDay, type BookedSlot } from '@/lib/scheduling/slots';
+import { guestFieldsForLocation, validateGuestInput } from '@/lib/scheduling/guestFields';
+import { slotsForDay, type BookedSlot } from '@/lib/scheduling/slots';
+import BookingScheduler from './BookingScheduler';
 
 function parseSlug(): string {
     const path = window.location.pathname.replace(/\/$/, '');
@@ -28,20 +21,23 @@ function parseSlug(): string {
     return new URLSearchParams(window.location.search).get('slug') || '';
 }
 
-function locationLabel(link: SchedulingLink): string | null {
-    if (!link.locationValue?.trim()) return null;
+function locationMeta(link: SchedulingLink) {
+    const value = link.locationValue?.trim();
     switch (link.locationType) {
-        case 'link':
-            return link.locationValue;
         case 'phone':
-            return 'Phone call';
+            return { icon: Phone, label: 'Phone call', detail: value || 'Host will call you' };
         case 'in_person':
+            return { icon: MapPin, label: 'In person', detail: value || 'Location shared after booking' };
         case 'custom':
-            return link.locationValue;
+            return { icon: MapPin, label: 'Meeting details', detail: value || 'See host instructions' };
+        case 'link':
+            return { icon: Link2, label: 'Video / link', detail: value || 'Link shared after booking' };
         default:
             return null;
     }
 }
+
+type Step = 'schedule' | 'details';
 
 type Props = {
     client: SupabaseClient;
@@ -51,15 +47,21 @@ export default function BookingApp({ client }: Props) {
     const slug = useMemo(() => parseSlug(), []);
     const [link, setLink] = useState<SchedulingLink | null>(null);
     const [booked, setBooked] = useState<BookedSlot[]>([]);
-    const [month, setMonth] = useState(new Date());
     const [selectedDay, setSelectedDay] = useState<Date | null>(null);
     const [selectedStartMin, setSelectedStartMin] = useState<number | null>(null);
+    const [step, setStep] = useState<Step>('schedule');
     const [guestName, setGuestName] = useState('');
     const [guestEmail, setGuestEmail] = useState('');
     const [guestPhone, setGuestPhone] = useState('');
+    const [guestDetails, setGuestDetails] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [confirmed, setConfirmed] = useState(false);
     const [error, setError] = useState('');
+
+    const guestFields = useMemo(
+        () => guestFieldsForLocation(link?.locationType),
+        [link?.locationType],
+    );
 
     const loadBooked = useCallback(
         async (activeSlug: string) => {
@@ -97,12 +99,6 @@ export default function BookingApp({ client }: Props) {
         };
     }, [slug, loadBooked, client]);
 
-    const monthStart = startOfMonth(month);
-    const gridDays = eachDayOfInterval({
-        start: startOfWeek(monthStart),
-        end: endOfWeek(endOfMonth(monthStart)),
-    });
-
     const daySlots = selectedDay && link ? slotsForDay(link, selectedDay, booked) : [];
 
     const selectedSlotLabel =
@@ -110,14 +106,20 @@ export default function BookingApp({ client }: Props) {
             ? daySlots.find((s) => s.startMin === selectedStartMin)?.label
             : null;
 
+    const loc = link ? locationMeta(link) : null;
+    const LocIcon = loc?.icon ?? MapPin;
+
     const handleConfirm = async () => {
         if (!link || !selectedDay || selectedStartMin == null) return;
-        if (!guestName.trim() || !guestEmail.trim()) {
-            setError('Please enter your name and email.');
-            return;
-        }
-        if (link.locationType === 'phone' && !guestPhone.trim()) {
-            setError('Please enter your phone number.');
+
+        const validationError = validateGuestInput(guestFields, {
+            name: guestName,
+            email: guestEmail,
+            phone: guestPhone,
+            details: guestDetails,
+        });
+        if (validationError) {
+            setError(validationError);
             return;
         }
 
@@ -129,8 +131,9 @@ export default function BookingApp({ client }: Props) {
             bookingDate: format(selectedDay, 'yyyy-MM-dd'),
             startMin: selectedStartMin,
             guestName,
-            guestEmail,
-            guestPhone: guestPhone || undefined,
+            guestEmail: guestFields.email ? guestEmail : undefined,
+            guestPhone: guestFields.phone ? guestPhone : undefined,
+            guestDetails: guestFields.details ? guestDetails : undefined,
         });
 
         setSubmitting(false);
@@ -139,6 +142,7 @@ export default function BookingApp({ client }: Props) {
             const msg = result.error || '';
             if (msg.includes('SLOT_TAKEN')) {
                 setError('That time was just booked. Please pick another slot.');
+                setStep('schedule');
                 await loadBooked(link.slug);
             } else if (msg.includes('LINK_NOT_FOUND') || msg.includes('LINK_EXPIRED')) {
                 setError('This scheduling link is no longer available.');
@@ -148,12 +152,21 @@ export default function BookingApp({ client }: Props) {
             return;
         }
 
+        if (result.bookingId) {
+            const emailed = await notifySchedulingBooking(client, result.bookingId);
+            if (!emailed.ok) {
+                console.warn('Booking saved but confirmation email failed:', emailed.error);
+            }
+        } else {
+            console.warn('Booking saved without booking_id — emails will not send until migrations are applied.');
+        }
+
         setConfirmed(true);
     };
 
     if (error && !link) {
         return (
-            <div className="min-h-screen bg-[#111] text-white flex items-center justify-center p-8">
+            <div className="min-h-screen bg-gradient-to-b from-[#0c0c0f] via-[#111] to-[#0a0a0c] text-white flex items-center justify-center p-8">
                 <p className="text-neutral-400 text-center max-w-md">{error}</p>
             </div>
         );
@@ -161,197 +174,258 @@ export default function BookingApp({ client }: Props) {
 
     if (!link) {
         return (
-            <div className="min-h-screen bg-[#111] text-white flex items-center justify-center">
-                <p className="text-neutral-500">Loading…</p>
+            <div className="min-h-screen bg-gradient-to-b from-[#0c0c0f] via-[#111] to-[#0a0a0c] text-white flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="h-8 w-8 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
+                    <p className="text-neutral-500 text-sm">Loading schedule…</p>
+                </div>
             </div>
         );
     }
 
     if (confirmed && selectedDay && selectedSlotLabel) {
         return (
-            <div className="min-h-screen bg-[#111] text-white flex items-center justify-center p-8">
-                <div className="max-w-md w-full rounded-2xl border border-white/10 bg-[#141414] p-8 text-center">
+            <div className="min-h-screen bg-gradient-to-b from-[#0c0c0f] via-[#111] to-[#0a0a0c] text-white flex items-center justify-center p-6">
+                <div className="max-w-md w-full rounded-3xl border border-emerald-500/20 bg-[#141414]/90 backdrop-blur p-8 text-center shadow-[0_0_60px_-12px_rgba(16,185,129,0.25)]">
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/30">
+                        <Check size={28} className="text-emerald-400" strokeWidth={2.5} />
+                    </div>
                     <h1 className="text-2xl font-black text-white mb-2">You&apos;re booked</h1>
-                    <p className="text-neutral-400 text-sm mb-6">
-                        {format(selectedDay, 'EEEE, MMMM d, yyyy')} at {selectedSlotLabel} ({link.timezone})
+                    <p className="text-neutral-300 text-sm mb-1">
+                        {format(selectedDay, 'EEEE, MMMM d, yyyy')}
                     </p>
-                    <p className="text-neutral-500 text-sm">
-                        Confirmation sent to <span className="text-white">{guestEmail}</span>.
+                    <p className="text-white font-semibold mb-6">
+                        {selectedSlotLabel} · {link.timezone}
                     </p>
+                    {guestFields.email && guestEmail ? (
+                        <p className="text-neutral-500 text-sm">
+                            Confirmation sent to <span className="text-white">{guestEmail}</span>
+                            {guestFields.email ? ' · reminder 24h before' : ''}.
+                        </p>
+                    ) : (
+                        <p className="text-neutral-500 text-sm">
+                            {link.hostName} has your details and will be in touch.
+                        </p>
+                    )}
                 </div>
             </div>
         );
     }
 
-    const loc = locationLabel(link);
-
     return (
-        <div className="min-h-screen bg-[#111] text-white flex flex-col md:flex-row">
-            <aside className="md:w-[340px] border-b md:border-b-0 md:border-r border-white/10 p-8 flex flex-col gap-6">
-                <h1 className="text-2xl font-black leading-tight">{link.title}</h1>
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-sm font-black">
-                        {link.hostName.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                        <p className="font-bold">{link.hostName}</p>
-                        <p className="text-xs text-neutral-500">Organizer</p>
-                    </div>
-                </div>
-                <p className="text-sm text-neutral-400">{link.durationMin} min</p>
-                {link.description && <p className="text-sm text-neutral-500">{link.description}</p>}
-                {loc && (
-                    <div className="flex items-start gap-2 text-sm text-neutral-400">
-                        {link.locationType === 'phone' ? (
-                            <Phone size={16} className="shrink-0 mt-0.5" />
-                        ) : link.locationType === 'in_person' ? (
-                            <MapPin size={16} className="shrink-0 mt-0.5" />
-                        ) : (
-                            <Link2 size={16} className="shrink-0 mt-0.5" />
-                        )}
-                        <span className="break-all">{loc}</span>
-                    </div>
-                )}
-            </aside>
+        <div className="min-h-screen bg-gradient-to-b from-[#0c0c0f] via-[#111] to-[#0a0a0c] text-white">
+            <div className="mx-auto flex min-h-screen max-w-6xl flex-col lg:flex-row">
+                <aside className="border-b border-white/[0.06] bg-[#0e0e12]/80 p-8 lg:w-[360px] lg:border-b-0 lg:border-r lg:min-h-screen">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-400/80 mb-3">
+                        Book with
+                    </p>
+                    <h1 className="text-2xl font-black leading-tight mb-6">{link.title}</h1>
 
-            <main className="flex-1 p-8">
-                <h2 className="text-lg font-bold mb-6">Pick a date and time</h2>
-                <div className="flex flex-col lg:flex-row gap-8">
-                    <div>
-                        <div className="flex items-center gap-2 mb-4">
-                            <button
-                                type="button"
-                                onClick={() => setMonth((m) => addDays(startOfMonth(m), -1))}
-                                className="p-1 text-neutral-500 hover:text-white"
-                            >
-                                <ChevronLeft size={18} />
-                            </button>
-                            <span className="font-bold min-w-[120px]">{format(month, 'MMMM yyyy')}</span>
-                            <button
-                                type="button"
-                                onClick={() => setMonth((m) => addDays(endOfMonth(m), 1))}
-                                className="p-1 text-neutral-500 hover:text-white"
-                            >
-                                <ChevronRight size={18} />
-                            </button>
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center text-sm font-black shadow-lg shadow-violet-900/30">
+                            {link.hostName.charAt(0).toUpperCase()}
                         </div>
-                        <div className="grid grid-cols-7 gap-1 text-[10px] text-neutral-600 font-bold text-center mb-2">
-                            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
-                                <span key={d}>{d}</span>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-7 gap-1">
-                            {gridDays.map((day) => {
-                                const inMonth = isSameMonth(day, month);
-                                const hasSlots = slotsForDay(link, day, booked).length > 0;
-                                const bookable = isDayBookable(link, day);
-                                const sel = selectedDay && isSameDay(day, selectedDay);
-                                return (
-                                    <button
-                                        key={day.toISOString()}
-                                        type="button"
-                                        disabled={!bookable || !hasSlots}
-                                        onClick={() => {
-                                            setSelectedDay(day);
-                                            setSelectedStartMin(null);
-                                            setError('');
-                                        }}
-                                        className={`h-9 text-sm font-bold rounded-lg transition-colors ${
-                                            !inMonth
-                                                ? 'text-neutral-800'
-                                                : hasSlots
-                                                  ? 'text-white hover:bg-white/10'
-                                                  : 'text-neutral-700'
-                                        } ${sel ? 'bg-blue-600 text-white' : ''}`}
-                                    >
-                                        {format(day, 'd')}
-                                    </button>
-                                );
-                            })}
+                        <div>
+                            <p className="font-bold">{link.hostName}</p>
+                            <p className="text-xs text-neutral-500">Host</p>
                         </div>
                     </div>
 
-                    <div className="flex-1 min-w-[200px]">
-                        {selectedDay ? (
-                            daySlots.length > 0 ? (
-                                <div className="flex flex-col gap-2">
-                                    {daySlots.map((slot) => (
-                                        <button
-                                            key={slot.startMin}
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedStartMin(slot.startMin);
-                                                setError('');
-                                            }}
-                                            className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition-colors ${
-                                                selectedStartMin === slot.startMin
-                                                    ? 'bg-blue-600 border-blue-500 text-white'
-                                                    : 'border-white/10 text-white hover:bg-white/5'
-                                            }`}
-                                        >
-                                            {slot.label}
-                                        </button>
-                                    ))}
+                    <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <div className="flex items-center gap-2 text-sm text-neutral-300">
+                            <Clock size={16} className="text-neutral-500 shrink-0" />
+                            <span>{link.durationMin} minutes</span>
+                        </div>
+                        {loc && (
+                            <div className="flex items-start gap-2 text-sm text-neutral-300">
+                                <LocIcon size={16} className="text-neutral-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-medium text-neutral-200">{loc.label}</p>
+                                    {loc.detail && (
+                                        <p className="text-neutral-500 text-xs mt-0.5 break-all">{loc.detail}</p>
+                                    )}
                                 </div>
-                            ) : (
-                                <p className="text-neutral-500 text-sm">No times available</p>
-                            )
-                        ) : (
-                            <p className="text-neutral-500 text-sm">Select a date</p>
+                            </div>
                         )}
                     </div>
-                </div>
 
-                {selectedStartMin != null && (
-                    <div className="mt-8 max-w-md space-y-3 border-t border-white/10 pt-6">
-                        <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
-                            Your details
+                    {link.description && (
+                        <p className="mt-4 text-sm text-neutral-500 leading-relaxed">{link.description}</p>
+                    )}
+
+                    <div className="mt-8 hidden lg:block">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-600 mb-2">
+                            Time zone
                         </p>
-                        <input
-                            value={guestName}
-                            onChange={(e) => setGuestName(e.target.value)}
-                            placeholder="Name"
-                            className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-blue-500/50"
-                        />
-                        <input
-                            value={guestEmail}
-                            onChange={(e) => setGuestEmail(e.target.value)}
-                            type="email"
-                            placeholder="Email"
-                            className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-blue-500/50"
-                        />
-                        {link.locationType === 'phone' && (
-                            <input
-                                value={guestPhone}
-                                onChange={(e) => setGuestPhone(e.target.value)}
-                                type="tel"
-                                placeholder="Phone"
-                                className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-blue-500/50"
-                            />
-                        )}
-                        {error && <p className="text-sm text-red-400">{error}</p>}
-                        <button
-                            type="button"
-                            disabled={submitting}
-                            onClick={handleConfirm}
-                            className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
-                        >
-                            {submitting ? 'Booking…' : 'Confirm booking'}
-                        </button>
-                    </div>
-                )}
-
-                <div className="mt-10 max-w-md">
-                    <p className="text-xs font-bold text-neutral-500 mb-2">Time zone</p>
-                    <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-white/10 bg-black/30">
-                        <span className="flex items-center gap-2 text-sm font-medium">
-                            <Globe size={16} className="text-neutral-500" />
+                        <div className="flex items-center gap-2 text-sm text-neutral-400">
+                            <Globe size={14} />
                             {link.timezone}
-                        </span>
-                        <span className="text-sm text-neutral-500">{format(new Date(), 'h:mm a')}</span>
+                        </div>
                     </div>
-                </div>
-            </main>
+                </aside>
+
+                <main className="flex-1 p-6 lg:p-10">
+                    <div className="mb-6 flex items-center gap-2 max-w-md">
+                        {(['schedule', 'details'] as Step[]).map((s, i) => {
+                            const labels = { schedule: 'Date & time', details: 'Details' };
+                            const active = step === s;
+                            const done = s === 'schedule' && !!selectedDay && selectedStartMin != null;
+                            return (
+                                <div key={s} className="flex items-center gap-2 flex-1">
+                                    <div
+                                        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                                            active
+                                                ? 'bg-blue-600 text-white'
+                                                : done
+                                                  ? 'bg-white/10 text-white'
+                                                  : 'bg-white/[0.04] text-neutral-600'
+                                        }`}
+                                    >
+                                        {i + 1}
+                                    </div>
+                                    <span
+                                        className={`text-xs font-semibold hidden sm:inline ${
+                                            active ? 'text-white' : 'text-neutral-600'
+                                        }`}
+                                    >
+                                        {labels[s]}
+                                    </span>
+                                    {i < 1 && <div className="h-px flex-1 bg-white/[0.06]" />}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {step === 'schedule' && (
+                        <div>
+                            <BookingScheduler
+                                link={link}
+                                booked={booked}
+                                selectedDay={selectedDay}
+                                selectedStartMin={selectedStartMin}
+                                onSelectDay={(day) => {
+                                    setSelectedDay(day);
+                                    setError('');
+                                }}
+                                onSelectTime={(min) => {
+                                    setSelectedStartMin(min);
+                                    setError('');
+                                }}
+                            />
+                            <button
+                                type="button"
+                                disabled={!selectedDay || selectedStartMin == null}
+                                onClick={() => setStep('details')}
+                                className="mt-6 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-sm transition-colors"
+                            >
+                                Continue
+                            </button>
+                        </div>
+                    )}
+
+                    {step === 'details' && (
+                        <div className="max-w-md">
+                            <button
+                                type="button"
+                                onClick={() => setStep('schedule')}
+                                className="text-sm text-neutral-500 hover:text-white mb-4 flex items-center gap-1"
+                            >
+                                <ChevronLeft size={16} /> Change date or time
+                            </button>
+                            <h2 className="text-lg font-bold mb-1">Your details</h2>
+                            <p className="text-sm text-neutral-500 mb-6">
+                                {link.locationType === 'phone'
+                                    ? 'Name and phone so the host can reach you.'
+                                    : link.locationType === 'in_person'
+                                      ? 'Just your name to confirm the booking.'
+                                      : link.locationType === 'custom'
+                                        ? 'Name and any details the host asked for.'
+                                        : 'We’ll send confirmation and a reminder to your email.'}
+                            </p>
+
+                            <div className="space-y-3">
+                                <label className="block">
+                                    <span className="text-xs font-medium text-neutral-500 mb-1.5 flex items-center gap-1.5">
+                                        <User size={12} /> Name
+                                    </span>
+                                    <input
+                                        value={guestName}
+                                        onChange={(e) => setGuestName(e.target.value)}
+                                        placeholder="Your name"
+                                        className="w-full bg-[#1a1a1f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                    />
+                                </label>
+
+                                {guestFields.email && (
+                                    <label className="block">
+                                        <span className="text-xs font-medium text-neutral-500 mb-1.5">
+                                            Email
+                                        </span>
+                                        <input
+                                            value={guestEmail}
+                                            onChange={(e) => setGuestEmail(e.target.value)}
+                                            type="email"
+                                            placeholder="you@email.com"
+                                            className="w-full bg-[#1a1a1f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                        />
+                                    </label>
+                                )}
+
+                                {guestFields.phone && (
+                                    <label className="block">
+                                        <span className="text-xs font-medium text-neutral-500 mb-1.5 flex items-center gap-1.5">
+                                            <Phone size={12} /> Phone
+                                        </span>
+                                        <input
+                                            value={guestPhone}
+                                            onChange={(e) => setGuestPhone(e.target.value)}
+                                            type="tel"
+                                            placeholder="+1 (555) 000-0000"
+                                            className="w-full bg-[#1a1a1f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                        />
+                                    </label>
+                                )}
+
+                                {guestFields.details && (
+                                    <label className="block">
+                                        <span className="text-xs font-medium text-neutral-500 mb-1.5">
+                                            Details
+                                        </span>
+                                        <textarea
+                                            value={guestDetails}
+                                            onChange={(e) => setGuestDetails(e.target.value)}
+                                            placeholder="Anything the host should know"
+                                            rows={4}
+                                            className="w-full bg-[#1a1a1f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 resize-none"
+                                        />
+                                    </label>
+                                )}
+                            </div>
+
+                            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+
+                            <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={handleConfirm}
+                                className="mt-6 w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-900/25"
+                            >
+                                {submitting ? 'Booking…' : 'Confirm booking'}
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="mt-10 lg:hidden max-w-md">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-600 mb-2">
+                            Time zone
+                        </p>
+                        <div className="flex items-center gap-2 text-sm text-neutral-400">
+                            <Globe size={14} />
+                            {link.timezone}
+                        </div>
+                    </div>
+                </main>
+            </div>
         </div>
     );
 }
