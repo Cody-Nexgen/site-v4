@@ -12,6 +12,7 @@ import {
 import { guestFieldsForLocation, validateGuestInput } from '@/lib/scheduling/guestFields';
 import { slotsForDay, type BookedSlot } from '@/lib/scheduling/slots';
 import BookingScheduler from './BookingScheduler';
+import HostProfile, { hostProfileFromLink } from './HostProfile';
 
 function parseSlug(): string {
     const path = window.location.pathname.replace(/\/$/, '');
@@ -204,7 +205,7 @@ export default function BookingApp({ client }: Props) {
                         </p>
                     ) : (
                         <p className="text-neutral-500 text-sm">
-                            {link.hostName} has your details and will be in touch.
+                            {hostProfileFromLink(link).displayName} has your details and will be in touch.
                         </p>
                     )}
                 </div>
@@ -221,15 +222,7 @@ export default function BookingApp({ client }: Props) {
                     </p>
                     <h1 className="text-2xl font-black leading-tight mb-6">{link.title}</h1>
 
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center text-sm font-black shadow-lg shadow-violet-900/30">
-                            {link.hostName.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                            <p className="font-bold">{link.hostName}</p>
-                            <p className="text-xs text-neutral-500">Host</p>
-                        </div>
-                    </div>
+                    <HostProfile link={link} />
 
                     <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
                         <div className="flex items-center gap-2 text-sm text-neutral-300">

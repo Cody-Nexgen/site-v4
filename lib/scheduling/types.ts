@@ -31,6 +31,9 @@ export type SchedulingLink = {
     expiresAt?: string;
     hostName: string;
     hostEmail: string;
+    hostDisplayName?: string;
+    hostUsername?: string;
+    hostAvatarUrl?: string | null;
     description?: string;
     locationType?: LinkLocationType;
     locationValue?: string;
