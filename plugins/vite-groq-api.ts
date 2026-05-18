@@ -7,7 +7,8 @@ export function groqApiDevPlugin(apiKey: string | undefined): Plugin {
         name: 'focuznow-groq-api-dev',
         configureServer(server) {
             server.middlewares.use(async (req, res, next) => {
-                if (!req.url?.startsWith('/api/chat')) {
+                const pathname = (req.url || '').split('?')[0];
+                if (pathname !== '/api/chat') {
                     return next();
                 }
                 if (req.method !== 'POST') {

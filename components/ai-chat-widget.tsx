@@ -11,6 +11,7 @@ import {
 } from "@tabler/icons-react";
 import ReactMarkdown from "react-markdown";
 import { supabase } from "@/lib/supabase";
+import { postChatMessage } from "@/lib/chat-api";
 import type { ChatMessage } from "@/lib/ai-types";
 
 const WELCOME: ChatMessage = {
@@ -50,46 +51,29 @@ export function AiChatWidget() {
         setMessages(nextMessages);
         setLoading(true);
 
-        try {
-            const res = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    messages: nextMessages.map((m) => ({
-                        role: m.role,
-                        content: m.content,
-                    })),
-                }),
-            });
+        const result = await postChatMessage(
+            nextMessages.map((m) => ({
+                role: m.role as "user" | "assistant",
+                content: m.content,
+            })),
+        );
 
-            const data = (await res.json()) as {
-                error?: string;
-                message?: { content: string };
-            };
-
-            if (!res.ok) {
-                throw new Error(data.error || "Chat request failed");
-            }
-
+        if (result.ok) {
+            setMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: result.content },
+            ]);
+        } else {
             setMessages((prev) => [
                 ...prev,
                 {
                     role: "assistant",
-                    content: data.message?.content || "No response.",
+                    content: `Sorry — I couldn't reply right now.\n\n${result.error}`,
                 },
             ]);
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : "Something went wrong";
-            setMessages((prev) => [
-                ...prev,
-                {
-                    role: "assistant",
-                    content: `Sorry — I couldn't reply right now.\n\n_${msg}_`,
-                },
-            ]);
-        } finally {
-            setLoading(false);
         }
+
+        setLoading(false);
     };
 
     const clearChat = () => setMessages([WELCOME]);
