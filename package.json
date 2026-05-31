@@ -1,0 +1,7 @@
+{
+  "name": "focuznow",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'static site, no build needed'"
+  }
+}
