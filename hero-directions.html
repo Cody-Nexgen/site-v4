@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Focuznow — Hero Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #07070b;
+    --surface: #0e0e15;
+    --surface-2: #15151f;
+    --border: rgba(255,255,255,0.09);
+    --violet: #8b5cf6;
+    --violet-bright: #a78bfa;
+    --violet-deep: #6d28d9;
+    --text: #f3f1fb;
+    --muted: #9b98ad;
+    --display: 'Space Grotesk', sans-serif;
+    --body: 'Manrope', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  .hero {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-display { font-family: var(--display); }
+  .grad-text {
+    background: linear-gradient(120deg, #fff 20%, var(--violet-bright) 60%, var(--violet) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  /* ---------- shared nav ---------- */
+  .nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 26px 48px; position: relative; z-index: 5;
+  }
+  .wordmark { font-family: var(--display); font-weight: 700; font-size: 21px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
+  .logo-dot { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(150deg, var(--violet-bright), var(--violet-deep)); box-shadow: 0 0 18px rgba(139,92,246,0.6); position: relative; }
+  .logo-dot::after { content:''; position:absolute; inset: 8px; border-radius: 3px; background: var(--bg); }
+  .nav-links { display: flex; gap: 30px; font-size: 14.5px; color: var(--muted); font-weight: 500; }
+  .nav-links span:hover { color: var(--text); }
+  .nav-cta { display: flex; gap: 12px; align-items: center; }
+  .btn { font-family: var(--body); font-weight: 600; font-size: 14.5px; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--border); color: var(--text); background: transparent; cursor: pointer; }
+  .btn-primary { background: var(--violet); border-color: transparent; box-shadow: 0 6px 24px rgba(139,92,246,0.45); color: #fff; }
+
+  /* glows */
+  .glow { position: absolute; border-radius: 50%; filter: blur(90px); pointer-events: none; }
+
+  @keyframes float { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-14px); } }
+  @keyframes floatB { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(10px); } }
+  @keyframes pulse { 0%,100%{ opacity: .55; } 50%{ opacity: 1; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes ring { 0%{ stroke-dashoffset: 760; } 100%{ stroke-dashoffset: 250; } }
+
+  /* mock UI bits */
+  .panel { background: rgba(20,20,30,0.72); border: 1px solid var(--border); border-radius: 16px; backdrop-filter: blur(12px); }
+  .chip { font-size: 12px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); display:inline-flex; align-items:center; gap:6px; }
+  .dotg { width: 7px; height: 7px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; }
+</style>
+</head>
+<body style="margin:0; background:#0b0b0f;">
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="hero-variations.jsx"></script>
+<script type="text/babel">
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(
+    <DesignCanvas>
+      <DCSection id="heroes" title="Focuznow — Hero Directions" subtitle="3 takes on a sleek premium dark hero · purple + black · Space Grotesk + Manrope">
+        <DCArtboard id="a" label="A · Floating Console" width={1380} height={860}><HeroA /></DCArtboard>
+        <DCArtboard id="b" label="B · Cinematic Split" width={1380} height={860}><HeroB /></DCArtboard>
+        <DCArtboard id="c" label="C · The Lockdown" width={1380} height={860}><HeroC /></DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+</script>
+</body>
+</html>

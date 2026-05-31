@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Focuznow — Get back your hours</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="focuznow.css" />
+<template id="__bundler_thumbnail" data-bg-color="#07070b">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <!-- background -->
+    <rect width="1200" height="800" fill="#07070b"/>
+    <!-- subtle grid -->
+    <defs>
+      <pattern id="g" width="60" height="60" patternUnits="userSpaceOnUse">
+        <path d="M60 0H0v60" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+      </pattern>
+      <radialGradient id="glow" cx="50%" cy="30%" r="50%">
+        <stop offset="0%" stop-color="rgba(124,58,237,0.35)"/>
+        <stop offset="100%" stop-color="rgba(124,58,237,0)"/>
+      </radialGradient>
+    </defs>
+    <rect width="1200" height="800" fill="url(#g)"/>
+    <ellipse cx="600" cy="200" rx="600" ry="300" fill="url(#glow)"/>
+    <!-- logo mark -->
+    <rect x="537" y="290" width="56" height="56" rx="16" fill="url(#lgrad)"/>
+    <defs>
+      <linearGradient id="lgrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#a78bfa"/>
+        <stop offset="100%" stop-color="#6d28d9"/>
+      </linearGradient>
+      <linearGradient id="tgrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#ffffff"/>
+        <stop offset="60%" stop-color="#a78bfa"/>
+        <stop offset="100%" stop-color="#8b5cf6"/>
+      </linearGradient>
+    </defs>
+    <rect x="549" y="302" rx="5" ry="5" width="32" height="32" fill="#07070b"/>
+    <!-- wordmark -->
+    <text x="600" y="400" font-family="Space Grotesk, sans-serif" font-weight="700" font-size="64" fill="url(#tgrad)" text-anchor="middle" letter-spacing="-2">focuznow</text>
+    <!-- tagline -->
+    <text x="600" y="448" font-family="Manrope, sans-serif" font-size="22" fill="rgba(255,255,255,0.4)" text-anchor="middle" letter-spacing="2">GET BACK YOUR HOURS</text>
+  </svg>
+</template>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="focuznow-ui.jsx"></script>
+<script type="text/babel" src="focuznow-mockups.jsx"></script>
+<script type="text/babel" src="focuznow-sections.jsx"></script>
+<script type="text/babel" src="focuznow-chatwidget.jsx"></script>
+<script type="text/babel" src="focuznow-app.jsx"></script>
+</body>
+</html>
