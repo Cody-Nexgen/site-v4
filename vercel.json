@@ -1,8 +1,4 @@
 {
-  "outputDirectory": ".",
-  "rewrites": [
-    { "source": "/", "destination": "/Focuznow.html" }
-  ],
   "headers": [
     {
       "source": "/api/(.*)",
@@ -12,5 +8,14 @@
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
       ]
     }
+  ],
+  "rewrites": [
+    { "source": "/login", "destination": "/app/index.html" },
+    { "source": "/signup", "destination": "/app/index.html" },
+    { "source": "/dashboard", "destination": "/app/index.html" },
+    { "source": "/manage_subscription", "destination": "/app/index.html" },
+    { "source": "/blocked", "destination": "/app/index.html" },
+    { "source": "/notion-auth", "destination": "/app/notion-auth.html" },
+    { "source": "/", "destination": "/Focuznow.html" }
   ]
 }

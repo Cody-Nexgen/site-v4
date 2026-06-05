@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Connecting to FocuzNow...</title>
+    <style>
+        body {
+            background: #000;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #9333ea;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="loader"></div>
+    <p>Handing back to FocuzNow Extension...</p>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get("code");
+        const extId = params.get("state");
+
+        if (code && extId) {
+            // Safe Bridge: Redirect directly to the extension's internal options page
+            window.location.href = `chrome-extension://${extId}/src/options/index.html?notion_code=${code}`;
+        } else {
+            document.body.innerHTML = "<p style='color: #ef4444'>Authentication error: Missing parameters.</p>";
+        }
+    </script>
+</body>
+
+</html>

@@ -23,7 +23,7 @@ function Nav() {
           <a href="#faq">FAQ</a>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <a href="#" className="btn btn-ghost" style={{ padding: '10px 14px' }}>Sign in</a>
+          <a href="/login" className="btn btn-ghost" style={{ padding: '10px 14px' }}>Sign in</a>
           <a href="#" className="btn btn-primary" data-mag style={{ padding: '11px 18px' }}>Add to Chrome</a>
         </div>
       </div>
