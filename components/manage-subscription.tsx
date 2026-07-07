@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { BILLING_RETURN_URL } from "@/lib/billing-urls";
 import { IconCreditCard, IconX, IconCheck, IconAlertCircle } from "@tabler/icons-react";
 
 interface ManageSubscriptionProps {
@@ -29,6 +30,9 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
                 .from('subscriptions')
                 .select('*')
                 .eq('user_id', session.user.id)
+                .in('status', ['active', 'trialing'])
+                .order('created_at', { ascending: false })
+                .limit(1)
                 .maybeSingle();
 
             if (error) throw error;
@@ -60,10 +64,37 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
         }
     };
 
+    const handleOpenCheckout = async () => {
+        const alreadyPro =
+            subscription && ['active', 'trialing'].includes(subscription.status);
+        if (alreadyPro) {
+            await handleChangePaymentMethod();
+            return;
+        }
+        try {
+            const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+                body: { return_url: BILLING_RETURN_URL },
+                headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (error) throw error;
+            if (data?.already_subscribed || data?.code === 'ALREADY_SUBSCRIBED') {
+                await fetchSubscription();
+                if (data?.url) window.location.href = data.url;
+                else await handleChangePaymentMethod();
+                return;
+            }
+            if (data?.url) window.location.href = data.url;
+            else if (data?.error) alert(data.error);
+        } catch (error: any) {
+            console.error('Error creating checkout session:', error);
+            alert('Failed to start checkout: ' + error.message);
+        }
+    };
+
     const handleChangePaymentMethod = async () => {
         try {
             const { data, error } = await supabase.functions.invoke('create-portal-session', {
-                body: { return_url: window.location.href },
+                body: { return_url: BILLING_RETURN_URL },
                 headers: { Authorization: `Bearer ${session.access_token}` }
             });
 
@@ -196,7 +227,7 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
                             )}
                             {!isPro && (
                                 <button
-                                    onClick={() => window.location.href = '/'}
+                                    onClick={() => void handleOpenCheckout()}
                                     className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-semibold transition-colors"
                                 >
                                     Upgrade to Pro

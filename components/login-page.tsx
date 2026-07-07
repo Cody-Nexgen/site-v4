@@ -9,6 +9,13 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { AnimatedInput } from "@/components/ui/AnimatedInput";
 import { AUTH_SLIDES } from "@/lib/auth-slides";
+import { getOAuthRedirectUrl } from "@/lib/auth-redirect";
+import {
+  clearAuthErrorFromUrl,
+  fetchSignInMethods,
+  googleLoginBlockedMessage,
+  passwordLoginBlockedMessage,
+} from "@/lib/auth-providers";
 
 // TOGGLE THIS TO FALSE TO STOP LOGS
 const DEBUG_MODE = true;
@@ -40,6 +47,13 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
 
   // Password Strength
   const [passwordStrength, setPasswordStrength] = useState(0);
+
+  useEffect(() => {
+    const oauthErr = clearAuthErrorFromUrl();
+    if (oauthErr) {
+      handleError(oauthErr);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -74,11 +88,22 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
+      setError(null);
+
+      if (email.trim()) {
+        const methods = await fetchSignInMethods(email);
+        const blocked = googleLoginBlockedMessage(methods);
+        if (blocked) {
+          handleError(blocked);
+          return;
+        }
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/?view=dashboard` : undefined,
-        }
+          redirectTo: getOAuthRedirectUrl(),
+        },
       });
       if (error) throw error;
     } catch (err: any) {
@@ -95,7 +120,12 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
 
     try {
       if (isLogin) {
-        // LOGIN FLOW
+        const methods = await fetchSignInMethods(email);
+        const blocked = passwordLoginBlockedMessage(methods);
+        if (blocked) {
+          throw new Error(blocked);
+        }
+
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -104,7 +134,7 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
 
         if (data.session) {
           syncSessionWithExtension(data.session);
-          onLoginSuccess(); // Redirect to Dashboard
+          onLoginSuccess();
         }
       } else {
         // SIGNUP FLOW
@@ -116,6 +146,14 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
         }
         if (passwordStrength < 4) {
           throw new Error("Password is too weak. Please meet requirements.");
+        }
+
+        const methods = await fetchSignInMethods(email);
+        if (methods.includes('google') && !methods.includes('email')) {
+          throw new Error('An account with this email already uses Google. Sign in with Google instead.');
+        }
+        if (methods.includes('email')) {
+          throw new Error('An account with this email already exists. Sign in with your password.');
         }
 
         const { error } = await supabase.auth.signUp({
@@ -172,7 +210,7 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
 
       if (data.session) {
         syncSessionWithExtension(data.session);
-        onLoginSuccess(); // Redirect to Dashboard
+        onLoginSuccess();
       }
 
     } catch (err: any) {

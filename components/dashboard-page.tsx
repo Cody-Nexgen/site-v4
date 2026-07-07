@@ -19,7 +19,6 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { AnimatedInput } from "@/components/ui/AnimatedInput";
 import { StatCard, ActivityChart, HistoryList } from "@/components/dashboard/DashboardComponents";
-
 interface DashboardPageProps {
   session: any;
   onLogout: () => void;
@@ -57,21 +56,17 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
   // Settings State
   const [dailyLimit, setDailyLimit] = useState(2); // hours
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [billingNotice, setBillingNotice] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const params = new URLSearchParams(window.location.search);
+    return params.get("subscription") === "success"
+      ? "Welcome to Pro — your subscription is active."
+      : params.get("billing") === "return"
+        ? "Billing updated. You are subscribed to Pro."
+        : "";
+  });
 
   useEffect(() => {
-    // Redirection Logic: If extension is detected and user is in dashboard, redirect to extension options
-    const checkForExtensionAndRedirect = () => {
-      if (document.documentElement.getAttribute('data-focuznow-extension')) {
-        console.log('[Dashboard] Extension detected. Redirecting to internal settings...');
-        // We use a specific ID if known, but chrome-extension://[ID]/src/options/index.html is the target.
-        // Since we don't know the production ID yet, we'll try to message the extension or use a generic trigger.
-        // For now, let's inform the user or use a window.location if possible.
-        // Actually, the most reliable way in MV3 for a webpage to open the options is to ask the extension to open its own page.
-        window.postMessage({ type: 'OPEN_EXTENSION_OPTIONS' }, '*');
-      }
-    };
-
-    // Simulate fetching data
     setTimeout(() => {
       setStats({
         timeTracked: '12.5h',
@@ -79,7 +74,6 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
         focusScore: 85
       });
       setLoading(false);
-      checkForExtensionAndRedirect();
     }, 1000);
   }, []);
 
@@ -88,6 +82,11 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
       case 'overview':
         return (
           <div className="space-y-6">
+            {billingNotice && (
+              <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-sm text-purple-200">
+                {billingNotice}
+              </div>
+            )}
             {/* Hero Section */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <StatCard
@@ -109,7 +108,7 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
               <StatCard
                 title="Focus Score"
                 value={stats.focusScore}
-                subtitle="Productivity Rating"
+                subtitle="Quality-based · open extension for live score"
                 icon={Zap}
                 color="orange"
                 delay={0.3}

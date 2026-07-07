@@ -6,22 +6,34 @@ import { Tooltip } from "@/components/ui/tooltip-card";
 import { LoaderThree } from "@/components/ui/loader";
 import { FloatingNav } from "@/components/ui/floating-navbar";
 import { TypewriterEffectSmooth } from "@/components/ui/typewriter-effect";
+import { RotatingWord } from "@/components/ui/rotating-word";
 import { LinkPreview } from "@/components/ui/link-preview";
 import FeaturesList from "@/components/features-list";
 import LoginPage from "@/components/login-page";
 import { AiChatWidget } from "@/components/ai-chat-widget";
-import ExtensionRequiredScreen from "@/components/extension-required-screen";
 import { CHROME_EXTENSION_STORE_URL } from "@/lib/site-config";
 import { IconBrandGoogle, IconEye, IconEyeOff, IconCheck, IconMail, IconLock, IconUser, IconHome, IconChartBar, IconCurrencyDollar } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
-import { syncSessionWithExtension, redirectToExtension } from "@/lib/extension-utils";
+import {
+  syncSessionWithExtension,
+  redirectToExtension,
+  shouldHandoffToExtension,
+  clearExtensionOAuthParam,
+} from "@/lib/extension-utils";
+import ExtensionHandoffScreen from "@/components/extension-handoff-screen";
+import { isBillingReturnQuery } from "@/lib/billing-urls";
 import DashboardPage from "@/components/dashboard-page";
 import ManageSubscriptionPage from "@/components/manage-subscription";
 import BlockedPage from "@/components/blocked-page";
 import OnboardingModal from "@/components/onboarding-modal";
 import ScheduleBookingPage from "@/components/schedule-booking-page";
-import { isScheduleRoute } from "@/lib/routing";
+import PublicProfilePage from "@/components/public-profile-page";
+import FocusRoomPage from "@/components/focus-room-page";
+import { isScheduleRoute, getPublicProfileUsername, isPublicProfileRoute, isFocusRoomRoute, getFocusRoomId } from "@/lib/routing";
+import { clearAuthErrorFromUrl } from "@/lib/auth-providers";
+import { isBetaTesterSite } from "@/lib/site-mode";
+import BetaApp from "@/components/beta/beta-app";
 // -----------------------------------------------------------------------------
 // MAIN APP
 // -----------------------------------------------------------------------------
@@ -34,14 +46,12 @@ function FocuzNowApp() {
     | "blocked"
     | "notion-auth"
     | "schedule"
+    | "public_profile"
+    | "focus_room"
   >("landing");
   const [session, setSession] = useState<any>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isDevMode, setIsDevMode] = useState(false);
-  const [hasExtension, setHasExtension] = useState(() => {
-    if (typeof document === 'undefined') return false;
-    return !!document.documentElement.getAttribute('data-focuznow-extension');
-  });
 
   const [loginDefaultState, setLoginDefaultState] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -51,9 +61,35 @@ function FocuzNowApp() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [extensionHandoff, setExtensionHandoff] = useState<"idle" | "redirecting" | "done">("idle");
+
+  const beginExtensionHandoff = (opts?: { freshSignIn?: boolean }) => {
+    if (!shouldHandoffToExtension(opts)) return false;
+    clearExtensionOAuthParam();
+    setExtensionHandoff("redirecting");
+    return true;
+  };
+
+  useEffect(() => {
+    if (extensionHandoff !== "redirecting" || !session) return;
+
+    syncSessionWithExtension(session);
+
+    const timer = window.setTimeout(() => {
+      redirectToExtension();
+      setExtensionHandoff("done");
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [extensionHandoff, session]);
 
   useEffect(() => {
     const checkSessionAndRoute = async () => {
+      const oauthError = clearAuthErrorFromUrl();
+      if (oauthError) {
+        console.warn('[App] OAuth error from redirect:', oauthError);
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
 
@@ -68,6 +104,8 @@ function FocuzNowApp() {
       const isLoginPath = path === "/login" || path === "/signup" || hash === "#login" || hash === "#signup" || viewQuery === "login" || viewQuery === "signup";
       const isNotionAuth = path === "/notion-auth" || viewQuery === "notion-auth";
       const isSchedulePath = /^\/schedule\/[^/]+/.test(path);
+      const isFocusRoomPath = /^\/room\/[^/]+/.test(path);
+      const publicProfileUser = getPublicProfileUsername();
 
       if (isNotionAuth) {
         setCurrentView("notion-auth");
@@ -81,20 +119,33 @@ function FocuzNowApp() {
         return;
       }
 
-      if (session) {
-        if (!isSchedulePath) {
-          syncSessionWithExtension(session);
-        }
+      if (isFocusRoomPath) {
+        setCurrentView("focus_room");
+        setLoading(false);
+        return;
+      }
 
-        // Never hijack public booking URLs — extension users can still book on web
+      if (publicProfileUser) {
+        setCurrentView("public_profile");
+        setLoading(false);
+        return;
+      }
+
+      if (session) {
+        const billingReturn = isBillingReturnQuery(window.location.search);
+
         if (
           !isSchedulePath &&
-          document.documentElement.getAttribute('data-focuznow-extension')
+          !isFocusRoomPath &&
+          !billingReturn &&
+          beginExtensionHandoff()
         ) {
-          console.log('[App] Session + Extension detected. Redirecting...');
-          redirectToExtension();
           setLoading(false);
           return;
+        }
+
+        if (!isSchedulePath) {
+          syncSessionWithExtension(session);
         }
 
         // Check for new user (created within last minute)
@@ -108,9 +159,11 @@ function FocuzNowApp() {
           setCurrentView("manage_subscription");
         } else if (isBlockedPath) {
           setCurrentView("blocked");
-        } else {
+        } else if (isLoginPath) {
           setCurrentView("dashboard");
-          window.history.pushState({}, "", "/dashboard");
+          window.history.replaceState({}, "", "/dashboard");
+        } else {
+          setCurrentView("landing");
         }
       } else {
         if (isManageSubPath) {
@@ -129,41 +182,25 @@ function FocuzNowApp() {
 
     checkSessionAndRoute();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (session && !isScheduleRoute()) {
+      if (session && !isScheduleRoute() && !isFocusRoomRoute()) {
         syncSessionWithExtension(session);
+      }
+      if (event === "SIGNED_IN" && session && !isScheduleRoute() && !isFocusRoomRoute()) {
+        beginExtensionHandoff();
       }
       if (isScheduleRoute()) {
         setCurrentView("schedule");
         setLoading(false);
+      } else if (isFocusRoomRoute()) {
+        setCurrentView("focus_room");
+        setLoading(false);
+      } else if (isPublicProfileRoute()) {
+        setCurrentView("public_profile");
+        setLoading(false);
       }
     });
-
-    // Listen for Extension Ready
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'FOCUZNOW_EXTENSION_READY' || event.data?.type === 'FOCUZNOW_EXTENSION_PONG') {
-        console.log('[Web] Extension detected via message!');
-        setHasExtension(true);
-      }
-    };
-    window.addEventListener("message", handleMessage);
-
-    // Initial Check
-    if (document.documentElement.getAttribute('data-focuznow-extension')) {
-      setHasExtension(true);
-    }
-
-    // Ping the extension periodically until it responds
-    const pingInterval = setInterval(() => {
-      const isDetected = !!document.documentElement.getAttribute('data-focuznow-extension');
-      if (isDetected) {
-        console.log('[Web] Extension detected via attribute scan!');
-        setHasExtension(true);
-        clearInterval(pingInterval);
-      }
-      window.postMessage({ type: 'FOCUZNOW_WEB_PING' }, '*');
-    }, 200); // More aggressive ping (200ms)
 
     // Dev Mode & Onboarding Trigger
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -176,23 +213,10 @@ function FocuzNowApp() {
     (window as any).onboarding = () => setShowOnboarding(true);
 
     return () => {
-      clearInterval(pingInterval);
       subscription.unsubscribe();
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("message", handleMessage);
     };
   }, []);
-
-  useEffect(() => {
-    if (isScheduleRoute()) {
-      setCurrentView("schedule");
-      return;
-    }
-    if (session && hasExtension && currentView === "dashboard") {
-      console.log('[App] Session + Extension confirmed. Redirecting out...');
-      redirectToExtension();
-    }
-  }, [session, hasExtension, currentView]);
 
   const navItems = [
     {
@@ -217,11 +241,12 @@ function FocuzNowApp() {
   ];
 
   const typewriterWords = [
-    { text: "Local-first" },
-    { text: "analytics" },
-    { text: "for" },
-    { text: "deep" },
-    { text: "work.", className: "text-purple-500 dark:text-purple-500" },
+    { text: "Time" },
+    { text: "to" },
+    { text: "build", className: "text-purple-500" },
+    { text: "work", className: "text-purple-500" },
+    { text: "win", className: "text-purple-500" },
+    { text: "focus.", className: "text-purple-500 dark:text-purple-500" },
   ];
 
   const goLogin = () => {
@@ -274,8 +299,22 @@ function FocuzNowApp() {
     );
   }
 
+  if (extensionHandoff !== "idle" && session) {
+    return <ExtensionHandoffScreen phase={extensionHandoff === "done" ? "done" : "redirecting"} />;
+  }
+
   if (currentView === "schedule") {
     return <ScheduleBookingPage />;
+  }
+
+  if (currentView === "focus_room") {
+    const roomId = getFocusRoomId();
+    if (roomId) return <FocusRoomPage roomId={roomId} />;
+  }
+
+  if (currentView === "public_profile") {
+    const handle = getPublicProfileUsername();
+    if (handle) return <PublicProfilePage username={handle} />;
   }
 
   // ---------------------------------------------------------------------------
@@ -322,21 +361,9 @@ function FocuzNowApp() {
   // DASHBOARD (REDIRECTING)
   // ---------------------------------------------------------------------------
   if (currentView === "dashboard" && session) {
-    if (hasExtension) {
-      return (
-        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-10">
-          <div className="relative w-16 h-16 mb-6">
-            <div className="absolute inset-0 border-4 border-purple-500/20 rounded-full" />
-            <div className="absolute inset-0 border-4 border-t-purple-500 rounded-full animate-spin" />
-          </div>
-          <h1 className="text-2xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-400">Authenticating...</h1>
-          <p className="text-neutral-500 text-sm">Passing session to FocuzNow Extension.</p>
-        </div>
-      );
-    }
-
     return (
-      <ExtensionRequiredScreen
+      <DashboardPage
+        session={session}
         onLogout={() => {
           supabase.auth.signOut().then(() => goLanding());
         }}
@@ -352,14 +379,11 @@ function FocuzNowApp() {
       <LoginPage
         onBack={goLanding}
         onLoginSuccess={() => {
-          // Check for session again before redirecting
           supabase.auth.getSession().then(({ data }) => {
-            if (data.session) {
-              syncSessionWithExtension(data.session);
-              if (document.documentElement.getAttribute('data-focuznow-extension')) {
-                redirectToExtension();
-              }
-            }
+            if (!data.session) return;
+            setSession(data.session);
+            syncSessionWithExtension(data.session);
+            if (beginExtensionHandoff({ freshSignIn: true })) return;
             goDashboard();
           });
         }}
@@ -386,6 +410,9 @@ function FocuzNowApp() {
           </div>
 
           <div className="text-center -mt-20 md:-mt-40 space-y-6 flex flex-col items-center">
+            <p className="text-2xl md:text-3xl font-bold text-white flex items-center gap-2 flex-wrap justify-center">
+              Time to <RotatingWord />
+            </p>
             <TypewriterEffectSmooth words={typewriterWords} />
             <p className="max-w-xl mx-auto text-neutral-400 text-lg">
               Your focus data, finally useful. Local-first analytics that turn
@@ -695,6 +722,30 @@ function FocuzNowApp() {
         </div>
       </section>
 
+      {/* Need Help Section */}
+      <section id="help" className="py-24 px-6 border-t border-white/10 bg-neutral-950">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-white mb-3">Need help?</h2>
+          <p className="text-neutral-400 mb-8 max-w-xl mx-auto">
+            Ask our AI coach on the landing page, or email our team — we typically respond within 24 hours.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <a
+              href="mailto:support@focuznow.com?subject=FocuzNow%20Help"
+              className="px-6 py-3 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-bold transition-all"
+            >
+              Email support
+            </a>
+            <button
+              onClick={goLogin}
+              className="px-6 py-3 rounded-full border border-white/20 text-white font-bold hover:bg-white/5 transition-all"
+            >
+              Open dashboard
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* Footer CTA */}
       <footer className="py-20 border-t border-white/10 bg-neutral-950 text-center">
         <h2 className="text-3xl font-bold text-white mb-6">
@@ -754,6 +805,9 @@ function FocuzNowApp() {
 export default function App() {
   if (typeof window !== "undefined" && isScheduleRoute()) {
     return <ScheduleBookingPage />;
+  }
+  if (typeof window !== "undefined" && isBetaTesterSite()) {
+    return <BetaApp />;
   }
   return <FocuzNowApp />;
 }
