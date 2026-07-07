@@ -1,0 +1,114 @@
+{
+    "manifest_version": 3,
+    "name": "FocuzNow",
+    "version": "1.0.0",
+    "description": "Local-first productivity tool with AI coaching.",
+    "permissions": [
+        "storage",
+        "tabs",
+        "history",
+        "declarativeNetRequest",
+        "notifications",
+        "offscreen",
+        "alarms",
+        "identity",
+        "scripting"
+    ],
+    "commands": {
+        "toggle-command-palette": {
+            "suggested_key": {
+                "default": "Ctrl+K",
+                "mac": "Command+K"
+            },
+            "description": "Toggle FocuzNow command palette"
+        }
+    },
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "icons": {
+        "16": "public/icons/icon-16.png",
+        "48": "public/icons/icon-48.png",
+        "128": "public/icons/icon-128.png"
+    },
+    "oauth2": {
+        "client_id": "834789886737-j1a7hcvntot3d1sbdq3v2c5b3okng8to.apps.googleusercontent.com",
+        "scopes": [
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/userinfo.profile",
+            "https://www.googleapis.com/auth/userinfo.email"
+        ]
+    },
+    "background": {
+        "service_worker": "src/background/service-worker.js"
+    },
+    "action": {
+        "default_title": "FocuzNow",
+        "default_popup": "src/popup/index.html",
+        "default_icon": {
+            "16": "public/icons/icon-16.png",
+            "48": "public/icons/icon-48.png",
+            "128": "public/icons/icon-128.png"
+        }
+    },
+    "options_ui": {
+        "page": "src/options/index.html",
+        "open_in_tab": true
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "http://localhost:3000/*",
+                "http://localhost:3001/*",
+                "http://localhost:5173/*",
+                "https://focuznow.com/*",
+                "https://www.focuznow.com/*"
+            ],
+            "js": [
+                "src/content/index.ts"
+            ]
+        },
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "src/content/commandPalette.ts"
+            ],
+            "run_at": "document_start",
+            "all_frames": false
+        },
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "src/content/draggableTimer.ts",
+                "src/content/inAppBlock.ts"
+            ],
+            "run_at": "document_idle",
+            "all_frames": false
+        }
+    ],
+    "externally_connectable": {
+        "matches": [
+            "http://localhost:3000/*",
+            "http://localhost:3001/*",
+            "http://localhost:5173/*",
+            "https://focuznow.com/*",
+            "https://www.focuznow.com/*"
+        ]
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "public/icons/*",
+                "assets/*",
+                "src/options/*"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
+}

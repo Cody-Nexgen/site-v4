@@ -1,0 +1,160 @@
+/* Focuz Design Language — premium productivity, not AI-dashboard */
+
+:root {
+    --fz-bg: #141416;
+    --fz-surface: #1c1c1f;
+    --fz-surface-raised: #242428;
+    --fz-surface-overlay: #2a2a30;
+    --fz-border: rgba(255, 255, 255, 0.07);
+    --fz-border-strong: rgba(255, 255, 255, 0.12);
+    --fz-text: #f4f4f5;
+    --fz-text-secondary: #a1a1aa;
+    --fz-text-tertiary: #71717a;
+    --fz-accent: #38bdf8;
+    --fz-accent-muted: rgba(56, 189, 248, 0.15);
+    --fz-accent-warm: #f59e0b;
+    --fz-success: #34d399;
+    --fz-danger: #f87171;
+    --fz-radius-sm: 8px;
+    --fz-radius-md: 12px;
+    --fz-radius-lg: 14px;
+    --fz-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2);
+    --fz-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --fz-font-display: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.focuznow-calendar {
+    --cal-bg: #161618;
+    --cal-surface: #1e1e22;
+    --cal-surface-raised: #26262c;
+    --cal-border: rgba(255, 255, 255, 0.06);
+    --cal-accent: #a855f7;
+    --cal-accent-muted: rgba(168, 85, 247, 0.12);
+    --cal-today: #a855f7;
+    --cal-weekend: transparent;
+    --cal-now: #f59e0b;
+    --cal-hour: #8b8b96;
+    --cal-event-radius: 12px;
+    color-scheme: dark;
+    background-color: var(--cal-bg);
+    font-family: var(--fz-font-display);
+}
+
+html:has(.focuznow-calendar),
+html:has(.focuznow-calendar) body {
+    background-color: var(--cal-bg);
+}
+
+.focuz-surface-card {
+    background: var(--fz-surface);
+    border: 1px solid var(--fz-border);
+    border-radius: var(--fz-radius-lg);
+    box-shadow: var(--fz-shadow-sm);
+}
+
+.focuz-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fz-text-tertiary);
+}
+
+.focuz-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: rgba(8, 8, 10, 0.82);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.focuz-modal-panel {
+    width: 100%;
+    max-width: 32rem;
+    max-height: min(88vh, 720px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(165deg, var(--fz-surface-raised) 0%, var(--fz-surface) 100%);
+    border: 1px solid var(--fz-border-strong);
+    border-radius: 16px;
+    box-shadow: var(--fz-shadow-md);
+}
+
+.focuz-modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--fz-border);
+}
+
+.focuz-modal-body {
+    padding: 1.25rem 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.focuz-modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--fz-border);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.focuz-btn-primary {
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--fz-radius-md);
+    background: var(--fz-accent);
+    color: #0c1220;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    transition: filter 0.15s;
+}
+
+.focuz-btn-primary:hover {
+    filter: brightness(1.08);
+}
+
+.focuz-btn-ghost {
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--fz-radius-md);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--fz-text-secondary);
+    font-weight: 600;
+    font-size: 0.8125rem;
+}
+
+.focuz-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.09);
+    color: var(--fz-text);
+}
+
+.focuz-category-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--fz-radius-md);
+    border: 1px solid var(--fz-border);
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.focuz-category-chip:hover {
+    border-color: var(--fz-border-strong);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.focuz-category-chip.is-blocked {
+    border-color: rgba(248, 113, 113, 0.35);
+    background: rgba(248, 113, 113, 0.08);
+}
+
+.focuz-category-chip.is-allowed {
+    border-color: rgba(52, 211, 153, 0.3);
+    background: rgba(52, 211, 153, 0.06);
+}

@@ -1,0 +1,188 @@
+import type { EngineState } from './store';
+
+export const PRO_GOLD_THEME_ID = 'pro' as const;
+export const CUSTOM_THEME_ID = 'custom' as const;
+
+/** @deprecated use PRO_GOLD_THEME_ID */
+export const PRO_THEME_ID = PRO_GOLD_THEME_ID;
+
+export const PUBLIC_THEME_IDS = ['purple', 'emerald', 'amber', 'rose'] as const;
+
+export const PRO_EXCLUSIVE_THEME_IDS = [PRO_GOLD_THEME_ID, CUSTOM_THEME_ID] as const;
+
+export type PublicThemeId = (typeof PUBLIC_THEME_IDS)[number];
+export type ProExclusiveThemeId = (typeof PRO_EXCLUSIVE_THEME_IDS)[number];
+export type ThemeId = PublicThemeId | ProExclusiveThemeId;
+
+export interface CustomThemeColors {
+    primary: string;
+    accent: string;
+    highlight: string;
+}
+
+export const DEFAULT_CUSTOM_THEME: CustomThemeColors = {
+    primary: '#7c3aed',
+    accent: '#a855f7',
+    highlight: '#c4b5fd',
+};
+
+export const THEME_LABELS: Record<ThemeId, string> = {
+    purple: 'Purple',
+    emerald: 'Emerald',
+    amber: 'Amber',
+    rose: 'Rose',
+    pro: 'Pro Gold',
+    custom: 'Custom',
+};
+
+export function isProGoldTheme(theme: string | undefined): boolean {
+    return theme === PRO_GOLD_THEME_ID;
+}
+
+export function isCustomTheme(theme: string | undefined): boolean {
+    return theme === CUSTOM_THEME_ID;
+}
+
+export function isProExclusiveTheme(theme: string | undefined): boolean {
+    return theme === PRO_GOLD_THEME_ID || theme === CUSTOM_THEME_ID;
+}
+
+/** @deprecated use isProGoldTheme */
+export function isProTheme(theme: string | undefined): boolean {
+    return isProGoldTheme(theme);
+}
+
+export function canUseTheme(theme: ThemeId, isPro: boolean): boolean {
+    if (isProExclusiveTheme(theme)) return isPro;
+    return PUBLIC_THEME_IDS.includes(theme as PublicThemeId);
+}
+
+export function normalizeThemeForUser(theme: string | undefined, isPro: boolean): ThemeId {
+    if (isPro && theme === PRO_GOLD_THEME_ID) return PRO_GOLD_THEME_ID;
+    if (isPro && theme === CUSTOM_THEME_ID) return CUSTOM_THEME_ID;
+    if (theme && PUBLIC_THEME_IDS.includes(theme as PublicThemeId)) return theme as PublicThemeId;
+    return 'purple';
+}
+
+export function resolveCustomThemeColors(
+    colors: CustomThemeColors | undefined | null,
+): CustomThemeColors {
+    if (!colors?.primary || !colors?.accent || !colors?.highlight) {
+        return { ...DEFAULT_CUSTOM_THEME };
+    }
+    return colors;
+}
+
+export function applyCustomThemeVars(colors: CustomThemeColors) {
+    const c = resolveCustomThemeColors(colors);
+    const root = document.documentElement;
+    root.style.setProperty('--theme-primary', c.primary);
+    root.style.setProperty('--theme-accent', c.accent);
+    root.style.setProperty('--theme-highlight', c.highlight);
+    root.style.setProperty('--theme-primary-20', hexAlpha(c.primary, 0.22));
+    root.style.setProperty('--theme-primary-10', hexAlpha(c.primary, 0.12));
+    root.style.setProperty('--theme-shadow', hexAlpha(c.primary, 0.28));
+}
+
+export function clearCustomThemeVars() {
+    const root = document.documentElement;
+    root.style.removeProperty('--theme-primary');
+    root.style.removeProperty('--theme-accent');
+    root.style.removeProperty('--theme-highlight');
+    root.style.removeProperty('--theme-primary-20');
+    root.style.removeProperty('--theme-primary-10');
+    root.style.removeProperty('--theme-shadow');
+}
+
+function hexAlpha(hex: string, alpha: number): string {
+    const h = hex.replace('#', '');
+    if (h.length !== 6) return `rgba(124, 58, 237, ${alpha})`;
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** Pro Gold shell or Custom theme active */
+export function isProThemeActive(
+    engineState: Pick<EngineState, 'theme'>,
+    isPro: boolean,
+): boolean {
+    return isPro && isProExclusiveTheme(engineState?.theme);
+}
+
+/** Pro Gold only (gold vignette, hero, avatar ring) */
+export function isProGoldThemeActive(
+    engineState: Pick<EngineState, 'theme'>,
+    isPro: boolean,
+): boolean {
+    return isPro && isProGoldTheme(engineState?.theme);
+}
+
+/** Extra motion on Pro-exclusive themes */
+export function isProMotionEnabled(
+    engineState: Pick<EngineState, 'theme'> & { proDashboardVisuals?: boolean },
+    isPro: boolean,
+): boolean {
+    if (!isProThemeActive(engineState, isPro)) return false;
+    return engineState.proDashboardVisuals === true;
+}
+
+export function applyDocumentTheme(
+    engineState: Pick<EngineState, 'theme' | 'customTheme'> | null | undefined,
+    isPro: boolean,
+) {
+    const theme = normalizeThemeForUser(engineState?.theme, isPro);
+    const root = document.documentElement;
+    root.setAttribute('data-theme', theme);
+    root.classList.toggle('pro-theme-active', theme === PRO_GOLD_THEME_ID);
+    root.classList.toggle('pro-motion', theme === PRO_GOLD_THEME_ID);
+    root.classList.toggle('custom-motion', theme === CUSTOM_THEME_ID);
+    if (theme === CUSTOM_THEME_ID) {
+        applyCustomThemeVars(resolveCustomThemeColors(engineState?.customTheme));
+    } else {
+        clearCustomThemeVars();
+    }
+}
+
+export async function setEngineTheme(theme: ThemeId) {
+    await new Promise<void>((resolve) =>
+        chrome.runtime.sendMessage(
+            { type: 'UPDATE_ENGINE_SETTINGS', settings: { theme } },
+            () => resolve(),
+        ),
+    );
+}
+
+export async function setCustomThemeColors(colors: CustomThemeColors) {
+    await new Promise<void>((resolve) =>
+        chrome.runtime.sendMessage(
+            {
+                type: 'UPDATE_ENGINE_SETTINGS',
+                settings: { theme: CUSTOM_THEME_ID, customTheme: colors },
+            },
+            () => resolve(),
+        ),
+    );
+}
+
+export async function applyProWelcomePack() {
+    await new Promise<void>((resolve) =>
+        chrome.runtime.sendMessage(
+            {
+                type: 'UPDATE_ENGINE_SETTINGS',
+                settings: { theme: PRO_GOLD_THEME_ID, proDashboardVisuals: false },
+            },
+            () => resolve(),
+        ),
+    );
+}
+
+export async function revertProThemeIfNeeded() {
+    await new Promise<void>((resolve) =>
+        chrome.runtime.sendMessage(
+            { type: 'UPDATE_ENGINE_SETTINGS', settings: { theme: 'purple' } },
+            () => resolve(),
+        ),
+    );
+}

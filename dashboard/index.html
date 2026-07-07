@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<title>Focuznow — Dashboard</title>
+<link rel="stylesheet" href="../../colors_and_type.css"/>
+<style>
+  body { background: var(--canvas-soft); min-height: 100vh; }
+
+  /* Layout shell */
+  .dash { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { background: var(--canvas); border-right: 1px solid var(--hairline); display: flex; flex-direction: column; }
+  .sb-head { padding: 18px 20px; }
+  .logo-mark { display: inline-flex; align-items: center; gap: 8px; font: 600 16px/20px var(--font-sans); letter-spacing: -0.6px; color: var(--ink); }
+  .sb-nav { flex: 1; padding: 0 12px; display: flex; flex-direction: column; gap: 2px; }
+  .sb-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px; color: var(--body); font: 500 14px/20px var(--font-sans); letter-spacing: -0.28px; cursor: pointer; }
+  .sb-item:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .sb-item.is-active { background: var(--canvas-soft-2); color: var(--ink); }
+  .sb-ic { width: 16px; height: 16px; flex: 0 0 16px; }
+  .sb-label { flex: 1; }
+  .sb-count { font: 400 11px/14px var(--font-mono); color: var(--mute); background: var(--canvas-soft); padding: 1px 6px; border-radius: 9999px; box-shadow: var(--elev-1); }
+  .sb-section { padding: 14px 10px 4px; }
+  .sb-foot { padding: 12px; border-top: 1px solid var(--hairline); }
+  .sb-user { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 6px; cursor: pointer; }
+  .sb-user:hover { background: var(--canvas-soft-2); }
+  .avatar { width: 28px; height: 28px; border-radius: 9999px; background: var(--primary); color: var(--on-primary); display: inline-flex; align-items: center; justify-content: center; font: 500 11px/14px var(--font-sans); }
+  .sb-user-meta { display: flex; flex-direction: column; flex: 1; line-height: 1; gap: 2px; }
+  .sb-user-name { font: 500 13px/16px var(--font-sans); color: var(--ink); }
+  .sb-user-plan { font: 400 10px/12px var(--font-mono); color: var(--mute); }
+  .sb-user-chev { width: 14px; height: 14px; color: var(--mute); }
+
+  /* Main */
+  .dash-main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: 64px; padding: 0 28px; border-bottom: 1px solid var(--hairline); background: rgba(255,255,255,0.7); backdrop-filter: blur(12px); position: sticky; top: 0; display: flex; align-items: center; gap: 14px; z-index: 10; }
+  .topbar-search { flex: 1; max-width: 480px; display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 32px; border-radius: 6px; background: var(--canvas-soft); box-shadow: var(--elev-1); }
+  .topbar-search input { flex: 1; background: transparent; border: 0; outline: 0; font: 400 13px/16px var(--font-sans); color: var(--ink); }
+  .topbar-search input::placeholder { color: var(--mute); }
+  .kbd { font: 400 11px/14px var(--font-mono); color: var(--mute); background: var(--canvas); padding: 1px 5px; border-radius: 4px; box-shadow: var(--elev-1); }
+  .topbar-actions { margin-left: auto; display: flex; gap: 8px; }
+
+  .dash-scroll { padding: 28px 28px 64px; max-width: 1280px; width: 100%; margin: 0 auto; }
+  .dash-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+  .tabbar { display: flex; gap: 6px; }
+
+  /* Session */
+  .session { margin-bottom: 16px; padding: 28px; }
+  .session-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .session-body { display: grid; grid-template-columns: 200px 1fr; gap: 32px; align-items: center; }
+  .session-ring { position: relative; width: 200px; height: 200px; }
+  .session-ring-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
+  .session-ring-text .t-display-xl { font-size: 40px; line-height: 40px; letter-spacing: -1.6px; }
+  .session-controls { display: flex; gap: 12px; }
+
+  /* Stat tiles */
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat-tile { display: flex; flex-direction: column; gap: 4px; padding: 18px 20px; }
+  .stat-value { font: 600 24px/28px var(--font-mono); color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.6px; margin-top: 2px; }
+  .stat-sub { font: 400 12px/16px var(--font-sans); color: var(--mute); display: inline-flex; gap: 4px; align-items: center; }
+  .trend.up { color: var(--positive-green); }
+  .trend.down { color: var(--error); }
+
+  /* Generic card chrome */
+  .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card-foot { display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+
+  /* Dash grid */
+  .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+  /* Todo */
+  .todo-list { display: flex; flex-direction: column; gap: 2px; }
+  .todo-row { display: flex; align-items: center; gap: 10px; padding: 8px 8px; border-radius: 6px; cursor: pointer; }
+  .todo-row:hover { background: var(--canvas-soft-2); }
+  .todo-title { flex: 1; font: 500 14px/20px var(--font-sans); color: var(--ink); }
+  .todo-tag { font: 400 12px/16px var(--font-mono); color: var(--mute); }
+  .todo-src { display: inline-flex; align-items: center; gap: 4px; font: 400 11px/14px var(--font-mono); color: var(--mute); text-transform: uppercase; letter-spacing: 0.04em; background: var(--canvas-soft); padding: 2px 6px; border-radius: 4px; box-shadow: var(--elev-1); }
+  .rcheck { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--hairline-strong); background: transparent; display: inline-flex; align-items: center; justify-content: center; color: #fff; cursor: pointer; padding: 0; flex: 0 0 18px; }
+  .rcheck.on { background: var(--primary); border-color: var(--primary); }
+
+  /* Habits grid */
+  .habit-grid { display: flex; flex-direction: column; gap: 4px; }
+  .habit-grid-head, .habit-row { display: grid; grid-template-columns: 1fr repeat(7, 32px) 44px; gap: 4px; align-items: center; }
+  .habit-grid-head { padding: 0 0 8px; border-bottom: 1px solid var(--hairline); margin-bottom: 4px; }
+  .hg-day, .hg-streak { font: 400 11px/14px var(--font-mono); color: var(--mute); text-align: center; text-transform: uppercase; }
+  .habit-name { font: 500 14px/20px var(--font-sans); color: var(--ink); }
+  .hg-cell { width: 32px; height: 32px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font: 400 14px/20px var(--font-mono); }
+  .hg-cell.on { background: var(--primary); color: var(--on-primary); }
+  .hg-cell.off { background: var(--canvas-soft-2); color: transparent; }
+  .habit-streak { font: 500 13px/16px var(--font-mono); color: var(--ink); text-align: right; }
+
+  /* Table */
+  .dtable { width: 100%; border-collapse: collapse; }
+  .dtable thead th { font: 400 12px/16px var(--font-mono); color: var(--mute); text-transform: uppercase; letter-spacing: 0.04em; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--hairline); }
+  .dtable tbody td { font: 400 14px/20px var(--font-sans); color: var(--ink); padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
+  .dtable tbody tr:last-child td { border-bottom: 0; }
+  .dtable td .favicon { width: 18px; height: 18px; border-radius: 4px; background: var(--canvas-soft-2); display: inline-flex; align-items: center; justify-content: center; color: var(--body); margin-right: 8px; vertical-align: middle; }
+  .dtable td.num, .dtable td.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  .eyebrow { font: 400 12px/16px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="Sidebar.jsx"></script>
+  <script type="text/babel" src="SessionPanel.jsx"></script>
+  <script type="text/babel" src="StatTiles.jsx"></script>
+  <script type="text/babel" src="TodoList.jsx"></script>
+  <script type="text/babel" src="HabitsCard.jsx"></script>
+  <script type="text/babel" src="BlocksCard.jsx"></script>
+  <script type="text/babel" src="DashboardApp.jsx"></script>
+
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('root')).render(<DashboardApp/>);
+    setTimeout(() => window.lucide && window.lucide.createIcons(), 100);
+  </script>
+</body>
+</html>

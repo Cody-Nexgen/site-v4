@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200">
+  <defs>
+    <linearGradient id="bg3" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" style="stop-color:#120a18"/>
+      <stop offset="100%" style="stop-color:#050508"/>
+    </linearGradient>
+    <radialGradient id="glow3" cx="50%" cy="35%" r="55%">
+      <stop offset="0%" style="stop-color:#c026d3;stop-opacity:0.2"/>
+      <stop offset="100%" style="stop-color:#c026d3;stop-opacity:0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="1200" fill="url(#bg3)"/>
+  <rect width="1600" height="1200" fill="url(#glow3)"/>
+  <circle cx="800" cy="420" r="120" stroke="#a78bfa" stroke-width="2" fill="none" opacity="0.4"/>
+  <circle cx="800" cy="420" r="200" stroke="#6366f1" stroke-width="1" fill="none" opacity="0.2"/>
+  <text x="80" y="1100" fill="#52525b" font-family="system-ui,sans-serif" font-size="14">Replace: public/auth/slide-3.svg</text>
+</svg>

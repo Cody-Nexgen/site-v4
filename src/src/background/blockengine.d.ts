@@ -1,0 +1,26 @@
+export function initBlockEngine(): Promise<void>;
+export function blockDomainManual(domain: string): Promise<void>;
+export function unblockDomainManual(domain: string): Promise<void>;
+export function blockRegexManual(pattern: string): Promise<void>;
+export function unblockRegexManual(pattern: string): Promise<void>;
+export function enableCategory(categoryName: string): Promise<void>;
+export function disableCategory(categoryName: string): Promise<void>;
+export function getCategoryState(categoryName: string): boolean;
+export function getAllCategoryStates(): Record<string, boolean>;
+export function addDailySchedule(domain: string, startHour: number, startMin: number, endHour: number, endMin: number, days?: number[]): Promise<string>;
+export function removeDailySchedule(domain: string, scheduleId: string): Promise<void>;
+export function getSchedules(domain?: string): any;
+export function startTimer(domain: string, durationMinutes: number): Promise<string>;
+export function cancelTimer(domain: string, timerId: string): Promise<void>;
+export function getTimers(domain?: string): any;
+export function getEngineState(): {
+    blocklist: Record<string, any>;
+    regexBlocklist: Record<string, any>;
+    categoriesActive: Record<string, boolean>;
+    schedules: Record<string, any>;
+    timers: Record<string, any>;
+};
+export function saveState(): Promise<void>;
+export function loadState(): Promise<void>;
+export function checkSchedules(): void;
+export function checkTimers(): void;

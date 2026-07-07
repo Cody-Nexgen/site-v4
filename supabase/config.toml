@@ -1,0 +1,34 @@
+# Hosted Supabase: set Site URL to https://focuznow.com in Dashboard → Auth → URL Configuration.
+# Add redirect URLs: https://focuznow.com/**, http://localhost:3000/**, chrome-extension://**
+[auth]
+site_url = "https://focuznow.com"
+additional_redirect_urls = [
+  "https://focuznow.com/**",
+  "https://www.focuznow.com/**",
+  "http://localhost:3000/**",
+  "http://localhost:5173/**",
+  "chrome-extension://**",
+  "https://*.chromiumapp.org/**",
+]
+
+[functions.ai-coach-chat]
+verify_jwt = true
+
+[functions.chat-with-groq]
+verify_jwt = true
+
+[functions.create-checkout-session]
+verify_jwt = true
+
+[functions.create-portal-session]
+verify_jwt = true
+
+[functions.scheduling-booking-notify]
+verify_jwt = false
+
+[functions.scheduling-send-reminders]
+verify_jwt = false
+
+# Hourly cron: send guest reminders ~24h before start (requires pg_cron / Dashboard schedule)
+# [functions.scheduling-send-reminders.schedule]
+# cron = "0 * * * *"

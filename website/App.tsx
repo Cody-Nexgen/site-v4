@@ -1,0 +1,813 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { TextHoverEffect } from "@/components/ui/text-hover-effect";
+import { Tooltip } from "@/components/ui/tooltip-card";
+import { LoaderThree } from "@/components/ui/loader";
+import { FloatingNav } from "@/components/ui/floating-navbar";
+import { TypewriterEffectSmooth } from "@/components/ui/typewriter-effect";
+import { RotatingWord } from "@/components/ui/rotating-word";
+import { LinkPreview } from "@/components/ui/link-preview";
+import FeaturesList from "@/components/features-list";
+import LoginPage from "@/components/login-page";
+import { AiChatWidget } from "@/components/ai-chat-widget";
+import { CHROME_EXTENSION_STORE_URL } from "@/lib/site-config";
+import { IconBrandGoogle, IconEye, IconEyeOff, IconCheck, IconMail, IconLock, IconUser, IconHome, IconChartBar, IconCurrencyDollar } from "@tabler/icons-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/lib/supabase";
+import {
+  syncSessionWithExtension,
+  redirectToExtension,
+  shouldHandoffToExtension,
+  clearExtensionOAuthParam,
+} from "@/lib/extension-utils";
+import ExtensionHandoffScreen from "@/components/extension-handoff-screen";
+import { isBillingReturnQuery } from "@/lib/billing-urls";
+import DashboardPage from "@/components/dashboard-page";
+import ManageSubscriptionPage from "@/components/manage-subscription";
+import BlockedPage from "@/components/blocked-page";
+import OnboardingModal from "@/components/onboarding-modal";
+import ScheduleBookingPage from "@/components/schedule-booking-page";
+import PublicProfilePage from "@/components/public-profile-page";
+import FocusRoomPage from "@/components/focus-room-page";
+import { isScheduleRoute, getPublicProfileUsername, isPublicProfileRoute, isFocusRoomRoute, getFocusRoomId } from "@/lib/routing";
+import { clearAuthErrorFromUrl } from "@/lib/auth-providers";
+import { isBetaTesterSite } from "@/lib/site-mode";
+import BetaApp from "@/components/beta/beta-app";
+// -----------------------------------------------------------------------------
+// MAIN APP
+// -----------------------------------------------------------------------------
+function FocuzNowApp() {
+  const [currentView, setCurrentView] = useState<
+    | "landing"
+    | "login"
+    | "dashboard"
+    | "manage_subscription"
+    | "blocked"
+    | "notion-auth"
+    | "schedule"
+    | "public_profile"
+    | "focus_room"
+  >("landing");
+  const [session, setSession] = useState<any>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isDevMode, setIsDevMode] = useState(false);
+
+  const [loginDefaultState, setLoginDefaultState] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const path = window.location.pathname.replace(/\/$/, "");
+    const hash = window.location.hash;
+    return !(path === "/signup" || hash === "#signup");
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [extensionHandoff, setExtensionHandoff] = useState<"idle" | "redirecting" | "done">("idle");
+
+  const beginExtensionHandoff = (opts?: { freshSignIn?: boolean }) => {
+    if (!shouldHandoffToExtension(opts)) return false;
+    clearExtensionOAuthParam();
+    setExtensionHandoff("redirecting");
+    return true;
+  };
+
+  useEffect(() => {
+    if (extensionHandoff !== "redirecting" || !session) return;
+
+    syncSessionWithExtension(session);
+
+    const timer = window.setTimeout(() => {
+      redirectToExtension();
+      setExtensionHandoff("done");
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [extensionHandoff, session]);
+
+  useEffect(() => {
+    const checkSessionAndRoute = async () => {
+      const oauthError = clearAuthErrorFromUrl();
+      if (oauthError) {
+        console.warn('[App] OAuth error from redirect:', oauthError);
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+
+      const path = window.location.pathname.replace(/\/$/, "");
+      const hash = window.location.hash;
+      const searchParams = new URLSearchParams(window.location.search);
+      const viewQuery = searchParams.get("view");
+
+      const isDashboardPath = path === "/dashboard" || hash === "#dashboard" || viewQuery === "dashboard";
+      const isManageSubPath = path === "/manage_subscription" || hash === "#manage_subscription" || viewQuery === "manage_subscription";
+      const isBlockedPath = path === "/blocked" || hash === "#blocked" || viewQuery === "blocked";
+      const isLoginPath = path === "/login" || path === "/signup" || hash === "#login" || hash === "#signup" || viewQuery === "login" || viewQuery === "signup";
+      const isNotionAuth = path === "/notion-auth" || viewQuery === "notion-auth";
+      const isSchedulePath = /^\/schedule\/[^/]+/.test(path);
+      const isFocusRoomPath = /^\/room\/[^/]+/.test(path);
+      const publicProfileUser = getPublicProfileUsername();
+
+      if (isNotionAuth) {
+        setCurrentView("notion-auth");
+        setLoading(false);
+        return; // Skip authentication logic entirely for the proxy
+      }
+
+      if (isSchedulePath) {
+        setCurrentView("schedule");
+        setLoading(false);
+        return;
+      }
+
+      if (isFocusRoomPath) {
+        setCurrentView("focus_room");
+        setLoading(false);
+        return;
+      }
+
+      if (publicProfileUser) {
+        setCurrentView("public_profile");
+        setLoading(false);
+        return;
+      }
+
+      if (session) {
+        const billingReturn = isBillingReturnQuery(window.location.search);
+
+        if (
+          !isSchedulePath &&
+          !isFocusRoomPath &&
+          !billingReturn &&
+          beginExtensionHandoff()
+        ) {
+          setLoading(false);
+          return;
+        }
+
+        if (!isSchedulePath) {
+          syncSessionWithExtension(session);
+        }
+
+        // Check for new user (created within last minute)
+        if (session.user.created_at && new Date(session.user.created_at).getTime() > Date.now() - 60000) {
+          setShowOnboarding(true);
+        }
+
+        if (isDashboardPath) {
+          setCurrentView("dashboard");
+        } else if (isManageSubPath) {
+          setCurrentView("manage_subscription");
+        } else if (isBlockedPath) {
+          setCurrentView("blocked");
+        } else if (isLoginPath) {
+          setCurrentView("dashboard");
+          window.history.replaceState({}, "", "/dashboard");
+        } else {
+          setCurrentView("landing");
+        }
+      } else {
+        if (isManageSubPath) {
+          setCurrentView("login");
+          window.history.pushState({}, "", "/login");
+        } else if (isBlockedPath) {
+          setCurrentView("blocked");
+        } else if (isLoginPath) {
+          setCurrentView("login");
+        } else {
+          setCurrentView("landing");
+        }
+      }
+      setLoading(false);
+    };
+
+    checkSessionAndRoute();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      if (session && !isScheduleRoute() && !isFocusRoomRoute()) {
+        syncSessionWithExtension(session);
+      }
+      if (event === "SIGNED_IN" && session && !isScheduleRoute() && !isFocusRoomRoute()) {
+        beginExtensionHandoff();
+      }
+      if (isScheduleRoute()) {
+        setCurrentView("schedule");
+        setLoading(false);
+      } else if (isFocusRoomRoute()) {
+        setCurrentView("focus_room");
+        setLoading(false);
+      } else if (isPublicProfileRoute()) {
+        setCurrentView("public_profile");
+        setLoading(false);
+      }
+    });
+
+    // Dev Mode & Onboarding Trigger
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.shiftKey && e.key === "Escape") {
+        setIsDevMode(prev => !prev);
+        console.log("Dev Mode Toggled");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    (window as any).onboarding = () => setShowOnboarding(true);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  const navItems = [
+    {
+      name: "Features",
+      link: "#features",
+      icon: (
+        <IconChartBar className="h-4 w-4 text-neutral-500 dark:text-white" />
+      ),
+    },
+    {
+      name: "How it Works",
+      link: "#how-it-works",
+      icon: <IconHome className="h-4 w-4 text-neutral-500 dark:text-white" />,
+    },
+    {
+      name: "Pricing",
+      link: "#pricing",
+      icon: (
+        <IconCurrencyDollar className="h-4 w-4 text-neutral-500 dark:text-white" />
+      ),
+    },
+  ];
+
+  const typewriterWords = [
+    { text: "Time" },
+    { text: "to" },
+    { text: "build", className: "text-purple-500" },
+    { text: "work", className: "text-purple-500" },
+    { text: "win", className: "text-purple-500" },
+    { text: "focus.", className: "text-purple-500 dark:text-purple-500" },
+  ];
+
+  const goLogin = () => {
+    setLoginDefaultState(true);
+    setCurrentView("login");
+    window.history.pushState({}, "", "/login");
+  };
+
+  const goSignup = () => {
+    setLoginDefaultState(false);
+    setCurrentView("login");
+    window.history.pushState({}, "", "/signup");
+  };
+
+  const goLanding = () => {
+    setCurrentView("landing");
+    window.history.pushState({}, "", "/");
+  };
+
+  const goDashboard = () => {
+    setCurrentView("dashboard");
+    window.history.pushState({}, "", "/dashboard");
+  };
+
+  const goManageSubscription = () => {
+    if (!session) {
+      goLogin();
+      return;
+    }
+    setCurrentView("manage_subscription");
+    window.history.pushState({}, "", "/manage_subscription");
+  };
+
+  const handleInstallClick = () => {
+    if (document.documentElement.getAttribute('data-focuznow-extension')) {
+      alert("Extension is already installed! Open it from your browser toolbar.");
+    } else {
+      window.open(CHROME_EXTENSION_STORE_URL, '_blank');
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // LOADING SCREEN
+  // ---------------------------------------------------------------------------
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-black">
+        <LoaderThree className="h-screen" />
+      </div>
+    );
+  }
+
+  if (extensionHandoff !== "idle" && session) {
+    return <ExtensionHandoffScreen phase={extensionHandoff === "done" ? "done" : "redirecting"} />;
+  }
+
+  if (currentView === "schedule") {
+    return <ScheduleBookingPage />;
+  }
+
+  if (currentView === "focus_room") {
+    const roomId = getFocusRoomId();
+    if (roomId) return <FocusRoomPage roomId={roomId} />;
+  }
+
+  if (currentView === "public_profile") {
+    const handle = getPublicProfileUsername();
+    if (handle) return <PublicProfilePage username={handle} />;
+  }
+
+  // ---------------------------------------------------------------------------
+  // MANAGE SUBSCRIPTION
+  // ---------------------------------------------------------------------------
+  if (currentView === "manage_subscription" && session) {
+    return <ManageSubscriptionPage session={session} onBack={goDashboard} />;
+  }
+
+  if (currentView === "blocked") {
+    return <BlockedPage />;
+  }
+
+  // ---------------------------------------------------------------------------
+  // NOTION OAUTH PROXY
+  // ---------------------------------------------------------------------------
+  if (currentView === "notion-auth") {
+    // When the component mounts or renders, we process the redirect immediately
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      const extId = params.get("state");
+
+      if (code && extId) {
+        // Safe Bridge: Redirect directly to the extension's options page
+        window.location.href = `chrome-extension://${extId}/src/options/index.html?notion_code=${code}`;
+      }
+    }
+
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-10">
+        <div className="relative w-16 h-16 mb-6">
+          <div className="absolute inset-0 border-4 border-purple-500/20 rounded-full" />
+          <div className="absolute inset-0 border-4 border-t-purple-500 rounded-full animate-spin" />
+        </div>
+        <h1 className="text-2xl font-bold mb-2">Connecting to Notion...</h1>
+        <p className="text-neutral-500 text-sm">Please wait while we redirect you back to FocuzNow.</p>
+        <p className="text-neutral-700 text-xs mt-4">Proxying token back to extension</p>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // DASHBOARD (REDIRECTING)
+  // ---------------------------------------------------------------------------
+  if (currentView === "dashboard" && session) {
+    return (
+      <DashboardPage
+        session={session}
+        onLogout={() => {
+          supabase.auth.signOut().then(() => goLanding());
+        }}
+      />
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // LOGIN PAGE
+  // ---------------------------------------------------------------------------
+  if (currentView === "login") {
+    return (
+      <LoginPage
+        onBack={goLanding}
+        onLoginSuccess={() => {
+          supabase.auth.getSession().then(({ data }) => {
+            if (!data.session) return;
+            setSession(data.session);
+            syncSessionWithExtension(data.session);
+            if (beginExtensionHandoff({ freshSignIn: true })) return;
+            goDashboard();
+          });
+        }}
+        initialLoginState={loginDefaultState}
+      />
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // LANDING PAGE
+  // ---------------------------------------------------------------------------
+  return (
+    <div className="min-h-screen bg-black text-neutral-200 font-sans selection:bg-purple-500/30">
+      <FloatingNav navItems={navItems} onLoginClick={goLogin} />
+      <AiChatWidget />
+
+      {/* HERO SECTION */}
+      <header className="relative flex flex-col items-center justify-center min-h-[90vh] overflow-hidden pt-20">
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-900/10 via-black to-black pointer-events-none" />
+
+        <div className="z-10 w-full max-w-5xl px-4 flex flex-col items-center">
+          <div className="h-[20rem] md:h-[40rem] flex items-center justify-center w-full">
+            <TextHoverEffect text="FOCUZNOW" />
+          </div>
+
+          <div className="text-center -mt-20 md:-mt-40 space-y-6 flex flex-col items-center">
+            <p className="text-2xl md:text-3xl font-bold text-white flex items-center gap-2 flex-wrap justify-center">
+              Time to <RotatingWord />
+            </p>
+            <TypewriterEffectSmooth words={typewriterWords} />
+            <p className="max-w-xl mx-auto text-neutral-400 text-lg">
+              Your focus data, finally useful. Local-first analytics that turn
+              your browsing chaos into personalized focus strategies. No cloud.
+              No judgment. Just insights.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 mt-8">
+              <button
+                onClick={handleInstallClick}
+                className="px-8 py-3 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-bold transition-all transform hover:scale-105"
+              >
+                Add to Chrome - Free
+              </button>
+              <button className="px-8 py-3 rounded-full border border-neutral-700 hover:bg-neutral-900 text-neutral-300 font-medium transition-all flex items-center gap-2">
+                <span>▶</span> Watch Demo
+              </button>
+            </div>
+            <p className="text-xs text-neutral-500 mt-4">
+              1,250 people improved their focus this week
+            </p>
+          </div>
+        </div>
+      </header>
+
+      {/* Stats Section */}
+      <section className="py-20 bg-neutral-950 border-y border-white/5">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center mb-16">
+            <div className="p-6 rounded-2xl bg-neutral-900/50 border border-white/5">
+              <p className="text-neutral-500 text-sm mb-2">Focus Score</p>
+              <p className="text-4xl font-bold text-white">87/100</p>
+            </div>
+            <div className="p-6 rounded-2xl bg-neutral-900/50 border border-white/5">
+              <p className="text-neutral-500 text-sm mb-2">Time Saved</p>
+              <p className="text-4xl font-bold text-purple-400">2h 34m</p>
+            </div>
+            <div className="p-6 rounded-2xl bg-neutral-900/50 border border-white/5">
+              <p className="text-neutral-500 text-sm mb-2">Current Streak</p>
+              <p className="text-4xl font-bold text-white">12 days</p>
+            </div>
+          </div>
+
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
+              You're not lazy. <br />
+              <span className="text-purple-500">
+                Your browser is just too interesting.
+              </span>
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              {
+                label: "Average daily social media time",
+                value: "2.5 hours",
+                icon: "📱",
+              },
+              { label: "Tab switches per hour", value: "47", icon: "🔄" },
+              { label: "Average focus duration", value: "11 minutes", icon: "⏱️" },
+              { label: "When you finally close YouTube", value: "3am", icon: "🌙" },
+            ].map((stat, i) => (
+              <div
+                key={i}
+                className="p-6 rounded-xl bg-black border border-neutral-800 hover:border-purple-500/30 transition-colors"
+              >
+                <div className="text-2xl mb-4">{stat.icon}</div>
+                <div className="text-xl font-bold text-white mb-2">
+                  {stat.value}
+                </div>
+                <div className="text-sm text-neutral-500">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Personas */}
+      <section className="py-24 px-6 bg-black">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-16 text-neutral-200">
+            The Usual Suspects
+          </h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="p-8 rounded-2xl bg-neutral-900 border border-neutral-800">
+              <div className="text-4xl mb-4">🌀</div>
+              <h3 className="text-xl font-bold text-white mb-2">The Rabbit Hole</h3>
+              <p className="text-neutral-400">
+                Started with one tutorial, ended on ancient alien theories.
+              </p>
+            </div>
+            <div className="p-8 rounded-2xl bg-neutral-900 border border-neutral-800">
+              <div className="text-4xl mb-4">🗂️</div>
+              <h3 className="text-xl font-bold text-white mb-2">The Tab Hoarder</h3>
+              <p className="text-neutral-400">
+                67 tabs open, 3 are actually useful.
+              </p>
+            </div>
+            <div className="p-8 rounded-2xl bg-neutral-900 border border-neutral-800">
+              <div className="text-4xl mb-4">🔄</div>
+              <h3 className="text-xl font-bold text-white mb-2">
+                The Context Switcher
+              </h3>
+              <p className="text-neutral-400">
+                Email → Slack → Twitter → Wait, what was I doing?
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features List */}
+      <section id="features" className="py-12 bg-neutral-950">
+        <div className="max-w-7xl mx-auto px-6">
+          <h2 className="text-3xl md:text-5xl font-bold text-center text-white mb-12">
+            Intelligence meets{" "}
+            <span className="text-purple-500">privacy</span>.
+          </h2>
+          <FeaturesList />
+        </div>
+      </section>
+
+      {/* How it Works */}
+      <section id="how-it-works" className="py-24 px-6 bg-black relative">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-16">
+            Three steps to focus clarity
+          </h2>
+          <div className="space-y-12">
+            {[
+              {
+                step: "Step 1",
+                title: "Install in 10 seconds",
+                desc: "One click. No signup required.",
+              },
+              {
+                step: "Step 2",
+                title: "Browse normally for 24 hours",
+                desc: "We learn your patterns silently.",
+              },
+              {
+                step: "Step 3",
+                title: "Receive your first insight",
+                desc: "Actionable advice by day two.",
+              },
+            ].map((item, i) => (
+              <div key={i} className="flex items-start gap-6">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-purple-900/30 text-purple-400 flex items-center justify-center font-bold border border-purple-500/20">
+                  {i + 1}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">{item.title}</h3>
+                  <p className="text-neutral-400 mt-1">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="py-24 px-6 bg-neutral-950 border-t border-white/5">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
+              Start free. Upgrade when you're ready.
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Free Plan */}
+            <div className="p-8 rounded-3xl bg-neutral-900 border border-neutral-800 flex flex-col">
+              <h3 className="text-2xl font-bold text-white mb-2">Free Forever</h3>
+              <div className="text-4xl font-bold text-white mb-6">
+                $0<span className="text-lg text-neutral-500 font-normal">/month</span>
+              </div>
+              <p className="text-neutral-400 mb-8">Perfect for getting started</p>
+
+              <ul className="space-y-4 mb-8 flex-1">
+                {[
+                  "Core tracking",
+                  "Daily focus score",
+                  "Top 5 site analytics",
+                  "Basic weekly reports",
+                  "Chrome extension",
+                ].map((feat, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center gap-3 text-neutral-300"
+                  >
+                    <span className="text-purple-500">✓</span> {feat}
+                  </li>
+                ))}
+              </ul>
+
+              <button className="w-full py-3 rounded-xl bg-white text-black font-bold hover:bg-neutral-200 transition-colors">
+                Start Free →
+              </button>
+            </div>
+
+            {/* Pro Plan */}
+            <div className="p-8 rounded-3xl bg-neutral-900 border border-purple-500/30 relative flex flex-col">
+              <div className="absolute top-0 right-0 bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-bl-xl rounded-tr-2xl">
+                MOST POPULAR
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
+              <div className="text-4xl font-bold text-white mb-6">
+                $8<span className="text-lg text-neutral-500 font-normal">/month</span>
+              </div>
+              <p className="text-neutral-400 mb-8">Everything in Free, plus:</p>
+
+              <ul className="space-y-4 mb-8 flex-1">
+                {[
+                  "AI-powered daily insights",
+                  "Unlimited site tracking",
+                  "Custom focus goals",
+                  "Advanced analytics",
+                  "Calendar integration",
+                  "Priority support",
+                ].map((feat, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center gap-3 text-neutral-300"
+                  >
+                    <span className="text-purple-400">✓</span> {feat}
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                onClick={goSignup}
+                className="w-full py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-500 transition-colors"
+              >
+                Start 7-Day Trial →
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="py-24 px-6 bg-black">
+        <div className="max-w-3xl mx-auto text-center leading-loose text-lg md:text-2xl text-neutral-400">
+          <div className="mb-12">
+            Real focus wins. Just ask{" "}
+            <Tooltip
+              containerClassName="text-white decoration-purple-500 decoration-2 underline underline-offset-4"
+              content={
+                <div>
+                  <img
+                    src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200"
+                    alt="Sarah K."
+                    className="aspect-square w-full rounded-sm object-cover"
+                  />
+                  <div className="my-4 flex flex-col">
+                    <p className="text-lg font-bold">Sarah K.</p>
+                    <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+                      Software Engineer. Cut Reddit time by 73%.
+                    </p>
+                  </div>
+                </div>
+              }
+            >
+              <span className="cursor-pointer font-bold hover:text-purple-400 transition-colors">
+                Sarah
+              </span>
+            </Tooltip>
+            , who cut her Reddit time by 73% in two weeks. "The AI insights are
+            scary accurate."
+          </div>
+
+          <div>
+            Even{" "}
+            <Tooltip
+              containerClassName="text-white decoration-purple-500 decoration-2 underline underline-offset-4"
+              content={
+                <div className="">
+                  <blockquote className="mb-4 text-neutral-700 dark:text-neutral-300 italic">
+                    "This extension understood my procrastination patterns
+                    better than I do."
+                  </blockquote>
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200"
+                      alt="Marcus J."
+                      className="size-8 rounded-full object-cover"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
+                        Marcus J.
+                      </p>
+                      <p className="text-[10px] text-neutral-600 dark:text-neutral-400">
+                        PhD Student
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              }
+            >
+              <span className="cursor-pointer font-bold hover:text-purple-400 transition-colors">
+                Marcus
+              </span>
+            </Tooltip>{" "}
+            finally finished his thesis using Focuznow.
+          </div>
+        </div>
+      </section>
+
+      {/* Need Help Section */}
+      <section id="help" className="py-24 px-6 border-t border-white/10 bg-neutral-950">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-white mb-3">Need help?</h2>
+          <p className="text-neutral-400 mb-8 max-w-xl mx-auto">
+            Ask our AI coach on the landing page, or email our team — we typically respond within 24 hours.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <a
+              href="mailto:support@focuznow.com?subject=FocuzNow%20Help"
+              className="px-6 py-3 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-bold transition-all"
+            >
+              Email support
+            </a>
+            <button
+              onClick={goLogin}
+              className="px-6 py-3 rounded-full border border-white/20 text-white font-bold hover:bg-white/5 transition-all"
+            >
+              Open dashboard
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer CTA */}
+      <footer className="py-20 border-t border-white/10 bg-neutral-950 text-center">
+        <h2 className="text-3xl font-bold text-white mb-6">
+          Ready to reclaim your focus?
+        </h2>
+        <p className="text-neutral-400 mb-8">
+          Join 1,247 people who took control this week.
+        </p>
+
+        <button
+          onClick={handleInstallClick}
+          className="px-8 py-4 rounded-full bg-white text-black font-bold text-lg hover:bg-neutral-200 transition-colors mb-4"
+        >
+          Add to Chrome - Start Free
+        </button>
+
+        <div className="flex justify-center gap-6 text-sm text-neutral-500 mt-6">
+          <span>No Credit Card Required</span>
+          <span>Setup in 60 Seconds</span>
+          <span>Cancel Anytime</span>
+        </div>
+
+        <div className="mt-20 border-t border-white/5 pt-12 flex flex-col md:flex-row justify-between items-center max-w-6xl mx-auto px-6 text-sm text-neutral-600">
+          <div className="flex gap-6 mb-4 md:mb-0">
+            <a href="/privacy.html" className="hover:text-purple-500 transition-colors">
+              Privacy
+            </a>
+            <a href="/terms.html" className="hover:text-purple-500 transition-colors">
+              Terms
+            </a>
+            <a href="mailto:support@focuznow.com" className="hover:text-purple-500 transition-colors">
+              Support
+            </a>
+          </div>
+          <p>&copy; 2026 FocuzNow, Inc. All rights reserved.</p>
+        </div>
+      </footer>
+
+      {/* Onboarding & Dev Mode */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onComplete={() => setShowOnboarding(false)}
+      />
+
+      {isDevMode && (
+        <div className="fixed bottom-4 right-4 bg-black border border-purple-500 text-purple-400 px-4 py-2 rounded-lg shadow-lg z-50 font-mono text-xs animate-in slide-in-from-bottom-2">
+          <div className="font-bold mb-1">DEV MODE ACTIVE</div>
+          <div className="opacity-70">Run onboarding() in console</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Booking pages skip auth/dashboard routing entirely so guests are never redirected home. */
+export default function App() {
+  if (typeof window !== "undefined" && isScheduleRoute()) {
+    return <ScheduleBookingPage />;
+  }
+  if (typeof window !== "undefined" && isBetaTesterSite()) {
+    return <BetaApp />;
+  }
+  return <FocuzNowApp />;
+}
