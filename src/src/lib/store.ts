@@ -37,7 +37,7 @@ function parseStoredSession(raw: unknown): Session | null {
 }
 
 function sendEngineProfileSettings(
-    settings: Pick<EngineState, 'profileName' | 'profileInitial' | 'profileAvatar'>,
+    settings: Pick<EngineState, 'profileName' | 'profileUsername' | 'profileInitial' | 'profileAvatar'>,
 ): Promise<void> {
     return new Promise((resolve) => {
         chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings }, () => resolve());
@@ -249,6 +249,7 @@ export interface EngineState {
     todos: { id: number; text: string; done: boolean }[];
     dailyFocusTarget: Record<string, number>;
     profileName?: string;
+    profileUsername?: string;
     profileInitial?: string;
     profileAvatar?: string;
     // Productivity tools
@@ -714,7 +715,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     clearProfileFromEngine: async () => {
-        const cleared = { profileName: '', profileInitial: '', profileAvatar: '' };
+        const cleared = { profileName: '', profileUsername: '', profileInitial: '', profileAvatar: '' };
         try {
             await sendEngineProfileSettings(cleared);
         } catch (e) {
@@ -757,6 +758,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const displayName = profile.displayName.trim();
         const settings = {
             profileName: displayName,
+            profileUsername: profile.username.trim(),
             profileInitial: (displayName.charAt(0) || 'F').toUpperCase(),
             profileAvatar: profile.avatarUrl || '',
         };

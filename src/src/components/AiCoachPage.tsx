@@ -195,11 +195,13 @@ export default function AiCoachPage({
     onOpenAccount,
     initialPrompt,
     onPromptConsumed,
+    embedded = false,
 }: {
     onBack: () => void;
     onOpenAccount: () => void;
     initialPrompt?: string | null;
     onPromptConsumed?: () => void;
+    embedded?: boolean;
 }) {
     const { session, engineState, syncSubscriptionFromDb, fetchEngineState } = useAuthStore();
     const [messages, setMessages] = useState<CoachMessage[]>([]);
@@ -665,19 +667,21 @@ export default function AiCoachPage({
     ];
 
     return (
-        <div className="fixed inset-0 z-[200] flex bg-[#0d0d0d] text-white">
+        <div className={`${embedded ? 'h-full min-h-0' : 'fixed inset-0 z-[200]'} flex bg-[#0a0a0b] text-neutral-100`}>
             {errorState && <ErrorOverlay error={errorState} onClose={() => setErrorState(null)} />}
 
-            <aside className="w-[280px] shrink-0 flex flex-col bg-[#171717] border-r border-white/[0.06]">
+            <aside className="w-[260px] shrink-0 flex flex-col bg-[#111113] border-r border-white/[0.06]">
                 <div className="p-2 flex items-center gap-1 border-b border-white/[0.04]">
-                    <button
-                        type="button"
-                        onClick={onBack}
-                        className="p-2 rounded-lg hover:bg-white/10 text-neutral-400 hover:text-white"
-                        title="Back to FocuzNow"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                    </button>
+                    {!embedded && (
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="p-2 rounded-md hover:bg-white/[0.05] text-neutral-500 hover:text-neutral-200"
+                            title="Back to FocuzNow"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={() => void startNewChat()}

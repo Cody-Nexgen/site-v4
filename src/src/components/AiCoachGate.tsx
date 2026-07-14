@@ -5,11 +5,13 @@ export default function AiCoachGate({
     onOpenAccount,
     initialPrompt,
     onPromptConsumed,
+    embedded = false,
 }: {
     onBack: () => void;
     onOpenAccount: () => void;
     initialPrompt?: string | null;
     onPromptConsumed?: () => void;
+    embedded?: boolean;
 }) {
     return (
         <AiCoachPage
@@ -17,6 +19,7 @@ export default function AiCoachGate({
             onOpenAccount={onOpenAccount}
             initialPrompt={initialPrompt}
             onPromptConsumed={onPromptConsumed}
+            embedded={embedded}
         />
     );
 }

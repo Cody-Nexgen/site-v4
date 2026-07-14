@@ -38,7 +38,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
                 onClick={() => setOpen((v) => !v)}
                 className="w-full flex items-center justify-between gap-3 py-4 text-left group"
             >
-                <span className="text-sm font-medium text-white group-hover:text-purple-300 transition-colors pr-2">{q}</span>
+                <span className="text-sm font-medium text-neutral-200 group-hover:text-white transition-colors pr-2">{q}</span>
                 <ChevronDown
                     size={16}
                     className={`shrink-0 text-neutral-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -72,10 +72,10 @@ export default function SupportTab({ onOpenAiCoach, isPro }: Props) {
                 </p>
             </div>
 
-            <GlassCard className="p-6 sm:p-8 border-purple-500/20 bg-gradient-to-br from-purple-950/30 to-transparent">
+            <GlassCard className="p-6 sm:p-8 border-white/[0.07] bg-[#121214]">
                 <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
-                        <Sparkles size={22} className="text-purple-400" />
+                    <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.07] flex items-center justify-center shrink-0">
+                        <Sparkles size={18} className="text-neutral-500" />
                     </div>
                     <div className="min-w-0 flex-1">
                         <h2 className="text-lg font-semibold text-white mb-1">AI Coach {isPro ? '' : '(Pro)'}</h2>
@@ -85,7 +85,7 @@ export default function SupportTab({ onOpenAiCoach, isPro }: Props) {
                         <button
                             type="button"
                             onClick={onOpenAiCoach}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors duration-150"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-neutral-100 hover:bg-white text-neutral-950 text-sm font-medium transition-colors duration-150"
                         >
                             <MessageCircle size={16} />
                             {isPro ? 'Open AI Coach' : 'Learn about Pro'}
@@ -101,7 +101,7 @@ export default function SupportTab({ onOpenAiCoach, isPro }: Props) {
                     <p className="text-sm text-neutral-500 mb-4">We typically respond within 24 hours.</p>
                     <a
                         href="mailto:support@focuznow.com?subject=FocuzNow%20Help"
-                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-400 hover:text-purple-300 transition-colors"
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 hover:text-neutral-200 transition-colors"
                     >
                         support@focuznow.com
                         <ExternalLink size={14} />

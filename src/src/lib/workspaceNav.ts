@@ -11,26 +11,24 @@ export type NavSection = {
     tabs: NavTab[];
 };
 
-export const WORKSPACE_NAV: NavSection[] = [
-    {
-        id: 'focus',
-        label: 'Focuz',
-        tabs: [
-            { id: 'overview', label: 'Dashboard' },
-            { id: 'calendar', label: 'Calendar' },
-            { id: 'sessions', label: 'Sessions' },
-            { id: 'blocklist', label: 'Block list' },
-            { id: 'habits', label: 'Habits' },
-        ],
-    },
+export const PRIMARY_NAV: NavTab[] = [
+    { id: 'overview', label: 'Dashboard' },
+    { id: 'calendar', label: 'Calendar' },
+    { id: 'ai_coach', label: 'AI Coach' },
+    { id: 'sessions', label: 'Sessions' },
+    { id: 'blocklist', label: 'Blocklist' },
+    { id: 'habits', label: 'Habits' },
+    { id: 'statistics', label: 'Stats' },
+];
+
+export const COLLAPSIBLE_NAV: NavSection[] = [
     {
         id: 'progress',
         label: 'Progress',
         tabs: [
-            { id: 'progress', label: 'Progress' },
+            { id: 'progress', label: 'Overview' },
             { id: 'challenges', label: 'Challenges' },
             { id: 'forest', label: 'Forest' },
-            { id: 'shop', label: 'Focuz Shop' },
         ],
     },
     {
@@ -38,26 +36,39 @@ export const WORKSPACE_NAV: NavSection[] = [
         label: 'Social',
         tabs: [
             { id: 'friends', label: 'Friends' },
-            { id: 'focus_rooms', label: 'Focuz Rooms' },
+            { id: 'focus_rooms', label: 'Focus Rooms' },
         ],
     },
+];
+
+export const ACCOUNT_NAV: NavTab[] = [
+    { id: 'account', label: 'Account' },
+    { id: 'settings', label: 'Preferences' },
+    { id: 'support', label: 'Help' },
+    { id: 'shop', label: 'Focuz Shop' },
+    { id: 'patterns', label: 'Patterns' },
+];
+
+export const WORKSPACE_NAV: NavSection[] = [
     {
-        id: 'insights',
-        label: 'Insights',
-        tabs: [
-            { id: 'statistics', label: 'Statistics' },
-            { id: 'ai_coach', label: 'AI Coach' },
-            { id: 'patterns', label: 'Patterns' },
-        ],
+        id: 'general',
+        label: 'General',
+        tabs: PRIMARY_NAV,
     },
     {
-        id: 'settings',
-        label: 'Settings',
-        tabs: [
-            { id: 'settings', label: 'Preferences' },
-            { id: 'support', label: 'Need Help' },
-            { id: 'account', label: 'Account' },
-        ],
+        id: 'progress',
+        label: 'Progress',
+        tabs: COLLAPSIBLE_NAV[0].tabs,
+    },
+    {
+        id: 'social',
+        label: 'Social',
+        tabs: COLLAPSIBLE_NAV[1].tabs,
+    },
+    {
+        id: 'account',
+        label: 'Account',
+        tabs: ACCOUNT_NAV,
     },
 ];
 

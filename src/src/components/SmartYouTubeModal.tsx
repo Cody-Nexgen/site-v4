@@ -44,7 +44,7 @@ export default function SmartYouTubeModal({ open, onClose, settings, onSave }: P
         <ModalPortal>
             <AnimatePresence>
                 <motion.div
-                    className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                    className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -58,7 +58,7 @@ export default function SmartYouTubeModal({ open, onClose, settings, onSave }: P
                     >
                         <div className="focuz-modal-header flex items-start justify-between gap-3">
                             <div>
-                                <div className="flex items-center gap-2 text-purple-400 mb-1">
+                                <div className="flex items-center gap-2 text-neutral-500 mb-1">
                                     <Youtube size={18} />
                                     <span className="text-[10px] font-bold uppercase tracking-widest">Smart YouTube</span>
                                 </div>
@@ -78,9 +78,9 @@ export default function SmartYouTubeModal({ open, onClose, settings, onSave }: P
                                 <button
                                     type="button"
                                     onClick={() => setDraft({ ...draft, blockShorts: !draft.blockShorts })}
-                                    className={`w-11 h-6 rounded-full relative transition-colors ${draft.blockShorts ? 'bg-purple-600' : 'bg-neutral-700'}`}
+                                    className={`w-10 h-5 rounded-full relative transition-colors ${draft.blockShorts ? 'bg-neutral-200' : 'bg-neutral-800'}`}
                                 >
-                                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${draft.blockShorts ? 'left-6' : 'left-1'}`} />
+                                    <div className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${draft.blockShorts ? 'left-5 bg-neutral-950' : 'left-0.5 bg-neutral-500'}`} />
                                 </button>
                             </div>
 
@@ -95,7 +95,7 @@ export default function SmartYouTubeModal({ open, onClose, settings, onSave }: P
                                                 blockedCategoryIds: [...DEFAULT_BLOCKED_CATEGORY_IDS],
                                             })
                                         }
-                                        className="text-[10px] font-bold text-purple-400 uppercase tracking-wide"
+                                        className="text-[10px] font-medium text-neutral-500"
                                     >
                                         Reset defaults
                                     </button>
@@ -133,7 +133,7 @@ export default function SmartYouTubeModal({ open, onClose, settings, onSave }: P
                             <button type="button" className="focuz-btn-ghost" onClick={onClose}>
                                 Cancel
                             </button>
-                            <button type="button" className="focuz-btn-primary !bg-purple-600" disabled={saving} onClick={() => void handleSave()}>
+                            <button type="button" className="focuz-btn-primary !bg-neutral-100 !text-neutral-950" disabled={saving} onClick={() => void handleSave()}>
                                 {saving ? 'Saving…' : 'Save & apply'}
                             </button>
                         </div>

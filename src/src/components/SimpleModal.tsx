@@ -26,7 +26,7 @@ export default function SimpleModal({
     return (
         <ModalPortal>
             <div
-                className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="simple-modal-title"
@@ -35,7 +35,7 @@ export default function SimpleModal({
                 }}
             >
                 <div
-                    className={`glass-edge-card w-full ${maxWidth} p-6 space-y-4 border ${
+                    className={`surface-card w-full ${maxWidth} p-5 space-y-4 border ${
                         danger ? 'border-red-500/30' : 'border-white/10'
                     }`}
                 >
@@ -43,7 +43,7 @@ export default function SimpleModal({
                         <div className="min-w-0">
                             <h3
                                 id="simple-modal-title"
-                                className={`text-lg font-black tracking-tight ${
+                                className={`text-base font-semibold tracking-tight ${
                                     danger ? 'text-red-400' : 'text-white'
                                 }`}
                             >
@@ -56,7 +56,7 @@ export default function SimpleModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/10 shrink-0"
+                            className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-white/[0.05] shrink-0"
                             aria-label="Close"
                         >
                             <X size={18} />

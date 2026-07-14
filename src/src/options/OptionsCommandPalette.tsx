@@ -235,38 +235,23 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
         <AnimatePresence>
             {open && (
                 <motion.div
-                    className="fixed inset-0 z-[300] flex items-start justify-center pt-[12vh] px-4 bg-black/60 backdrop-blur-md"
+                    className="fixed inset-0 z-[300] flex items-start justify-center pt-[12vh] px-4 bg-black/70"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     onClick={onClose}
                 >
                     <motion.div
-                        className="w-full max-w-[560px] bg-[#141414] border border-white/[0.08] rounded-2xl overflow-hidden shadow-2xl"
-                        style={{
-                            boxShadow:
-                                '0 24px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)',
-                        }}
+                        className="w-full max-w-[560px] bg-[#141416] border border-white/[0.09] rounded-lg overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.55)]"
                         initial={{ opacity: 0, scale: 0.97, y: -6 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.97, y: -6 }}
                         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between px-4 pt-3">
-                            <div className="flex gap-1.5">
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
-                            </div>
-                            <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-[0.12em]">
-                                Command palette
-                            </span>
-                        </div>
-
                         <div
-                            className={`mx-3.5 mt-3 mb-2 px-3.5 py-3 bg-[#1c1c1c] border rounded-xl flex items-center gap-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${
-                                todoPrompt ? 'border-purple-500/40' : 'border-white/[0.06]'
+                            className={`m-2 px-3 py-2.5 bg-white/[0.025] border rounded-md flex items-center gap-2.5 ${
+                                todoPrompt ? 'border-white/[0.14]' : 'border-white/[0.07]'
                             }`}
                         >
                             <Search size={18} className="text-neutral-600 flex-shrink-0" />
@@ -280,14 +265,14 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
                                 placeholder={
                                     todoPrompt ? 'What do you need to do?' : 'Type a command or search…'
                                 }
-                                className="flex-1 bg-transparent border-none outline-none text-white text-[15px] font-medium placeholder:text-neutral-600"
+                                className="flex-1 bg-transparent border-none outline-none text-neutral-200 text-sm font-normal placeholder:text-neutral-600"
                                 spellCheck={false}
                                 autoComplete="off"
                             />
                         </div>
 
                         {todoPrompt && !todoSuccess && (
-                            <p className="px-5 pb-2 text-xs font-semibold text-purple-400">
+                            <p className="px-4 pb-2 text-xs font-medium text-neutral-500">
                                 Add to-do — press Enter to save
                             </p>
                         )}
@@ -308,7 +293,7 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
                                     if (!sectionCmds.length) return null;
                                     return (
                                         <div key={section}>
-                                            <p className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest px-5 py-2">
+                                            <p className="text-[10px] font-medium text-neutral-600 px-4 py-2">
                                                 {section}
                                             </p>
                                             {sectionCmds.map((cmd) => {
@@ -327,7 +312,7 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
                                                                 onClose();
                                                             }
                                                         }}
-                                                        className={`w-full flex items-center gap-3 px-5 py-3 text-left transition-colors ${
+                                                        className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${
                                                             i === selected
                                                                 ? 'bg-white/[0.08] text-white'
                                                                 : 'text-neutral-400 hover:bg-white/[0.03]'

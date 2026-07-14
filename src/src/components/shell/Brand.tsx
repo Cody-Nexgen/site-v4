@@ -10,9 +10,9 @@ type BrandProps = {
 };
 
 const SIZES = {
-    sm: { box: 'w-8 h-8 rounded-lg text-sm', title: 'text-sm font-semibold' },
-    md: { box: 'w-10 h-10 rounded-xl text-base', title: 'text-base font-semibold' },
-    lg: { box: 'w-12 h-12 rounded-xl text-lg', title: 'text-lg font-semibold' },
+    sm: { box: 'w-7 h-7 text-xs', title: 'text-sm font-medium' },
+    md: { box: 'w-9 h-9 text-sm', title: 'text-base font-medium' },
+    lg: { box: 'w-11 h-11 text-base', title: 'text-lg font-medium' },
 } as const;
 
 export function Brand({ size = 'md', subtitle, className = '', glow = false, showRotatingWord = false }: BrandProps) {
@@ -20,7 +20,7 @@ export function Brand({ size = 'md', subtitle, className = '', glow = false, sho
     return (
         <div className={`flex items-center gap-3 min-w-0 ${className}`}>
             <div
-                className={`${s.box} shrink-0 flex items-center justify-center font-semibold text-white bg-gradient-to-br from-violet-600 to-violet-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] ring-1 ring-white/10 ${glow ? 'focuz-brand-icon-glow' : ''}`}
+                className={`${s.box} shrink-0 flex items-center justify-center rounded-full font-medium text-neutral-200 bg-neutral-800 border border-white/[0.08]`}
                 aria-hidden
             >
                 F
@@ -31,7 +31,7 @@ export function Brand({ size = 'md', subtitle, className = '', glow = false, sho
                 </p>
                 {showRotatingWord ? (
                     <p className="text-xs text-neutral-500 mt-0.5 flex items-center gap-1">
-                        Time to <RotatingWord className="text-purple-400 font-bold" />
+                        Time to <RotatingWord className="text-neutral-300 font-medium" />
                     </p>
                 ) : subtitle ? (
                     <p className="text-xs text-neutral-500 mt-0.5 truncate">{subtitle}</p>

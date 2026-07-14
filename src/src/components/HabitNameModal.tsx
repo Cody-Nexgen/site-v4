@@ -42,14 +42,14 @@ export default function HabitNameModal({ open, onClose, onSubmit }: Props) {
                     if (e.key === 'Enter') void submit();
                 }}
                 placeholder="e.g. Meditate, Deep Work"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-neutral-600 outline-none focus:border-purple-500 text-sm"
+                className="w-full h-9 bg-white/[0.025] border border-white/[0.08] rounded-md px-3 text-neutral-200 placeholder:text-neutral-600 outline-none focus:border-white/[0.18] text-sm"
             />
             <div className="flex gap-2 pt-1">
                 <button
                     type="button"
                     onClick={onClose}
                     disabled={saving}
-                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-sm font-bold"
+                    className="flex-1 py-2 rounded-md bg-white/[0.04] hover:bg-white/[0.07] text-neutral-300 text-sm font-medium"
                 >
                     Cancel
                 </button>
@@ -57,7 +57,7 @@ export default function HabitNameModal({ open, onClose, onSubmit }: Props) {
                     type="button"
                     onClick={() => void submit()}
                     disabled={!name.trim() || saving}
-                    className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex-1 py-2 rounded-md bg-neutral-100 hover:bg-white text-neutral-950 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                     {saving ? 'Adding…' : 'Add habit'}
                 </button>

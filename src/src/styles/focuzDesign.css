@@ -1,40 +1,40 @@
 /* Focuz Design Language — premium productivity, not AI-dashboard */
 
 :root {
-    --fz-bg: #141416;
-    --fz-surface: #1c1c1f;
-    --fz-surface-raised: #242428;
-    --fz-surface-overlay: #2a2a30;
+    --fz-bg: #0a0a0b;
+    --fz-surface: #121214;
+    --fz-surface-raised: #171719;
+    --fz-surface-overlay: #1c1c1f;
     --fz-border: rgba(255, 255, 255, 0.07);
-    --fz-border-strong: rgba(255, 255, 255, 0.12);
-    --fz-text: #f4f4f5;
-    --fz-text-secondary: #a1a1aa;
-    --fz-text-tertiary: #71717a;
-    --fz-accent: #38bdf8;
-    --fz-accent-muted: rgba(56, 189, 248, 0.15);
+    --fz-border-strong: rgba(255, 255, 255, 0.11);
+    --fz-text: #ededee;
+    --fz-text-secondary: #a0a0a6;
+    --fz-text-tertiary: #66666d;
+    --fz-accent: #d7d7db;
+    --fz-accent-muted: rgba(255, 255, 255, 0.08);
     --fz-accent-warm: #f59e0b;
     --fz-success: #34d399;
     --fz-danger: #f87171;
-    --fz-radius-sm: 8px;
-    --fz-radius-md: 12px;
-    --fz-radius-lg: 14px;
-    --fz-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2);
-    --fz-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
-    --fz-font-display: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --fz-radius-sm: 5px;
+    --fz-radius-md: 7px;
+    --fz-radius-lg: 8px;
+    --fz-shadow-sm: none;
+    --fz-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.45);
+    --fz-font-display: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 .focuznow-calendar {
-    --cal-bg: #161618;
-    --cal-surface: #1e1e22;
-    --cal-surface-raised: #26262c;
+    --cal-bg: #0a0a0b;
+    --cal-surface: #121214;
+    --cal-surface-raised: #18181b;
     --cal-border: rgba(255, 255, 255, 0.06);
-    --cal-accent: #a855f7;
-    --cal-accent-muted: rgba(168, 85, 247, 0.12);
-    --cal-today: #a855f7;
+    --cal-accent: #d7d7db;
+    --cal-accent-muted: rgba(255, 255, 255, 0.08);
+    --cal-today: #d7d7db;
     --cal-weekend: transparent;
     --cal-now: #f59e0b;
     --cal-hour: #8b8b96;
-    --cal-event-radius: 12px;
+    --cal-event-radius: 6px;
     color-scheme: dark;
     background-color: var(--cal-bg);
     font-family: var(--fz-font-display);
@@ -79,9 +79,9 @@ html:has(.focuznow-calendar) body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(165deg, var(--fz-surface-raised) 0%, var(--fz-surface) 100%);
+    background: var(--fz-surface-raised);
     border: 1px solid var(--fz-border-strong);
-    border-radius: 16px;
+    border-radius: var(--fz-radius-lg);
     box-shadow: var(--fz-shadow-md);
 }
 

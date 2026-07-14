@@ -4,7 +4,6 @@ import {
     Ban as IconBan,
     Zap as IconBolt,
     LogOut as IconLogout,
-    CalendarDays as IconCalendarStats,
     Lock as IconLock,
     Globe as IconWorldCheck,
     Palette as IconPalette,
@@ -26,17 +25,7 @@ import {
     Check as IconCheck,
     ExternalLink as IconExternalLink,
     CreditCard as IconCreditCard,
-    Sparkles as IconSparkles,
     Maximize2 as IconMaximize2,
-    HelpCircle as IconHelpCircle,
-    Trophy as IconTrophy,
-    BarChart3 as IconPatterns,
-    Trees as IconTrees,
-    Users as IconUsers,
-    Zap as IconZapChallenge,
-    Mic2 as IconFocusRooms,
-    ChevronDown as IconChevronDown,
-    Ellipsis as IconEllipsis,
 } from 'lucide-react';
 import AiCoachGate from '../components/AiCoachGate';
 import ForestTab from './ForestTab';
@@ -53,7 +42,7 @@ import AchievementsTab from './AchievementsTab';
 import ChallengesTab from './ChallengesTab';
 import FocusShopTab from './FocusShopTab';
 import FriendsTab from './FriendsTab';
-import { resolveTabId } from '../lib/workspaceNav';
+import { resolveTabId, tabLabel } from '../lib/workspaceNav';
 import { AUTO_SCHEDULE_COACH_PROMPT } from '../lib/socialApi';
 import { sendProgressionMessage } from '../hooks/useFocusProgression';
 import { useFocusProgression } from '../hooks/useFocusProgression';
@@ -72,7 +61,7 @@ import {
 } from '../lib/accountApi';
 import { useHostBookingNotifications } from '../hooks/useHostBookingNotifications';
 import { OptionsCommandPalette } from './OptionsCommandPalette';
-import { WorkspaceNavigator, tabLabel, tabToGroup } from './WorkspaceNavigator';
+import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { supabase } from '../lib/supabase';
 import {
     fetchMyProfile,
@@ -105,10 +94,8 @@ export const GlassCard = ({ children, className = "", onClick, style }: { childr
     <div
         onClick={onClick}
         style={style}
-        className={`glass-edge-card relative overflow-hidden ${onClick ? 'cursor-pointer hover:bg-[#0A0A0A]/80 transition-colors' : ''} ${className}`}
+        className={`surface-card relative overflow-hidden ${onClick ? 'cursor-pointer hover:bg-white/[0.025] transition-colors' : ''} ${className}`}
     >
-        {/* Subtle top-left light highlight for directional glass effect */}
-        <div className="absolute top-0 left-0 w-32 h-32 bg-white/[0.02] rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
         <div className="relative z-10">{children}</div>
     </div>
 );
@@ -2276,10 +2263,14 @@ const OptionsApp = () => {
     const [blockedUrl, setBlockedUrl] = useState('');
     const [showEndSession, setShowEndSession] = useState(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
-    const [workspaceOpen, setWorkspaceOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [focusToast, setFocusToast] = useState('');
     const [coachInitialPrompt, setCoachInitialPrompt] = useState<string | null>(null);
+
+    useEffect(() => {
+        document.body.classList.add('focuz-dashboard');
+        return () => document.body.classList.remove('focuz-dashboard');
+    }, []);
 
     useEffect(() => {
         const onFocusComplete = () => {
@@ -2444,6 +2435,16 @@ const OptionsApp = () => {
             case 'patterns': return <PatternsTab />;
             case 'shop': return <FocusShopTab />;
             case 'friends': return <FriendsTab />;
+            case 'focus_rooms': return <FocusRoomView onBack={() => navigateTab('overview')} embedded />;
+            case 'ai_coach': return (
+                <AiCoachGate
+                    onBack={() => navigateTab('overview')}
+                    onOpenAccount={() => navigateTab('account')}
+                    initialPrompt={coachInitialPrompt}
+                    onPromptConsumed={() => setCoachInitialPrompt(null)}
+                    embedded
+                />
+            );
             case 'support': return <SupportTab onOpenAiCoach={() => navigateTab('ai_coach')} isPro={isPro} />;
             case 'account': return <AccountSettings />;
             case 'settings': return <SettingsTab />;
@@ -2451,249 +2452,48 @@ const OptionsApp = () => {
         }
     };
 
-    if (activeTab === 'focus_rooms') {
-        return (
-            <FocusRoomView onBack={() => navigateTab('overview')} />
-        );
-    }
-
-    if (activeTab === 'ai_coach') {
-        return (
-            <AiCoachGate
-                onBack={() => navigateTab('overview')}
-                onOpenAccount={() => navigateTab('account')}
-                initialPrompt={coachInitialPrompt}
-                onPromptConsumed={() => setCoachInitialPrompt(null)}
-            />
-        );
-    }
-
-    const primarySidebarItems = [
-        { id: 'overview', label: 'Dashboard', icon: <IconTarget size={14} /> },
-        { id: 'calendar', label: 'Calendar', icon: <IconCalendarStats size={14} /> },
-        { id: 'sessions', label: 'Sessions', icon: <IconClock size={14} /> },
-    ];
-    const sidebarSections = [
-        {
-            label: 'Workspace',
-            items: [
-                { id: 'blocklist', label: 'Block list', icon: <IconBan size={14} /> },
-                { id: 'habits', label: 'Habits', icon: <IconChecklist size={14} /> },
-                { id: 'statistics', label: 'Statistics', icon: <IconPatterns size={14} /> },
-            ],
-        },
-        {
-            label: 'Progress',
-            items: [
-                { id: 'progress', label: 'Overview', icon: <IconTrophy size={14} /> },
-                { id: 'challenges', label: 'Challenges', icon: <IconZapChallenge size={14} /> },
-                { id: 'forest', label: 'Forest', icon: <IconTrees size={14} /> },
-            ],
-        },
-        {
-            label: 'Try',
-            items: [
-                { id: 'ai_coach', label: 'AI Coach', icon: <IconSparkles size={14} /> },
-                { id: 'focus_rooms', label: 'Focuz Rooms', icon: <IconFocusRooms size={14} /> },
-                { id: 'friends', label: 'Friends', icon: <IconUsers size={14} /> },
-            ],
-        },
-    ];
-    const overflowSidebarTabs = ['shop', 'patterns', 'settings', 'support', 'account'];
-    const sidebarItemIsActive = (tab: string) =>
-        activeTab === tab || (tab === 'progress' && activeTab === 'achievements');
-    const navItemClass = (tab: string) =>
-        `w-full h-7 px-2 flex items-center gap-2 rounded-[4px] text-[12.5px] font-normal text-left transition-colors ${
-            sidebarItemIsActive(tab)
-                ? 'bg-white/[0.055] text-neutral-200'
-                : 'text-neutral-500 hover:bg-white/[0.035] hover:text-neutral-300'
-        }`;
-
     return (
-        <div className={`grid grid-cols-[240px_1fr] min-h-screen text-white selection:bg-purple-500/30 font-sans ${proGoldTheme ? 'pro-shell-vignette' : 'bg-[#0a0a0a]'}`}>
+        <div className={`focuz-dashboard grid grid-cols-[240px_1fr] min-h-screen selection:bg-white/10 ${proGoldTheme ? 'pro-shell-vignette' : ''}`}>
             {proVisuals && <ProConfettiGate />}
             
             {/* Sidebar */}
-            <aside className="flex flex-col bg-[#0d0d0e] border-r border-white/[0.07] w-[240px] min-w-[240px] max-w-[240px] h-screen sticky top-0 overflow-x-hidden">
-                <div className="h-11 px-2 flex items-center gap-1">
-                    <button
-                        type="button"
-                        onClick={() => navigateTab('account')}
-                        className="min-w-0 flex-1 h-8 px-1.5 flex items-center gap-2 rounded-[4px] text-left hover:bg-white/[0.035] transition-colors"
-                    >
-                        <div className="w-5 h-5 shrink-0 rounded-full bg-[#d94f70] flex items-center justify-center text-[8px] font-semibold text-white">
-                            FN
-                        </div>
-                        <span className="min-w-0 truncate text-[12.5px] font-medium text-neutral-200">
-                            focuznow
-                        </span>
-                        <IconChevronDown size={11} className="shrink-0 text-neutral-600" />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setPaletteOpen(true)}
-                        className="w-7 h-7 shrink-0 flex items-center justify-center rounded-[4px] text-neutral-600 hover:bg-white/[0.035] hover:text-neutral-300 transition-colors"
-                        aria-label="Search"
-                        title="Search"
-                    >
-                        <IconSearch size={13} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setWorkspaceOpen(true)}
-                        className="w-7 h-7 shrink-0 flex items-center justify-center rounded-[4px] text-neutral-600 hover:bg-white/[0.035] hover:text-neutral-300 transition-colors"
-                        aria-label="Browse workspace"
-                        title="Browse workspace"
-                    >
-                        <IconMaximize2 size={13} />
-                    </button>
-                </div>
-
-                <nav className="flex-1 px-2 pt-1 pb-2 overflow-y-auto scrollbar-hide">
-                    <div className="space-y-0.5">
-                        {primarySidebarItems.map((item) => (
-                            <button
-                                type="button"
-                                key={item.id}
-                                onClick={() => navigateTab(item.id)}
-                                aria-current={sidebarItemIsActive(item.id) ? 'page' : undefined}
-                                className={navItemClass(item.id)}
-                            >
-                                <span className="shrink-0 text-current">{item.icon}</span>
-                                <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="mt-5 space-y-5">
-                        {sidebarSections.map((section) => (
-                            <div key={section.label}>
-                                <div className="h-6 px-2 flex items-center gap-1 text-[11px] font-medium text-neutral-600">
-                                    <span>{section.label}</span>
-                                    <IconChevronDown size={10} />
-                                </div>
-                                {section.label === 'Workspace' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setWorkspaceOpen(true)}
-                                        className="w-full h-7 px-2 flex items-center gap-2 rounded-[4px] text-[12.5px] text-neutral-400 hover:bg-white/[0.035] hover:text-neutral-200 transition-colors"
-                                    >
-                                        <span className="w-3.5 h-3.5 rounded-[3px] border border-white/10 bg-white/[0.04] flex items-center justify-center">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-[#748c45]" />
-                                        </span>
-                                        <span className="flex-1 text-left font-medium">FocuzNow</span>
-                                        <IconChevronDown size={10} className="text-neutral-700" />
-                                    </button>
-                                )}
-                                <div className={`space-y-0.5 ${section.label === 'Workspace' ? 'ml-4' : ''}`}>
-                                    {section.items.map((item) => (
-                                        <button
-                                            type="button"
-                                            key={item.id}
-                                            onClick={() => navigateTab(item.id)}
-                                            aria-current={sidebarItemIsActive(item.id) ? 'page' : undefined}
-                                            className={navItemClass(item.id)}
-                                        >
-                                            <span className="shrink-0 text-current">{item.icon}</span>
-                                            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                                        </button>
-                                    ))}
-                                    {section.label === 'Workspace' && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setWorkspaceOpen(true)}
-                                            aria-current={overflowSidebarTabs.includes(activeTab) ? 'page' : undefined}
-                                            className={`w-full h-7 px-2 flex items-center gap-2 rounded-[4px] text-[12.5px] text-left transition-colors ${
-                                                overflowSidebarTabs.includes(activeTab)
-                                                    ? 'bg-white/[0.055] text-neutral-200'
-                                                    : 'text-neutral-500 hover:bg-white/[0.035] hover:text-neutral-300'
-                                            }`}
-                                        >
-                                            <IconEllipsis size={14} />
-                                            <span>More</span>
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </nav>
-
-                <div className="p-2 flex items-center gap-1">
-                    <button
-                        type="button"
-                        onClick={() => navigateTab('support')}
-                        className="w-7 h-7 flex items-center justify-center rounded-full border border-white/[0.07] text-neutral-600 hover:bg-white/[0.035] hover:text-neutral-300 transition-colors"
-                        aria-label="Help"
-                        title="Help"
-                    >
-                        <IconHelpCircle size={13} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => navigateTab('settings')}
-                        className="w-7 h-7 flex items-center justify-center rounded-[4px] text-neutral-700 hover:bg-white/[0.035] hover:text-neutral-300 transition-colors"
-                        aria-label="Settings"
-                        title="Settings"
-                    >
-                        <IconBolt size={13} />
-                    </button>
-                </div>
-            </aside>
+            <WorkspaceSidebar
+                activeTab={activeTab}
+                avatarUrl={engineState.profileAvatar}
+                username={engineState.profileUsername || engineState.profileName}
+                email={session?.user?.email}
+                isPro={isPro}
+                onNavigate={navigateTab}
+                onOpenPalette={() => setPaletteOpen(true)}
+                onUpgrade={() => void openCheckout()}
+                onSignOut={() => void useAuthStore.getState().signOut()}
+            />
 
             {/* Main Content */}
-            <main className="flex flex-col min-w-0 relative bg-[#111111] overflow-x-hidden h-screen">
+            <main className="flex flex-col min-w-0 relative bg-[#0a0a0b] overflow-x-hidden h-screen">
                 {/* Topbar */}
-                <header className="h-16 shrink-0 px-8 flex items-center justify-between sticky top-0 z-50 bg-[#111111]/80 backdrop-blur-md">
-                    <div className="flex items-center space-x-2 text-[12px] font-bold uppercase tracking-widest text-neutral-500">
-                        <div className="flex items-center space-x-2 px-2 py-1 -ml-2">
-                            <span>Workspace</span>
-                        </div>
-                        <span>/</span>
-                        <div className="flex items-center space-x-2 px-2 py-1">
-                            <span>{tabToGroup(activeTab).label}</span>
-                        </div>
-                        <span>/</span>
-                        <span className="text-white bg-purple-500/10 px-2 py-1 rounded-md border border-purple-500/20">{tabLabel(activeTab)}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
+                <header className="h-11 shrink-0 px-6 flex items-center justify-between sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0b]">
+                    <h1 className="text-xs font-medium text-neutral-400">{tabLabel(activeTab)}</h1>
+                    <div className="flex items-center gap-2">
                         {!isPro && (
                             <button
                                 type="button"
                                 onClick={() => void openCheckout()}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-purple-500 text-white text-[11px] font-bold hover:from-purple-500 hover:to-purple-400 transition-all shadow-lg shadow-purple-600/20"
+                                className="flex h-7 items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.035] px-2.5 text-[11px] font-medium text-neutral-400 transition-colors hover:bg-white/[0.06] hover:text-neutral-200"
                             >
-                                <IconSparkles size={12} />
-                                Upgrade to Pro
+                                Upgrade
                             </button>
                         )}
                     </div>
-                    <div className="hidden">
-                        <div className="flex items-center space-x-3 text-neutral-400">
-                            <button type="button" className="hover:text-white transition-colors"><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
-                            <button className="hover:text-white transition-colors"><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></button>
-                            <button className="hover:text-white transition-colors"><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></button>
-                        </div>
-                        <div className="h-4 w-px bg-white/10"></div>
-                        <div className="flex items-center space-x-2">
-                            <button className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[12px] font-bold text-white hover:bg-white/5 transition-colors">
-                                <IconPlayerPause size={12} className="fill-current" />
-                                <span>Pause</span>
-                            </button>
-                            <button className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-purple-600 text-[12px] font-bold text-white hover:bg-purple-500 transition-colors">
-                                <span>+ New session</span>
-                            </button>
-                        </div>
-                    </div>
                 </header>
 
-                <div className={activeTab === 'calendar'
+                <div className={['calendar', 'ai_coach', 'focus_rooms'].includes(activeTab)
                     ? 'flex-1 min-h-0 w-full overflow-hidden'
-                    : 'px-8 pb-16 w-full overflow-y-auto scrollbar-hide'}
+                    : 'px-6 pb-12 w-full overflow-y-auto scrollbar-hide'}
                 >
                     <div
                         key={activeTab}
-                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${activeTab === 'calendar' ? 'h-full' : ''}`}
+                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${['calendar', 'ai_coach', 'focus_rooms'].includes(activeTab) ? 'h-full' : ''}`}
                     >
                         {renderContent()}
                     </div>
@@ -2706,12 +2506,6 @@ const OptionsApp = () => {
                 onNavigate={navigateTab}
                 onOpenAi={() => navigateTab('ai_coach')}
                 onFeedback={setToastMessage}
-            />
-            <WorkspaceNavigator
-                open={workspaceOpen}
-                onClose={() => setWorkspaceOpen(false)}
-                activeTab={activeTab}
-                onNavigate={navigateTab}
             />
             <ActionToast message={toastMessage} onDone={() => setToastMessage('')} />
 

@@ -79,12 +79,12 @@ function ParticipantTile({
     }, [stream, hasVideo, isLocal, speakerId]);
 
     return (
-        <div className="relative aspect-video rounded-xl overflow-hidden bg-[#111214] border border-[#2b2d31]">
+        <div className="relative aspect-video rounded-lg overflow-hidden bg-[#121214] border border-white/[0.07]">
             {!isLocal && <audio ref={audioRef} autoPlay playsInline className="sr-only" />}
             {hasVideo ? (
                 <video ref={videoRef} autoPlay playsInline muted={isLocal} className="w-full h-full object-cover" />
             ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-b from-[#1a1b1f] to-[#111214]">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#121214]">
                     {avatarUrl ? (
                         <img src={avatarUrl} alt="" className={`${PROFILE_AVATAR_IMG_CLASS} !w-20 !h-20`} />
                     ) : (
@@ -103,9 +103,10 @@ function ParticipantTile({
 
 type Props = {
     onBack?: () => void;
+    embedded?: boolean;
 };
 
-export default function FocusRoomView({ onBack }: Props) {
+export default function FocusRoomView({ onBack, embedded = false }: Props) {
     const { session, engineState } = useAuthStore();
     const [roomId, setRoomId] = useState<string | null>(null);
     const [room, setRoom] = useState<FocusRoom | null>(null);
@@ -266,15 +267,15 @@ export default function FocusRoomView({ onBack }: Props) {
 
     if (!session) {
         return (
-            <div className="h-screen flex items-center justify-center bg-[#111214] text-[#dbdee1] p-6">
+            <div className={`${embedded ? 'h-full' : 'h-screen'} flex items-center justify-center bg-[#0a0a0b] text-neutral-200 p-6`}>
                 <div className="max-w-md text-center space-y-4">
-                    <Users size={40} className="mx-auto text-[#5865f2]" />
+                    <Users size={40} className="mx-auto text-neutral-500" />
                     <h1 className="text-2xl font-bold text-white">Focuz Rooms</h1>
                     <p className="text-sm text-[#949ba4]">Sign in to join voice focus sessions with friends.</p>
                     <button
                         type="button"
                         onClick={() => window.open('https://focuznow.com/signup', '_blank')}
-                        className="px-6 py-3 rounded-xl bg-[#5865f2] hover:bg-[#4752c4] font-bold text-white"
+                        className="px-5 py-2 rounded-md bg-neutral-100 hover:bg-white font-medium text-neutral-950"
                     >
                         Create Account
                     </button>
@@ -285,15 +286,15 @@ export default function FocusRoomView({ onBack }: Props) {
 
     if (!inRoom || !room || !roomId) {
         return (
-            <div className="h-screen bg-[#111214] text-[#dbdee1] flex flex-col overflow-hidden">
-                {onBack && (
+            <div className={`${embedded ? 'h-full' : 'h-screen'} bg-[#0a0a0b] text-neutral-200 flex flex-col overflow-hidden`}>
+                {onBack && !embedded && (
                     <button type="button" onClick={onBack} className="m-4 flex items-center gap-2 text-sm text-[#949ba4] hover:text-white w-fit">
                         <ArrowLeft size={16} /> Back
                     </button>
                 )}
                 <div className="flex-1 grid lg:grid-cols-2 gap-0 min-h-0">
-                    <div className="flex flex-col justify-center p-8 lg:p-12 border-b lg:border-b-0 lg:border-r border-[#2b2d31]">
-                        <div className="relative aspect-video max-h-[420px] rounded-2xl overflow-hidden bg-[#1e1f22] border border-[#2b2d31]">
+                    <div className="flex flex-col justify-center p-8 lg:p-12 border-b lg:border-b-0 lg:border-r border-white/[0.07]">
+                        <div className="relative aspect-video max-h-[420px] rounded-lg overflow-hidden bg-[#121214] border border-white/[0.07]">
                             <video
                                 ref={previewVideoRef}
                                 autoPlay
@@ -436,7 +437,7 @@ export default function FocusRoomView({ onBack }: Props) {
                                 type="button"
                                 disabled={loading}
                                 onClick={() => void handleCreate()}
-                                className="px-6 py-3 rounded-xl bg-[#5865f2] hover:bg-[#4752c4] font-bold text-white disabled:opacity-50 flex items-center gap-2"
+                                className="px-5 py-2 rounded-md bg-neutral-100 hover:bg-white font-medium text-neutral-950 disabled:opacity-50 flex items-center gap-2"
                             >
                                 {loading ? <Loader2 className="animate-spin" size={18} /> : null}
                                 Join Focus Room
@@ -451,10 +452,10 @@ export default function FocusRoomView({ onBack }: Props) {
     }
 
     return (
-        <div className="h-screen flex flex-col bg-[#111214] text-[#dbdee1] overflow-hidden">
+        <div className={`${embedded ? 'h-full' : 'h-screen'} flex flex-col bg-[#0a0a0b] text-neutral-200 overflow-hidden`}>
             <header className="h-12 px-4 flex items-center justify-between border-b border-[#1e1f22] shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
-                    {onBack && (
+                    {onBack && !embedded && (
                         <button type="button" onClick={onBack} className="text-[#949ba4] hover:text-white">
                             <ArrowLeft size={18} />
                         </button>
@@ -465,7 +466,7 @@ export default function FocusRoomView({ onBack }: Props) {
                     {rtc.roomLocked && <Shield size={14} className="text-amber-400" aria-label="Room locked" />}
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-lg font-semibold text-[#5865f2] tabular-nums">{countdown}</span>
+                    <span className="text-lg font-semibold text-neutral-300 tabular-nums">{countdown}</span>
                     <button
                         type="button"
                         onClick={() => {
@@ -506,7 +507,7 @@ export default function FocusRoomView({ onBack }: Props) {
                         <div className="flex-1 overflow-y-auto p-3 space-y-2 text-sm">
                             {rtc.chat.map((m) => (
                                 <div key={m.id}>
-                                    <span className="font-bold text-[#5865f2] text-xs">{m.name}</span>
+                                    <span className="font-medium text-neutral-400 text-xs">{m.name}</span>
                                     <p className="text-[#dbdee1]">{m.text}</p>
                                 </div>
                             ))}

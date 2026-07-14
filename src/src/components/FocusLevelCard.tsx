@@ -20,7 +20,7 @@ export function FocusLevelCard({ progression, compact = false, className = '' }:
         return (
             <div className={`flex items-center gap-4 ${className}`}>
                 <div
-                    className={`w-11 h-11 rounded-xl bg-purple-500/[0.12] flex items-center justify-center font-semibold text-purple-300 tabular-nums ${frameClass}`}
+                    className={`w-11 h-11 rounded-lg bg-white/[0.05] border border-white/[0.07] flex items-center justify-center font-medium text-neutral-300 tabular-nums ${frameClass}`}
                 >
                     {progress.level}
                 </div>
@@ -49,13 +49,13 @@ export function FocusLevelCard({ progression, compact = false, className = '' }:
     }
 
     return (
-        <div className={`p-6 rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 to-transparent ${className}`}>
+        <div className={`p-6 rounded-lg border border-white/[0.07] bg-[#121214] ${className}`}>
             <div className="flex items-start justify-between gap-4 mb-5">
                 <div>
                     <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-2">Focuz Level</p>
                     <div className="flex items-center gap-3">
                         <div
-                            className={`w-14 h-14 rounded-2xl bg-purple-600/20 flex items-center justify-center text-2xl font-semibold text-white tabular-nums ${frameClass}`}
+                            className={`w-14 h-14 rounded-lg bg-white/[0.05] border border-white/[0.07] flex items-center justify-center text-2xl font-semibold text-neutral-200 tabular-nums ${frameClass}`}
                         >
                             {progress.level}
                         </div>
@@ -86,7 +86,7 @@ export function FocusLevelCard({ progression, compact = false, className = '' }:
             <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                     <span className="text-neutral-400">{progress.xp.toLocaleString()} XP from real focus work</span>
-                    <span className="text-purple-400 font-semibold tabular-nums">{progress.progressPct}%</span>
+                    <span className="text-neutral-400 font-medium tabular-nums">{progress.progressPct}%</span>
                 </div>
                 <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
                     <div
