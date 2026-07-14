@@ -54,7 +54,11 @@ const STORAGE_KEY = 'focuznow-sidebar-sections-v1';
 function readExpanded(): Record<string, boolean> {
     try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
-        return stored ? JSON.parse(stored) : { progress: true, social: true };
+        if (!stored) return { progress: true, social: true };
+        const parsed: unknown = JSON.parse(stored);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? parsed as Record<string, boolean>
+            : { progress: true, social: true };
     } catch {
         return { progress: true, social: true };
     }
@@ -74,6 +78,7 @@ export function WorkspaceSidebar({
     const [accountOpen, setAccountOpen] = useState(false);
     const [expanded, setExpanded] = useState<Record<string, boolean>>(readExpanded);
     const accountRef = useRef<HTMLDivElement>(null);
+    const accountTriggerRef = useRef<HTMLButtonElement>(null);
     const displayName = username?.trim() || email?.split('@')[0] || 'Account';
     const initial = displayName.charAt(0).toUpperCase();
 
@@ -87,7 +92,10 @@ export function WorkspaceSidebar({
             if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false);
         };
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setAccountOpen(false);
+            if (event.key === 'Escape') {
+                setAccountOpen(false);
+                window.requestAnimationFrame(() => accountTriggerRef.current?.focus());
+            }
         };
         document.addEventListener('mousedown', close);
         document.addEventListener('keydown', closeOnEscape);
@@ -99,9 +107,6 @@ export function WorkspaceSidebar({
 
     const isActive = (tab: string) =>
         activeTab === tab || (tab === 'progress' && activeTab === 'achievements');
-    const activeParentId = COLLAPSIBLE_NAV.find((section) =>
-        section.tabs.some((tab) => isActive(tab.id)),
-    )?.id;
     const navClass = (tab: string) =>
         `w-full h-7 px-2 flex items-center gap-2 rounded-[4px] text-[12.5px] text-left transition-colors ${
             isActive(tab)
@@ -117,9 +122,12 @@ export function WorkspaceSidebar({
         <aside className="relative flex h-screen w-[240px] min-w-[240px] flex-col overflow-x-hidden border-r border-white/[0.07] bg-[#0d0d0e]">
             <div ref={accountRef} className="relative flex h-11 items-center gap-1 px-2">
                 <button
+                    ref={accountTriggerRef}
                     type="button"
                     onClick={() => setAccountOpen((open) => !open)}
                     aria-expanded={accountOpen}
+                    aria-haspopup="menu"
+                    aria-controls="workspace-account-menu"
                     className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[4px] px-1.5 text-left transition-colors hover:bg-white/[0.035]"
                 >
                     {avatarUrl ? (
@@ -148,7 +156,11 @@ export function WorkspaceSidebar({
                 </button>
 
                 {accountOpen && (
-                    <div className="absolute left-2 right-2 top-10 z-[90] rounded-lg border border-white/[0.09] bg-[#171719] p-1 shadow-[0_16px_40px_rgba(0,0,0,0.55)]">
+                    <div
+                        id="workspace-account-menu"
+                        role="menu"
+                        className="absolute left-2 right-2 top-10 z-[90] rounded-lg border border-white/[0.09] bg-[#171719] p-1 shadow-[0_16px_40px_rgba(0,0,0,0.55)]"
+                    >
                         <div className="px-2 py-2">
                             <p className="truncate text-xs font-medium text-neutral-200">{displayName}</p>
                             <p className="truncate text-[11px] text-neutral-600">{email || (isPro ? 'Pro plan' : 'Free plan')}</p>
@@ -162,6 +174,7 @@ export function WorkspaceSidebar({
                         ].map((item) => (
                             <button
                                 type="button"
+                                role="menuitem"
                                 key={item.id}
                                 onClick={() => navigateFromMenu(item.id)}
                                 className="flex h-7 w-full items-center gap-2 rounded px-2 text-left text-xs text-neutral-400 hover:bg-white/[0.05] hover:text-neutral-200"
@@ -173,6 +186,7 @@ export function WorkspaceSidebar({
                         {!isPro && (
                             <button
                                 type="button"
+                                role="menuitem"
                                 onClick={() => {
                                     setAccountOpen(false);
                                     onUpgrade();
@@ -186,6 +200,7 @@ export function WorkspaceSidebar({
                         <div className="my-1 h-px bg-white/[0.07]" />
                         <button
                             type="button"
+                            role="menuitem"
                             onClick={onSignOut}
                             className="flex h-7 w-full items-center gap-2 rounded px-2 text-left text-xs text-neutral-500 hover:bg-white/[0.05] hover:text-neutral-200"
                         >
@@ -214,7 +229,7 @@ export function WorkspaceSidebar({
 
                 <div className="mt-5 space-y-4">
                     {COLLAPSIBLE_NAV.map((section) => {
-                        const open = section.id === activeParentId || expanded[section.id] !== false;
+                        const open = expanded[section.id] !== false;
                         return (
                             <div key={section.id}>
                                 <button

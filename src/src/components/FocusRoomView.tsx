@@ -292,7 +292,7 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                         <ArrowLeft size={16} /> Back
                     </button>
                 )}
-                <div className="flex-1 grid lg:grid-cols-2 gap-0 min-h-0">
+                <div className="flex-1 grid lg:grid-cols-2 gap-0 min-h-0 overflow-y-auto lg:overflow-hidden">
                     <div className="flex flex-col justify-center p-8 lg:p-12 border-b lg:border-b-0 lg:border-r border-white/[0.07]">
                         <div className="relative aspect-video max-h-[420px] rounded-lg overflow-hidden bg-[#121214] border border-white/[0.07]">
                             <video
@@ -338,7 +338,7 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                         </div>
                     </div>
 
-                    <div className="flex flex-col p-8 lg:p-12 overflow-y-auto">
+                    <div className="flex flex-col p-8 lg:p-12 lg:overflow-y-auto">
                         <h1 className="text-2xl font-bold text-white mb-1">Join a focus room</h1>
                         <p className="text-sm text-[#949ba4] mb-8">Configure devices, then create or join a session.</p>
 

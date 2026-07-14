@@ -7,6 +7,7 @@ import {
     Loader2,
     MoreHorizontal,
     Pencil,
+    PanelLeft,
     Plus,
     Search,
     Send,
@@ -214,6 +215,7 @@ export default function AiCoachPage({
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
+    const [embeddedSidebarOpen, setEmbeddedSidebarOpen] = useState(false);
     const [chatAnalyticsApproved, setChatAnalyticsApproved] = useState(false);
     const chatAnalyticsApprovedRef = useRef(false);
     const analyticsContinueQuestionRef = useRef<string | null>(null);
@@ -667,10 +669,27 @@ export default function AiCoachPage({
     ];
 
     return (
-        <div className={`${embedded ? 'h-full min-h-0' : 'fixed inset-0 z-[200]'} flex bg-[#0a0a0b] text-neutral-100`}>
+        <div className={`${embedded ? 'relative h-full min-h-0' : 'fixed inset-0 z-[200]'} flex bg-[#0a0a0b] text-neutral-100`}>
             {errorState && <ErrorOverlay error={errorState} onClose={() => setErrorState(null)} />}
 
-            <aside className="w-[260px] shrink-0 flex flex-col bg-[#111113] border-r border-white/[0.06]">
+            {embedded && embeddedSidebarOpen && (
+                <button
+                    type="button"
+                    aria-label="Close chat history"
+                    onClick={() => setEmbeddedSidebarOpen(false)}
+                    className="absolute inset-0 z-10 bg-black/45 xl:hidden"
+                />
+            )}
+
+            <aside
+                className={`w-[260px] shrink-0 flex flex-col bg-[#111113] border-r border-white/[0.06] ${
+                    embedded
+                        ? `absolute inset-y-0 left-0 z-20 transition-transform xl:relative xl:z-auto xl:translate-x-0 ${
+                            embeddedSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                        }`
+                        : ''
+                }`}
+            >
                 <div className="p-2 flex items-center gap-1 border-b border-white/[0.04]">
                     {!embedded && (
                         <button
@@ -684,7 +703,10 @@ export default function AiCoachPage({
                     )}
                     <button
                         type="button"
-                        onClick={() => void startNewChat()}
+                        onClick={() => {
+                            setEmbeddedSidebarOpen(false);
+                            void startNewChat();
+                        }}
                         className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/90 hover:bg-white/[0.08]"
                     >
                         <SquarePen className="w-4 h-4 shrink-0" />
@@ -729,7 +751,10 @@ export default function AiCoachPage({
                             >
                                 <button
                                     type="button"
-                                    onClick={() => void loadChatHistory(s.id)}
+                                    onClick={() => {
+                                        setEmbeddedSidebarOpen(false);
+                                        void loadChatHistory(s.id);
+                                    }}
                                     className="flex-1 text-left px-3 py-2.5 text-sm truncate text-neutral-300 group-hover:text-white"
                                 >
                                     {s.title || 'New chat'}
@@ -751,8 +776,18 @@ export default function AiCoachPage({
             </aside>
 
             <main className="flex-1 flex flex-col min-w-0 bg-[#0d0d0d]">
-                <header className="hidden">
-                </header>
+                {embedded && (
+                    <header className="flex h-10 shrink-0 items-center border-b border-white/[0.05] px-2 xl:hidden">
+                        <button
+                            type="button"
+                            onClick={() => setEmbeddedSidebarOpen(true)}
+                            className="flex h-7 items-center gap-2 rounded-md px-2 text-xs text-neutral-500 hover:bg-white/[0.04] hover:text-neutral-200"
+                        >
+                            <PanelLeft size={14} />
+                            Chats
+                        </button>
+                    </header>
+                )}
 
                 <div className="flex-1 overflow-y-auto">
                     {!hasConversation ? (

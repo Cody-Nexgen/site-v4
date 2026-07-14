@@ -1639,17 +1639,6 @@ const AccountSettings = () => {
         setProfileError('');
         setProfileNotice('');
 
-        await new Promise<void>((r) =>
-            chrome.runtime.sendMessage(
-                {
-                    type: 'UPDATE_ENGINE_SETTINGS',
-                    settings: { profileName: displayName.trim() },
-                },
-                () => r(),
-            ),
-        );
-        fetchEngineState();
-
         const sync = await syncProfileFromSettings(
             supabase,
             session.user.id,
@@ -1670,23 +1659,31 @@ const AccountSettings = () => {
             return;
         }
 
+        const nextUsername = sync.profile?.username || normalizedHandle;
+        const nextAvatar =
+            sync.profile?.avatarUrl ||
+            avatarOverride ||
+            engineState.profileAvatar ||
+            '';
+        await new Promise<void>((r) =>
+            chrome.runtime.sendMessage(
+                {
+                    type: 'UPDATE_ENGINE_SETTINGS',
+                    settings: {
+                        profileName: displayName.trim(),
+                        profileUsername: nextUsername,
+                        profileAvatar: nextAvatar,
+                    },
+                },
+                () => r(),
+            ),
+        );
+        fetchEngineState();
+
         if (sync.profile?.username) {
             savedUsernameRef.current = sync.profile.username;
             setUsername(sync.profile.username);
             setHandleStatus('available');
-        }
-
-        if (sync.profile?.avatarUrl) {
-            await new Promise<void>((r) =>
-                chrome.runtime.sendMessage(
-                    {
-                        type: 'UPDATE_ENGINE_SETTINGS',
-                        settings: { profileAvatar: sync.profile!.avatarUrl },
-                    },
-                    () => r(),
-                ),
-            );
-            fetchEngineState();
         }
 
         setProfileNotice('Profile saved.');
@@ -2314,13 +2311,13 @@ const OptionsApp = () => {
 
     const applyTabFromUrl = () => {
         const tab = new URLSearchParams(window.location.search).get('tab');
-        if (tab) setActiveTab(tab === 'tasks' ? 'calendar' : tab);
+        if (tab) setActiveTab(resolveTabId(tab));
     };
 
     useEffect(() => {
         const listener = (msg: { type?: string; tab?: string }) => {
             if (msg.type === 'NAVIGATE_TAB' && msg.tab) {
-                const t = msg.tab === 'tasks' ? 'calendar' : msg.tab;
+                const t = resolveTabId(msg.tab);
                 setActiveTab(t);
                 const url = new URL(window.location.href);
                 url.searchParams.set('tab', t);
@@ -2330,9 +2327,10 @@ const OptionsApp = () => {
         const onCustomNav = (e: Event) => {
             const tab = (e as CustomEvent<string>).detail;
             if (!tab) return;
-            setActiveTab(tab);
+            const resolvedTab = resolveTabId(tab);
+            setActiveTab(resolvedTab);
             const url = new URL(window.location.href);
-            url.searchParams.set('tab', tab);
+            url.searchParams.set('tab', resolvedTab);
             if (url.searchParams.get('coachPrompt') === 'auto_schedule') {
                 setCoachInitialPrompt(AUTO_SCHEDULE_COACH_PROMPT);
             }
@@ -2368,7 +2366,7 @@ const OptionsApp = () => {
 
         const tab = params.get('tab');
         if (tab) {
-            setActiveTab(tab === 'tasks' ? 'calendar' : tab);
+            setActiveTab(resolveTabId(tab));
         }
 
         if (params.get('coachPrompt') === 'auto_schedule') {
