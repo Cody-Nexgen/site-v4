@@ -36,6 +36,7 @@ export type FocusRoomMember = {
 
 export type FocusRoom = {
     id: string;
+    hostId?: string;
     title: string;
     durationMin: number;
     startedAt: string;

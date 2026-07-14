@@ -21,7 +21,7 @@ const FAQS = [
     { q: 'What does the Deep Work Planner do?', a: 'On the Sessions tab, enter your main goal for the day. FocuzNow builds a time-blocked action plan from your goal and pending tasks, with one-click pomodoro starts.' },
     { q: 'How do I block YouTube Shorts only?', a: 'Settings → In-App Distraction Blocking → enable Block YouTube Shorts. Regular YouTube videos still work; Shorts URLs and feed entries are blocked.' },
     { q: 'What is challenge mode?', a: 'When enabled in Settings, unblocking a site requires typing a focus phrase. This adds friction so you pause before visiting distracting sites.' },
-    { q: 'How do habits work?', a: 'Add habits on the Habits or Today tab and check in daily. Habit streaks are separate from your dashboard streak — they track consistency on specific routines.' },
+    { q: 'How do habits work?', a: 'Add habits on the Habits or Dashboard tab and check in daily. Habit streaks are separate from your dashboard streak — they track consistency on specific routines.' },
     { q: 'What is AI Coach (Pro)?', a: 'AI Coach is a Pro feature that can block sites, configure pomodoro, change themes, read your analytics (with consent), and help plan your day — all via natural language.' },
     { q: 'How do I upgrade or cancel Pro?', a: 'Account → Manage Subscription opens the Stripe billing portal where you can upgrade, update payment, or cancel anytime.' },
     { q: 'The extension isn\'t blocking sites — what should I check?', a: 'Confirm the site is on your blocklist, blocking is not paused, Nuclear Lockdown is not expired, and the schedule (if any) is active. Reload the page after changing block settings.' },
@@ -38,7 +38,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
                 onClick={() => setOpen((v) => !v)}
                 className="w-full flex items-center justify-between gap-3 py-4 text-left group"
             >
-                <span className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors pr-2">{q}</span>
+                <span className="text-sm font-medium text-white group-hover:text-purple-300 transition-colors pr-2">{q}</span>
                 <ChevronDown
                     size={16}
                     className={`shrink-0 text-neutral-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -65,12 +65,10 @@ export default function SupportTab({ onOpenAiCoach, isPro }: Props) {
     return (
         <div className="space-y-8 pt-6 animate-fade-in-up max-w-3xl pb-20">
             <div>
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Support</p>
-                <h1 className="text-4xl font-black text-white tracking-tighter">
-                    Need help<span className="text-purple-500">?</span>
-                </h1>
-                <p className="text-neutral-400 mt-2 text-sm leading-relaxed">
-                    Get unstuck fast — ask the AI Coach, browse guides, or reach our team directly.
+                <p className="focuz-section-label mb-1">Support</p>
+                <h1 className="text-3xl font-semibold text-white tracking-tight">Need help?</h1>
+                <p className="text-sm text-neutral-500 mt-1">
+                    Ask the AI Coach, browse guides, or reach our team directly.
                 </p>
             </div>
 
@@ -80,14 +78,14 @@ export default function SupportTab({ onOpenAiCoach, isPro }: Props) {
                         <Sparkles size={22} className="text-purple-400" />
                     </div>
                     <div className="min-w-0 flex-1">
-                        <h2 className="text-lg font-bold text-white mb-1">AI Coach {isPro ? '' : '(Pro)'}</h2>
+                        <h2 className="text-lg font-semibold text-white mb-1">AI Coach {isPro ? '' : '(Pro)'}</h2>
                         <p className="text-sm text-neutral-400 mb-4 leading-relaxed">
                             Your personal focus assistant — block sites, start pomodoro sessions, analyze patterns, and build a daily plan.
                         </p>
                         <button
                             type="button"
                             onClick={onOpenAiCoach}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold transition-all shadow-lg shadow-purple-600/20"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors duration-150"
                         >
                             <MessageCircle size={16} />
                             {isPro ? 'Open AI Coach' : 'Learn about Pro'}
@@ -99,11 +97,11 @@ export default function SupportTab({ onOpenAiCoach, isPro }: Props) {
             <div className="grid sm:grid-cols-2 gap-4">
                 <GlassCard className="p-6">
                     <Mail size={20} className="text-neutral-400 mb-3" />
-                    <h3 className="font-bold text-white mb-1">Email support</h3>
+                    <h3 className="font-semibold text-white mb-1">Email support</h3>
                     <p className="text-sm text-neutral-500 mb-4">We typically respond within 24 hours.</p>
                     <a
                         href="mailto:support@focuznow.com?subject=FocuzNow%20Help"
-                        className="inline-flex items-center gap-1.5 text-sm font-bold text-purple-400 hover:text-purple-300 transition-colors"
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-400 hover:text-purple-300 transition-colors"
                     >
                         support@focuznow.com
                         <ExternalLink size={14} />
@@ -112,7 +110,7 @@ export default function SupportTab({ onOpenAiCoach, isPro }: Props) {
 
                 <GlassCard className="p-6">
                     <BookOpen size={20} className="text-neutral-400 mb-3" />
-                    <h3 className="font-bold text-white mb-1">Quick tips</h3>
+                    <h3 className="font-semibold text-white mb-1">Quick tips</h3>
                     <ul className="text-sm text-neutral-400 space-y-2 mt-2">
                         <li>Press <kbd className="kbd">⌘K</kbd> anywhere to open the command palette</li>
                         <li>Toggle the site clock in Settings → Site Clock</li>
@@ -123,7 +121,7 @@ export default function SupportTab({ onOpenAiCoach, isPro }: Props) {
             </div>
 
             <GlassCard className="p-6">
-                <h3 className="font-bold text-white mb-1">Frequently asked questions</h3>
+                <h3 className="font-semibold text-white mb-1">Frequently asked questions</h3>
                 <p className="text-xs text-neutral-500 mb-4">{FAQS.length} topics — tap to expand</p>
                 <div>
                     {FAQS.map(({ q, a }) => (

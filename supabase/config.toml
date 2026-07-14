@@ -6,7 +6,9 @@ additional_redirect_urls = [
   "https://focuznow.com/**",
   "https://www.focuznow.com/**",
   "http://localhost:3000/**",
-  "http://localhost:5173/**",
+  "https://focuznow.com/reset-password",
+  "https://focuznow.com/forgot-password",
+  "http://localhost:5173/reset-password",
   "chrome-extension://**",
   "https://*.chromiumapp.org/**",
 ]

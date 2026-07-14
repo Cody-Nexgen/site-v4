@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { GlassCard } from './OptionsApp';
 import { useFocusProgression, sendProgressionMessage } from '../hooks/useFocusProgression';
 import { SHOP_ITEMS, getShopItem } from '../lib/focusShop';
 import { FocusLevelCard } from '../components/FocusLevelCard';
@@ -43,12 +42,12 @@ export default function FocusShopTab() {
     const owned = new Set(progression.ownedCosmetics);
 
     return (
-        <div className="space-y-8 pt-6 animate-fade-in-up max-w-4xl pb-20">
+        <div className="space-y-6 pt-6 animate-fade-in-up max-w-4xl pb-20">
             <div>
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Cosmetics</p>
-                <h1 className="text-4xl font-black text-white tracking-tighter">Focus Shop</h1>
-                <p className="text-neutral-400 mt-2 text-sm">
-                    Earn coins by focusing. Spend on cosmetics only — never pay-to-win.
+                <p className="focuz-section-label">Cosmetics</p>
+                <h1 className="text-3xl font-semibold text-white tracking-tight">Focuz Shop</h1>
+                <p className="text-sm text-neutral-500 mt-1">
+                    Earn coins from real sessions, blocks, and habits. Spend on cosmetics only — never pay-to-win.
                 </p>
             </div>
 
@@ -62,7 +61,7 @@ export default function FocusShopTab() {
             )}
 
             <section>
-                <h2 className="text-xs font-black text-neutral-500 uppercase tracking-widest mb-4">Shop</h2>
+                <h2 className="text-sm font-semibold text-white mb-3">Cosmetics</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {SHOP_ITEMS.map((item) => {
                         const isOwned = owned.has(item.id);
@@ -70,43 +69,56 @@ export default function FocusShopTab() {
                             progression.equippedCosmetics[item.type] === item.id;
 
                         return (
-                            <GlassCard key={item.id} className="p-5 flex flex-col">
-                                <div className="text-3xl mb-3">{item.preview}</div>
-                                <p className="text-sm font-black text-white">{item.name}</p>
-                                <p className="text-[11px] text-neutral-500 mt-1 mb-4 flex-1">{item.description}</p>
-                                <div className="flex items-center justify-between gap-2">
-                                    {!isOwned ? (
-                                        <button
-                                            type="button"
-                                            disabled={progression.coins < item.cost}
-                                            onClick={() => handlePurchase(item.id, item.cost)}
-                                            className="flex-1 py-2.5 rounded-xl text-xs font-black bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                        >
-                                            🪙 {item.cost}
-                                        </button>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                handleEquip(
-                                                    item.type,
-                                                    isEquipped ? null : item.id,
-                                                )
-                                            }
-                                            className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${
-                                                isEquipped
-                                                    ? 'bg-purple-600 text-white'
-                                                    : 'bg-white/5 text-neutral-300 hover:bg-white/10'
+                            <div
+                                key={item.id}
+                                className={`rounded-2xl border bg-[#0c0c0e] p-5 flex flex-col transition-colors duration-150 ${
+                                    isEquipped ? 'border-purple-500/40' : 'border-white/[0.06]'
+                                }`}
+                            >
+                                <div className="flex items-start justify-between mb-3">
+                                    <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center text-lg">
+                                        {item.preview}
+                                    </div>
+                                    {isOwned && (
+                                        <span
+                                            className={`text-[10px] font-medium uppercase tracking-wide ${
+                                                isEquipped ? 'text-purple-400' : 'text-neutral-500'
                                             }`}
                                         >
-                                            {isEquipped ? 'Equipped' : 'Equip'}
-                                        </button>
-                                    )}
-                                    {isOwned && (
-                                        <span className="text-[10px] text-green-400 font-bold uppercase">Owned</span>
+                                            {isEquipped ? 'Equipped' : 'Owned'}
+                                        </span>
                                     )}
                                 </div>
-                            </GlassCard>
+                                <p className="text-sm font-semibold text-white">{item.name}</p>
+                                <p className="text-xs text-neutral-500 mt-1 mb-4 flex-1">{item.description}</p>
+                                {!isOwned ? (
+                                    <button
+                                        type="button"
+                                        disabled={progression.coins < item.cost}
+                                        onClick={() => handlePurchase(item.id, item.cost)}
+                                        className="w-full px-4 py-2 rounded-xl bg-white/[0.06] text-neutral-300 text-xs font-semibold hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 tabular-nums"
+                                    >
+                                        Buy · {item.cost} coins
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            handleEquip(
+                                                item.type,
+                                                isEquipped ? null : item.id,
+                                            )
+                                        }
+                                        className={`w-full px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 ${
+                                            isEquipped
+                                                ? 'bg-purple-500 text-white hover:bg-purple-400'
+                                                : 'bg-white text-black hover:bg-neutral-200'
+                                        }`}
+                                    >
+                                        {isEquipped ? 'Unequip' : 'Equip'}
+                                    </button>
+                                )}
+                            </div>
                         );
                     })}
                 </div>

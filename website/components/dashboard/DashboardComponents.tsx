@@ -3,8 +3,6 @@ import { motion } from 'framer-motion';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LucideIcon } from 'lucide-react';
 import {
-    AreaChart,
-    Area,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -83,13 +81,7 @@ export const ActivityChart: React.FC<ActivityChartProps> = ({ data }) => {
 
             <div className="flex-1 w-full min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data}>
-                        <defs>
-                            <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                            </linearGradient>
-                        </defs>
+                    <BarChart data={data} barCategoryGap="18%">
                         <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                         <XAxis
                             dataKey="name"
@@ -109,17 +101,14 @@ export const ActivityChart: React.FC<ActivityChartProps> = ({ data }) => {
                         <Tooltip
                             contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '12px' }}
                             itemStyle={{ color: '#fff' }}
-                            cursor={{ stroke: '#ffffff20' }}
+                            cursor={{ fill: '#ffffff08' }}
                         />
-                        <Area
-                            type="monotone"
-                            dataKey="hours"
-                            stroke="#a855f7"
-                            strokeWidth={3}
-                            fillOpacity={1}
-                            fill="url(#colorHours)"
-                        />
-                    </AreaChart>
+                        <Bar dataKey="hours" radius={[8, 8, 4, 4]} maxBarSize={48}>
+                            {data.map((_, index) => (
+                                <Cell key={`cell-${index}`} fill="#a855f7" fillOpacity={0.85} />
+                            ))}
+                        </Bar>
+                    </BarChart>
                 </ResponsiveContainer>
             </div>
         </GlassCard>

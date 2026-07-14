@@ -36,3 +36,23 @@ export function getOAuthRedirectUrl(context: 'web' | 'extension' = 'web'): strin
 
     return `${PRODUCTION_AUTH_ORIGIN}/dashboard`;
 }
+
+export function getPasswordResetRedirectUrl(): string {
+    if (typeof window === 'undefined') {
+        return `${PRODUCTION_AUTH_ORIGIN}/reset-password`;
+    }
+
+    const host = window.location.hostname.replace(/^www\./, '');
+    const isLocalDev =
+        host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
+
+    if (host === 'focuznow.com') {
+        return `${PRODUCTION_AUTH_ORIGIN}/reset-password`;
+    }
+
+    if (isLocalDev) {
+        return `${window.location.origin}/reset-password`;
+    }
+
+    return `${PRODUCTION_AUTH_ORIGIN}/reset-password`;
+}

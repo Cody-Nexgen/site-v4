@@ -38,15 +38,15 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
     const s = input.progression.stats;
     const out: ChallengeDefinition[] = [];
 
-    const weeklyPomos = Math.min(s.totalPomodoros, 15);
+    const weeklyTarget = Math.max(5, Math.min(12, 5 + Math.floor(s.weekPomodorosCount / 2)));
     out.push(
         dyn({
             id: `dyn_week_pomo_${week}`,
             title: 'Weekly Focus Sprint',
-            description: `Complete ${Math.max(5, weeklyPomos)} pomodoros this week`,
+            description: `Complete ${weeklyTarget} pomodoros this week`,
             icon: '⚡',
-            metric: 'total_pomodoros',
-            target: Math.max(5, weeklyPomos),
+            metric: 'week_pomodoros',
+            target: weeklyTarget,
             xpReward: 120,
             coinReward: 60,
         }),
@@ -57,17 +57,18 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
             dyn({
                 id: `dyn_streak_hold_${today}`,
                 title: 'Protect Your Streak',
-                description: 'Open FocuzNow and complete 1 focus session today',
+                description: 'Complete 1 focus session today',
                 icon: '🔥',
-                metric: 'total_pomodoros',
-                target: s.totalPomodoros + 1,
+                metric: 'today_pomodoros',
+                target: 1,
                 xpReward: 80,
                 coinReward: 40,
             }),
         );
     }
 
-    if (s.focusMinutesTotal < 600) {
+    const focusHours = Math.floor(s.focusMinutesTotal / 60);
+    if (focusHours < 5) {
         out.push(
             dyn({
                 id: `dyn_deep_5h_${week}`,
@@ -81,15 +82,15 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
             }),
         );
     } else {
-        const nextMilestone = Math.ceil((s.focusMinutesTotal + 60) / 60) * 60;
+        const nextMilestoneHours = Math.ceil((focusHours + 1) / 1) * 60;
         out.push(
             dyn({
                 id: `dyn_deep_next_${week}`,
                 title: 'Deep Work Climb',
-                description: `Reach ${Math.round(nextMilestone / 60)} hours of focus time`,
+                description: `Reach ${nextMilestoneHours / 60} hours of focus time`,
                 icon: '🏔️',
                 metric: 'focus_minutes',
-                target: nextMilestone,
+                target: nextMilestoneHours,
                 xpReward: 250,
                 coinReward: 125,
             }),
@@ -100,11 +101,11 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
         out.push(
             dyn({
                 id: `dyn_score_70_${today}`,
-                title: 'Focus Score Boost',
+                title: 'Focuz Score Boost',
                 description: 'Get your focus score above 70 today',
                 icon: '📈',
-                metric: 'total_pomodoros',
-                target: s.totalPomodoros + 2,
+                metric: 'focus_score',
+                target: 70,
                 xpReward: 100,
                 coinReward: 50,
             }),

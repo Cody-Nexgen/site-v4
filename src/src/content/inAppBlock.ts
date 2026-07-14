@@ -1,6 +1,7 @@
 // Content Script: YouTube Smart Mode + Shorts blocking
 
 import {
+    classifyByPageCategory,
     classifyYouTubeVideo,
     isYouTubeWatchUrl,
     normalizeSmartYouTube,
@@ -46,7 +47,10 @@ function applySmartYouTubeWatch(blocks: Record<string, unknown>) {
     const smart = normalizeSmartYouTube(
         (blocks.smartYouTube as Record<string, unknown>) || undefined,
     );
-    if (!smart.enabled) return;
+    if (!smart.enabled) {
+        console.info('[FocuzNow] Smart YouTube is disabled — enable it in Settings to classify videos.');
+        return;
+    }
 
     const meta = parseYouTubePageMeta();
     const filters = Array.isArray(blocks.filters) ? (blocks.filters as string[]) : [];
@@ -55,6 +59,7 @@ function applySmartYouTubeWatch(blocks: Record<string, unknown>) {
 
     const runKeywordFallback = () => {
         const result = classifyYouTubeVideo(meta, smart, filters);
+        console.info(`[FocuzNow] Smart YouTube (keywords): ${meta.videoId} → ${result.decision} (${result.reason})`);
         if (result.decision === 'block') {
             lastClassifiedVideoId = meta.videoId || null;
             blockWatch(href, result.category);
@@ -63,7 +68,23 @@ function applySmartYouTubeWatch(blocks: Record<string, unknown>) {
         }
     };
 
-    if (smart.useDataApi && meta.videoId) {
+    const runPageCategoryFallback = () => {
+        const pageResult = classifyByPageCategory(meta, smart, filters);
+        if (pageResult) {
+            console.info(`[FocuzNow] Smart YouTube (page category): ${meta.videoId} → ${pageResult.decision} (${pageResult.reason})`);
+            if (pageResult.decision === 'block') {
+                lastClassifiedVideoId = meta.videoId || null;
+                blockWatch(href, pageResult.category);
+            } else if (meta.videoId) {
+                lastClassifiedVideoId = meta.videoId;
+            }
+            return;
+        }
+        runKeywordFallback();
+    };
+
+    // Primary: YouTube Data API classification via the service worker.
+    if (meta.videoId) {
         chrome.runtime.sendMessage(
             {
                 type: 'CLASSIFY_YOUTUBE_VIDEO',
@@ -74,15 +95,21 @@ function applySmartYouTubeWatch(blocks: Record<string, unknown>) {
             },
             (resp) => {
                 if (chrome.runtime.lastError) {
-                    runKeywordFallback();
+                    console.warn('[FocuzNow] Smart YouTube: classify message failed:', chrome.runtime.lastError.message);
+                    runPageCategoryFallback();
                     return;
                 }
                 const data = resp as {
                     ok?: boolean;
                     useFallback?: boolean;
-                    result?: { decision: string; category: string };
+                    error?: string;
+                    categoryId?: string;
+                    result?: { decision: string; category: string; reason?: string };
                 };
                 if (data?.ok && data.result) {
+                    console.info(
+                        `[FocuzNow] Smart YouTube (API): ${meta.videoId} → ${data.result.decision} (category ${data.categoryId ?? '?'} · ${data.result.reason ?? data.result.category})`,
+                    );
                     if (data.result.decision === 'block') {
                         lastClassifiedVideoId = meta.videoId ?? null;
                         blockWatch(href, data.result.category);
@@ -91,13 +118,14 @@ function applySmartYouTubeWatch(blocks: Record<string, unknown>) {
                     }
                     return;
                 }
-                runKeywordFallback();
+                console.warn('[FocuzNow] Smart YouTube: Data API failed:', data?.error ?? 'no response');
+                runPageCategoryFallback();
             },
         );
         return;
     }
 
-    runKeywordFallback();
+    runPageCategoryFallback();
 }
 
 function applyInAppBlocks() {

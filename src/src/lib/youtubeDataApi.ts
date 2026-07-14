@@ -1,4 +1,4 @@
-import { YOUTUBE_DATA_API_KEY } from './youtubeApiKey';
+import { getConfiguredYouTubeApiKey } from './youtubeApiKey';
 
 export const YOUTUBE_API_KEY_STORAGE = 'focuznow_youtube_api_key';
 
@@ -33,12 +33,15 @@ export const DEFAULT_BLOCKED_CATEGORY_IDS = ['10', '20', '23', '24'];
 export const ALWAYS_ALLOW_CATEGORY_IDS = new Set(['27', '28']);
 
 export async function getYouTubeApiKey(): Promise<string | null> {
-    const key = YOUTUBE_DATA_API_KEY?.trim();
+    const stored = await chrome.storage.local.get(YOUTUBE_API_KEY_STORAGE);
+    const fromStorage = (stored[YOUTUBE_API_KEY_STORAGE] as string | undefined)?.trim();
+    if (fromStorage) return fromStorage;
+    const key = getConfiguredYouTubeApiKey();
     return key || null;
 }
 
-export async function setYouTubeApiKey(_key: string): Promise<void> {
-    /* key is hardcoded in youtubeApiKey.ts */
+export async function setYouTubeApiKey(key: string): Promise<void> {
+    await chrome.storage.local.set({ [YOUTUBE_API_KEY_STORAGE]: key.trim() });
 }
 
 function extractVideoId(url: string): string | null {

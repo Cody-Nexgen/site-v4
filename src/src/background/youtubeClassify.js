@@ -1,4 +1,6 @@
-import { YOUTUBE_DATA_API_KEY } from '../lib/youtubeApiKey';
+import { getConfiguredYouTubeApiKey } from '../lib/youtubeApiKey';
+
+const YOUTUBE_API_KEY_STORAGE = 'focuznow_youtube_api_key';
 
 const ALWAYS_ALLOW_CATEGORY_IDS = new Set(['27', '28']);
 
@@ -84,15 +86,26 @@ async function fetchVideoCategoryId(videoId, apiKey) {
     };
 }
 
+async function resolveYouTubeApiKey() {
+    try {
+        const stored = await chrome.storage.local.get(YOUTUBE_API_KEY_STORAGE);
+        const fromStorage = stored[YOUTUBE_API_KEY_STORAGE]?.trim();
+        if (fromStorage) return fromStorage;
+    } catch {
+        /* ignore */
+    }
+    return getConfiguredYouTubeApiKey()?.trim() || '';
+}
+
 export async function classifyYouTubeViaApi({
     videoId,
     channel = '',
     blockedCategoryIds = [],
     allowedChannels = [],
 }) {
-    const apiKey = YOUTUBE_DATA_API_KEY?.trim();
+    const apiKey = await resolveYouTubeApiKey();
     if (!apiKey || !videoId) {
-        return { ok: false, useFallback: true, error: 'NO_API_KEY_OR_VIDEO' };
+        return { ok: false, useFallback: false, error: 'NO_API_KEY_OR_VIDEO' };
     }
 
     const { categoryId, error } = await fetchVideoCategoryId(videoId, apiKey);

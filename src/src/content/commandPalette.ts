@@ -199,7 +199,7 @@ export function initCommandPalette() {
             sub: 'Page',
             action: () => sendMsg({ type: 'OPEN_OPTIONS' }, 'Opening dashboard…'),
         },
-        { id: 'today', group: 'Navigation', icon: ICONS.nav, label: 'Go to Today', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'overview' }, 'Opening Today…') },
+        { id: 'today', group: 'Navigation', icon: ICONS.nav, label: 'Go to Dashboard', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'overview' }, 'Opening Dashboard…') },
         { id: 'cal', group: 'Navigation', icon: ICONS.nav, label: 'Go to Calendar', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'calendar' }, 'Opening Calendar…') },
         { id: 'blocklist', group: 'Navigation', icon: ICONS.nav, label: 'Go to Block list', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'blocklist' }, 'Opening Block list…') },
         { id: 'habits', group: 'Navigation', icon: ICONS.nav, label: 'Go to Habits', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'habits' }, 'Opening Habits…') },

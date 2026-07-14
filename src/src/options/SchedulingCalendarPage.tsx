@@ -5,6 +5,7 @@ import {
     endOfMonth,
     endOfWeek,
     format,
+    getDay,
     isSameDay,
     isSameMonth,
     startOfMonth,
@@ -137,6 +138,7 @@ export default function SchedulingCalendarPage({
     ]);
 
     const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+    const [dayDate, setDayDate] = useState(() => new Date());
     const [miniMonth, setMiniMonth] = useState(new Date());
     const [leftPanel, setLeftPanel] = useState<Panel>('none');
     const [rightPanel, setRightPanel] = useState<Panel>('none');
@@ -188,7 +190,7 @@ export default function SchedulingCalendarPage({
     weekDaysRef.current = weekDays;
 
     useEffect(() => {
-        const tick = window.setInterval(() => setNow(new Date()), 30_000);
+        const tick = window.setInterval(() => setNow(new Date()), 1000);
         return () => window.clearInterval(tick);
     }, []);
 
@@ -659,8 +661,21 @@ export default function SchedulingCalendarPage({
     const goToday = () => {
         const t = new Date();
         setWeekStart(startOfWeek(t));
+        setDayDate(t);
         setMiniMonth(t);
     };
+
+    const shiftDay = (dir: 1 | -1) => {
+        setDayDate((d) => {
+            const next = addDays(d, dir);
+            setWeekStart(startOfWeek(next));
+            setMiniMonth(next);
+            return next;
+        });
+    };
+
+    const navBack = () => (calView === 'day' ? shiftDay(-1) : commitWeek(-1));
+    const navForward = () => (calView === 'day' ? shiftDay(1) : commitWeek(1));
 
     return (
         <div
@@ -689,7 +704,7 @@ export default function SchedulingCalendarPage({
                             Back
                         </button>
                     )}
-                    {!sidebarCollapsed && !onBack && <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest">Calendar</span>}
+                    {!sidebarCollapsed && !onBack && <span className="text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">Calendar</span>}
                     <button
                         type="button"
                         onClick={() => setSidebarCollapsed((v) => !v)}
@@ -702,37 +717,35 @@ export default function SchedulingCalendarPage({
 
                 {!sidebarCollapsed && (
                     <>
-                        <div className="px-4 py-2 border-b border-white/10">
-                            <p className="text-xs font-bold text-white truncate" title={email}>{email}</p>
+                        <div className="px-4 py-2.5 border-b border-white/[0.06]">
+                            <p className="text-xs font-medium text-neutral-400 truncate" title={email}>{email}</p>
                         </div>
 
                         {/* Mini month — collapsible */}
-                        <div className="border-b border-white/10">
+                        <div className="border-b border-white/[0.06]">
                             <button
                                 type="button"
                                 onClick={() => setMiniCalCollapsed((v) => !v)}
-                                className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold text-neutral-500 hover:text-white transition-colors"
+                                className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-semibold text-neutral-500 hover:text-white transition-colors"
                             >
-                                <span className="uppercase tracking-widest">{format(miniMonth, 'MMM yyyy')}</span>
+                                <span className="uppercase tracking-wider">{format(miniMonth, 'MMMM yyyy')}</span>
                                 <ChevronDown size={12} className={`transition-transform ${miniCalCollapsed ? '-rotate-90' : ''}`} />
                             </button>
                             {!miniCalCollapsed && (
                                 <div className="px-3 pb-3">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <button type="button" onClick={() => setMiniMonth((m) => addDays(startOfMonth(m), -1))} className="p-1 text-neutral-500 hover:text-white">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <button type="button" onClick={() => setMiniMonth((m) => addDays(startOfMonth(m), -1))} className="p-1 text-neutral-500 hover:text-white transition-colors rounded hover:bg-white/5">
                                             <ChevronLeft size={12} />
                                         </button>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setMiniMonth((m) => addDays(endOfMonth(m), 1))}
-                                                className="p-1 text-neutral-500 hover:text-white"
-                                            >
-                                                <ChevronRight size={12} />
-                                            </button>
-                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setMiniMonth((m) => addDays(endOfMonth(m), 1))}
+                                            className="p-1 text-neutral-500 hover:text-white transition-colors rounded hover:bg-white/5"
+                                        >
+                                            <ChevronRight size={12} />
+                                        </button>
                                     </div>
-                                    <div className="grid grid-cols-7 gap-0.5 text-[9px] text-neutral-600 font-bold text-center mb-1">
+                                    <div className="grid grid-cols-7 gap-0.5 text-[9px] text-neutral-600 font-medium text-center mb-1">
                                         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
                                             <span key={i}>{d}</span>
                                         ))}
@@ -762,9 +775,9 @@ export default function SchedulingCalendarPage({
                                                         setWeekStart(startOfWeek(day));
                                                         setMiniMonth(day);
                                                     }}
-                                                    className={`relative z-[1] h-7 text-[10px] font-bold rounded-md transition-colors ${
+                                                    className={`relative z-[1] h-7 text-[10px] font-medium rounded-md transition-colors tabular-nums ${
                                                         !inMonth ? 'text-neutral-700' : inWeek ? 'text-white' : 'text-neutral-400'
-                                                    } ${isToday ? 'ring-2 ring-red-500 ring-offset-1 ring-offset-[#0f0f0f]' : ''} hover:bg-white/15`}
+                                                    } ${isToday ? 'bg-purple-600 !text-white font-semibold' : 'hover:bg-white/10'}`}
                                                 >
                                                     {format(day, 'd')}
                                                 </button>
@@ -777,13 +790,13 @@ export default function SchedulingCalendarPage({
 
                         {/* Scheduling links — collapsible */}
                         <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-                            <div className="border-b border-white/10">
+                            <div className="border-b border-white/[0.06]">
                                 <button
                                     type="button"
                                     onClick={() => setSchedulingCollapsed((v) => !v)}
-                                    className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold text-neutral-500 hover:text-white transition-colors"
+                                    className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-semibold text-neutral-500 hover:text-white transition-colors"
                                 >
-                                    <span className="uppercase tracking-widest">Scheduling</span>
+                                    <span className="uppercase tracking-wider">Scheduling</span>
                                     <ChevronDown size={12} className={`transition-transform ${schedulingCollapsed ? '-rotate-90' : ''}`} />
                                 </button>
                                 {!schedulingCollapsed && (
@@ -791,7 +804,7 @@ export default function SchedulingCalendarPage({
                                         <button
                                             type="button"
                                             onClick={() => setLeftPanel((p) => (p === 'schedule-menu' ? 'none' : 'schedule-menu'))}
-                                            className="glass-edge-btn w-full px-3 py-2 text-left text-xs font-bold text-white"
+                                            className="w-full px-3 py-2 text-left text-xs font-semibold text-neutral-300 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] hover:text-white transition-colors"
                                         >
                                             + New scheduling link
                                         </button>
@@ -895,14 +908,16 @@ export default function SchedulingCalendarPage({
             <div ref={weekPanRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0a0a0a] flex-shrink-0 gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => commitWeek(-1 as -1)} className="p-2 rounded-lg hover:bg-white/10 text-neutral-400">
+                        <button type="button" onClick={navBack} className="p-2 rounded-lg hover:bg-white/10 text-neutral-400 transition-colors">
                             <ChevronLeft size={18} />
                         </button>
-                        <button type="button" onClick={() => commitWeek(1)} className="p-2 rounded-lg hover:bg-white/10 text-neutral-400">
+                        <button type="button" onClick={navForward} className="p-2 rounded-lg hover:bg-white/10 text-neutral-400 transition-colors">
                             <ChevronRight size={18} />
                         </button>
-                        <h1 className="text-base font-black ml-1">{format(weekStart, 'MMMM yyyy')}</h1>
-                        <button type="button" onClick={goToday} className="ml-2 px-3 py-1 rounded-lg text-[11px] font-bold border border-white/10 text-neutral-400 hover:text-white hover:bg-white/5">
+                        <h1 className="text-base font-semibold ml-1">
+                            {calView === 'day' ? format(dayDate, 'EEEE, MMMM d') : format(weekStart, 'MMMM yyyy')}
+                        </h1>
+                        <button type="button" onClick={goToday} className="ml-2 px-3 py-1 rounded-lg text-[11px] font-semibold border border-white/10 text-neutral-400 hover:text-white hover:bg-white/5 transition-colors">
                             Today
                         </button>
                     </div>
@@ -911,16 +926,24 @@ export default function SchedulingCalendarPage({
                             <button
                                 key={v}
                                 type="button"
-                                onClick={() => setCalView(v)}
-                                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all capitalize ${
-                                    calView === v ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/25' : 'text-neutral-500 hover:text-white hover:bg-white/8'
+                                onClick={() => {
+                                    setCalView(v);
+                                    if (v === 'day') {
+                                        const inCurrentWeek = weekDays.some((d) => isSameDay(d, today));
+                                        const target = inCurrentWeek ? today : weekStart;
+                                        setDayDate(target);
+                                        setWeekStart(startOfWeek(target));
+                                    }
+                                }}
+                                className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-colors capitalize ${
+                                    calView === v ? 'bg-purple-600 text-white' : 'text-neutral-500 hover:text-white hover:bg-white/8'
                                 }`}
                             >
                                 {v}
                             </button>
                         ))}
                     </div>
-                    <span className="text-[11px] font-bold text-neutral-600 px-2 py-1 rounded-lg border border-white/8">
+                    <span className="text-[11px] font-medium text-neutral-600 px-2 py-1 rounded-lg border border-white/8">
                         Shift+scroll
                     </span>
                 </header>
@@ -932,13 +955,13 @@ export default function SchedulingCalendarPage({
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                     {calView === 'month' ? (
                         /* Month View */
-                        <div className="flex-1 overflow-y-auto p-3">
+                        <div className="flex-1 overflow-y-auto p-3 flex flex-col" style={{ backgroundColor: 'var(--cal-bg)' }}>
                             <div className="grid grid-cols-7 gap-0.5 mb-1">
                                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                                    <div key={d} className="text-center text-[10px] font-bold text-neutral-500 uppercase py-1">{d}</div>
+                                    <div key={d} className="text-center text-[10px] font-semibold text-neutral-500 uppercase py-1">{d}</div>
                                 ))}
                             </div>
-                            <div className="grid grid-cols-7 gap-0.5">
+                            <div className="grid grid-cols-7 gap-0.5 flex-1 auto-rows-fr min-h-0">
                                 {eachDayOfInterval({
                                     start: startOfWeek(startOfMonth(miniMonth)),
                                     end: endOfWeek(endOfMonth(miniMonth)),
@@ -999,7 +1022,7 @@ export default function SchedulingCalendarPage({
                                     groups={groups}
                                     timedEventsForDay={timedEventsForDay}
                                     allDayChipsForDay={allDayChipsForDay}
-                                    singleDayMode={weekStart}
+                                    singleDayMode={addDays(ws, getDay(dayDate))}
                                     onRightPointerDown={(day, dayIndex) => {
                                         rightDragRef.current = { active: true, started: false, day, dayIndex };
                                     }}

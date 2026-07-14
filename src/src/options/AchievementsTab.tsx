@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useAuthStore } from '../lib/store';
-import { GlassCard } from './OptionsApp';
 import { computeAchievements, unlockedCount } from '../lib/achievements';
 import { computeFocusScore, focusScoreColor } from '../lib/focusScore';
 import { useFocusProgression, sendProgressionMessage } from '../hooks/useFocusProgression';
@@ -82,84 +81,98 @@ export default function AchievementsTab() {
     const currentLevel = progression ? levelFromXp(progression.xp) : 1;
 
     return (
-        <div className="space-y-8 pt-6 animate-fade-in-up max-w-4xl pb-20">
+        <div className="space-y-6 pt-6 animate-fade-in-up max-w-4xl pb-20">
             <div>
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Progress</p>
-                <h1 className="text-4xl font-black text-white tracking-tighter">Focus Progression</h1>
-                <p className="text-neutral-400 mt-2 text-sm">
+                <p className="focuz-section-label">Progress</p>
+                <h1 className="text-3xl font-semibold text-white tracking-tight">Focuz Progression</h1>
+                <p className="text-sm text-neutral-500 mt-1">
                     Level up from sessions, streaks, habits, and resisting distractions.
                 </p>
             </div>
 
             {progression && <FocusLevelCard progression={progression} />}
 
-            <GlassCard className="p-5">
-                <h2 className="text-xs font-black text-neutral-500 uppercase tracking-widest mb-3">Rank Milestones</h2>
+            <div className="rounded-2xl border border-white/[0.06] bg-[#0c0c0e] p-5">
+                <h2 className="text-sm font-semibold text-white mb-3">Rank milestones</h2>
                 <div className="flex flex-wrap gap-2">
                     {FOCUS_RANKS.map((rank) => (
                         <span
                             key={rank.level}
-                            className={`px-3 py-1.5 rounded-full text-xs font-bold border ${
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors duration-150 ${
                                 rank.level <= currentLevel
                                     ? 'border-purple-500/40 bg-purple-500/10 text-purple-300'
-                                    : 'border-white/5 bg-white/[0.02] text-neutral-600'
+                                    : 'border-white/[0.06] bg-white/[0.02] text-neutral-600'
                             }`}
                         >
                             Lv {rank.level} · {rank.name}
                         </span>
                     ))}
                 </div>
-            </GlassCard>
+            </div>
 
-            <GlassCard className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-bold text-white">Achievements</span>
-                    <span className="text-sm text-purple-400 font-bold">
-                        {unlockedCount(achievements)} / {achievements.length}
+            <div className="rounded-2xl border border-white/[0.06] bg-[#0c0c0e] p-5">
+                <div className="flex items-baseline justify-between mb-3">
+                    <h2 className="text-sm font-semibold text-white">Achievements</h2>
+                    <span className="text-xs text-neutral-500 tabular-nums">
+                        <span className="text-neutral-300 font-medium">{unlockedCount(achievements)}</span>
+                        {' '}/ {achievements.length} unlocked
                     </span>
                 </div>
-                <div className="h-2 bg-white/5 rounded-full overflow-hidden mb-6">
+                <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden mb-5">
                     <div
-                        className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all"
+                        className="h-full bg-purple-500 rounded-full transition-all"
                         style={{ width: `${(unlockedCount(achievements) / achievements.length) * 100}%` }}
                     />
                 </div>
 
                 {unlocked.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                         {unlocked.map((a) => (
                             <div
                                 key={a.id}
-                                className="p-4 text-center rounded-xl border border-purple-500/25 bg-purple-500/5"
+                                className="flex items-center gap-3 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]"
                             >
-                                <span className="text-2xl block mb-1">{a.icon}</span>
-                                <p className="text-xs font-black text-white">{a.title}</p>
+                                <div className="w-10 h-10 shrink-0 rounded-xl bg-white/[0.04] flex items-center justify-center text-lg">
+                                    {a.icon}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-white truncate">{a.title}</p>
+                                    <p className="text-[11px] text-neutral-500 truncate">{a.description}</p>
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
 
                 {locked.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {locked.slice(0, 6).map((a) => (
-                            <div key={a.id} className="p-4 text-center rounded-xl border border-white/5 opacity-50 grayscale">
-                                <span className="text-2xl block mb-1">{a.icon}</span>
-                                <p className="text-xs font-black text-white">{a.title}</p>
+                            <div
+                                key={a.id}
+                                className="flex items-center gap-3 p-3 rounded-xl border border-white/[0.04] opacity-50 grayscale"
+                            >
+                                <div className="w-10 h-10 shrink-0 rounded-xl bg-white/[0.04] flex items-center justify-center text-lg">
+                                    {a.icon}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-white truncate">{a.title}</p>
+                                    <p className="text-[11px] text-neutral-500 truncate">{a.description}</p>
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
-            </GlassCard>
+            </div>
 
-            <GlassCard className="p-5 border-white/5">
-                <p className="text-xs text-neutral-500 leading-relaxed">
-                    Focus score:{' '}
-                    <span className="font-bold" style={{ color: focusScoreColor(focusScore) }}>
+            <div className="rounded-2xl border border-white/[0.06] bg-[#0c0c0e] p-5">
+                <p className="text-xs text-neutral-500 leading-relaxed tabular-nums">
+                    Focuz score:{' '}
+                    <span className="font-semibold" style={{ color: focusScoreColor(focusScore) }}>
                         {focusScore}/100
                     </span>
                     {' '}· Streak: {streak} days · Dashboard: {dashboardStreak} days · Deep work: {hoursFocused}h
                 </p>
-            </GlassCard>
+            </div>
         </div>
     );
 }

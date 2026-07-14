@@ -50,7 +50,7 @@ export default function ForestStatsTab({ onBack }: Props) {
         <div className="space-y-8 pt-6 animate-fade-in-up max-w-4xl pb-20">
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <p className="focuz-section-label mb-1">Gamification</p>
+                    <p className="focuz-section-label mb-1">Progress</p>
                     <h1 className="text-4xl font-black text-white tracking-tighter">Forest Stats</h1>
                     <p className="text-neutral-400 mt-2 text-sm">Growth metrics from your infinite forest.</p>
                 </div>

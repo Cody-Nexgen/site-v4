@@ -35,6 +35,8 @@ import {
     Users as IconUsers,
     Zap as IconZapChallenge,
     Mic2 as IconFocusRooms,
+    ChevronDown as IconChevronDown,
+    Ellipsis as IconEllipsis,
 } from 'lucide-react';
 import AiCoachGate from '../components/AiCoachGate';
 import ForestTab from './ForestTab';
@@ -88,18 +90,13 @@ import {
     applyProWelcomePack,
 } from '../lib/themes';
 import {
-    PROFILE_AVATAR_FALLBACK_CLASS,
-    PROFILE_AVATAR_IMG_CLASS,
     PROFILE_AVATAR_LARGE_IMG_CLASS,
     PROFILE_AVATAR_LARGE_WRAP_CLASS,
 } from '../lib/profileAvatar';
 import { ThemeSelector } from '../components/pro-dashboard/ThemeSelector';
 import {
-    ProBadge,
     ProConfettiGate,
     ProFocusToast,
-    ProNavSuffix,
-    ProSidebarAvatarRing,
 } from '../components/pro-dashboard/ProDashboardVisuals';
 
 // --- GLASSMORPHISM COMPONENTS ---
@@ -117,29 +114,29 @@ export const GlassCard = ({ children, className = "", onClick, style }: { childr
 );
 
 
-export const ActivityGraph = ({ onSelectDay }: { onSelectDay: (day: any) => void }) => {
+export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { date: string; total: number; sites: Record<string, number> }[]; onSelectDay: (day: any) => void }) => {
     const { last7DaysStats } = useAuthStore();
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    const uid = React.useId().replace(/:/g, '');
 
-    // Dynamic Scaling
-    const maxTotal = Math.max(...last7DaysStats.map(s => s.total), 60 * 60 * 1000); // minimum 1 hour scale
-    const points = last7DaysStats.length ? last7DaysStats.map(s => Math.min(100, (s.total / maxTotal) * 100)) : [0, 0, 0, 0, 0, 0, 0];
+    const source = statsProp ?? last7DaysStats;
+    const sliced = source.slice(-7);
+    const stats = sliced.length ? sliced : Array.from({ length: 7 }, () => ({ date: '', total: 0, sites: {} }));
+    const maxTotal = Math.max(...stats.map((s) => s.total || 0), 60 * 60 * 1000);
     const width = 800;
-    const height = 160;
-    const padding = 20;
+    const height = 200;
+    const paddingX = 36;
+    const paddingTop = 28;
+    const paddingBottom = 16;
+    const chartWidth = width - paddingX * 2;
+    const chartHeight = height - paddingTop - paddingBottom;
+    const barGap = 12;
+    const barWidth = Math.max(28, (chartWidth - barGap * (stats.length - 1)) / Math.max(1, stats.length));
 
-    const getX = (i: number) => padding + (i * (width - 2 * padding) / (Math.max(1, points.length - 1)));
-    const getY = (v: number) => height - padding - (v * (height - 2 * padding) / 100);
-
-    const pathData = points.reduce((acc, v, i) => {
-        const x = getX(i);
-        const y = getY(v);
-        if (i === 0) return `M ${x} ${y}`;
-        const prevX = getX(i - 1);
-        const prevY = getY(points[i - 1]);
-        const cpX = (prevX + x) / 2;
-        return `${acc} C ${cpX} ${prevY}, ${cpX} ${y}, ${x} ${y}`;
-    }, "");
+    const getBarX = (i: number) => paddingX + i * (barWidth + barGap);
+    const getBarHeight = (ms: number) => Math.max(ms > 0 ? 4 : 0, ((ms || 0) / maxTotal) * chartHeight);
+    const getBarY = (ms: number) => paddingTop + chartHeight - getBarHeight(ms);
+    const getY = (pct: number) => paddingTop + chartHeight - (pct * chartHeight / 100);
 
     const formatTime = (ms: number) => {
         const mins = Math.round((ms || 0) / 60000);
@@ -148,93 +145,67 @@ export const ActivityGraph = ({ onSelectDay }: { onSelectDay: (day: any) => void
     };
 
     return (
-        <div className="w-full h-48 relative pt-4 overflow-visible group">
-            {/* Tooltip */}
-            {hoveredIndex !== null && last7DaysStats[hoveredIndex] && (
-                <div
-                    className="absolute z-50 pointer-events-none px-3 py-2 bg-neutral-900 border border-white/10 rounded-xl shadow-2xl animate-in fade-in zoom-in duration-200"
-                    style={{
-                        left: getX(hoveredIndex),
-                        top: getY(points[hoveredIndex]) - 50,
-                        transform: 'translateX(-50%)'
-                    }}
-                >
-                    <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">{last7DaysStats[hoveredIndex]?.date?.split(' ').slice(0, 3).join(' ')}</div>
-                    <div className="text-lg font-black text-white">{formatTime(last7DaysStats[hoveredIndex]?.total)}</div>
-                </div>
-            )}
-
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+        <div className="w-full h-full min-h-[12rem] relative overflow-visible">
+            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
                 <defs>
-                    <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#9333ea" />
-                        <stop offset="50%" stopColor="#ec4899" />
-                        <stop offset="100%" stopColor="#9333ea" />
-                    </linearGradient>
-                    <linearGradient id="fillGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#9333ea" stopOpacity="0.2" />
-                        <stop offset="100%" stopColor="#9333ea" stopOpacity="0" />
+                    <linearGradient id={`barGradient-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#c084fc" />
+                        <stop offset="100%" stopColor="#7c3aed" />
                     </linearGradient>
                 </defs>
 
-                {/* Y-Axis Scale */}
-                {[0, 50, 100].map(v => (
+                {[0, 50, 100].map((v) => (
                     <g key={v}>
-                        <line x1={padding} y1={getY(v)} x2={width - padding} y2={getY(v)} stroke="white" strokeOpacity="0.05" />
-                        <text x={0} y={getY(v) + 4} className="text-[9px] fill-neutral-600 font-bold">
-                            {v === 0 ? '0h' : v === 50 ? formatTime(maxTotal / 2) : formatTime(maxTotal)}
+                        <line x1={paddingX} y1={getY(v)} x2={width - paddingX} y2={getY(v)} stroke="white" strokeOpacity="0.04" />
+                        <text x={4} y={getY(v) + 4} className="text-[9px] fill-neutral-600 font-medium">
+                            {v === 0 ? '0' : v === 50 ? formatTime(maxTotal / 2) : formatTime(maxTotal)}
                         </text>
                     </g>
                 ))}
 
-                {/* Animated Area Fill */}
-                <path
-                    d={`${pathData} L ${width - padding} ${height} L ${padding} ${height} Z`}
-                    fill="url(#fillGradient)"
-                    className="animate-in fade-in duration-1000"
-                />
-
-                {/* The Main Path */}
-                <path
-                    d={pathData}
-                    fill="none"
-                    stroke="url(#lineGradient)"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="animate-draw"
-                    style={{
-                        strokeDasharray: 2000,
-                        strokeDashoffset: 2000,
-                        filter: 'drop-shadow(0 0 10px rgba(168, 85, 247, 0.5))'
-                    }}
-                />
-
-                {/* Interaction Nodes */}
-                {points.map((v, i) => (
-                    <g key={i}
-                        className="cursor-pointer"
-                        onMouseEnter={() => setHoveredIndex(i)}
-                        onMouseLeave={() => setHoveredIndex(null)}
-                        onClick={() => onSelectDay(last7DaysStats[i])}
-                    >
-                        <circle
-                            cx={getX(i)}
-                            cy={getY(v)}
-                            r="6"
-                            fill="#000"
-                            stroke="#9333ea"
-                            strokeWidth="2"
-                            className="hover:scale-150 transition-all duration-300 opacity-0 group-hover:opacity-100"
-                        />
-                        <circle
-                            cx={getX(i)}
-                            cy={getY(v)}
-                            r="20"
-                            fill="transparent"
-                        />
-                    </g>
-                ))}
+                {stats.map((day, i) => {
+                    const h = getBarHeight(day.total);
+                    const x = getBarX(i);
+                    const y = getBarY(day.total);
+                    const active = hoveredIndex === i;
+                    return (
+                        <g
+                            key={i}
+                            className="cursor-pointer"
+                            onMouseEnter={() => setHoveredIndex(i)}
+                            onMouseLeave={() => setHoveredIndex(null)}
+                            onClick={() => onSelectDay(day)}
+                        >
+                            <rect
+                                x={x}
+                                y={paddingTop}
+                                width={barWidth}
+                                height={chartHeight}
+                                fill="transparent"
+                            />
+                            <rect
+                                x={x}
+                                y={y}
+                                width={barWidth}
+                                height={h}
+                                rx={8}
+                                fill={`url(#barGradient-${uid})`}
+                                opacity={active ? 1 : 0.85}
+                            />
+                            {day.total > 0 && (
+                                <text
+                                    x={x + barWidth / 2}
+                                    y={Math.max(14, y - 8)}
+                                    textAnchor="middle"
+                                    className="fill-neutral-300 font-semibold"
+                                    style={{ fontSize: 11 }}
+                                >
+                                    {formatTime(day.total)}
+                                </text>
+                            )}
+                        </g>
+                    );
+                })}
             </svg>
         </div>
     );
@@ -251,7 +222,7 @@ const ChallengeModal = ({ isOpen, onClose, onComplete, phrase, onDisableChalleng
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
             <GlassCard className="w-full max-w-lg p-8 space-y-6 border-purple-500/30">
                 <div className="text-center space-y-2">
-                    <h3 className="text-2xl font-black text-white tracking-tight">Focus Challenge</h3>
+                    <h3 className="text-2xl font-semibold text-white tracking-tight">Focus Challenge</h3>
                     <p className="text-neutral-400 text-sm">Type the phrase below exactly to confirm you truly wish to unblock this site.</p>
                 </div>
 
@@ -276,7 +247,7 @@ const ChallengeModal = ({ isOpen, onClose, onComplete, phrase, onDisableChalleng
                         <button
                             disabled={input !== phrase}
                             onClick={() => { onComplete(); setInput(''); }}
-                            className={`flex-1 py-4 font-black rounded-2xl transition-all shadow-xl
+                            className={`flex-1 py-4 font-semibold rounded-2xl transition-all shadow-xl
                                 ${input === phrase
                                     ? 'bg-purple-600 text-white shadow-purple-600/20 hover:bg-purple-500'
                                     : 'bg-neutral-800 text-neutral-600 cursor-not-allowed opacity-50'}`}
@@ -492,8 +463,12 @@ export const SettingsTab = () => {
     };
 
     return (
-        <div className="space-y-6 animate-fade-in-up w-full">
-            <h2 className="text-2xl font-bold text-white">Settings</h2>
+        <div className="space-y-6 animate-fade-in-up w-full max-w-3xl">
+            <div>
+                <p className="focuz-section-label mb-1">Settings</p>
+                <h2 className="text-3xl font-semibold text-white tracking-tight">Preferences</h2>
+                <p className="text-sm text-neutral-500 mt-1">Blocking behavior, appearance, and privacy.</p>
+            </div>
             <BrowsingHistorySettings />
             <Customization />
             <GlassCard className="p-8">
@@ -1235,7 +1210,7 @@ export const Productivity = () => {
                                         className="transition-all duration-1000" />
                                 </svg>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <span className="text-3xl font-black text-white tabular-nums">{formatTime(pomoTimeLeft)}</span>
+                                    <span className="text-3xl font-semibold text-white tabular-nums">{formatTime(pomoTimeLeft)}</span>
                                     <span className="text-[10px] text-neutral-500 uppercase">{isBreak ? 'Break' : 'Focus'}</span>
                                 </div>
                             </div>
@@ -1464,10 +1439,10 @@ export const Productivity = () => {
                                 <div key={d} className="flex items-center justify-between p-2.5 bg-white/5 border border-white/10 rounded-xl group hover:border-white/20 transition-all">
                                     <div className="flex flex-col">
                                         <span className="text-xs font-bold text-white truncate max-w-[120px]">{d}</span>
-                                        <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-black">Daily Limit</span>
+                                        <span className="text-[10px] text-neutral-500 uppercase tracking-wider font-semibold">Daily Limit</span>
                                     </div>
                                     <div className="flex items-center space-x-3">
-                                        <span className="text-xs font-black text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded-full">{m as number}m</span>
+                                        <span className="text-xs font-semibold text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded-full tabular-nums">{m as number}m</span>
                                         <button
                                             onClick={async () => {
                                                 const updated = { ...(engineState.dailyFocusTarget || {}) };
@@ -1893,7 +1868,7 @@ const AccountSettings = () => {
                         {engineState.profileAvatar ? (
                             <img src={engineState.profileAvatar} className={PROFILE_AVATAR_LARGE_IMG_CLASS} alt="Avatar" />
                         ) : (
-                            <span className="text-xl font-black">{session?.user?.email?.[0].toUpperCase()}</span>
+                            <span className="text-xl font-semibold">{session?.user?.email?.[0].toUpperCase()}</span>
                         )}
                         <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <IconUser size={18} className="text-white" />
@@ -2196,7 +2171,7 @@ const BlockedView = ({ url }: { url: string }) => {
                 </div>
 
                 <div className="py-6 sm:py-8 px-6 sm:px-8 bg-white/[0.04] rounded-2xl border border-white/10 w-full">
-                    <p className="text-[10px] sm:text-xs uppercase tracking-widest font-black text-neutral-500 mb-3 sm:mb-4">Restricted Area</p>
+                    <p className="text-[10px] sm:text-xs uppercase tracking-wider font-semibold text-neutral-500 mb-3 sm:mb-4">Restricted Area</p>
                     <p className="text-lg sm:text-xl md:text-2xl font-mono font-bold text-purple-300 break-all leading-snug">{domain || '…'}</p>
                 </div>
 
@@ -2271,7 +2246,7 @@ const BlockedView = ({ url }: { url: string }) => {
                         </>
                     )}
 
-                    <p className="text-[10px] text-neutral-700 uppercase tracking-[0.2em] font-black pt-2">Powered by FocuzNow Precision Engine</p>
+                    <p className="text-[10px] text-neutral-700 uppercase tracking-wider font-semibold pt-2">Powered by FocuzNow</p>
                 </div>
             </GlassCard>
         </div>
@@ -2292,10 +2267,10 @@ function ActionToast({ message, onDone }: { message: string; onDone: () => void 
 }
 
 const OptionsApp = () => {
-    const { session, loading, init, featurePreviewSeen, setFeaturePreviewSeen, engineState, subscriptionTier, dashboardStreak, dashboardBestStreak, recordDashboardOpen } = useAuthStore();
+    const { session, loading, init, featurePreviewSeen, setFeaturePreviewSeen, engineState, subscriptionTier, recordDashboardOpen } = useAuthStore();
     const hostBookings = useHostBookingNotifications(!!session);
     const isPro = subscriptionTier === 'pro';
-    const { proTheme, proGoldTheme, enabled: proVisuals } = useProDashboardVisuals();
+    const { proGoldTheme, enabled: proVisuals } = useProDashboardVisuals();
     const [activeTab, setActiveTab] = useState('overview');
     const [view, setView] = useState<'app' | 'blocked'>('app');
     const [blockedUrl, setBlockedUrl] = useState('');
@@ -2437,7 +2412,7 @@ const OptionsApp = () => {
         return <BlockedView url={blockedUrl} />;
     }
 
-    if (loading) {
+    if (loading && !session) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-black">
                 <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -2493,260 +2468,183 @@ const OptionsApp = () => {
         );
     }
 
+    const primarySidebarItems = [
+        { id: 'overview', label: 'Dashboard', icon: <IconTarget size={14} /> },
+        { id: 'calendar', label: 'Calendar', icon: <IconCalendarStats size={14} /> },
+        { id: 'sessions', label: 'Sessions', icon: <IconClock size={14} /> },
+    ];
+    const sidebarSections = [
+        {
+            label: 'Workspace',
+            items: [
+                { id: 'blocklist', label: 'Block list', icon: <IconBan size={14} /> },
+                { id: 'habits', label: 'Habits', icon: <IconChecklist size={14} /> },
+                { id: 'statistics', label: 'Statistics', icon: <IconPatterns size={14} /> },
+            ],
+        },
+        {
+            label: 'Progress',
+            items: [
+                { id: 'progress', label: 'Overview', icon: <IconTrophy size={14} /> },
+                { id: 'challenges', label: 'Challenges', icon: <IconZapChallenge size={14} /> },
+                { id: 'forest', label: 'Forest', icon: <IconTrees size={14} /> },
+            ],
+        },
+        {
+            label: 'Try',
+            items: [
+                { id: 'ai_coach', label: 'AI Coach', icon: <IconSparkles size={14} /> },
+                { id: 'focus_rooms', label: 'Focuz Rooms', icon: <IconFocusRooms size={14} /> },
+                { id: 'friends', label: 'Friends', icon: <IconUsers size={14} /> },
+            ],
+        },
+    ];
+    const overflowSidebarTabs = ['shop', 'patterns', 'settings', 'support', 'account'];
+    const sidebarItemIsActive = (tab: string) =>
+        activeTab === tab || (tab === 'progress' && activeTab === 'achievements');
     const navItemClass = (tab: string) =>
-        `pro-nav-item pro-spring-btn flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer relative ${
-            activeTab === tab ? 'bg-white/5 text-white is-active' : 'text-neutral-500 hover:bg-white/5 hover:text-white'
+        `w-full h-7 px-2 flex items-center gap-2 rounded-[4px] text-[12.5px] font-normal text-left transition-colors ${
+            sidebarItemIsActive(tab)
+                ? 'bg-white/[0.055] text-neutral-200'
+                : 'text-neutral-500 hover:bg-white/[0.035] hover:text-neutral-300'
         }`;
 
     return (
-        <div className={`grid grid-cols-[260px_1fr] min-h-screen text-white selection:bg-purple-500/30 font-sans ${proGoldTheme ? 'pro-shell-vignette' : 'bg-[#0a0a0a]'}`}>
+        <div className={`grid grid-cols-[240px_1fr] min-h-screen text-white selection:bg-purple-500/30 font-sans ${proGoldTheme ? 'pro-shell-vignette' : 'bg-[#0a0a0a]'}`}>
             {proVisuals && <ProConfettiGate />}
             
             {/* Sidebar */}
-            <div className="flex flex-col bg-[#0f0f0f] border-r border-white/5 w-[260px] min-w-[260px] max-w-[260px] h-screen sticky top-0 flex-shrink-0 overflow-x-hidden">
-                <div className="px-4 pt-4 pb-3 min-w-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-6 h-6 shrink-0 border-[2px] border-white/20 rounded-full flex items-center justify-center">
-                            <div className="w-2.5 h-2.5 bg-white rounded-full" />
+            <aside className="flex flex-col bg-[#0d0d0e] border-r border-white/[0.07] w-[240px] min-w-[240px] max-w-[240px] h-screen sticky top-0 overflow-x-hidden">
+                <div className="h-11 px-2 flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={() => navigateTab('account')}
+                        className="min-w-0 flex-1 h-8 px-1.5 flex items-center gap-2 rounded-[4px] text-left hover:bg-white/[0.035] transition-colors"
+                    >
+                        <div className="w-5 h-5 shrink-0 rounded-full bg-[#d94f70] flex items-center justify-center text-[8px] font-semibold text-white">
+                            FN
                         </div>
-                        <span className="text-[15px] font-bold tracking-tight focuz-brand-glow truncate">
-                            FocuzNow
+                        <span className="min-w-0 truncate text-[12.5px] font-medium text-neutral-200">
+                            focuznow
                         </span>
-                        {isPro && <ProBadge gold={proGoldTheme} className="shrink-0" />}
-                    </div>
-                    {(proGoldTheme || (proTheme && !proGoldTheme)) && (
-                        <div className="mt-0.5">
-                            {proGoldTheme && (
-                                <p className="text-[8px] text-amber-400/90 font-bold uppercase tracking-widest truncate">
-                                    Pro Gold
-                                </p>
-                            )}
-                            {proTheme && !proGoldTheme && (
-                                <p className="text-[8px] text-purple-400/90 font-bold uppercase tracking-widest truncate">
-                                    Custom theme
-                                </p>
-                            )}
-                        </div>
-                    )}
+                        <IconChevronDown size={11} className="shrink-0 text-neutral-600" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setPaletteOpen(true)}
+                        className="w-7 h-7 shrink-0 flex items-center justify-center rounded-[4px] text-neutral-600 hover:bg-white/[0.035] hover:text-neutral-300 transition-colors"
+                        aria-label="Search"
+                        title="Search"
+                    >
+                        <IconSearch size={13} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setWorkspaceOpen(true)}
+                        className="w-7 h-7 shrink-0 flex items-center justify-center rounded-[4px] text-neutral-600 hover:bg-white/[0.035] hover:text-neutral-300 transition-colors"
+                        aria-label="Browse workspace"
+                        title="Browse workspace"
+                    >
+                        <IconMaximize2 size={13} />
+                    </button>
                 </div>
 
-                <div className="px-4 mb-4">
-                    <div className="w-full bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-1.5 flex items-center">
-                        <input
-                            placeholder="Jump to...  ⌘K"
-                            readOnly
-                            onClick={() => setPaletteOpen(true)}
-                            onFocus={() => setPaletteOpen(true)}
-                            className="bg-transparent border-none outline-none text-[13px] text-white w-full placeholder:text-neutral-600 cursor-pointer"
-                        />
+                <nav className="flex-1 px-2 pt-1 pb-2 overflow-y-auto scrollbar-hide">
+                    <div className="space-y-0.5">
+                        {primarySidebarItems.map((item) => (
+                            <button
+                                type="button"
+                                key={item.id}
+                                onClick={() => navigateTab(item.id)}
+                                aria-current={sidebarItemIsActive(item.id) ? 'page' : undefined}
+                                className={navItemClass(item.id)}
+                            >
+                                <span className="shrink-0 text-current">{item.icon}</span>
+                                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                            </button>
+                        ))}
                     </div>
+
+                    <div className="mt-5 space-y-5">
+                        {sidebarSections.map((section) => (
+                            <div key={section.label}>
+                                <div className="h-6 px-2 flex items-center gap-1 text-[11px] font-medium text-neutral-600">
+                                    <span>{section.label}</span>
+                                    <IconChevronDown size={10} />
+                                </div>
+                                {section.label === 'Workspace' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setWorkspaceOpen(true)}
+                                        className="w-full h-7 px-2 flex items-center gap-2 rounded-[4px] text-[12.5px] text-neutral-400 hover:bg-white/[0.035] hover:text-neutral-200 transition-colors"
+                                    >
+                                        <span className="w-3.5 h-3.5 rounded-[3px] border border-white/10 bg-white/[0.04] flex items-center justify-center">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-[#748c45]" />
+                                        </span>
+                                        <span className="flex-1 text-left font-medium">FocuzNow</span>
+                                        <IconChevronDown size={10} className="text-neutral-700" />
+                                    </button>
+                                )}
+                                <div className={`space-y-0.5 ${section.label === 'Workspace' ? 'ml-4' : ''}`}>
+                                    {section.items.map((item) => (
+                                        <button
+                                            type="button"
+                                            key={item.id}
+                                            onClick={() => navigateTab(item.id)}
+                                            aria-current={sidebarItemIsActive(item.id) ? 'page' : undefined}
+                                            className={navItemClass(item.id)}
+                                        >
+                                            <span className="shrink-0 text-current">{item.icon}</span>
+                                            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                                        </button>
+                                    ))}
+                                    {section.label === 'Workspace' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setWorkspaceOpen(true)}
+                                            aria-current={overflowSidebarTabs.includes(activeTab) ? 'page' : undefined}
+                                            className={`w-full h-7 px-2 flex items-center gap-2 rounded-[4px] text-[12.5px] text-left transition-colors ${
+                                                overflowSidebarTabs.includes(activeTab)
+                                                    ? 'bg-white/[0.055] text-neutral-200'
+                                                    : 'text-neutral-500 hover:bg-white/[0.035] hover:text-neutral-300'
+                                            }`}
+                                        >
+                                            <IconEllipsis size={14} />
+                                            <span>More</span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </nav>
+
+                <div className="p-2 flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={() => navigateTab('support')}
+                        className="w-7 h-7 flex items-center justify-center rounded-full border border-white/[0.07] text-neutral-600 hover:bg-white/[0.035] hover:text-neutral-300 transition-colors"
+                        aria-label="Help"
+                        title="Help"
+                    >
+                        <IconHelpCircle size={13} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => navigateTab('settings')}
+                        className="w-7 h-7 flex items-center justify-center rounded-[4px] text-neutral-700 hover:bg-white/[0.035] hover:text-neutral-300 transition-colors"
+                        aria-label="Settings"
+                        title="Settings"
+                    >
+                        <IconBolt size={13} />
+                    </button>
                 </div>
-
-                <div className="flex-1 px-3 py-2 space-y-6 overflow-y-auto scrollbar-hide">
-                    {/* Default Section */}
-                    <nav className="space-y-0.5">
-                        <div onClick={() => navigateTab('overview')} className={navItemClass('overview')}>
-                            {activeTab === 'overview' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-purple-500 rounded-r-full"></div>}
-                            <div className={`flex items-center space-x-2.5 ml-1 ${proGoldTheme && proVisuals && activeTab === 'overview' ? 'pro-nav-glow' : ''}`}>
-                                <div className="w-3.5 h-3.5 border border-purple-500 rounded-full flex items-center justify-center">
-                                    <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
-                                </div>
-                                <span className="text-[13px] font-medium">Today</span>
-                            </div>
-                        </div>
-                        
-                        <div onClick={() => navigateTab('calendar')} className={`pro-nav-item pro-spring-btn flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer relative ${activeTab === 'calendar' ? 'bg-white/5 text-white is-active' : 'text-neutral-500 hover:bg-white/5 hover:text-white'}`}>
-                            {activeTab === 'calendar' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-purple-500 rounded-r-full"></div>}
-                            <div className="flex items-center space-x-2.5 ml-1">
-                                <IconCalendarStats size={14} />
-                                <span className="text-[13px] font-medium">Calendar</span>
-                            </div>
-                        </div>
-                        
-                        <div onClick={() => navigateTab('sessions')} className={`pro-nav-item pro-spring-btn flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer relative ${activeTab === 'sessions' ? 'bg-white/5 text-white is-active' : 'text-neutral-500 hover:bg-white/5 hover:text-white'}`}>
-                            {activeTab === 'sessions' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-purple-500 rounded-r-full"></div>}
-                            <div className="flex items-center space-x-2.5 ml-1">
-                                <IconClock size={14} />
-                                <span className="text-[13px] font-medium">Sessions</span>
-                            </div>
-                        </div>
-                    </nav>
-
-                    {/* FOCUS Section */}
-                    <div>
-                        <div className="focuz-section-label px-3 mb-2">Focus</div>
-                        <nav className="space-y-0.5">
-                            <div onClick={() => navigateTab('blocklist')} className={navItemClass('blocklist')}>
-                                {activeTab === 'blocklist' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-sky-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconBan size={14} />
-                                    <span className="text-[13px] font-medium">Block list</span>
-                                </div>
-                            </div>
-                            <div onClick={() => navigateTab('habits')} className={navItemClass('habits')}>
-                                {activeTab === 'habits' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-sky-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconCalendarStats size={14} />
-                                    <span className="text-[13px] font-medium">Habits</span>
-                                </div>
-                            </div>
-                        </nav>
-                    </div>
-
-                    {/* GAMIFICATION Section */}
-                    <div>
-                        <div className="focuz-section-label px-3 mb-2">Gamification</div>
-                        <nav className="space-y-0.5">
-                            <div onClick={() => navigateTab('progress')} className={navItemClass('progress')}>
-                                {(activeTab === 'progress' || activeTab === 'achievements') && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-amber-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconTrophy size={14} className="text-amber-400/90" />
-                                    <span className="text-[13px] font-medium">Progress</span>
-                                </div>
-                            </div>
-                            <div onClick={() => navigateTab('challenges')} className={navItemClass('challenges')}>
-                                {activeTab === 'challenges' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-amber-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconZapChallenge size={14} className="text-sky-400" />
-                                    <span className="text-[13px] font-medium">Challenges</span>
-                                </div>
-                            </div>
-                            <div onClick={() => navigateTab('forest')} className={navItemClass('forest')}>
-                                {activeTab === 'forest' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-emerald-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconTrees size={14} className="text-emerald-400" />
-                                    <span className="text-[13px] font-medium">Forest</span>
-                                </div>
-                            </div>
-                            <div onClick={() => navigateTab('shop')} className={navItemClass('shop')}>
-                                {activeTab === 'shop' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-amber-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconSparkles size={14} className="text-amber-300" />
-                                    <span className="text-[13px] font-medium">Focus Shop</span>
-                                </div>
-                            </div>
-                        </nav>
-                    </div>
-
-                    {/* SOCIAL Section */}
-                    <div>
-                        <div className="focuz-section-label px-3 mb-2">Social</div>
-                        <nav className="space-y-0.5">
-                            <div onClick={() => navigateTab('friends')} className={navItemClass('friends')}>
-                                {activeTab === 'friends' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-sky-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconUsers size={14} className="text-sky-400" />
-                                    <span className="text-[13px] font-medium">Friends</span>
-                                </div>
-                            </div>
-                            <div onClick={() => navigateTab('focus_rooms')} className={navItemClass('focus_rooms')}>
-                                {activeTab === 'focus_rooms' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-sky-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconFocusRooms size={14} className="text-violet-400" />
-                                    <span className="text-[13px] font-medium">Focus Rooms</span>
-                                </div>
-                            </div>
-                        </nav>
-                    </div>
-
-                    {/* INSIGHTS Section */}
-                    <div>
-                        <div className="focuz-section-label px-3 mb-2">Insights</div>
-                        <nav className="space-y-0.5">
-                            <div onClick={() => navigateTab('statistics')} className={navItemClass('statistics')}>
-                                {activeTab === 'statistics' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-purple-500 rounded-r-full"></div>}
-                                <div className={`flex items-center space-x-2.5 ml-1 ${proGoldTheme && proVisuals && activeTab === 'statistics' ? 'pro-nav-glow' : ''}`}>
-                                    <IconTarget size={14} />
-                                    <span className="text-[13px] font-medium">Statistics</span>
-                                    {proVisuals && <ProNavSuffix />}
-                                </div>
-                            </div>
-                            <div onClick={() => navigateTab('ai_coach')} className={navItemClass('ai_coach')}>
-                                {activeTab === 'ai_coach' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-purple-500 rounded-r-full"></div>}
-                                <div className={`flex items-center space-x-2.5 ml-1 ${proGoldTheme && proVisuals && activeTab === 'ai_coach' ? 'pro-nav-glow' : ''}`}>
-                                    <IconSparkles size={14} className="text-purple-400" />
-                                    <span className="text-[13px] font-medium">AI Coach</span>
-                                    {isPro && proVisuals && <ProNavSuffix />}
-                                </div>
-                            </div>
-                            <div onClick={() => navigateTab('patterns')} className={navItemClass('patterns')}>
-                                {activeTab === 'patterns' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-purple-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1 min-w-0">
-                                    <IconPatterns size={14} className="shrink-0" />
-                                    <span className="text-[13px] font-medium truncate">Patterns</span>
-                                </div>
-                            </div>
-                        </nav>
-                    </div>
-
-                    {/* SETTINGS Section */}
-                    <div className="mt-6">
-                        <div className="text-[10px] font-bold text-neutral-600 uppercase tracking-[0.1em] px-3 mb-2">SETTINGS</div>
-                        <nav className="space-y-0.5">
-                            <div onClick={() => navigateTab('settings')} className={navItemClass('settings')}>
-                                {activeTab === 'settings' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-purple-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconBolt size={14} />
-                                    <span className="text-[13px] font-medium">Settings</span>
-                                </div>
-                            </div>
-                            <div onClick={() => navigateTab('support')} className={navItemClass('support')}>
-                                {activeTab === 'support' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-purple-500 rounded-r-full"></div>}
-                                <div className="flex items-center space-x-2.5 ml-1">
-                                    <IconHelpCircle size={14} />
-                                    <span className="text-[13px] font-medium">Need Help</span>
-                                </div>
-                            </div>
-                        </nav>
-                    </div>
-                </div>
-
-                <div className="mt-auto px-3 pb-4 min-w-0">
-                    {/* Dashboard streak */}
-                    <div className="mb-4 group cursor-default min-w-0 px-1">
-                        <div className="flex items-center justify-between mb-2 gap-1 min-w-0">
-                            <span className="text-[9px] font-bold text-neutral-600 uppercase tracking-wide truncate">Dashboard streak</span>
-                            <span className="text-[10px] font-bold text-purple-400 shrink-0">{dashboardStreak}d</span>
-                        </div>
-                        <div className="grid grid-cols-7 gap-0.5 mb-1.5 w-full min-w-0">
-                            {Array.from({ length: 7 }).map((_, i) => (
-                                <div 
-                                    key={i} 
-                                    className={`h-2.5 rounded-[2px] min-w-0 transition-all duration-500 ${i < Math.min(dashboardStreak, 7) ? 'bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.3)] pro-streak-cell' : 'bg-white/5'}`}
-                                    style={i < Math.min(dashboardStreak, 7) ? { animationDelay: `${i * 0.06}s` } : undefined}
-                                />
-                            ))}
-                        </div>
-                        <div className="text-[9px] text-neutral-500 font-bold uppercase tracking-wide">Best · {dashboardBestStreak} days</div>
-                    </div>
-
-                    {/* Profile */}
-                    <div onClick={() => navigateTab('account')} className="pro-spring-btn flex items-center justify-between mt-4 pt-4 border-t border-white/5 cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-xl">
-                        <div className="flex items-center space-x-3 overflow-hidden">
-                            {(() => {
-                                const avatar = engineState.profileAvatar ? (
-                                    <img src={engineState.profileAvatar} alt="Profile" className={PROFILE_AVATAR_IMG_CLASS} />
-                                ) : (
-                                    <div className={PROFILE_AVATAR_FALLBACK_CLASS}>
-                                        {engineState.profileName?.charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || 'F'}
-                                    </div>
-                                );
-                                return proTheme ? <ProSidebarAvatarRing>{avatar}</ProSidebarAvatarRing> : avatar;
-                            })()}
-                            <div className="flex flex-col overflow-hidden min-w-0 flex-1">
-                                <span className="text-sm font-bold text-white truncate">{engineState.profileName || session?.user?.email?.split('@')[0]}</span>
-                                <span className="text-[10px] font-bold text-neutral-500 uppercase">Manage Account</span>
-                            </div>
-                        </div>
-                        <IconUser size={14} className="text-neutral-500 flex-shrink-0" />
-                    </div>
-                </div>
-            </div>
+            </aside>
 
             {/* Main Content */}
-            <main className="flex flex-col min-w-0 relative bg-[#111111] overflow-x-hidden">
+            <main className="flex flex-col min-w-0 relative bg-[#111111] overflow-x-hidden h-screen">
                 {/* Topbar */}
-                <header className="h-16 px-8 flex items-center justify-between sticky top-0 z-50 bg-[#111111]/80 backdrop-blur-md">
+                <header className="h-16 shrink-0 px-8 flex items-center justify-between sticky top-0 z-50 bg-[#111111]/80 backdrop-blur-md">
                     <div className="flex items-center space-x-2 text-[12px] font-bold uppercase tracking-widest text-neutral-500">
                         <div className="flex items-center space-x-2 px-2 py-1 -ml-2">
                             <span>Workspace</span>
@@ -2789,10 +2687,13 @@ const OptionsApp = () => {
                     </div>
                 </header>
 
-                <div className="px-8 pb-16 w-full overflow-y-auto scrollbar-hide">
+                <div className={activeTab === 'calendar'
+                    ? 'flex-1 min-h-0 w-full overflow-hidden'
+                    : 'px-8 pb-16 w-full overflow-y-auto scrollbar-hide'}
+                >
                     <div
                         key={activeTab}
-                        className={proVisuals ? 'pro-content-fade pro-page-enter' : undefined}
+                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${activeTab === 'calendar' ? 'h-full' : ''}`}
                     >
                         {renderContent()}
                     </div>

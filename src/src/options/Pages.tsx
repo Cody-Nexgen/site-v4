@@ -32,13 +32,91 @@ import { NuclearConfirmModal } from '../components/NuclearConfirmModal';
 
 export const InboxTab = () => (
     <div className="space-y-6 animate-fade-in-up max-w-[1200px] mx-auto">
-        <h2 className="text-2xl font-bold text-white">Inbox</h2>
+        <div>
+            <p className="focuz-section-label">Workspace</p>
+            <h1 className="text-3xl font-semibold text-white tracking-tight">Inbox</h1>
+            <p className="text-sm text-neutral-500 mt-1">Captured thoughts and incoming integrations.</p>
+        </div>
         <GlassCard className="p-8 flex flex-col items-center justify-center h-64 text-center">
-            <span className="text-neutral-500 text-sm font-bold uppercase tracking-widest mb-2">Empty Inbox</span>
-            <span className="text-neutral-400">All captured thoughts and incoming integrations will appear here.</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">Empty inbox</span>
+            <span className="text-sm text-neutral-400">All captured thoughts and incoming integrations will appear here.</span>
         </GlassCard>
     </div>
 );
+
+function FocusScoreBarGraph({ points }: { points: { date: string; score: number }[] }) {
+    const [hovered, setHovered] = useState<number | null>(null);
+    const width = 560;
+    const height = 200;
+    const padX = 36;
+    const padTop = 24;
+    const padBottom = 28;
+    const chartHeight = height - padTop - padBottom;
+    const chartWidth = width - padX * 2;
+    const gap = 10;
+    const barW = Math.max(24, (chartWidth - gap * (points.length - 1)) / Math.max(1, points.length));
+    const maxGraphHeight = 220;
+
+    const getX = (i: number) => padX + i * (barW + gap);
+    const getY = (score: number) => padTop + chartHeight - (score / 100) * chartHeight;
+    const getH = (score: number) => Math.max(score > 0 ? 4 : 0, (score / 100) * chartHeight);
+
+    return (
+        <div className="relative w-full flex justify-center">
+            <div
+                className="relative w-full"
+                style={{ maxWidth: (maxGraphHeight * width) / height, aspectRatio: `${width} / ${height}`, maxHeight: maxGraphHeight }}
+            >
+                <svg
+                    viewBox={`0 0 ${width} ${height}`}
+                    className="block h-full w-full"
+                    preserveAspectRatio="xMidYMid meet"
+                >
+                    {[0, 25, 50, 75, 100].map((v) => (
+                        <g key={v}>
+                            <line x1={padX} y1={getY(v)} x2={width - padX} y2={getY(v)} stroke="white" strokeOpacity="0.05" />
+                            <text x={4} y={getY(v) + 4} className="text-[10px] fill-neutral-600 font-medium">{v}</text>
+                        </g>
+                    ))}
+                    {points.map((p, i) => {
+                        const x = getX(i);
+                        const y = getY(p.score);
+                        const h = getH(p.score);
+                        const active = hovered === i;
+                        return (
+                            <g key={p.date} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} className="cursor-pointer">
+                                <rect x={x} y={padTop} width={barW} height={chartHeight} fill="transparent" />
+                                <rect
+                                    x={x}
+                                    y={y}
+                                    width={barW}
+                                    height={h}
+                                    rx={6}
+                                    fill={focusScoreColor(p.score)}
+                                    opacity={active ? 1 : 0.8}
+                                />
+                                {p.score > 0 && (
+                                    <text
+                                        x={x + barW / 2}
+                                        y={Math.max(14, y - 6)}
+                                        textAnchor="middle"
+                                        className="fill-neutral-300 font-semibold"
+                                        style={{ fontSize: 11 }}
+                                    >
+                                        {p.score}
+                                    </text>
+                                )}
+                                <text x={x + barW / 2} y={height - 8} textAnchor="middle" className="text-[10px] fill-neutral-600 font-medium">
+                                    {new Date(p.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                                </text>
+                            </g>
+                        );
+                    })}
+                </svg>
+            </div>
+        </div>
+    );
+}
 
 export const PatternsTab = () => {
     const { last7DaysStats, engineState, streak, dashboardStreak } = useAuthStore();
@@ -66,7 +144,10 @@ export const PatternsTab = () => {
     });
 
     const recentWeek = allStats.slice(-7);
-    const maxFocus = Math.max(...recentWeek.map((d) => computeFocusScore({ todaySites: d.sites, todayTotalMs: d.total }).score), 1);
+    const weekScores = recentWeek.map((d) => ({
+        date: d.date,
+        score: computeFocusScore({ todaySites: d.sites, todayTotalMs: d.total }).score,
+    }));
     const allTime = computeAllTimeFocusScore(allStats);
 
     const severityStyle = {
@@ -84,79 +165,73 @@ export const PatternsTab = () => {
     return (
         <div className="space-y-8 animate-fade-in-up max-w-[1200px] mx-auto pb-20">
             <div>
-                <h2 className="text-2xl font-bold text-white">Patterns</h2>
+                <p className="focuz-section-label">Insights</p>
+                <h1 className="text-3xl font-semibold text-white tracking-tight">Patterns</h1>
                 <p className="text-sm text-neutral-500 mt-1">Activity trends and focus insights — all computed locally.</p>
             </div>
 
             {/* Activity heatmap */}
-            <GlassCard className="p-6">
-                <h3 className="font-bold text-white text-sm mb-1">Focus activity</h3>
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-4">Last 12 weeks · darker green = higher focus score</p>
+            <GlassCard className="p-5">
+                <h3 className="font-semibold text-white text-sm mb-1">Focus activity</h3>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-4">Last 12 weeks · darker green = higher focuz score</p>
                 <FocusActivityChart stats={allStats} weeks={12} />
             </GlassCard>
 
             {/* Weekly stats row */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide">Today&apos;s score</span>
-                    <p className="text-3xl font-black mt-1" style={{ color: focusScoreColor(focusResult.score) }}>{focusResult.score}</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Today&apos;s score</span>
+                    <p className="text-2xl font-semibold tabular-nums mt-1" style={{ color: focusScoreColor(focusResult.score) }}>{focusResult.score}</p>
                     <p className="text-xs text-neutral-500">{focusResult.label}</p>
                 </GlassCard>
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide">All-time score</span>
-                    <p className="text-3xl font-black mt-1" style={{ color: focusScoreColor(allTime.score) }}>{allTime.score}</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">All-time score</span>
+                    <p className="text-2xl font-semibold tabular-nums mt-1" style={{ color: focusScoreColor(allTime.score) }}>{allTime.score}</p>
                     <p className="text-xs text-neutral-500">{allTime.daysCounted > 0 ? `Avg · ${allTime.daysCounted} days` : 'No data yet'}</p>
                 </GlassCard>
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide">Usage today</span>
-                    <p className="text-3xl font-black text-white mt-1">{formatTime(todayData?.total ?? 0)}</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Usage today</span>
+                    <p className="text-2xl font-semibold tabular-nums text-white mt-1">{formatTime(todayData?.total ?? 0)}</p>
                 </GlassCard>
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide">Blocks today</span>
-                    <p className="text-3xl font-black text-white mt-1">{engineState.blockedToday ?? 0}</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Blocks today</span>
+                    <p className="text-2xl font-semibold tabular-nums text-white mt-1">{engineState.blockedToday ?? 0}</p>
                 </GlassCard>
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide">Activity streak</span>
-                    <p className="text-3xl font-black text-purple-400 mt-1">{streak}<span className="text-sm text-neutral-500 ml-1">d</span></p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Activity streak</span>
+                    <p className="text-2xl font-semibold tabular-nums text-purple-400 mt-1">{streak}<span className="text-sm text-neutral-500 ml-1">d</span></p>
                 </GlassCard>
             </div>
 
-            {/* Weekly focus score bars */}
-            <GlassCard className="p-6">
-                <h3 className="font-bold text-white text-sm mb-4">Weekly focus scores</h3>
-                <div className="flex items-end gap-2 h-32">
-                    {recentWeek.map((day) => {
-                        const score = computeFocusScore({ todaySites: day.sites, todayTotalMs: day.total }).score;
-                        const h = Math.max(8, (score / maxFocus) * 100);
-                        const label = new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' });
-                        return (
-                            <div key={day.date} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                                <span className="text-[9px] text-neutral-500 font-bold">{score}</span>
-                                <div
-                                    className="w-full rounded-t-md transition-all"
-                                    style={{ height: `${h}%`, backgroundColor: focusScoreColor(score), opacity: 0.85 }}
-                                    title={`${day.date}: ${score}`}
-                                />
-                                <span className="text-[9px] text-neutral-600 truncate w-full text-center">{label}</span>
-                            </div>
-                        );
-                    })}
-                </div>
+            {/* Weekly focus score graph */}
+            <GlassCard className="p-5">
+                <h3 className="font-semibold text-white text-sm mb-1">Weekly focuz scores</h3>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-4">Last 7 days · 0–100</p>
+                {weekScores.length === 0 ? (
+                    <p className="text-sm text-neutral-600 py-10 text-center">Not enough data yet — scores appear after a day of use.</p>
+                ) : (
+                    <FocusScoreBarGraph points={weekScores} />
+                )}
             </GlassCard>
 
             {/* AI Patterns section */}
             <div>
-                <h3 className="text-lg font-bold text-white mb-2">AI patterns</h3>
+                <h3 className="text-lg font-semibold text-white mb-2">AI patterns</h3>
                 <p className="text-sm text-neutral-500 mb-4 leading-relaxed">
                     Procrastination and distraction patterns detected from your local browsing data.
                 </p>
                 {patterns.length === 0 ? (
-                    <GlassCard className="p-8 flex flex-col items-center justify-center text-center">
-                        <Lightbulb size={32} className="text-purple-400 mb-3" />
-                        <p className="text-white font-bold mb-2">No AI patterns yet</p>
-                        <p className="text-neutral-400 text-sm leading-relaxed max-w-sm">
-                            Keep using FocuzNow for a few days and insights will appear here.
-                        </p>
+                    <GlassCard className="p-10">
+                        <div className="flex flex-col items-center justify-center text-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-purple-500/[0.12] flex items-center justify-center">
+                                <Lightbulb size={22} className="text-purple-400" />
+                            </div>
+                            <p className="text-white font-semibold">No patterns detected yet</p>
+                            <p className="text-neutral-500 text-sm leading-relaxed max-w-xs">
+                                Keep using FocuzNow for a few days — distraction and procrastination
+                                insights will appear here automatically.
+                            </p>
+                        </div>
                     </GlassCard>
                 ) : (
                     <div className="space-y-4">
@@ -170,14 +245,14 @@ export const PatternsTab = () => {
                                     )}
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                            <h4 className="font-bold text-white">{p.title}</h4>
-                                            <span className="text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded bg-white/5 text-neutral-400">
+                                            <h4 className="font-semibold text-white">{p.title}</h4>
+                                            <span className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-white/5 text-neutral-400">
                                                 {p.severity}
                                             </span>
                                         </div>
                                         <p className="text-sm text-neutral-400 mb-3 leading-relaxed">{p.detail}</p>
                                         <p className="text-sm text-purple-300/90 leading-relaxed">
-                                            <span className="font-bold text-purple-400 block mb-1">Try this</span>
+                                            <span className="font-semibold text-purple-400 block mb-1">Try this</span>
                                             {p.suggestion}
                                         </p>
                                     </div>
@@ -190,14 +265,14 @@ export const PatternsTab = () => {
 
             {overridePatterns.length > 0 && (
                 <div>
-                    <h3 className="text-lg font-bold text-white mb-2">Emergency override patterns</h3>
+                    <h3 className="text-lg font-semibold text-white mb-2">Emergency override patterns</h3>
                     <p className="text-sm text-neutral-500 mb-4">
                         Based on your emergency unlock history — all stored locally.
                     </p>
                     <div className="space-y-3">
                         {overridePatterns.map((p) => (
                             <GlassCard key={p.id} className={`p-5 border ${severityStyle[p.severity]}`}>
-                                <h4 className="font-bold text-white mb-1">{p.title}</h4>
+                                <h4 className="font-semibold text-white mb-1">{p.title}</h4>
                                 <p className="text-sm text-neutral-400 leading-relaxed">{p.description}</p>
                             </GlassCard>
                         ))}
@@ -210,10 +285,14 @@ export const PatternsTab = () => {
 
 export const ExportsTab = () => (
     <div className="space-y-6 animate-fade-in-up max-w-[1200px] mx-auto">
-        <h2 className="text-2xl font-bold text-white">Exports</h2>
+        <div>
+            <p className="focuz-section-label">Insights</p>
+            <h1 className="text-3xl font-semibold text-white tracking-tight">Exports</h1>
+            <p className="text-sm text-neutral-500 mt-1">Download your focus data.</p>
+        </div>
         <GlassCard className="p-8 flex flex-col items-center justify-center h-64 text-center">
-            <span className="text-neutral-500 text-sm font-bold uppercase tracking-widest mb-2">Export Data</span>
-            <span className="text-neutral-400">CSV and JSON exports will be available here soon.</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">Export data</span>
+            <span className="text-sm text-neutral-400">CSV and JSON exports will be available here soon.</span>
         </GlassCard>
     </div>
 );
@@ -281,45 +360,46 @@ export const HabitsTab = () => {
                             localStorage.setItem(HABITS_TIP_KEY, '1');
                             setShowTip(false);
                         }}
-                        className="absolute top-3 right-3 w-7 h-7 rounded-lg text-neutral-500 hover:text-white hover:bg-white/10 text-sm font-bold"
+                        className="absolute top-3 right-3 w-7 h-7 rounded-lg text-neutral-500 hover:text-white hover:bg-white/10 text-sm font-semibold transition-colors duration-150"
                         aria-label="Dismiss tip"
                     >
                         ×
                     </button>
                     <p className="text-sm text-neutral-300 leading-relaxed pr-8">
-                        <span className="font-bold text-white">How to track:</span> Add a habit, then tap the large check-in button each day. Your streak grows when you check in on consecutive days. You can also check in from the Today page habits grid.
+                        <span className="font-semibold text-white">How to track:</span> Add a habit, then tap the large check-in button each day. Your streak grows when you check in on consecutive days. You can also check in from the Dashboard habits grid.
                     </p>
                 </GlassCard>
             )}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
-                    <h2 className="text-2xl font-bold text-white">Habits</h2>
-                    <p className="text-xs text-neutral-500 uppercase tracking-widest mt-1">Build discipline through consistency</p>
+                    <p className="focuz-section-label">Progress</p>
+                    <h1 className="text-3xl font-semibold text-white tracking-tight">Habits</h1>
+                    <p className="text-sm text-neutral-500 mt-1">Build discipline through consistency.</p>
                 </div>
                 <button
                     type="button"
                     onClick={() => setHabitModalOpen(true)}
-                    className="glass-edge-btn px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-2xl text-xs font-black text-white transition-all shadow-lg shadow-purple-600/20 active:scale-95 flex items-center space-x-2"
+                    className="px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors duration-150 flex items-center gap-1.5"
                 >
-                    <Plus size={16} />
-                    <span>CREATE HABIT</span>
+                    <Plus size={14} />
+                    <span>New habit</span>
                 </button>
             </div>
             
             <div className="grid grid-cols-1 gap-4">
                 {habits.length === 0 ? (
-                    <GlassCard className="p-16 flex flex-col items-center justify-center text-center opacity-50 mx-auto max-w-lg">
-                        <div className="w-16 h-16 min-w-[4rem] min-h-[4rem] shrink-0 bg-white/5 rounded-3xl flex items-center justify-center mb-4 mx-auto">
+                    <GlassCard className="p-16 flex flex-col items-center justify-center text-center mx-auto max-w-lg">
+                        <div className="w-16 h-16 min-w-[4rem] min-h-[4rem] shrink-0 bg-white/5 rounded-2xl flex items-center justify-center mb-4 mx-auto">
                             <IconCalendarStats size={32} className="text-neutral-500 shrink-0" stroke={1.5} />
                         </div>
-                        <p className="text-neutral-400 font-bold uppercase tracking-widest text-xs">No active habits</p>
-                        <p className="text-neutral-600 text-sm mt-2 max-w-xs">Start your first streak by adding a habit above.</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">No active habits</p>
+                        <p className="text-neutral-500 text-sm mt-2 max-w-xs">Start your first streak by adding a habit above.</p>
                     </GlassCard>
                 ) : (
                     habits.map((h: any) => {
                         const checkedToday = h.checkins?.includes(todayStr);
                         return (
-                            <GlassCard key={h.id} className="p-6 group">
+                            <GlassCard key={h.id} className="p-5 group">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-6">
                                         <HabitCheckInButton
@@ -327,15 +407,15 @@ export const HabitsTab = () => {
                                             onCheckIn={() => checkInHabit(h.id)}
                                         />
                                         <div>
-                                            <p className={`text-xl font-black tracking-tight transition-colors ${checkedToday ? 'text-purple-400' : 'text-white'}`}>{h.name}</p>
+                                            <p className={`text-lg font-semibold transition-colors duration-150 ${checkedToday ? 'text-purple-400' : 'text-white'}`}>{h.name}</p>
                                             <div className="flex items-center space-x-3 mt-1">
                                                 <div className="flex items-center space-x-1">
                                                     <Zap size={12} className={h.streak > 0 ? 'text-orange-400' : 'text-neutral-600'} />
-                                                    <span className="text-xs font-black text-neutral-500 uppercase tracking-widest">{h.streak || 0} DAY STREAK</span>
+                                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">{h.streak || 0} day streak</span>
                                                 </div>
                                                 <span className="text-neutral-800">•</span>
-                                                <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest">
-                                                    {checkedToday ? 'COMPLETED TODAY' : 'PENDING CHECK-IN'}
+                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">
+                                                    {checkedToday ? 'Completed today' : 'Pending check-in'}
                                                 </span>
                                             </div>
                                         </div>
@@ -352,14 +432,14 @@ export const HabitsTab = () => {
                                                 return (
                                                     <div 
                                                         key={i} 
-                                                        className={`w-3 h-3 rounded-[3px] transition-all duration-300
-                                                            ${checked ? 'bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.4)]' : 'bg-white/5'}`}
+                                                        className={`w-3 h-3 rounded-[3px] transition-colors duration-150
+                                                            ${checked ? 'bg-purple-500' : 'bg-white/5'}`}
                                                         title={ds}
                                                     />
                                                 );
                                             })}
                                         </div>
-                                        <button onClick={() => removeHabit(h.id)} className="p-3 text-neutral-700 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100 bg-white/5 hover:bg-red-400/10 rounded-xl">
+                                        <button onClick={() => removeHabit(h.id)} className="p-3 text-neutral-600 hover:text-red-400 transition-colors duration-150 opacity-0 group-hover:opacity-100 bg-white/[0.06] hover:bg-red-400/10 rounded-xl">
                                             <Trash size={18} />
                                         </button>
                                     </div>
@@ -406,28 +486,32 @@ export const TasksTab = () => {
 
     return (
         <div className="space-y-6 animate-fade-in-up max-w-[1400px] mx-auto">
-            <h2 className="text-2xl font-bold text-white">Tasks & Planning</h2>
+            <div>
+                <p className="focuz-section-label">Workspace</p>
+                <h1 className="text-3xl font-semibold text-white tracking-tight">Tasks & Planning</h1>
+                <p className="text-sm text-neutral-500 mt-1">Plan your day and keep it on schedule.</p>
+            </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
-                <GlassCard className="p-8 h-[750px] flex flex-col">
-                    <div className="flex space-x-3 mb-8">
+                <GlassCard className="p-5 h-[750px] flex flex-col">
+                    <div className="flex space-x-3 mb-6">
                         <input type="time" value={newPlanTime} onChange={e => setNewPlanTime(e.target.value)}
-                            className="bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500 transition-colors w-32" />
+                            className="bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500 transition-colors duration-150 w-32" />
                         <input value={newPlanTask} onChange={e => setNewPlanTask(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPlanItem()}
                             placeholder="What needs to get done?"
-                            className="flex-1 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500 transition-colors min-w-0" />
-                        <button onClick={addPlanItem} className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold text-sm transition-all whitespace-nowrap">ADD</button>
+                            className="flex-1 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500 transition-colors duration-150 min-w-0" />
+                        <button onClick={addPlanItem} className="px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors duration-150 whitespace-nowrap">Add</button>
                     </div>
                     
                     <div className="space-y-3 flex-1 overflow-y-auto pr-2 scrollbar-hide">
                         {planner.map((p: any) => (
-                            <div key={p.id} className="flex items-center space-x-4 p-4 bg-[#111] border border-white/5 rounded-xl group hover:border-white/10 transition-colors">
-                                <button onClick={() => togglePlanItem(p.id)} className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${p.done ? 'bg-purple-500' : 'bg-white/10'}`}>
+                            <div key={p.id} className="flex items-center space-x-4 p-4 bg-[#111] border border-white/5 rounded-xl group hover:border-white/10 transition-colors duration-150">
+                                <button onClick={() => togglePlanItem(p.id)} className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors duration-150 flex-shrink-0 ${p.done ? 'bg-purple-500' : 'bg-white/10'}`}>
                                     {p.done && <Check size={14} className="text-white" />}
                                 </button>
-                                <span className="text-xs font-bold text-purple-400 w-12 flex-shrink-0">{p.time}</span>
+                                <span className="text-xs font-semibold text-purple-400 tabular-nums w-12 flex-shrink-0">{p.time}</span>
                                 <span className={`flex-1 text-sm font-medium truncate ${p.done ? 'line-through text-neutral-500' : 'text-white'}`}>{p.task}</span>
-                                <button onClick={() => removePlanItem(p.id)} className="opacity-0 group-hover:opacity-100 text-neutral-600 hover:text-red-400 transition-all flex-shrink-0"><Trash size={16} /></button>
+                                <button onClick={() => removePlanItem(p.id)} className="opacity-0 group-hover:opacity-100 text-neutral-600 hover:text-red-400 transition-colors duration-150 flex-shrink-0"><Trash size={16} /></button>
                             </div>
                         ))}
                         {planner.length === 0 && <p className="text-neutral-600 text-sm text-center py-8">Plan your day. Add tasks above.</p>}
@@ -601,7 +685,11 @@ export const SessionsTab = () => {
 
     return (
         <div className="space-y-6 animate-fade-in-up max-w-[1200px] mx-auto">
-            <h2 className="text-2xl font-bold text-white">Focus Sessions</h2>
+            <div>
+                <p className="focuz-section-label">Focus</p>
+                <h1 className="text-3xl font-semibold text-white tracking-tight">Focus Sessions</h1>
+                <p className="text-sm text-neutral-500 mt-1">Timed deep work with a scratchpad for stray thoughts.</p>
+            </div>
             {pomoNotice && (
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300">
                     {pomoNotice}
@@ -611,13 +699,13 @@ export const SessionsTab = () => {
             <DeepWorkPlanner />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <GlassCard className="p-8 flex flex-col items-center justify-center w-full min-h-[440px]">
+                <GlassCard className="p-5 flex flex-col items-center justify-center w-full min-h-[440px]">
                     <div className="w-full flex flex-col items-center text-center gap-3 mb-6">
-                        <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
-                            {isBreak ? 'Break Time' : 'Focus Session'}
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                            {isBreak ? 'Break time' : 'Focus session'}
                         </span>
                         <div className="flex items-center justify-center gap-2 text-neutral-500">
-                            <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                            <label className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider">
                                 Focus
                                 <input
                                     type="number"
@@ -641,7 +729,7 @@ export const SessionsTab = () => {
                                 />
                             </label>
                             <span className="text-neutral-600">/</span>
-                            <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                            <label className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider">
                                 Break
                                 <input
                                     type="number"
@@ -689,10 +777,10 @@ export const SessionsTab = () => {
                                 />
                             </svg>
                             <div className="absolute inset-[22%] flex flex-col items-center justify-center text-center pointer-events-none">
-                                <span className="text-3xl font-black text-white tabular-nums leading-none">
+                                <span className="text-3xl font-semibold text-white tabular-nums leading-none">
                                     {formatTime(pomoTimeLeft)}
                                 </span>
-                                <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest mt-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-400 mt-2">
                                     {defaultPomo.sessionsCompleted} sessions today
                                 </span>
                             </div>
@@ -731,21 +819,21 @@ export const SessionsTab = () => {
                                 }
                             })();
                         }}
-                            className={`px-10 py-4 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 ${pomoRunning ? 'bg-white/10 text-white' : 'bg-purple-600 hover:bg-purple-500 text-white'}`}>
-                            {pomoRunning ? <><Pause size={18} /><span>PAUSE</span></> : <><Play size={18} /><span>START</span></>}
+                            className={`px-8 py-3 rounded-xl font-semibold text-sm transition-colors duration-150 flex items-center space-x-2 ${pomoRunning ? 'bg-white/[0.06] text-neutral-300 hover:bg-white/10' : 'bg-white text-black hover:bg-neutral-200'}`}>
+                            {pomoRunning ? <><Pause size={16} /><span>Pause</span></> : <><Play size={16} /><span>Start</span></>}
                         </button>
                         <button onClick={() => {
                             void persistRuntime(null);
                         }}
-                            className="px-5 py-4 bg-white/5 hover:bg-white/10 rounded-xl text-neutral-400 hover:text-white transition-all flex items-center">
+                            className="px-5 py-3 bg-white/[0.06] hover:bg-white/10 rounded-xl text-neutral-400 hover:text-white transition-colors duration-150 flex items-center">
                             <RefreshCw size={18} />
                         </button>
                     </div>
                 </GlassCard>
 
-                <GlassCard className="p-8 flex flex-col min-h-[500px] relative overflow-hidden">
+                <GlassCard className="p-5 flex flex-col min-h-[500px] relative overflow-hidden">
                     <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-bold text-white">Scratchpad</h3>
+                        <h3 className="font-semibold text-white">Scratchpad</h3>
                         <div className="flex items-center gap-2">
                             {activeScratchId != null && (
                                 <button
@@ -754,7 +842,7 @@ export const SessionsTab = () => {
                                         const active = scratchList.find((n) => n.id === activeScratchId);
                                         if (active) startRenameScratch(active.id, active.title);
                                     }}
-                                    className="p-1.5 rounded-lg bg-white/10 text-white"
+                                    className="p-1.5 rounded-lg bg-white/[0.06] text-neutral-300 hover:bg-white/10 transition-colors duration-150"
                                     title="Rename scratch"
                                 >
                                     <Pencil size={12} />
@@ -763,15 +851,15 @@ export const SessionsTab = () => {
                             <button
                                 type="button"
                                 onClick={addScratch}
-                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-white/10 text-white"
+                                className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/[0.06] text-neutral-300 hover:bg-white/10 transition-colors duration-150"
                             >
                                 <Plus size={12} className="inline mr-1" />
-                                NEW
+                                New
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setScratchFullscreen(true)}
-                                className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+                                className="p-1.5 rounded-lg bg-white/[0.06] text-neutral-300 hover:bg-white/10 transition-colors duration-150"
                                 title="Fullscreen"
                             >
                                 <Maximize2 size={12} />
@@ -793,7 +881,7 @@ export const SessionsTab = () => {
                             <button
                                 type="button"
                                 onClick={commitRenameScratch}
-                                className="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold"
+                                className="px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors duration-150"
                             >
                                 Save
                             </button>
@@ -809,10 +897,10 @@ export const SessionsTab = () => {
                                         setActiveScratchId(n.id);
                                         setNoteText(n.body || '');
                                     }}
-                                    className={`px-2 py-1 rounded-md text-[10px] whitespace-nowrap border ${
+                                    className={`px-2 py-1 rounded-md text-[10px] whitespace-nowrap border transition-colors duration-150 ${
                                         activeScratchId === n.id
                                             ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
-                                            : 'bg-white/5 border-white/10 text-neutral-400'
+                                            : 'bg-white/5 border-white/10 text-neutral-400 hover:text-neutral-200'
                                     }`}
                                 >
                                     {n.title}
@@ -831,7 +919,7 @@ export const SessionsTab = () => {
                             }
                         }}
                         onBlur={saveNote}
-                        className="w-full flex-1 min-h-[280px] bg-[#111] border border-white/10 rounded-2xl p-6 text-white text-sm focus:border-purple-500 outline-none transition-colors resize-none font-mono"
+                        className="w-full flex-1 min-h-[280px] bg-[#111] border border-white/10 rounded-2xl p-5 text-white text-sm focus:border-purple-500 outline-none transition-colors duration-150 resize-none font-mono"
                         placeholder="Jot down distracting thoughts or notes here while you focus. Auto-saves when you click away."
                     />
 
@@ -850,7 +938,7 @@ export const SessionsTab = () => {
                                     animate={{ y: 0, opacity: 1 }}
                                     transition={{ delay: 0.05, duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                                 >
-                                    <span className="text-sm font-bold text-white">
+                                    <span className="text-sm font-semibold text-white">
                                         {scratchList.find((n) => n.id === activeScratchId)?.title || 'Scratchpad'}
                                     </span>
                                     <button
@@ -971,8 +1059,10 @@ export const BlocklistTab = () => {
                 onComplete={() => executeAction(challengeState.type, challengeState.domain, 'remove')}
                 onDisableChallenge={disableChallenge}
             />
-            <div className="flex items-center justify-between mb-2">
-                <h2 className="text-2xl font-bold text-white">Site Management</h2>
+            <div className="mb-2">
+                <p className="focuz-section-label">Focus</p>
+                <h1 className="text-3xl font-semibold text-white tracking-tight">Site Management</h1>
+                <p className="text-sm text-neutral-500 mt-1">Control what gets blocked and what stays reachable.</p>
             </div>
 
             {/* Platform quick-blocks */}
@@ -997,7 +1087,7 @@ export const BlocklistTab = () => {
                                     }, () => r()));
                                     fetchEngineState();
                                 }}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${on ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'}`}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-semibold transition-colors duration-150 ${on ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'}`}
                                 title={desc}
                             >
                                 <span className={`w-2 h-2 rounded-full ${on ? 'bg-red-500' : 'bg-neutral-600'}`} />
@@ -1008,26 +1098,26 @@ export const BlocklistTab = () => {
                 </div>
             </GlassCard>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <GlassCard className="p-8">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-white text-lg">Blocked List</h3>
-                        <Ban size={20} className="text-red-400" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <GlassCard className="p-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-semibold text-white text-base">Blocked List</h3>
+                        <Ban size={18} className="text-red-400" />
                     </div>
-                    <p className="text-[10px] text-neutral-600 font-bold uppercase tracking-widest mb-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-4">
                         Supports subdomains (sub.site.com) and routes (site.com/path)
                     </p>
-                    <div className="flex space-x-3 mb-8">
+                    <div className="flex space-x-3 mb-6">
                         <input
                             value={newBlocked}
                             onChange={e => setNewBlocked(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') { triggerAction('block', newBlocked, 'add'); setNewBlocked(''); } }}
                             placeholder="site.com or sub.site.com/path"
-                            className="flex-1 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-purple-500 outline-none transition-colors text-white"
+                            className="flex-1 min-w-0 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-purple-500 outline-none transition-colors duration-150 text-white"
                         />
                         <button
                             onClick={() => { triggerAction('block', newBlocked, 'add'); setNewBlocked(''); }}
-                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-6 py-3 rounded-xl text-sm font-bold transition-all"
+                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150"
                         >Add</button>
                     </div>
                     <div className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide">
@@ -1036,7 +1126,7 @@ export const BlocklistTab = () => {
                             ...Object.keys(engineState.schedules || {}),
                             ...Object.keys(engineState.timers || {})
                         ])).map(domain => (
-                            <div key={domain as string} className="flex items-center justify-between p-4 bg-[#111] rounded-xl border border-white/5 group hover:border-white/10 transition-all">
+                            <div key={domain as string} className="flex items-center justify-between p-4 bg-[#111] rounded-xl border border-white/5 group hover:border-white/10 transition-colors duration-150">
                                 <span className="text-sm font-medium text-white">{domain}</span>
                                 <button
                                     type="button"
@@ -1051,26 +1141,26 @@ export const BlocklistTab = () => {
                     </div>
                 </GlassCard>
 
-                <GlassCard className="p-8">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="font-bold text-white text-lg">Allowed (Whitelist)</h3>
-                        <Globe size={20} className="text-green-400" />
+                <GlassCard className="p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-semibold text-white text-base">Allowed (Whitelist)</h3>
+                        <Globe size={18} className="text-emerald-400" />
                     </div>
-                    <div className="flex space-x-3 mb-8">
+                    <div className="flex space-x-3 mb-6">
                         <input
                             value={newAllowed}
                             onChange={e => setNewAllowed(e.target.value)}
                             placeholder="trustedsite.com"
-                            className="flex-1 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-green-500 outline-none transition-colors text-white"
+                            className="flex-1 min-w-0 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-emerald-500 outline-none transition-colors duration-150 text-white"
                         />
                         <button
                             onClick={() => { triggerAction('allowed_site', newAllowed, 'add'); setNewAllowed(''); }}
-                            className="bg-green-500/20 hover:bg-green-500/30 text-green-400 px-6 py-3 rounded-xl text-sm font-bold transition-all"
+                            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150"
                         >Add</button>
                     </div>
                     <div className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide">
                         {(engineState.allowedSites || []).map((domain: string) => (
-                            <div key={domain} className="flex items-center justify-between p-4 bg-[#111] rounded-xl border border-white/5 group hover:border-white/10 transition-all">
+                            <div key={domain} className="flex items-center justify-between p-4 bg-[#111] rounded-xl border border-white/5 group hover:border-white/10 transition-colors duration-150">
                                 <span className="text-sm font-medium text-white">{domain}</span>
                                 <button
                                     type="button"
@@ -1087,24 +1177,20 @@ export const BlocklistTab = () => {
             </div>
             
             {/* Nuclear */}
-            <GlassCard className="p-10 border-red-500/20 bg-red-900/5 relative overflow-hidden">
-                <div className="flex items-center space-x-4 mb-4">
-                    <div className="relative">
-                        <Zap size={24} className="text-red-500 relative z-10" style={{ filter: 'drop-shadow(0 0 8px rgba(239,68,68,0.8)) drop-shadow(0 0 16px rgba(239,68,68,0.4))' }} />
-                        <div className="absolute inset-0 animate-ping rounded-full bg-red-500/20" style={{ animationDuration: '2s' }} />
-                    </div>
-                    <h3 className="text-xl font-bold text-white">Nuclear Lockdown</h3>
-                    <span className="text-[10px] font-bold text-red-500/60 uppercase tracking-widest">⚠ IRREVERSIBLE</span>
+            <GlassCard className="p-5 border-red-500/20 bg-red-900/5">
+                <div className="flex items-center gap-3 mb-4 flex-wrap">
+                    <Zap size={20} className="text-red-500" />
+                    <h3 className="text-lg font-semibold text-white">Nuclear Lockdown</h3>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-red-500/70">Irreversible</span>
                 </div>
                 
                 {engineState.nuclearState?.active ? (
-                    <div className="p-6 bg-red-600/20 border border-red-500/40 rounded-3xl text-center relative overflow-hidden">
-                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(239,68,68,0.08)_0%,transparent_70%)] animate-pulse" />
-                        <span className="text-red-400 font-bold text-lg relative z-10">☢ NUCLEAR LOCKDOWN ACTIVE ☢</span>
-                        <div className="text-3xl font-black text-white mt-2 relative z-10">
-                            {Math.max(0, Math.ceil((engineState.nuclearState.endTime - Date.now()) / 60000))}M REMAINING
+                    <div className="p-6 bg-red-600/15 border border-red-500/40 rounded-2xl text-center">
+                        <span className="text-red-400 font-semibold text-sm">Nuclear lockdown active</span>
+                        <div className="text-3xl font-semibold tabular-nums text-white mt-2">
+                            {Math.max(0, Math.ceil((engineState.nuclearState.endTime - Date.now()) / 60000))}m remaining
                         </div>
-                        <p className="text-xs text-red-400/60 mt-4 font-bold uppercase tracking-widest relative z-10">Un-cancellable by design.</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400/60 mt-4">Un-cancellable by design</p>
                     </div>
                 ) : (
                     <>
@@ -1117,10 +1203,10 @@ export const BlocklistTab = () => {
                                     key={m}
                                     type="button"
                                     onClick={() => setNuclearDuration(m)}
-                                    className={`glass-edge-btn px-4 py-2 text-xs font-bold ${
+                                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 ${
                                         nuclearDuration === m
-                                            ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-1 ring-purple-400/40'
-                                            : 'text-neutral-400'
+                                            ? 'bg-white text-black'
+                                            : 'bg-white/[0.06] text-neutral-300 hover:bg-white/10'
                                     }`}
                                 >
                                     {m}m
@@ -1128,36 +1214,24 @@ export const BlocklistTab = () => {
                             ))}
                         </div>
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                            <div className="flex items-center glass-edge-btn rounded-2xl px-4 py-3 w-full sm:w-48 shrink-0">
-                                <span className="text-neutral-500 text-xs font-bold uppercase tracking-widest mr-3">Custom</span>
+                            <div className="flex items-center rounded-xl border border-white/10 bg-[#111] px-4 py-3 w-full sm:w-48 shrink-0">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mr-3">Custom</span>
                                 <input
                                     type="number"
                                     min={1}
                                     value={nuclearDuration}
                                     onChange={(e) => setNuclearDuration(parseInt(e.target.value, 10) || 1)}
-                                    className="bg-transparent text-white font-black text-lg outline-none w-full"
+                                    className="bg-transparent text-white font-semibold tabular-nums text-base outline-none w-full"
                                 />
-                                <span className="text-neutral-500 text-xs font-bold ml-1">MIN</span>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 ml-1">min</span>
                             </div>
                             <button
                                 type="button"
                                 disabled={blocklistCount === 0}
                                 onClick={() => setNukeModalOpen(true)}
-                                className="flex-1 px-8 py-4 text-base font-black uppercase tracking-wider transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 rounded-xl"
-                                style={{
-                                    background: blocklistCount > 0
-                                        ? 'linear-gradient(180deg, #fde047 0%, #eab308 55%, #ca8a04 100%)'
-                                        : '#333',
-                                    color: '#000',
-                                    border: '3px solid #000',
-                                    boxShadow: blocklistCount > 0
-                                        ? '0 0 20px rgba(250, 204, 21, 0.35), inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.2)'
-                                        : 'none',
-                                    outline: blocklistCount > 0 ? '2px solid #facc15' : 'none',
-                                    outlineOffset: '2px',
-                                }}
+                                className="flex-1 px-8 py-3 rounded-xl text-sm font-semibold transition-colors duration-150 bg-red-500 text-white hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500"
                             >
-                                ☢ Nuke em!
+                                Activate lockdown
                             </button>
                         </div>
                         {blocklistCount === 0 && (
@@ -1284,39 +1358,40 @@ export const StatisticsTab = () => {
 
     const graphWidth = Math.max(graphContainerWidth, 200);
     const graphHeight = 200;
-    const padX = 24;
+    const padX = 28;
+    const padTop = 20;
     const padBottom = 48;
     const plotW = graphWidth - padX * 2;
-    const xStep = chartData.length > 1 ? plotW / (chartData.length - 1) : plotW;
-
-    const linePath = chartData.map((day: any, i: number) => {
-        const x = padX + i * xStep;
-        const y = graphHeight - padBottom - Math.max(8, (day.total / maxTime) * (graphHeight - padBottom - 16));
-        return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    }).join(' ');
+    const plotH = graphHeight - padTop - padBottom;
+    const barGap = 10;
+    const barW = Math.max(20, (plotW - barGap * (chartData.length - 1)) / Math.max(1, chartData.length));
 
     return (
         <div className="space-y-6 animate-fade-in-up w-full">
-            <h2 className="text-2xl font-bold text-white">Statistics & Analytics</h2>
+            <div>
+                <p className="focuz-section-label">Insights</p>
+                <h1 className="text-3xl font-semibold text-white tracking-tight">Statistics & Analytics</h1>
+                <p className="text-sm text-neutral-500 mt-1">Where your time went, day by day.</p>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* LINE GRAPH */}
-                <GlassCard className="p-6 flex flex-col" style={{ height: '420px' }}>
+                {/* BAR GRAPH */}
+                <GlassCard className="p-5 flex flex-col" style={{ height: '420px' }}>
                     <div className="flex items-center justify-between mb-1">
                         <div>
-                            <h3 className="font-bold text-white text-sm">Weekly Activity</h3>
-                            <p className="text-[10px] text-neutral-500 uppercase tracking-widest">Click a point to see its breakdown</p>
+                            <h3 className="font-semibold text-white text-sm">Weekly Activity</h3>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Click a bar to see its breakdown</p>
                         </div>
                         <div className="flex items-center space-x-2">
                             <button
                                 onClick={() => setWindowEnd(resolvedEnd - 7)}
                                 disabled={!canGoBack}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-all text-white text-xs font-bold"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/[0.06] hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-150 text-neutral-300 text-xs font-semibold"
                             >‹</button>
                             <button
                                 onClick={() => setWindowEnd(Math.min(resolvedEnd + 7, allStats.length - 1))}
                                 disabled={!canGoForward}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-all text-white text-xs font-bold"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/[0.06] hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-150 text-neutral-300 text-xs font-semibold"
                             >›</button>
                         </div>
                     </div>
@@ -1327,16 +1402,8 @@ export const StatisticsTab = () => {
                             className="w-full h-full max-h-[280px]"
                             preserveAspectRatio="xMidYMid meet"
                         >
-                            <defs>
-                                <linearGradient id="lineGrad2" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="rgba(168,85,247,0.25)" />
-                                    <stop offset="100%" stopColor="rgba(168,85,247,0)" />
-                                </linearGradient>
-                            </defs>
-
-                            {/* Y-axis grid lines with labels */}
                             {[0.25, 0.5, 0.75, 1].map(f => {
-                                const y = graphHeight - padBottom - f * (graphHeight - padBottom - 16);
+                                const y = padTop + plotH - f * plotH;
                                 return (
                                     <g key={f}>
                                         <line
@@ -1351,31 +1418,38 @@ export const StatisticsTab = () => {
                                 );
                             })}
 
-                            <path
-                                d={`${linePath} L ${padX + (chartData.length - 1) * xStep} ${graphHeight - padBottom} L ${padX} ${graphHeight - padBottom} Z`}
-                                fill="url(#lineGrad2)"
-                                className="transition-all duration-700"
-                            />
-                            <path
-                                d={linePath}
-                                fill="none"
-                                stroke="#a855f7"
-                                strokeWidth="2.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="transition-all duration-700"
-                            />
-
                             {chartData.map((day: any, i: number) => {
-                                const x = padX + i * xStep;
-                                const y = graphHeight - padBottom - Math.max(8, (day.total / maxTime) * (graphHeight - padBottom - 16));
+                                const x = padX + i * (barW + barGap);
+                                const h = Math.max(day.total > 0 ? 4 : 0, (day.total / maxTime) * plotH);
+                                const y = padTop + plotH - h;
                                 const sel = i === selectedIdxClamped;
                                 return (
                                     <g key={i} onClick={() => setSelectedDateIdx(i)} className="cursor-pointer">
-                                        <circle cx={x} cy={y} r={sel ? 7 : 4} fill={sel ? '#fff' : '#a855f7'} className="transition-all duration-200" />
-                                        {sel && <circle cx={x} cy={y} r={12} fill="rgba(168,85,247,0.15)" className="transition-all" />}
+                                        <rect x={x} y={padTop} width={barW} height={plotH} fill="transparent" />
+                                        <rect
+                                            x={x}
+                                            y={y}
+                                            width={barW}
+                                            height={h}
+                                            rx={6}
+                                            fill={sel ? '#fff' : '#a855f7'}
+                                            opacity={sel ? 1 : 0.85}
+                                            className="transition-all duration-200"
+                                        />
+                                        {day.total > 0 && (
+                                            <text
+                                                x={x + barW / 2}
+                                                y={Math.max(12, y - 6)}
+                                                textAnchor="middle"
+                                                fill={sel ? '#fff' : '#a3a3a3'}
+                                                fontSize="10"
+                                                fontWeight="600"
+                                            >
+                                                {formatTime(day.total)}
+                                            </text>
+                                        )}
                                         <text
-                                            x={x} y={graphHeight - padBottom + 22}
+                                            x={x + barW / 2} y={graphHeight - padBottom + 22}
                                             textAnchor="middle"
                                             fill={sel ? '#a855f7' : '#555'}
                                             fontSize="11"
@@ -1383,11 +1457,6 @@ export const StatisticsTab = () => {
                                         >
                                             {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
                                         </text>
-                                        {sel && (
-                                            <text x={x} y={graphHeight - padBottom + 36} textAnchor="middle" fill="#888" fontSize="9">
-                                                {formatTime(day.total)}
-                                            </text>
-                                        )}
                                     </g>
                                 );
                             })}
@@ -1396,10 +1465,10 @@ export const StatisticsTab = () => {
                 </GlassCard>
 
                 {/* HALF PIE CHART */}
-                <GlassCard className="p-6 flex flex-col relative" style={{ minHeight: '420px' }}>
+                <GlassCard className="p-5 flex flex-col relative" style={{ minHeight: '420px' }}>
                     <div className="mb-2">
-                        <h3 className="font-bold text-white text-sm">Date Breakdown</h3>
-                        <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">
+                        <h3 className="font-semibold text-white text-sm">Date Breakdown</h3>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">
                             {new Date(activeData.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                         </p>
                     </div>
@@ -1442,17 +1511,17 @@ export const StatisticsTab = () => {
                             >
                                 <div className="flex items-center space-x-2 mb-2">
                                     <img src={`https://s2.googleusercontent.com/s2/favicons?domain=${tooltip.site}&sz=32`} className="w-5 h-5 rounded" alt="" />
-                                    <span className="text-white font-bold text-xs truncate max-w-[110px]">{tooltip.site}</span>
+                                    <span className="text-white font-semibold text-xs truncate max-w-[110px]">{tooltip.site}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-neutral-400 text-xs">{formatTime(tooltip.time)}</span>
-                                    <span className="text-purple-400 font-black text-sm">{tooltip.pct}%</span>
+                                    <span className="text-purple-400 font-semibold tabular-nums text-sm">{tooltip.pct}%</span>
                                 </div>
                             </div>
                         )}
                         </div>
                         {slices.length === 0 && (
-                            <p className="text-neutral-500 text-xs font-bold mt-2">No usage this day</p>
+                            <p className="text-neutral-500 text-xs font-semibold mt-2">No usage this day</p>
                         )}
                     </div>
 
@@ -1462,12 +1531,12 @@ export const StatisticsTab = () => {
                                 <div className="flex items-center space-x-3 min-w-0">
                                     <img src={`https://s2.googleusercontent.com/s2/favicons?domain=${selectedSite}&sz=64`} alt="" className="w-10 h-10 rounded-lg bg-white/5 p-1 flex-shrink-0" />
                                     <div className="min-w-0">
-                                        <p className="text-base font-bold text-white truncate">{selectedSite}</p>
-                                        <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-bold">Selected</p>
+                                        <p className="text-base font-semibold text-white truncate">{selectedSite}</p>
+                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Selected</p>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end flex-shrink-0 ml-2">
-                                    <span className="text-2xl font-black text-purple-400">
+                                    <span className="text-2xl font-semibold tabular-nums text-purple-400">
                                         {slices.find((s) => s.site === selectedSite)?.pct ?? 0}%
                                     </span>
                                     <span className="text-xs text-neutral-500">
@@ -1499,8 +1568,8 @@ export const StatisticsTab = () => {
                                     <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
                                         <div className="h-full rounded-full transition-all" style={{ width: `${slice.pct}%`, background: slice.color }} />
                                     </div>
-                                    <span className="text-[10px] text-neutral-500 w-10 text-right">{formatTime(slice.time)}</span>
-                                    <span className="text-[10px] font-bold text-purple-400 w-7 text-right">{slice.pct}%</span>
+                                    <span className="text-[10px] text-neutral-500 tabular-nums w-10 text-right">{formatTime(slice.time)}</span>
+                                    <span className="text-[10px] font-semibold text-purple-400 tabular-nums w-7 text-right">{slice.pct}%</span>
                                 </div>
                             </div>
                         ))}

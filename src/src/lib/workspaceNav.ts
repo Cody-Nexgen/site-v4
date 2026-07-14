@@ -14,9 +14,9 @@ export type NavSection = {
 export const WORKSPACE_NAV: NavSection[] = [
     {
         id: 'focus',
-        label: 'Focus',
+        label: 'Focuz',
         tabs: [
-            { id: 'overview', label: 'Today' },
+            { id: 'overview', label: 'Dashboard' },
             { id: 'calendar', label: 'Calendar' },
             { id: 'sessions', label: 'Sessions' },
             { id: 'blocklist', label: 'Block list' },
@@ -24,13 +24,13 @@ export const WORKSPACE_NAV: NavSection[] = [
         ],
     },
     {
-        id: 'gamification',
-        label: 'Gamification',
+        id: 'progress',
+        label: 'Progress',
         tabs: [
             { id: 'progress', label: 'Progress' },
             { id: 'challenges', label: 'Challenges' },
             { id: 'forest', label: 'Forest' },
-            { id: 'shop', label: 'Focus Shop' },
+            { id: 'shop', label: 'Focuz Shop' },
         ],
     },
     {
@@ -38,7 +38,7 @@ export const WORKSPACE_NAV: NavSection[] = [
         label: 'Social',
         tabs: [
             { id: 'friends', label: 'Friends' },
-            { id: 'focus_rooms', label: 'Focus Rooms' },
+            { id: 'focus_rooms', label: 'Focuz Rooms' },
         ],
     },
     {
@@ -65,6 +65,7 @@ export const WORKSPACE_NAV: NavSection[] = [
 export const TAB_ALIASES: Record<string, string> = {
     achievements: 'progress',
     tasks: 'calendar',
+    gamification: 'progress',
 };
 
 export function resolveTabId(tab: string | null | undefined): string {

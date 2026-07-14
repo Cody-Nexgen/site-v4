@@ -1,4 +1,4 @@
-import type { FocusProgressionState } from './focusProgression';
+import type { ActiveChallengeSnapshot, FocusProgressionState } from './focusProgression';
 import { applyProgressionEvent } from './focusProgression';
 import { getAllChallengeDefinitions, type DynamicChallengeInput } from './dynamicChallenges';
 
@@ -6,7 +6,10 @@ export type ChallengeMetric =
     | 'no_shorts_streak'
     | 'no_tiktok_streak'
     | 'focus_minutes'
-    | 'total_pomodoros';
+    | 'total_pomodoros'
+    | 'week_pomodoros'
+    | 'today_pomodoros'
+    | 'focus_score';
 
 export type ChallengeDefinition = {
     id: string;
@@ -80,7 +83,15 @@ export type ChallengeProgress = ChallengeDefinition & {
     progressPct: number;
 };
 
-function metricValue(state: FocusProgressionState, metric: ChallengeMetric): number {
+export type ChallengeRuntimeContext = {
+    focusScore?: number;
+};
+
+function metricValue(
+    state: FocusProgressionState,
+    metric: ChallengeMetric,
+    ctx?: ChallengeRuntimeContext,
+): number {
     const s = state.stats;
     switch (metric) {
         case 'no_shorts_streak':
@@ -91,73 +102,153 @@ function metricValue(state: FocusProgressionState, metric: ChallengeMetric): num
             return s.focusMinutesTotal;
         case 'total_pomodoros':
             return s.totalPomodoros;
+        case 'week_pomodoros':
+            return s.weekPomodorosCount ?? 0;
+        case 'today_pomodoros':
+            return s.todayPomodorosCount ?? 0;
+        case 'focus_score':
+            return ctx?.focusScore ?? 0;
         default:
             return 0;
     }
 }
 
+function usesBaseline(metric: ChallengeMetric): boolean {
+    return metric === 'focus_minutes' || metric === 'total_pomodoros' || metric === 'week_pomodoros' || metric === 'today_pomodoros';
+}
+
+function challengeProgressValue(
+    state: FocusProgressionState,
+    snapshot: Pick<ActiveChallengeSnapshot, 'metric' | 'baseline'>,
+    ctx?: ChallengeRuntimeContext,
+): number {
+    const metric = snapshot.metric as ChallengeMetric;
+    const raw = metricValue(state, metric, ctx);
+    if (usesBaseline(metric)) {
+        return Math.max(0, raw - snapshot.baseline);
+    }
+    return raw;
+}
+
+function definitionFromSnapshot(snapshot: ActiveChallengeSnapshot): ChallengeDefinition {
+    return {
+        id: snapshot.id,
+        title: snapshot.title,
+        description: snapshot.description,
+        icon: snapshot.icon,
+        metric: snapshot.metric as ChallengeMetric,
+        target: snapshot.target,
+        xpReward: snapshot.xpReward,
+        coinReward: snapshot.coinReward,
+    };
+}
+
 export function computeChallengeProgress(
     state: FocusProgressionState,
     dynamicInput?: Omit<DynamicChallengeInput, 'progression'>,
+    ctx?: ChallengeRuntimeContext,
 ): ChallengeProgress[] {
     const defs = getAllChallengeDefinitions(
         dynamicInput ? { ...dynamicInput, progression: state } : undefined,
     );
-    return defs.map((def) => {
-        const activeEntry = state.activeChallenges.find((c) => c.id === def.id);
+    const activeSnapshots = state.activeChallenges.filter(
+        (c): c is ActiveChallengeSnapshot => typeof c.metric === 'string' && typeof c.target === 'number',
+    );
+
+    const merged = new Map<string, ChallengeDefinition>();
+    for (const def of defs) merged.set(def.id, def);
+    for (const snap of activeSnapshots) merged.set(snap.id, definitionFromSnapshot(snap));
+
+    return Array.from(merged.values()).map((def) => {
+        const activeEntry = activeSnapshots.find((c) => c.id === def.id);
         const completed = state.completedChallenges.includes(def.id);
-        const current = metricValue(state, def.metric);
-        const progressPct = Math.min(100, Math.round((current / def.target) * 100));
+        const effectiveDef = activeEntry ? definitionFromSnapshot(activeEntry) : def;
+        const currentRaw = activeEntry
+            ? challengeProgressValue(state, activeEntry, ctx)
+            : metricValue(state, effectiveDef.metric, ctx);
+        const current = Math.min(currentRaw, effectiveDef.target);
+        const progressPct = effectiveDef.target > 0
+            ? Math.min(100, Math.round((current / effectiveDef.target) * 100))
+            : 0;
 
         return {
-            ...def,
+            ...effectiveDef,
             active: !!activeEntry,
             startedAt: activeEntry?.startedAt,
-            current: Math.min(current, def.target),
+            current,
             completed,
             progressPct,
         };
     });
 }
 
-export function startChallenge(state: FocusProgressionState, challengeId: string): FocusProgressionState {
-    if (state.completedChallenges.includes(challengeId)) return state;
-    if (state.activeChallenges.some((c) => c.id === challengeId)) return state;
+export function startChallenge(
+    state: FocusProgressionState,
+    def: ChallengeDefinition,
+): FocusProgressionState {
+    if (state.completedChallenges.includes(def.id)) return state;
+    if (state.activeChallenges.some((c) => c.id === def.id)) return state;
+
+    const baseline = usesBaseline(def.metric) ? metricValue(state, def.metric) : 0;
+    const snapshot: ActiveChallengeSnapshot = {
+        id: def.id,
+        startedAt: new Date().toISOString(),
+        title: def.title,
+        description: def.description,
+        icon: def.icon,
+        metric: def.metric,
+        target: def.target,
+        baseline,
+        xpReward: def.xpReward,
+        coinReward: def.coinReward,
+    };
+
     return {
         ...state,
-        activeChallenges: [
-            ...state.activeChallenges,
-            { id: challengeId, startedAt: new Date().toISOString() },
-        ],
+        activeChallenges: [...state.activeChallenges.filter((c) => c.id !== def.id), snapshot],
     };
 }
 
 export function checkChallengeCompletions(
     state: FocusProgressionState,
+    ctx?: ChallengeRuntimeContext,
 ): { state: FocusProgressionState; completed: ChallengeDefinition[] } {
     const completed: ChallengeDefinition[] = [];
     let next = state;
 
-    for (const def of getAllChallengeDefinitions()) {
-        if (next.completedChallenges.includes(def.id)) continue;
-        const isActive = next.activeChallenges.some((c) => c.id === def.id);
-        if (!isActive) continue;
+    const activeSnapshots = next.activeChallenges.filter(
+        (c): c is ActiveChallengeSnapshot => typeof c.metric === 'string' && typeof c.target === 'number',
+    );
 
-        if (metricValue(next, def.metric) >= def.target) {
-            next = {
-                ...next,
-                completedChallenges: [...next.completedChallenges, def.id],
-                activeChallenges: next.activeChallenges.filter((c) => c.id !== def.id),
-            };
-            const result = applyProgressionEvent(next, 'challenge_complete', {
-                dedupKey: `challenge:${def.id}`,
-                xpOverride: def.xpReward,
-                coinsOverride: def.coinReward,
-            });
-            next = result.state;
-            completed.push(def);
-        }
+    for (const snap of activeSnapshots) {
+        if (next.completedChallenges.includes(snap.id)) continue;
+        const current = challengeProgressValue(next, snap, ctx);
+        if (current < snap.target) continue;
+
+        const def = definitionFromSnapshot(snap);
+        next = {
+            ...next,
+            completedChallenges: [...next.completedChallenges, snap.id],
+            activeChallenges: next.activeChallenges.filter((c) => c.id !== snap.id),
+        };
+        const result = applyProgressionEvent(next, 'challenge_complete', {
+            dedupKey: `challenge:${snap.id}`,
+            xpOverride: snap.xpReward,
+            coinsOverride: snap.coinReward,
+        });
+        next = result.state;
+        completed.push(def);
     }
 
     return { state: next, completed };
+}
+
+export function pruneStaleActiveChallenges(state: FocusProgressionState): FocusProgressionState {
+    const validIds = new Set(getAllChallengeDefinitions().map((d) => d.id));
+    const active = state.activeChallenges.filter((c) => {
+        if (typeof c.metric === 'string') return true;
+        return validIds.has(c.id);
+    });
+    if (active.length === state.activeChallenges.length) return state;
+    return { ...state, activeChallenges: active };
 }

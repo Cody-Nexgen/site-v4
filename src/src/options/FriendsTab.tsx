@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, UserPlus, Users, Trophy, Zap } from 'lucide-react';
-import { GlassCard } from './OptionsApp';
+import { Loader2, UserPlus, Users, Trophy } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import {
@@ -17,6 +16,12 @@ import {
     PROFILE_AVATAR_IMG_CLASS,
 } from '../lib/profileAvatar';
 
+const CARD_CLASS = 'rounded-2xl border border-white/[0.06] bg-[#0c0c0e]';
+const PRIMARY_BTN_CLASS =
+    'px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-neutral-200';
+const GHOST_BTN_CLASS =
+    'px-4 py-2 rounded-xl bg-white/[0.06] text-neutral-300 text-xs font-semibold hover:bg-white/10';
+
 function Avatar({ url, name }: { url: string | null; name: string }) {
     const initial = name.charAt(0).toUpperCase() || '?';
     if (url) return <img src={url} alt="" className={PROFILE_AVATAR_IMG_CLASS} />;
@@ -28,22 +33,26 @@ function FriendRow({ friend }: { friend: FriendEntry }) {
     const focusing = friend.isFocusing && endsAt && endsAt.getTime() > Date.now();
 
     return (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-            <Avatar url={friend.avatarUrl} name={friend.displayName} />
+        <div className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition-colors">
+            <div className="relative shrink-0">
+                <Avatar url={friend.avatarUrl} name={friend.displayName} />
+                {focusing && (
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#0c0c0e]" />
+                )}
+            </div>
             <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-white truncate">{friend.displayName}</p>
-                <p className="text-xs text-neutral-500 truncate">@{friend.username} · Lv {friend.level}</p>
+                <p className="text-sm font-medium text-white truncate">{friend.displayName}</p>
+                <p className="text-xs text-neutral-500 truncate">
+                    @{friend.username} · Lv <span className="tabular-nums">{friend.level}</span>
+                </p>
             </div>
             <div className="text-right shrink-0">
                 {focusing ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 uppercase">
-                        <Zap size={10} className="fill-emerald-400" />
-                        Focusing
-                    </span>
+                    <p className="text-xs font-medium text-emerald-400">Focusing</p>
                 ) : (
-                    <span className="text-[10px] text-neutral-600 font-bold uppercase">Idle</span>
+                    <p className="text-xs text-neutral-600">Idle</p>
                 )}
-                <p className="text-[10px] text-neutral-500 mt-0.5">{friend.streak}d streak</p>
+                <p className="text-xs text-neutral-500 mt-0.5 tabular-nums">{friend.streak}d streak</p>
             </div>
         </div>
     );
@@ -114,137 +123,159 @@ export default function FriendsTab() {
 
     if (!session) {
         return (
-            <div className="max-w-[720px] mx-auto p-6">
-                <GlassCard className="p-8 text-center">
-                    <p className="text-neutral-400">Sign in to add friends and see the weekly leaderboard.</p>
-                </GlassCard>
+            <div className="max-w-[720px] mx-auto pt-6 pb-20">
+                <div className={`${CARD_CLASS} px-6 py-16 flex flex-col items-center text-center`}>
+                    <Users size={24} className="text-neutral-600" />
+                    <p className="text-sm text-neutral-500 mt-3">
+                        Sign in to add friends and see the weekly leaderboard.
+                    </p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6 animate-fade-in-up max-w-[720px] mx-auto">
+        <div className="space-y-6 animate-fade-in-up max-w-[960px] mx-auto pt-6 pb-20">
             <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <Users size={22} className="text-purple-400" />
-                    Friends
-                </h2>
+                <p className="focuz-section-label mb-1">Social</p>
+                <h1 className="text-3xl font-semibold text-white tracking-tight">Friends</h1>
                 <p className="text-sm text-neutral-500 mt-1">
-                    See who&apos;s focusing, compare weekly deep work, and stay accountable.
+                    See who&apos;s focusing and compare weekly deep work.
                 </p>
             </div>
 
-            <GlassCard className="p-5">
-                <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-2 block">
-                    Add friend
-                </label>
+            <div className={`${CARD_CLASS} p-4`}>
                 <div className="flex gap-2">
                     <input
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && void handleSendRequest()}
-                        placeholder="@username"
-                        className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-purple-500"
+                        placeholder="Add a friend by @username"
+                        className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-white/20 placeholder:text-neutral-600"
                     />
                     <button
                         type="button"
                         disabled={sending || !username.trim()}
                         onClick={() => void handleSendRequest()}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-sm font-bold"
+                        className={`${PRIMARY_BTN_CLASS} inline-flex items-center gap-1.5 shrink-0 disabled:opacity-40 disabled:pointer-events-none`}
                     >
-                        {sending ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                        Add
+                        {sending ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                        Add friend
                     </button>
                 </div>
                 {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
                 {notice && <p className="text-xs text-emerald-400 mt-2">{notice}</p>}
-            </GlassCard>
+            </div>
 
             {pending.length > 0 && (
-                <GlassCard className="p-5">
-                    <h3 className="text-sm font-bold text-white mb-3">Pending requests</h3>
-                    <div className="space-y-2">
+                <div className={CARD_CLASS}>
+                    <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+                        <h3 className="text-sm font-semibold text-white">Pending requests</h3>
+                        <span className="text-xs text-neutral-500 tabular-nums">{pending.length}</span>
+                    </div>
+                    <div className="divide-y divide-white/[0.04]">
                         {pending.map((p) => (
                             <div
                                 key={p.friendshipId}
-                                className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5"
+                                className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition-colors"
                             >
                                 <Avatar url={p.avatarUrl} name={p.displayName} />
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-white truncate">{p.displayName}</p>
-                                    <p className="text-xs text-neutral-500">@{p.username}</p>
+                                    <p className="text-sm font-medium text-white truncate">{p.displayName}</p>
+                                    <p className="text-xs text-neutral-500 truncate">@{p.username}</p>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => void handleRespond(p.friendshipId, true)}
-                                    className="px-3 py-1.5 rounded-lg bg-emerald-600/80 text-white text-xs font-bold"
+                                    className={`${PRIMARY_BTN_CLASS} shrink-0`}
                                 >
                                     Accept
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => void handleRespond(p.friendshipId, false)}
-                                    className="px-3 py-1.5 rounded-lg bg-white/5 text-neutral-400 text-xs font-bold hover:text-white"
+                                    className={`${GHOST_BTN_CLASS} shrink-0 text-red-400 hover:text-red-300`}
                                 >
                                     Decline
                                 </button>
                             </div>
                         ))}
                     </div>
-                </GlassCard>
+                </div>
             )}
 
-            <GlassCard className="p-5">
-                <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                    <Trophy size={16} className="text-amber-400" />
-                    Weekly focus leaderboard
-                </h3>
-                {leaderboard.length === 0 ? (
-                    <p className="text-sm text-neutral-500 italic">Add friends to compete on weekly deep work minutes.</p>
-                ) : (
-                    <div className="space-y-2">
-                        {leaderboard.map((entry, i) => (
-                            <div
-                                key={`${entry.username}-${i}`}
-                                className={`flex items-center gap-3 p-3 rounded-xl border ${
-                                    entry.isMe ? 'bg-purple-500/10 border-purple-500/30' : 'bg-white/[0.03] border-white/5'
-                                }`}
-                            >
-                                <span className="text-xs font-black text-neutral-600 w-5">{i + 1}</span>
-                                <Avatar url={entry.avatarUrl} name={entry.displayName} />
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-white truncate">
-                                        {entry.displayName}
-                                        {entry.isMe && (
-                                            <span className="text-[10px] text-purple-400 ml-1">(you)</span>
-                                        )}
-                                    </p>
-                                </div>
-                                <span className="text-sm font-bold text-white tabular-nums">
-                                    {entry.weeklyFocusMinutes}m
-                                </span>
-                            </div>
-                        ))}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <div className={CARD_CLASS}>
+                    <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+                        <h3 className="text-sm font-semibold text-white">Your friends</h3>
+                        {friends.length > 0 && (
+                            <span className="text-xs text-neutral-500 tabular-nums">{friends.length}</span>
+                        )}
                     </div>
-                )}
-            </GlassCard>
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="animate-spin text-neutral-600" size={20} />
+                        </div>
+                    ) : friends.length === 0 ? (
+                        <div className="px-6 py-12 flex flex-col items-center text-center">
+                            <Users size={24} className="text-neutral-600" />
+                            <p className="text-sm text-neutral-500 mt-3">
+                                No friends yet — add someone by username above.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-white/[0.04]">
+                            {friends.map((f) => (
+                                <FriendRow key={f.userId} friend={f} />
+                            ))}
+                        </div>
+                    )}
+                </div>
 
-            <GlassCard className="p-5">
-                <h3 className="text-sm font-bold text-white mb-3">Your friends</h3>
-                {loading ? (
-                    <div className="flex justify-center py-8">
-                        <Loader2 className="animate-spin text-purple-400" size={24} />
+                <div className={CARD_CLASS}>
+                    <div className="px-4 pt-4 pb-2">
+                        <h3 className="text-sm font-semibold text-white">Weekly leaderboard</h3>
+                        <p className="text-xs text-neutral-500 mt-0.5">Focus minutes this week</p>
                     </div>
-                ) : friends.length === 0 ? (
-                    <p className="text-sm text-neutral-500 italic">No friends yet — add someone by username.</p>
-                ) : (
-                    <div className="space-y-2">
-                        {friends.map((f) => (
-                            <FriendRow key={f.userId} friend={f} />
-                        ))}
-                    </div>
-                )}
-            </GlassCard>
+                    {leaderboard.length === 0 ? (
+                        <div className="px-6 py-12 flex flex-col items-center text-center">
+                            <Trophy size={24} className="text-neutral-600" />
+                            <p className="text-sm text-neutral-500 mt-3">
+                                Add friends to compete on weekly deep work minutes.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-white/[0.04]">
+                            {leaderboard.map((entry, i) => (
+                                <div
+                                    key={`${entry.username}-${i}`}
+                                    className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                                        entry.isMe
+                                            ? 'bg-purple-500/[0.08] border-l-2 border-purple-500'
+                                            : 'border-l-2 border-transparent hover:bg-white/[0.03]'
+                                    }`}
+                                >
+                                    <span className="text-xs font-semibold text-neutral-600 w-5 tabular-nums">
+                                        {i + 1}
+                                    </span>
+                                    <Avatar url={entry.avatarUrl} name={entry.displayName} />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-white truncate">
+                                            {entry.displayName}
+                                            {entry.isMe && (
+                                                <span className="text-xs text-purple-400 ml-1.5">you</span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    <span className="text-sm font-semibold text-white tabular-nums shrink-0">
+                                        {entry.weeklyFocusMinutes}m
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

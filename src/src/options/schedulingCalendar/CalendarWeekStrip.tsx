@@ -62,7 +62,7 @@ export default function CalendarWeekStrip({
     const gridTemplate = `56px repeat(${dayCount}, 1fr)`;
 
     return (
-        <div className="flex h-full min-h-0 flex-col" style={{ width: singleDayMode ? '33.333%' : '33.333%', flexShrink: 0 }}>
+        <div className="flex h-full min-h-0 flex-col" style={{ width: '33.333%', flexShrink: 0 }}>
             <div
                 className="border-b flex-shrink-0"
                 style={{

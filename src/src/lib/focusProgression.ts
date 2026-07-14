@@ -26,6 +26,23 @@ export type ProgressionStats = {
     noShortsLastDate: string;
     noTiktokStreakDays: number;
     noTiktokLastDate: string;
+    weekPomodorosKey: string;
+    weekPomodorosCount: number;
+    todayPomodorosKey: string;
+    todayPomodorosCount: number;
+};
+
+export type ActiveChallengeSnapshot = {
+    id: string;
+    startedAt: string;
+    title: string;
+    description: string;
+    icon: string;
+    metric: string;
+    target: number;
+    baseline: number;
+    xpReward: number;
+    coinReward: number;
 };
 
 export type FocusProgressionState = {
@@ -35,7 +52,7 @@ export type FocusProgressionState = {
     ownedCosmetics: string[];
     equippedCosmetics: { frame?: string; badge?: string; widget?: string };
     completedChallenges: string[];
-    activeChallenges: { id: string; startedAt: string }[];
+    activeChallenges: ActiveChallengeSnapshot[];
     awardedKeys: string[];
     stats: ProgressionStats;
     publicProfileEnabled: boolean;
@@ -90,6 +107,10 @@ export function defaultProgressionState(): FocusProgressionState {
             noShortsLastDate: '',
             noTiktokStreakDays: 0,
             noTiktokLastDate: '',
+            weekPomodorosKey: '',
+            weekPomodorosCount: 0,
+            todayPomodorosKey: '',
+            todayPomodorosCount: 0,
         },
         publicProfileEnabled: false,
     };
@@ -137,8 +158,59 @@ export function getLevelProgress(xp: number): LevelProgress {
     };
 }
 
+/** Estimate deep-work hours until next level from remaining XP (≈1 XP per focus minute). */
+export function hoursUntilNextMilestone(xp: number): number | null {
+    const progress = getLevelProgress(xp);
+    if (progress.isMaxLevel) return null;
+    const xpLeft = Math.max(0, progress.xpForNextLevel - progress.xpIntoLevel);
+    return Math.max(0.5, Math.round((xpLeft / 60) * 10) / 10);
+}
+
+export function milestoneLabel(xp: number): string {
+    const hours = hoursUntilNextMilestone(xp);
+    if (hours == null) return 'Maximum level reached';
+    if (hours < 1) return `${Math.round(hours * 60)} min of deep work until next level`;
+    return `${hours} hour${hours === 1 ? '' : 's'} of deep work until next level`;
+}
+
 function todayKey(): string {
     return new Date().toDateString();
+}
+
+function isoWeekKey(d = new Date()): string {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const day = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return `${date.getUTCFullYear()}-W${week}`;
+}
+
+function bumpPomodoroPeriodCounters(stats: ProgressionStats): void {
+    const week = isoWeekKey();
+    const today = todayKey();
+    if (stats.weekPomodorosKey !== week) {
+        stats.weekPomodorosKey = week;
+        stats.weekPomodorosCount = 1;
+    } else {
+        stats.weekPomodorosCount += 1;
+    }
+    if (stats.todayPomodorosKey !== today) {
+        stats.todayPomodorosKey = today;
+        stats.todayPomodorosCount = 1;
+    } else {
+        stats.todayPomodorosCount += 1;
+    }
+}
+
+function normalizeProgressionStats(stats: ProgressionStats): ProgressionStats {
+    return {
+        ...stats,
+        weekPomodorosKey: stats.weekPomodorosKey ?? '',
+        weekPomodorosCount: stats.weekPomodorosCount ?? 0,
+        todayPomodorosKey: stats.todayPomodorosKey ?? '',
+        todayPomodorosCount: stats.todayPomodorosCount ?? 0,
+    };
 }
 
 function canAward(state: FocusProgressionState, dedupKey: string): boolean {
@@ -190,6 +262,7 @@ export function applyProgressionEvent(
     if (event === 'pomodoro_complete') {
         state.stats.totalPomodoros += 1;
         state.stats.focusMinutesTotal += opts?.focusMinutes ?? 25;
+        bumpPomodoroPeriodCounters(state.stats);
     } else if (event === 'block_resisted') {
         state.stats.totalBlocksResisted += 1;
     } else if (event === 'habit_checkin') {
@@ -260,7 +333,7 @@ export function normalizeProgressionState(raw: unknown): FocusProgressionState {
         ...base,
         ...r,
         version: 1,
-        stats: { ...base.stats, ...(r.stats ?? {}) },
+        stats: normalizeProgressionStats({ ...base.stats, ...(r.stats ?? {}) }),
         ownedCosmetics: Array.isArray(r.ownedCosmetics) ? r.ownedCosmetics : [],
         equippedCosmetics: r.equippedCosmetics ?? {},
         completedChallenges: Array.isArray(r.completedChallenges) ? r.completedChallenges : [],

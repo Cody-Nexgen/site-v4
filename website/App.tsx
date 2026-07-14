@@ -10,6 +10,8 @@ import { RotatingWord } from "@/components/ui/rotating-word";
 import { LinkPreview } from "@/components/ui/link-preview";
 import FeaturesList from "@/components/features-list";
 import LoginPage from "@/components/login-page";
+import ForgotPasswordPage from "@/components/forgot-password-page";
+import ResetPasswordPage from "@/components/reset-password-page";
 import { AiChatWidget } from "@/components/ai-chat-widget";
 import { CHROME_EXTENSION_STORE_URL } from "@/lib/site-config";
 import { IconBrandGoogle, IconEye, IconEyeOff, IconCheck, IconMail, IconLock, IconUser, IconHome, IconChartBar, IconCurrencyDollar } from "@tabler/icons-react";
@@ -41,6 +43,8 @@ function FocuzNowApp() {
   const [currentView, setCurrentView] = useState<
     | "landing"
     | "login"
+    | "forgot_password"
+    | "reset_password"
     | "dashboard"
     | "manage_subscription"
     | "blocked"
@@ -102,10 +106,24 @@ function FocuzNowApp() {
       const isManageSubPath = path === "/manage_subscription" || hash === "#manage_subscription" || viewQuery === "manage_subscription";
       const isBlockedPath = path === "/blocked" || hash === "#blocked" || viewQuery === "blocked";
       const isLoginPath = path === "/login" || path === "/signup" || hash === "#login" || hash === "#signup" || viewQuery === "login" || viewQuery === "signup";
+      const isForgotPasswordPath = path === "/forgot-password";
+      const isResetPasswordPath = path === "/reset-password";
       const isNotionAuth = path === "/notion-auth" || viewQuery === "notion-auth";
       const isSchedulePath = /^\/schedule\/[^/]+/.test(path);
       const isFocusRoomPath = /^\/room\/[^/]+/.test(path);
       const publicProfileUser = getPublicProfileUsername();
+
+      if (isForgotPasswordPath) {
+        setCurrentView("forgot_password");
+        setLoading(false);
+        return;
+      }
+
+      if (isResetPasswordPath) {
+        setCurrentView("reset_password");
+        setLoading(false);
+        return;
+      }
 
       if (isNotionAuth) {
         setCurrentView("notion-auth");
@@ -133,6 +151,26 @@ function FocuzNowApp() {
 
       if (session) {
         const billingReturn = isBillingReturnQuery(window.location.search);
+
+        try {
+          const raw = localStorage.getItem("focuznow_pending_signup_prefs");
+          if (raw) {
+            const prefs = JSON.parse(raw) as { marketing_opt_in?: boolean; terms_accepted?: boolean };
+            localStorage.removeItem("focuznow_pending_signup_prefs");
+            const meta = session.user.user_metadata || {};
+            if (meta.terms_accepted == null || meta.marketing_opt_in == null) {
+              void supabase.auth.updateUser({
+                data: {
+                  terms_accepted: prefs.terms_accepted ?? true,
+                  terms_accepted_at: new Date().toISOString(),
+                  marketing_opt_in: Boolean(prefs.marketing_opt_in),
+                },
+              });
+            }
+          }
+        } catch {
+          /* ignore */
+        }
 
         if (
           !isSchedulePath &&
@@ -248,6 +286,16 @@ function FocuzNowApp() {
     { text: "win", className: "text-purple-500" },
     { text: "focus.", className: "text-purple-500 dark:text-purple-500" },
   ];
+
+  const goForgotPassword = () => {
+    setCurrentView("forgot_password");
+    window.history.pushState({}, "", "/forgot-password");
+  };
+
+  const goResetPassword = () => {
+    setCurrentView("reset_password");
+    window.history.pushState({}, "", "/reset-password");
+  };
 
   const goLogin = () => {
     setLoginDefaultState(true);
@@ -374,10 +422,25 @@ function FocuzNowApp() {
   // ---------------------------------------------------------------------------
   // LOGIN PAGE
   // ---------------------------------------------------------------------------
+  if (currentView === "forgot_password") {
+    return <ForgotPasswordPage onBack={goLogin} />;
+  }
+
+  if (currentView === "reset_password") {
+    return (
+      <ResetPasswordPage
+        onSuccess={() => {
+          goLogin();
+        }}
+      />
+    );
+  }
+
   if (currentView === "login") {
     return (
       <LoginPage
         onBack={goLanding}
+        onForgotPassword={goForgotPassword}
         onLoginSuccess={() => {
           supabase.auth.getSession().then(({ data }) => {
             if (!data.session) return;
@@ -443,7 +506,7 @@ function FocuzNowApp() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center mb-16">
             <div className="p-6 rounded-2xl bg-neutral-900/50 border border-white/5">
-              <p className="text-neutral-500 text-sm mb-2">Focus Score</p>
+              <p className="text-neutral-500 text-sm mb-2">Focuz Score</p>
               <p className="text-4xl font-bold text-white">87/100</p>
             </div>
             <div className="p-6 rounded-2xl bg-neutral-900/50 border border-white/5">

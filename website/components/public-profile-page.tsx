@@ -139,7 +139,7 @@ export default function PublicProfilePage({ username }: { username: string }) {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             {[
-              { icon: Target, label: "Focus Score", value: `${stats.focusScore}/100` },
+              { icon: Target, label: "Focuz Score", value: `${stats.focusScore}/100` },
               { icon: Flame, label: "Longest Streak", value: `${stats.longestStreak}d` },
               { icon: Clock, label: "Hours Focused", value: `${stats.hoursFocused}h` },
               { icon: Trophy, label: "Achievements", value: String(stats.achievementsUnlocked) },

@@ -34,6 +34,7 @@ import {
     purchaseShopItem,
     equipShopItem,
     setPublicProfileEnabled,
+    setChallengeFocusScore,
 } from '../lib/progressionService';
 import { loadProgressionState } from '../lib/focusProgression';
 import { classifyYouTubeViaApi } from './youtubeClassify.js';
@@ -432,8 +433,13 @@ export function initMessageRouter() {
                         break;
 
                     case "START_CHALLENGE":
-                        await startChallengeById(msg.challengeId);
+                        await startChallengeById(msg.challengeId, msg.challenge);
                         sendResponse({ ok: true, progression: await loadProgressionState() });
+                        break;
+
+                    case "SET_CHALLENGE_FOCUS_SCORE":
+                        setChallengeFocusScore(Number(msg.focusScore) || 0);
+                        sendResponse({ ok: true });
                         break;
 
                     case "PURCHASE_SHOP_ITEM": {

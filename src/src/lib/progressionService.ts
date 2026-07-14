@@ -5,7 +5,30 @@ import {
     tickPlatformStreak,
     type FocusProgressionState,
 } from './focusProgression';
-import { checkChallengeCompletions } from './challenges';
+import { checkChallengeCompletions, pruneStaleActiveChallenges } from './challenges';
+import { getAllChallengeDefinitions } from './dynamicChallenges';
+
+let cachedFocusScore = 0;
+
+export function setChallengeFocusScore(score: number) {
+    cachedFocusScore = score;
+}
+
+async function runChallengeChecks(state: FocusProgressionState) {
+    const pruned = pruneStaleActiveChallenges(state);
+    const { state: next, completed } = checkChallengeCompletions(pruned, { focusScore: cachedFocusScore });
+    if (completed.length === 0 && pruned === state) return;
+    await saveProgressionState(next);
+    try {
+        chrome.runtime.sendMessage({
+            type: 'PROGRESSION_UPDATED',
+            state: next,
+            challengesCompleted: completed.map((c) => c.id),
+        }).catch(() => {});
+    } catch {
+        /* ignore */
+    }
+}
 
 export async function onPomodoroComplete(focusMinutes = 25) {
     const today = new Date().toDateString();
@@ -54,36 +77,38 @@ export async function updatePlatformStreaks(inAppBlock?: {
     tiktok?: boolean;
 }) {
     let state = await loadProgressionState();
-    if (inAppBlock?.youtubeShorts) {
-        state = tickPlatformStreak(state, 'shorts', true);
-    }
-    if (inAppBlock?.tiktok) {
-        state = tickPlatformStreak(state, 'tiktok', true);
-    }
+    state = tickPlatformStreak(state, 'shorts', !!inAppBlock?.youtubeShorts);
+    state = tickPlatformStreak(state, 'tiktok', !!inAppBlock?.tiktok);
     await saveProgressionState(state);
     await runChallengeChecks(state);
 }
 
-async function runChallengeChecks(state: FocusProgressionState) {
-    const { state: next, completed } = checkChallengeCompletions(state);
-    if (completed.length === 0) return;
+export async function startChallengeById(
+    challengeId: string,
+    definition?: {
+        id: string;
+        title: string;
+        description: string;
+        icon: string;
+        metric: string;
+        target: number;
+        xpReward: number;
+        coinReward: number;
+    },
+) {
+    const state = await loadProgressionState();
+    const { startChallenge } = await import('./challenges');
+    const def =
+        (definition as import('./challenges').ChallengeDefinition | undefined) ??
+        getAllChallengeDefinitions().find((d) => d.id === challengeId);
+    if (!def) return state;
+    const next = startChallenge(state, def);
     await saveProgressionState(next);
     try {
-        chrome.runtime.sendMessage({
-            type: 'PROGRESSION_UPDATED',
-            state: next,
-            challengesCompleted: completed.map((c) => c.id),
-        }).catch(() => {});
+        chrome.runtime.sendMessage({ type: 'PROGRESSION_UPDATED', state: next }).catch(() => {});
     } catch {
         /* ignore */
     }
-}
-
-export async function startChallengeById(challengeId: string) {
-    const state = await loadProgressionState();
-    const { startChallenge } = await import('./challenges');
-    const next = startChallenge(state, challengeId);
-    await saveProgressionState(next);
     return next;
 }
 

@@ -106,7 +106,7 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
                 delay={0.2}
               />
               <StatCard
-                title="Focus Score"
+                title="Focuz Score"
                 value={stats.focusScore}
                 subtitle="Quality-based · open extension for live score"
                 icon={Zap}

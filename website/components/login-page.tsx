@@ -22,11 +22,12 @@ const DEBUG_MODE = true;
 
 interface LoginPageProps {
   onBack: () => void;
-  onLoginSuccess: () => void; // New prop for redirecting
+  onLoginSuccess: () => void;
+  onForgotPassword?: () => void;
   initialLoginState?: boolean;
 }
 
-export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = true }: LoginPageProps) {
+export default function LoginPage({ onBack, onLoginSuccess, onForgotPassword, initialLoginState = true }: LoginPageProps) {
   const [isLogin, setIsLogin] = useState(initialLoginState);
   const [currentImage, setCurrentImage] = useState(0);
   const [email, setEmail] = useState("");
@@ -35,6 +36,7 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
   const [lastName, setLastName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // OTP Verification State
@@ -90,12 +92,31 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
       setLoading(true);
       setError(null);
 
+      if (!isLogin && !termsAccepted) {
+        handleError("You must agree to the Terms of Service and Privacy Policy.");
+        return;
+      }
+
       if (email.trim()) {
         const methods = await fetchSignInMethods(email);
         const blocked = googleLoginBlockedMessage(methods);
         if (blocked) {
           handleError(blocked);
           return;
+        }
+      }
+
+      if (!isLogin) {
+        try {
+          localStorage.setItem(
+            "focuznow_pending_signup_prefs",
+            JSON.stringify({
+              marketing_opt_in: marketingOptIn,
+              terms_accepted: true,
+            }),
+          );
+        } catch {
+          /* ignore */
         }
       }
 
@@ -142,7 +163,7 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
           throw new Error("Please fill in all fields.");
         }
         if (!termsAccepted) {
-          throw new Error("You must agree to the Terms & Conditions.");
+          throw new Error("You must agree to the Terms of Service and Privacy Policy.");
         }
         if (passwordStrength < 4) {
           throw new Error("Password is too weak. Please meet requirements.");
@@ -163,6 +184,9 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
             data: {
               first_name: firstName,
               last_name: lastName,
+              terms_accepted: true,
+              terms_accepted_at: new Date().toISOString(),
+              marketing_opt_in: marketingOptIn,
             },
           },
         });
@@ -400,6 +424,18 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
                     {showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
                   </button>
 
+                  {isLogin && onForgotPassword && (
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={onForgotPassword}
+                        className="text-xs text-neutral-500 hover:text-purple-400 font-medium transition-colors"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                  )}
+
                   {!isLogin && (
                     <div className="pt-2 space-y-2">
                       <div className="flex gap-1 h-1 w-full">
@@ -416,20 +452,45 @@ export default function LoginPage({ onBack, onLoginSuccess, initialLoginState = 
                 </div>
 
                 {!isLogin && (
-                  <div className="flex items-start gap-3">
-                    <div className="relative flex items-center">
-                      <input
-                        type="checkbox"
-                        id="terms"
-                        checked={termsAccepted}
-                        onChange={(e) => setTermsAccepted(e.target.checked)}
-                        className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-neutral-600 bg-[#25222e] checked:border-purple-500 checked:bg-purple-500 transition-all"
-                      />
-                      <IconCheck className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 w-3.5 h-3.5" />
+                  <div className="space-y-4 pt-1">
+                    <div className="flex items-start gap-3">
+                      <div className="relative flex items-center mt-0.5">
+                        <input
+                          type="checkbox"
+                          id="terms"
+                          required
+                          checked={termsAccepted}
+                          onChange={(e) => setTermsAccepted(e.target.checked)}
+                          className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-neutral-600 bg-[#25222e] checked:border-purple-500 checked:bg-purple-500 transition-all"
+                        />
+                        <IconCheck className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 w-3.5 h-3.5" />
+                      </div>
+                      <label htmlFor="terms" className="text-sm text-neutral-400 cursor-pointer select-none leading-relaxed">
+                        I agree to the{" "}
+                        <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">
+                          Terms of Service
+                        </a>{" "}
+                        and{" "}
+                        <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">
+                          Privacy Policy
+                        </a>
+                      </label>
                     </div>
-                    <label htmlFor="terms" className="text-sm text-neutral-400 cursor-pointer select-none">
-                      I agree to the <a href="#" className="text-white hover:underline">Terms & Conditions</a>
-                    </label>
+                    <div className="flex items-start gap-3">
+                      <div className="relative flex items-center mt-0.5">
+                        <input
+                          type="checkbox"
+                          id="marketing"
+                          checked={marketingOptIn}
+                          onChange={(e) => setMarketingOptIn(e.target.checked)}
+                          className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-neutral-600 bg-[#25222e] checked:border-purple-500 checked:bg-purple-500 transition-all"
+                        />
+                        <IconCheck className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 w-3.5 h-3.5" />
+                      </div>
+                      <label htmlFor="marketing" className="text-sm text-neutral-500 cursor-pointer select-none leading-relaxed">
+                        Send me productivity tips, feature updates, and occasional offers by email.
+                      </label>
+                    </div>
                   </div>
                 )}
 

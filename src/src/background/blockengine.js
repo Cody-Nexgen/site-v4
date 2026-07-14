@@ -858,6 +858,12 @@ export async function updateEngineSettings(settings) {
     }
     applyRules();
 
+    if (settings.inAppBlock !== undefined) {
+        import('../lib/progressionService').then(({ updatePlatformStreaks }) => {
+            updatePlatformStreaks(state.inAppBlock).catch(() => {});
+        }).catch(() => {});
+    }
+
     if (settings.pomodoroWidget !== undefined || settings.draggableTimer !== undefined) {
         try {
             const tabs = await chrome.tabs.query({});

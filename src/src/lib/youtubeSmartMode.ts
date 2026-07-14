@@ -16,6 +16,8 @@ export type YouTubeVideoMeta = {
     channel: string;
     description: string;
     videoId?: string;
+    /** Category title read from the watch page itself (microformat / meta genre). */
+    pageCategory?: string;
 };
 
 export type YouTubeClassification = {
@@ -82,6 +84,60 @@ export function normalizeSmartYouTube(raw: Partial<SmartYouTubeSettings> | undef
     return merged;
 }
 
+const CATEGORY_TITLE_TO_ID: Record<string, string> = {
+    'film & animation': '1',
+    'autos & vehicles': '2',
+    'music': '10',
+    'pets & animals': '15',
+    'sports': '17',
+    'travel & events': '19',
+    'gaming': '20',
+    'people & blogs': '22',
+    'comedy': '23',
+    'entertainment': '24',
+    'news & politics': '25',
+    'howto & style': '26',
+    'education': '27',
+    'science & technology': '28',
+    'nonprofits & activism': '29',
+};
+
+const ALWAYS_ALLOW_IDS = new Set(['27', '28']);
+
+/**
+ * Classify using the category YouTube embeds in the watch page itself.
+ * Authoritative when available — works even if the Data API call fails.
+ * Returns null when the page category is unknown/unavailable.
+ */
+export function classifyByPageCategory(
+    meta: YouTubeVideoMeta,
+    settings: SmartYouTubeSettings,
+    allowedChannels: string[] = [],
+): YouTubeClassification | null {
+    const raw = meta.pageCategory?.trim().toLowerCase();
+    if (!raw) return null;
+    const id = CATEGORY_TITLE_TO_ID[raw];
+    if (!id) return null;
+
+    const channelKey = normalizeChannelHandle(meta.channel);
+    for (const handle of allowedChannels) {
+        const h = normalizeChannelHandle(handle);
+        if (h && (channelKey.includes(h) || h.includes(channelKey))) {
+            return { decision: 'allow', category: 'allowed_channel', reason: `@${h} is on your allow list` };
+        }
+    }
+
+    if (ALWAYS_ALLOW_IDS.has(id)) {
+        return { decision: 'allow', category: meta.pageCategory!, reason: `${meta.pageCategory} is always allowed` };
+    }
+
+    if (settings.blockedCategoryIds.includes(id)) {
+        return { decision: 'block', category: meta.pageCategory!, reason: `Blocked category: ${meta.pageCategory}` };
+    }
+
+    return { decision: 'allow', category: meta.pageCategory!, reason: `${meta.pageCategory} is not blocked` };
+}
+
 /** Keyword fallback when Data API unavailable. */
 export function classifyYouTubeVideo(
     meta: YouTubeVideoMeta,
@@ -133,6 +189,7 @@ export function parseYouTubePageMeta(doc: Document = document): YouTubeVideoMeta
         '';
     let description = '';
     let videoId = '';
+    let pageCategory = '';
 
     try {
         const u = new URL(doc.location?.href ?? window.location.href);
@@ -160,17 +217,40 @@ export function parseYouTubePageMeta(doc: Document = document): YouTubeVideoMeta
                 }
             }
             const data = JSON.parse(text.slice(jsonStart, end));
-            title = data?.videoDetails?.title || title;
-            channel = data?.videoDetails?.author || channel;
-            description = data?.videoDetails?.shortDescription || description;
-            videoId = data?.videoDetails?.videoId || videoId;
+            const scriptVideoId = data?.videoDetails?.videoId || '';
+            // Only trust initial-load data when it describes the video we're on
+            // (SPA navigations leave stale ytInitialPlayerResponse in the DOM).
+            if (!videoId || scriptVideoId === videoId) {
+                title = data?.videoDetails?.title || title;
+                channel = data?.videoDetails?.author || channel;
+                description = data?.videoDetails?.shortDescription || description;
+                videoId = scriptVideoId || videoId;
+                pageCategory = data?.microformat?.playerMicroformatRenderer?.category || '';
+            }
             break;
         }
     } catch {
         /* fall back to DOM */
     }
 
-    return { title: title.trim(), channel: channel.trim(), description: description.trim(), videoId: videoId.trim() };
+    if (!pageCategory) {
+        const genre = doc.querySelector('meta[itemprop="genre"]')?.getAttribute('content') || '';
+        const metaVideoId =
+            doc.querySelector('meta[itemprop="identifier"]')?.getAttribute('content') ||
+            doc.querySelector('meta[itemprop="videoId"]')?.getAttribute('content') ||
+            '';
+        if (genre && (!metaVideoId || !videoId || metaVideoId === videoId)) {
+            pageCategory = genre;
+        }
+    }
+
+    return {
+        title: title.trim(),
+        channel: channel.trim(),
+        description: description.trim(),
+        videoId: videoId.trim(),
+        pageCategory: pageCategory.trim() || undefined,
+    };
 }
 
 export function isYouTubeWatchUrl(href: string): boolean {

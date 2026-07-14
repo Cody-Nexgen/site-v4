@@ -18,6 +18,8 @@ const PROFILE_USER_KEY = 'focuznow_profile_user_id';
 const INSTALL_KEY = 'focuznow_installed_at';
 const SESSION_CACHE_KEY = 'focuznow_session_cache_v1';
 const MIN_ACTIVE_MS = 60_000; // 1 minute of tracked usage counts as an active day
+const HISTORY_IMPORT_COOLDOWN_MS = 5 * 60_000;
+let lastHistoryImportAt = 0;
 
 function parseStoredSession(raw: unknown): Session | null {
     if (!raw) return null;
@@ -498,10 +500,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     importHistory: async () => {
+        // Dedupe: history ingestion is expensive and must never loop the dashboard.
+        if (Date.now() - lastHistoryImportAt < HISTORY_IMPORT_COOLDOWN_MS) return;
+        lastHistoryImportAt = Date.now();
         try {
             const response = await chrome.runtime.sendMessage({ type: 'IMPORT_HISTORY' });
             if (response?.ok) {
-                await get().checkSession(); // Refresh stats
+                await get().refreshStats();
+                await get().recalculateStreak();
             }
         } catch (e) {
             console.error('[Store] Import history failed:', e);
@@ -736,7 +742,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         };
 
         try {
-            await supabase.auth.setSession(tokens);
+            const { data: current } = await supabase.auth.getSession();
+            // Avoid re-firing SIGNED_IN if this session is already active.
+            if (current?.session?.user?.id !== userId) {
+                await supabase.auth.setSession(tokens);
+            }
         } catch (e) {
             console.warn('[Store] syncProfileFromServer setSession failed:', e);
         }
@@ -923,16 +933,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
 
         if (isSupabaseConfigured()) {
+            let lastProfileSyncUserId: string | null = null;
             supabase.auth.onAuthStateChange((event, session) => {
                 console.log('[Store] Auth event:', event);
                 if (session) {
                     const prevUserId = get().session?.user?.id;
                     set({ session, loading: false });
                     void persistSessionBackup(session);
-                    if (event === 'SIGNED_IN' || prevUserId !== session.user?.id) {
+                    // setSession() re-fires SIGNED_IN; only sync when the user actually changes.
+                    const userId = session.user?.id ?? null;
+                    if (userId && (userId !== lastProfileSyncUserId || prevUserId !== userId)) {
+                        lastProfileSyncUserId = userId;
                         void get().syncProfileFromServer();
                     }
                 } else if (event === 'SIGNED_OUT') {
+                    lastProfileSyncUserId = null;
                     void get().clearProfileFromEngine();
                 }
             });

@@ -11,7 +11,6 @@ import {
     type TreeSpecies,
     FOREST_STORAGE_KEY,
     GROWTH_STAGES,
-    boardRadius,
     computeDisplay,
     devClearSlip,
     devGrowAll,
@@ -27,7 +26,6 @@ import { DEV_MODE_EVENT, isDevModeEnabled } from '../lib/devMode';
 
 const FOREST_TIP_KEY = 'focuznow-forest-tip-dismissed';
 const FOREST_SPLASH_KEY = 'focuznow-forest-splash-v2';
-const VIEW_RADIUS_BASE = 16;
 
 // ---------------------------------------------------------
 // Isometric projection
@@ -35,17 +33,6 @@ const VIEW_RADIUS_BASE = 16;
 
 const TILE_W = 100;
 const TILE_H = 50;
-
-function rotateCoord(gx: number, gy: number, rot: number): { rx: number; ry: number } {
-    let x = gx;
-    let y = gy;
-    for (let i = 0; i < rot % 4; i++) {
-        const t = x;
-        x = y;
-        y = -t;
-    }
-    return { rx: x, ry: y };
-}
 
 function project(rx: number, ry: number): { x: number; y: number } {
     return { x: ((rx - ry) * TILE_W) / 2, y: ((rx + ry) * TILE_H) / 2 };
@@ -168,16 +155,17 @@ export const ForestTab = () => {
     const [state, setState] = useState<ForestState>(() => emptyForest());
     const [loaded, setLoaded] = useState(false);
     const [now, setNow] = useState(() => Date.now());
-    const [rot] = useState(0);
     const [zoom, setZoom] = useState(1);
     const [pan, setPan] = useState({ x: 0, y: 30 });
-    const [hoverCell, setHoverCell] = useState<{ gx: number; gy: number } | null>(null);
     const [hoverTree, setHoverTree] = useState<DisplayTree | null>(null);
     const [showTip, setShowTip] = useState(() => !localStorage.getItem(FOREST_TIP_KEY));
     const [showSplash, setShowSplash] = useState(() => !localStorage.getItem(FOREST_SPLASH_KEY));
     const [showStats, setShowStats] = useState(false);
     const [devMode, setDevMode] = useState(() => isDevModeEnabled());
+    const [viewport, setViewport] = useState({ w: 900, h: 560 });
     const sceneRef = useRef<HTMLDivElement>(null);
+    const gRef = useRef<SVGGElement>(null);
+    const panLiveRef = useRef<{ x: number; y: number } | null>(null);
     const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number; moved: boolean } | null>(null);
 
     const refresh = useCallback(async () => {
@@ -207,6 +195,17 @@ export const ForestTab = () => {
         };
     }, [refresh]);
 
+    useEffect(() => {
+        const el = sceneRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver((entries) => {
+            const rect = entries[0]?.contentRect;
+            if (rect) setViewport({ w: rect.width, h: rect.height });
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
     // Non-passive wheel zoom (prevents page scroll inside the scene)
     useEffect(() => {
         const el = sceneRef.current;
@@ -220,42 +219,41 @@ export const ForestTab = () => {
     }, []);
 
     const display = useMemo(() => computeDisplay(state, now), [state, now]);
-    const radius = boardRadius(state.trees);
 
-    const viewCenter = useMemo(() => {
-        const gx = Math.round(-pan.x / ((TILE_W / 2) * Math.max(zoom, 0.5) * 0.9));
-        const gy = Math.round(-pan.y / ((TILE_H / 2) * Math.max(zoom, 0.5) * 0.9));
-        return { gx, gy };
-    }, [pan, zoom]);
+    // Visible world rect (camera = viewBox; pan in screen px, zoom scales world→screen).
+    // 30% margin each side so direct-DOM drags don't expose unrendered ground.
+    const marginX = (viewport.w * 0.3) / zoom;
+    const marginY = (viewport.h * 0.3) / zoom;
+    const xMin = (-viewport.w / 2 - pan.x) / zoom - marginX;
+    const xMax = (viewport.w / 2 - pan.x) / zoom + marginX;
+    const yMin = (-viewport.h / 2 - pan.y) / zoom - marginY;
+    const yMax = (viewport.h / 2 - pan.y) / zoom + marginY;
 
-    const cells = useMemo(() => {
-        const treeR = radius;
-        const panR = Math.ceil(Math.max(Math.abs(viewCenter.gx), Math.abs(viewCenter.gy)) / 6);
-        const R = Math.max(VIEW_RADIUS_BASE, treeR + 8, panR + VIEW_RADIUS_BASE);
-        const out: { gx: number; gy: number }[] = [];
-        for (let gx = viewCenter.gx - R; gx <= viewCenter.gx + R; gx++) {
-            for (let gy = viewCenter.gy - R; gy <= viewCenter.gy + R; gy++) {
-                out.push({ gx, gy });
+    // Isometric axes: x = v·(TILE_W/2), y = u·(TILE_H/2) where u = gx+gy, v = gx−gy.
+    // Iterating u outer / v inner yields cells already depth-sorted (painter's order).
+    const vMin = Math.floor(xMin / (TILE_W / 2)) - 1;
+    const vMax = Math.ceil(xMax / (TILE_W / 2)) + 1;
+    const uMin = Math.floor(yMin / (TILE_H / 2)) - 1;
+    const uMax = Math.ceil(yMax / (TILE_H / 2)) + 5; // extra rows below — tree sprites extend upward
+
+    const sortedCells = useMemo(() => {
+        const out: { gx: number; gy: number; x: number; y: number }[] = [];
+        for (let u = uMin; u <= uMax; u++) {
+            for (let v = vMin; v <= vMax; v++) {
+                if (((u + v) % 2 + 2) % 2 !== 0) continue;
+                const gx = (u + v) / 2;
+                const gy = (u - v) / 2;
+                out.push({ gx, gy, ...project(gx, gy) });
             }
         }
         return out;
-    }, [viewCenter, radius]);
+    }, [uMin, uMax, vMin, vMax]);
 
     const occupied = useMemo(() => {
         const m = new Map<string, DisplayTree>();
         for (const t of display.trees) m.set(`${t.gx},${t.gy}`, t);
         return m;
     }, [display.trees]);
-
-    // Depth-sorted render list (painter's algorithm after rotation)
-    const sortedCells = useMemo(() => {
-        return cells
-            .map((cell) => {
-                const { rx, ry } = rotateCoord(cell.gx, cell.gy, rot);
-                return { ...cell, ...project(rx, ry), depth: rx + ry };
-            })
-            .sort((a, b) => a.depth - b.depth);
-    }, [cells, rot]);
 
     // ---- interactions ------------------------------------
 
@@ -269,9 +267,20 @@ export const ForestTab = () => {
         const dx = e.clientX - d.startX;
         const dy = e.clientY - d.startY;
         if (Math.abs(dx) + Math.abs(dy) > 4) d.moved = true;
-        if (d.moved) setPan({ x: d.panX + dx, y: d.panY + dy });
+        if (d.moved) {
+            // Move the camera via direct DOM transform — no React re-render per pixel.
+            panLiveRef.current = { x: d.panX + dx, y: d.panY + dy };
+            gRef.current?.setAttribute(
+                'transform',
+                `translate(${panLiveRef.current.x}, ${panLiveRef.current.y}) scale(${zoom})`,
+            );
+        }
     };
     const onPointerUp = () => {
+        if (dragRef.current?.moved && panLiveRef.current) {
+            setPan(panLiveRef.current);
+            panLiveRef.current = null;
+        }
         // keep `moved` readable in the click handler for one tick
         setTimeout(() => { dragRef.current = null; }, 0);
     };
@@ -335,6 +344,10 @@ export const ForestTab = () => {
                     transform-box: fill-box;
                     transform-origin: center;
                 }
+                .forest-cell:hover {
+                    stroke: rgba(163, 230, 53, 0.65);
+                    stroke-width: 1.5;
+                }
             `}</style>
 
             {showTip && (
@@ -361,23 +374,24 @@ export const ForestTab = () => {
 
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <h2 className="text-2xl font-bold text-white">Forest</h2>
-                    <p className="text-xs text-neutral-500 uppercase tracking-widest mt-1">
-                        Drag to explore · scroll to zoom
+                    <p className="focuz-section-label mb-1">Progress</p>
+                    <h2 className="text-3xl font-semibold text-white tracking-tight">Forest</h2>
+                    <p className="text-sm text-neutral-500 mt-1">
+                        A living map of completed focus sessions — each tree is real work you finished.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
                         type="button"
                         onClick={() => setShowStats(true)}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-neutral-300"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-white/10 text-xs font-semibold text-neutral-300 transition-colors duration-150"
                     >
                         <BarChart3 size={14} className="text-emerald-400" />
                         Stats
                     </button>
                 {(import.meta.env.DEV || devMode) && (
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-fuchsia-600/15 border border-fuchsia-500/30 text-fuchsia-300 text-[10px] font-black uppercase tracking-widest">
+                        <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-fuchsia-600/15 border border-fuchsia-500/30 text-fuchsia-300 text-[10px] font-semibold uppercase tracking-wider">
                             Dev mode
                         </span>
                         {([
@@ -417,7 +431,7 @@ export const ForestTab = () => {
                     onPointerDown={onPointerDown}
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
-                    onPointerLeave={() => { onPointerUp(); setHoverCell(null); setHoverTree(null); }}
+                    onPointerLeave={() => { onPointerUp(); setHoverTree(null); }}
                 >
                     {/* fireflies */}
                     <div className="forest-firefly" style={{ left: '18%', top: '58%', animationDelay: '0s' }} />
@@ -425,7 +439,25 @@ export const ForestTab = () => {
                     <div className="forest-firefly" style={{ left: '46%', top: '68%', animationDelay: '-6s' }} />
                     <div className="forest-firefly" style={{ left: '60%', top: '30%', animationDelay: '-1.5s' }} />
 
-                    <svg className="w-full h-full" viewBox="-450 -280 900 560">
+                    <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                            backgroundImage: `
+                                radial-gradient(ellipse 120% 80% at 50% 120%, rgba(26,56,38,0.95) 0%, transparent 55%),
+                                repeating-linear-gradient(
+                                    30deg,
+                                    rgba(36,74,50,0.35) 0px,
+                                    rgba(36,74,50,0.35) 2px,
+                                    rgba(31,66,44,0.35) 2px,
+                                    rgba(31,66,44,0.35) 4px
+                                )
+                            `,
+                        }}
+                    />
+                    <svg
+                        className="w-full h-full relative z-[1]"
+                        viewBox={`${-viewport.w / 2} ${-viewport.h / 2} ${viewport.w} ${viewport.h}`}
+                    >
                         <defs>
                             <linearGradient id="forest-tile" x1="0" y1="0" x2="0.4" y2="1">
                                 <stop offset="0%" stopColor="#2d5a3d" />
@@ -442,11 +474,10 @@ export const ForestTab = () => {
                                 <stop offset="100%" stopColor="#0a150d" />
                             </linearGradient>
                         </defs>
-                        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+                        <g ref={gRef} transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
                             {sortedCells.map((cell) => {
                                 const key = `${cell.gx},${cell.gy}`;
                                 const tree = occupied.get(key);
-                                const isHover = hoverCell?.gx === cell.gx && hoverCell?.gy === cell.gy;
                                 const isNext = state.nextPlantPos?.gx === cell.gx && state.nextPlantPos?.gy === cell.gy;
                                 const alt = (((cell.gx + cell.gy) % 2) + 2) % 2 === 0;
                                 return (
@@ -454,11 +485,11 @@ export const ForestTab = () => {
                                         <polygon
                                             points={`0,${-TILE_H / 2} ${TILE_W / 2},0 0,${TILE_H / 2} ${-TILE_W / 2},0`}
                                             fill={alt ? 'url(#forest-tile)' : 'url(#forest-tile-alt)'}
-                                            stroke={isHover && !tree ? 'rgba(163, 230, 53, 0.65)' : 'rgba(255,255,255,0.05)'}
-                                            strokeWidth={isHover && !tree ? 1.5 : 1}
-                                            className={tree ? '' : 'cursor-pointer'}
-                                            onMouseEnter={() => { setHoverCell(cell); setHoverTree(tree ?? null); }}
-                                            onMouseLeave={() => { setHoverCell(null); setHoverTree(null); }}
+                                            stroke="rgba(255,255,255,0.05)"
+                                            strokeWidth={1}
+                                            className={tree ? 'forest-cell-tree' : 'forest-cell cursor-pointer'}
+                                            onMouseEnter={tree ? () => setHoverTree(tree) : undefined}
+                                            onMouseLeave={tree ? () => setHoverTree(null) : undefined}
                                             onClick={() => void onCellClick(cell.gx, cell.gy)}
                                         />
                                         {isNext && !tree && (
@@ -471,14 +502,9 @@ export const ForestTab = () => {
                                             </g>
                                         )}
                                         {tree && (
-                                            <motion.g
-                                                initial={{ opacity: 0, scale: 0.3, y: -46 }}
-                                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                transition={{ type: 'spring', stiffness: 210, damping: 16 }}
-                                                style={{ pointerEvents: 'none' }}
-                                            >
+                                            <g style={{ pointerEvents: 'none' }}>
                                                 <TreeSprite tree={tree} />
-                                            </motion.g>
+                                            </g>
                                         )}
                                     </g>
                                 );
@@ -549,7 +575,7 @@ export const ForestTab = () => {
                                     className="text-center max-w-md px-8 py-10 rounded-2xl border border-emerald-500/30 bg-[#0d1410]/90"
                                 >
                                     <Trees size={48} className="text-emerald-400 mx-auto mb-4" />
-                                    <h3 className="text-2xl font-black text-white mb-2">Welcome to your forest</h3>
+                                    <h3 className="text-2xl font-semibold text-white mb-2">Welcome to your forest</h3>
                                     <p className="text-sm text-neutral-400 leading-relaxed mb-6">
                                         Every focus session plants a tree. Pan and scroll to explore an endless meadow — your progress grows with you.
                                     </p>
@@ -559,7 +585,7 @@ export const ForestTab = () => {
                                             localStorage.setItem(FOREST_SPLASH_KEY, '1');
                                             setShowSplash(false);
                                         }}
-                                        className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm"
+                                        className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-colors duration-150"
                                     >
                                         Enter forest
                                     </button>
