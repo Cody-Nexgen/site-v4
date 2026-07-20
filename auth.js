@@ -1,12 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
 const PRODUCTION_AUTH_ORIGIN = 'https://focuznow.com';
+const DEFAULT_SUPABASE_URL = 'https://zbgbszatstigtbfvdfpb.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpiZ2JzemF0c3RpZ3RiZnZkZnBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNjY5NDAsImV4cCI6MjA3OTg0Mjk0MH0.6Uomu8F8qWp9bTCIwkj4yc48wZDMBT1U8efp9_M2vGw';
 const PENDING_EXTENSION_REDIRECT_KEY = 'focuznow_redirect_extension';
 const PENDING_EXTENSION_REDIRECT_AT_KEY = 'focuznow_redirect_extension_at';
 const PENDING_MAX_AGE_MS = 10 * 60 * 1000;
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+// The anonymous key is intentionally public client configuration, protected by
+// Supabase RLS. Environment values can override these production defaults.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() || DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || DEFAULT_SUPABASE_ANON_KEY;
 const isConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 const supabase = isConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
