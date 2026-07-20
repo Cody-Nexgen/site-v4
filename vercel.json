@@ -1,26 +1,9 @@
 {
-    "buildCommand": "npm run build",
-    "outputDirectory": "dist",
-    "rewrites": [
-        {
-            "source": "/api/(.*)",
-            "destination": "/api/$1"
-        },
-        {
-            "source": "/privacy.html",
-            "destination": "/privacy.html"
-        },
-        {
-            "source": "/terms.html",
-            "destination": "/terms.html"
-        },
-        {
-            "source": "/auth/(.*)",
-            "destination": "/auth/$1"
-        },
-        {
-            "source": "/(.*)",
-            "destination": "/index.html"
-        }
-    ]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/login", "destination": "/signin.html" },
+    { "source": "/signup", "destination": "/signup.html" },
+    { "source": "/dashboard", "destination": "/signin.html" }
+  ]
 }

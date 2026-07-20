@@ -1,20 +1,19 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# FocuzNow marketing site
 
-# Run and deploy your AI Studio app
+## Local development
 
-This contains everything you need to run your app locally.
+```sh
+npm install
+npm run dev
+```
 
-View your app in AI Studio: https://ai.studio/apps/drive/1oKiyz3h6Yefl8PztkRzEi3MKWyiN8Jpx
+## AI Coach on Vercel
 
-## Run Locally
+The streaming coach calls its model only from `api/coach.mjs`; the browser never receives the API key.
 
-**Prerequisites:**  Node.js
+Add these environment variables to the Vercel project:
 
+- `AI_COACH_API_KEY` — required
+- `AI_COACH_MODEL` — optional, defaults to `llama-3.3-70b-versatile`
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Use `vercel dev` when testing the serverless function locally. The regular Vite server previews the UI but does not execute `/api/coach`.

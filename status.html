@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08090a" />
+    <meta name="description" content="Live operational status for FocuzNow." />
+    <title>FocuzNow Status</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./status.css" />
+  </head>
+  <body class="status-page">
+    <a class="skip-link" href="#status-main">Skip to status</a>
+    <header class="site-header site-header-static" id="top"><nav class="nav shell" aria-label="Main navigation"><a class="brand" href="./index.html" aria-label="FocuzNow home"><span class="brand-orbit" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="brand-orbit-ring" cx="10" cy="10" r="6.4"/><circle class="brand-orbit-dot" cx="10" cy="3.6" r="1.35"/></svg></span><span>FocuzNow</span></a><div class="nav-links" id="nav-links"><a href="./index.html#product">Product</a><a href="./features.html">Features</a><a href="./index.html#demo">Live demo</a><a href="./index.html#ai-coach">AI Coach</a></div><div class="nav-actions"><a class="text-link sign-in" href="./signin.html">Sign in</a><a class="button button-small" href="mailto:hello@focuznow.com?subject=Get%20FocuzNow">Add to Chrome <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a><button class="menu-toggle" type="button" data-site-menu aria-expanded="false" aria-controls="nav-links" aria-label="Open navigation"><i></i><i></i></button></div></nav></header>
+
+    <main class="status-main status-shell" id="status-main">
+      <section class="status-hero" aria-labelledby="status-title">
+        <p class="status-eyebrow"><i aria-hidden="true"></i> LIVE SYSTEM STATUS</p>
+        <h1 id="status-title">Quiet systems.<br><span>Clear focus.</span></h1>
+        <p class="status-intro">A fresh request checks the deployed FocuzNow site every time this page is viewed. Nothing here is a cached promise.</p>
+      </section>
+
+      <section class="status-panel" aria-labelledby="current-status-title">
+        <div class="status-overall" data-state="checking" aria-live="polite">
+          <span class="status-pulse" aria-hidden="true"><i></i></span>
+          <div><small id="current-status-title">CURRENT STATUS</small><h2 data-overall>Checking systems…</h2><p data-summary>Contacting the live deployment.</p></div>
+          <button type="button" data-recheck>Run check</button>
+        </div>
+
+        <div class="status-services" aria-label="Service status">
+          <article data-service="website"><span class="service-icon">01</span><div><h3>Marketing site</h3><p>The public FocuzNow experience and static assets.</p></div><strong><i></i><span>Checking</span></strong></article>
+          <article data-service="api"><span class="service-icon">02</span><div><h3>Status function</h3><p>The Vercel function performing this live health check.</p></div><strong><i></i><span>Checking</span></strong></article>
+          <article data-service="edge"><span class="service-icon">03</span><div><h3>Delivery network</h3><p>The Vercel region serving the current status request.</p></div><strong><i></i><span>Checking</span></strong></article>
+        </div>
+
+        <footer class="status-meta">
+          <span>Last checked <time data-checked>—</time></span>
+          <span>Site response <b data-latency>—</b></span>
+          <span>Region <b data-region>—</b></span>
+        </footer>
+      </section>
+
+      <p class="status-note">Status is measured from the server, not inferred from this browser session.</p>
+    </main>
+
+    <script type="module" src="./status.js"></script>
+    <script type="module" src="./site-nav.js"></script>
+  </body>
+</html>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08090a" />
+    <meta name="description" content="Sign in to FocuzNow." />
+    <title>Sign in — FocuzNow</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./auth.css" />
+  </head>
+  <body class="auth-signin">
+    <a class="skip-link" href="#auth-main">Skip to sign in</a>
+    <header class="site-header site-header-static" id="top"><nav class="nav shell" aria-label="Main navigation"><a class="brand" href="./index.html" aria-label="FocuzNow home"><span class="brand-orbit" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="brand-orbit-ring" cx="10" cy="10" r="6.4"/><circle class="brand-orbit-dot" cx="10" cy="3.6" r="1.35"/></svg></span><span>FocuzNow</span></a><div class="nav-links" id="nav-links"><a href="./index.html#product">Product</a><a href="./features.html">Features</a><a href="./index.html#demo">Live demo</a><a href="./index.html#ai-coach">AI Coach</a></div><div class="nav-actions"><a class="text-link sign-in" href="./signin.html" aria-current="page">Sign in</a><a class="button button-small" href="mailto:hello@focuznow.com?subject=Get%20FocuzNow">Add to Chrome <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a><button class="menu-toggle" type="button" data-site-menu aria-expanded="false" aria-controls="nav-links" aria-label="Open navigation"><i></i><i></i></button></div></nav></header>
+    <main class="auth-main" id="auth-main">
+      <section class="auth-copy" aria-labelledby="auth-title"><p class="auth-eyebrow">WELCOME BACK</p><h1 id="auth-title">Return to<br><span>clear focus.</span></h1><p class="auth-summary">Your plans, boundaries, sessions, and progress are waiting exactly where you left them.</p><div class="auth-benefits" aria-label="FocuzNow account benefits"><span><i>01</i><b>One workspace</b><small>Every focus surface stays connected.</small></span><span><i>02</i><b>Local-first</b><small>Your attention stays yours.</small></span><span><i>03</i><b>Ready instantly</b><small>Continue without rebuilding context.</small></span></div></section>
+      <section class="auth-panel" data-auth-panel>
+        <div class="auth-panel-head"><p>ACCOUNT ACCESS</p><h2>Sign in to continue.</h2><span>Use the email attached to your FocuzNow workspace.</span></div>
+        <form data-auth-form data-auth-mode="signin" novalidate>
+          <button class="google-auth" type="button" data-google-auth aria-label="Continue with Google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.35 12.23c0-.71-.06-1.39-.19-2.04H12v3.86h5.24a4.48 4.48 0 0 1-1.94 2.94v2.51h3.14c1.84-1.69 2.91-4.19 2.91-7.27Z"/><path fill="#34A853" d="M12 21.73c2.62 0 4.82-.87 6.43-2.35l-3.14-2.51c-.87.58-1.99.92-3.29.92-2.53 0-4.67-1.71-5.44-4.01H3.32v2.59A9.72 9.72 0 0 0 12 21.73Z"/><path fill="#FBBC05" d="M6.56 13.78A5.84 5.84 0 0 1 6.25 12c0-.62.11-1.22.31-1.78V7.63H3.32A9.72 9.72 0 0 0 2.27 12c0 1.57.38 3.06 1.05 4.37l3.24-2.59Z"/><path fill="#EA4335" d="M12 6.21c1.42 0 2.69.49 3.69 1.45l2.77-2.77C16.82 3.36 14.62 2.27 12 2.27a9.72 9.72 0 0 0-8.68 5.36l3.24 2.59c.77-2.3 2.91-4.01 5.44-4.01Z"/></svg><span>Continue with Google</span></button>
+          <div class="auth-divider" aria-hidden="true"><i></i><span>OR CONTINUE WITH EMAIL</span><i></i></div>
+          <label>Email address<input type="email" name="email" autocomplete="email" placeholder="you@example.com" required /></label>
+          <label>Password<span class="password-field"><input type="password" name="password" autocomplete="current-password" placeholder="Enter your password" minlength="8" required /><button type="button" data-toggle-password>Show</button></span></label>
+          <div class="auth-options"><label class="check"><input type="checkbox" name="remember" /><span></span>Keep me signed in</label><a href="mailto:support@focuznow.com?subject=Password%20reset">Forgot password?</a></div>
+          <button class="auth-submit" type="submit" data-submit-button><span>Continue</span> <svg viewBox="0 0 18 18"><path d="M3 9h11M10 5l4 4-4 4"/></svg></button>
+          <p class="form-message" data-form-message aria-live="polite"></p>
+        </form>
+        <div class="auth-panel-foot"><span><i></i> Secure account handoff</span><p class="auth-switch">New to FocuzNow? <a href="./signup.html">Create an account</a></p></div>
+      </section>
+    </main>
+    <script type="module" src="./auth.js"></script>
+    <script type="module" src="./site-nav.js"></script>
+  </body>
+</html>
