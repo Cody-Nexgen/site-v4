@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08090a" />
+    <meta name="description" content="Connecting your FocuzNow account to the extension." />
+    <title>Connecting to FocuzNow…</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./auth.css" />
+  </head>
+  <body class="auth-signin auth-callback-page">
+    <main class="auth-callback-main">
+      <section class="auth-panel auth-callback-panel" aria-labelledby="callback-title">
+        <span class="completion-orbit" aria-hidden="true"><i></i></span>
+        <div class="auth-panel-head"><p>SECURE HANDOFF</p><h1 id="callback-title">Connecting your account…</h1><span>Keep this tab open while FocuzNow retrieves your session and opens the extension.</span></div>
+        <p class="form-message info" data-form-message aria-live="polite">Finishing your secure sign-in…</p>
+        <a class="callback-login-link" href="/login">Return to sign in</a>
+      </section>
+    </main>
+    <script type="module" src="./auth.js"></script>
+  </body>
+</html>
