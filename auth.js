@@ -125,8 +125,17 @@ const getOAuthRedirectUrl = () => {
   const host = window.location.hostname.replace(/^www\./, '');
   const isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
   const extensionQuery = hasFocuzNowExtension() ? '?extension_oauth=1' : '';
-  if (isLocal) return `${window.location.origin}/signin.html${extensionQuery}`;
+  if (isLocal) return `${window.location.origin}/dashboard.html${extensionQuery}`;
   return `${PRODUCTION_AUTH_ORIGIN}/dashboard${extensionQuery}`;
+};
+
+const beginDashboardHandoff = (session) => {
+  syncSessionWithExtension(session);
+  markPendingExtensionRedirect();
+  const host = window.location.hostname.replace(/^www\./, '');
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
+  const dashboardPath = isLocal ? '/dashboard.html' : '/dashboard';
+  window.location.assign(`${window.location.origin}${dashboardPath}?extension_oauth=1`);
 };
 
 const renderHandoff = (extensionDetected) => {
@@ -261,7 +270,7 @@ forms.forEach((form) => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (!data.session) throw new Error('Sign-in completed without a session. Please try again.');
-        await completeAuthentication(data.session);
+        beginDashboardHandoff(data.session);
         return;
       }
 
@@ -287,7 +296,7 @@ forms.forEach((form) => {
       });
       if (error) throw error;
       if (data.session) {
-        await completeAuthentication(data.session);
+        beginDashboardHandoff(data.session);
       } else {
         showVerificationPanel(email);
       }
@@ -322,7 +331,7 @@ verificationForm?.addEventListener('submit', async (event) => {
     });
     if (error) throw error;
     if (!data.session) throw new Error('Verification completed without a session. Sign in to continue.');
-    await completeAuthentication(data.session);
+    beginDashboardHandoff(data.session);
   } catch (error) {
     setMessage(message, friendlyError(error, 'Invalid or expired verification code.'));
   } finally {
@@ -379,7 +388,8 @@ const initializeAuthReturn = async () => {
 
   const query = new URLSearchParams(window.location.search);
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-  const isAuthReturn = query.has('code') || query.get('extension_oauth') === '1' || hash.has('access_token') || consumePendingExtensionRedirect();
+  const pendingExtensionHandoff = consumePendingExtensionRedirect();
+  const isAuthReturn = query.has('code') || query.get('extension_oauth') === '1' || hash.has('access_token') || pendingExtensionHandoff;
   if (!isAuthReturn) return;
 
   setMessage(formMessage, 'Finishing your secure sign-in…', 'info');
@@ -388,7 +398,11 @@ const initializeAuthReturn = async () => {
     setMessage(formMessage, friendlyError(error));
     return;
   }
-  if (data.session) await completeAuthentication(data.session);
+  if (data.session) {
+    await completeAuthentication(data.session);
+  } else {
+    setMessage(formMessage, 'No sign-in session was found. Return to sign in and try again.');
+  }
 };
 
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('auth_preview') === 'verify' && verificationForm) {
