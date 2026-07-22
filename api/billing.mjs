@@ -115,7 +115,6 @@ const listSubscriptions = (customerId) => stripeRequest('/subscriptions', {
     ['status', 'all'],
     ['limit', '10'],
     ['expand[]', 'data.default_payment_method'],
-    ['expand[]', 'data.items.data.price.product'],
   ],
 });
 
