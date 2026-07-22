@@ -214,7 +214,7 @@ const realAccountMenu = $('#real-account-menu');
 $$('.real-nav-item, .real-section-toggle').forEach((button) => {
   if (!button.hasAttribute('aria-label')) button.setAttribute('aria-label', $('span', button)?.textContent.trim() || 'Navigation item');
 });
-realAccountButton?.setAttribute('aria-label', 'Nora account');
+realAccountButton?.setAttribute('aria-label', 'FocuzNow account');
 $$('[data-real-view]').forEach((button) => button.addEventListener('click', () => activateRealView(button.dataset.realView)));
 
 $$('.real-section-toggle').forEach((button) => button.addEventListener('click', () => {

@@ -94,7 +94,7 @@ export function AiChatWidget() {
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600">
                             <IconMessage size={18} />
                         </span>
-                        Ask FocuzNow
+                        Ask FocuzAI
                     </motion.button>
                 )}
             </AnimatePresence>

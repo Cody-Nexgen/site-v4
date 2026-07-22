@@ -14,6 +14,8 @@ export default defineConfig({
         dashboard: resolve(process.cwd(), 'dashboard.html'),
         terms: resolve(process.cwd(), 'terms.html'),
         privacy: resolve(process.cwd(), 'privacy.html'),
+        billing: resolve(process.cwd(), 'billing.html'),
+        notFound: resolve(process.cwd(), '404.html'),
       },
     },
   },

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08090a" />
+    <meta name="description" content="Manage your FocuzNow plan, payment method, renewal, and invoices." />
+    <title>Billing — FocuzNow</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./billing.css" />
+    <script src="https://js.stripe.com/v3/"></script>
+  </head>
+  <body class="billing-page">
+    <a class="skip-link" href="#billing-main">Skip to billing</a>
+    <header class="site-header site-header-static" id="top"><nav class="nav shell" aria-label="Main navigation"><a class="brand" href="./index.html" aria-label="FocuzNow home"><span class="brand-orbit" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="brand-orbit-ring" cx="10" cy="10" r="6.4"/><circle class="brand-orbit-dot" cx="10" cy="3.6" r="1.35"/></svg></span><span>FocuzNow</span></a><div class="nav-links" id="nav-links"><a href="./index.html#product">Product</a><a href="./features.html">Features</a><a href="./index.html#demo">Live demo</a><a href="./index.html#ai-coach">AI Coach</a></div><div class="nav-actions"><a class="text-link sign-in" href="/login">Sign in</a><a class="button button-small" data-install-cta data-install-header href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a><button class="menu-toggle" type="button" data-site-menu aria-expanded="false" aria-controls="nav-links" aria-label="Open navigation"><i></i><i></i></button></div></nav></header>
+
+    <main class="billing-main shell" id="billing-main">
+      <aside class="settings-nav" aria-label="Account settings">
+        <p>Settings</p>
+        <nav>
+          <button type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3"/><path d="M4.5 16c.5-3 2.3-4.5 5.5-4.5s5 1.5 5.5 4.5"/></svg><span>Account</span></button>
+          <a href="/billing" aria-current="page"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="5" width="14" height="10" rx="2"/><path d="M3 8.5h14M6 12h3"/></svg><span>Billing</span></a>
+          <button type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M7 10h9M4 14h12"/><circle cx="6" cy="10" r="1"/></svg><span>Preferences</span></button>
+          <button type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="8" width="10" height="8" rx="2"/><path d="M7.5 8V6a2.5 2.5 0 0 1 5 0v2"/></svg><span>Privacy</span></button>
+        </nav>
+      </aside>
+
+      <section class="billing-content">
+        <header class="billing-heading">
+          <div><h1>Billing</h1><p data-billing-description>Manage your plan and subscription.</p></div>
+          <span data-billing-identity>Loading your account…</span>
+        </header>
+
+        <div class="billing-notice" data-billing-notice hidden role="status"><span></span><p></p><button type="button" aria-label="Dismiss billing notice">×</button></div>
+
+        <div class="billing-dashboard" data-billing-dashboard aria-busy="true">
+          <section class="settings-card plan-section" aria-labelledby="plan-title">
+            <header class="settings-card-header"><div><h2 id="plan-title">Current plan</h2><p>Your current subscription and renewal date.</p></div><em class="plan-status" data-plan-status>Syncing</em></header>
+            <div class="plan-summary">
+              <span class="plan-mark" data-plan-mark>F</span>
+              <div><strong data-plan-name>FocuzNow</strong><p data-plan-copy>Retrieving your plan.</p></div>
+              <b data-plan-price>—</b>
+            </div>
+            <dl class="settings-rows">
+              <div><dt data-period-label>Renewal date</dt><dd data-period-date>—</dd></div>
+              <div><dt>Access</dt><dd data-account-state>Checking…</dd></div>
+              <div><dt>Renewal</dt><dd data-renewal-copy>Your plan status is loading.</dd></div>
+            </dl>
+            <div class="billing-actions"><button class="billing-primary" type="button" data-upgrade-plan><span>Upgrade to Pro</span><i>→</i></button><button class="billing-secondary" type="button" data-manage-plan>Manage subscription</button></div>
+            <span hidden data-renewal-date></span>
+          </section>
+
+          <section class="settings-card payment-section" data-pro-section="payment" aria-labelledby="payment-title" hidden>
+            <header class="settings-card-header"><div><h2 id="payment-title">Payment method</h2><p>The default card used for your subscription.</p></div></header>
+            <div class="payment-layout">
+              <div class="payment-card-visual" data-card-visual data-brand="none" aria-label="Saved payment card">
+                <div class="payment-card-top"><span class="payment-chip" aria-hidden="true"><i></i><i></i><i></i></span><svg class="contactless-icon" viewBox="0 0 28 28" aria-hidden="true"><path d="M6 10c2.4 2.4 2.4 5.6 0 8M10 7c4 4 4 10 0 14M14 4c5.8 5.8 5.8 14.2 0 20"/></svg><b data-card-brand>CARD</b></div>
+                <strong data-card-number>•••• •••• •••• ••••</strong>
+                <div class="payment-card-bottom"><span><small>CARDHOLDER</small><b data-cardholder>FOCUZNOW MEMBER</b></span><span><small>EXPIRES</small><b data-card-expiry>—</b></span></div>
+              </div>
+              <dl class="payment-details">
+                <div><dt>Card brand</dt><dd data-payment-brand>Not available</dd></div>
+                <div><dt>Card number</dt><dd data-payment-last4>•••• •••• •••• ••••</dd></div>
+                <div><dt>Expiry date</dt><dd data-payment-expiry>—</dd></div>
+                <div><dt>Security code</dt><dd>•••</dd></div>
+              </dl>
+            </div>
+            <div class="payment-empty-state" data-payment-empty hidden><span>○</span><div><b>No payment method on file</b><p>Add a card when you update your subscription.</p></div></div>
+            <p class="payment-note" data-payment-copy>No payment method is required on the Free plan.</p>
+          </section>
+
+          <section class="settings-card included-section" data-pro-section="included" aria-labelledby="included-title" hidden>
+            <header class="settings-card-header"><div><h2 id="included-title">Included in your plan</h2><p data-coverage-summary>Your current plan includes the focus essentials.</p></div></header>
+            <div class="included-grid">
+              <span data-pro-feature="core"><i>✓</i><b>Focus system</b><em>Included</em></span>
+              <span data-pro-feature="blocking"><i>✓</i><b>Advanced protection</b><em>Pro</em></span>
+              <span data-pro-feature="insights"><i>✓</i><b>Complete insights</b><em>Pro</em></span>
+              <span data-pro-feature="social"><i>✓</i><b>Focus Rooms and Forest</b><em>Pro</em></span>
+            </div>
+          </section>
+
+          <section class="settings-card history-section" data-pro-section="history" aria-labelledby="history-title" hidden>
+            <header class="settings-card-header"><div><h2 id="history-title">Billing history</h2><p>Receipts from completed subscription payments.</p></div></header>
+            <div class="history-head" aria-hidden="true"><span>Invoice</span><span>Date</span><span>Amount</span><span></span></div>
+            <div class="billing-history" data-billing-history><span class="billing-empty"><i>○</i><b>No invoices yet</b><small>Your first Pro receipt will appear here.</small></span></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <section class="billing-checkout" data-billing-checkout hidden aria-labelledby="checkout-title">
+      <button class="billing-modal-backdrop" type="button" data-close-checkout aria-label="Close checkout"></button>
+      <div class="billing-checkout-card">
+        <button class="billing-modal-close" type="button" data-close-checkout aria-label="Close checkout">×</button>
+        <aside><p>FOCUZNOW PRO</p><h2 id="checkout-title">Everything you need<br><span>to stay focused.</span></h2><div class="checkout-price"><b>$8</b><span>per month<br>cancel anytime</span></div><ul><li>Advanced blocking and schedules</li><li>Complete statistics and FocuzAI</li><li>Progression, Forest, friends, and rooms</li></ul><small>Payment details are securely handled by Stripe.</small></aside>
+        <div class="billing-payment-form"><header><p>SECURE PAYMENT</p><h3>Complete your upgrade</h3><span>Enter your payment details below.</span></header><form data-payment-form><div class="billing-element-loading" data-element-loading><i></i><span>Preparing secure payment fields…</span></div><div id="payment-element"></div><p class="billing-form-message" data-payment-message aria-live="polite"></p><button class="billing-primary billing-pay" type="submit" data-payment-submit disabled><span>Start Pro for $8</span><i>→</i></button></form></div>
+      </div>
+    </section>
+
+    <section class="billing-manager" data-billing-manager hidden aria-labelledby="manager-title">
+      <button class="billing-modal-backdrop" type="button" data-close-manager aria-label="Close subscription manager"></button>
+      <div class="billing-manager-card"><button class="billing-modal-close" type="button" data-close-manager aria-label="Close subscription manager">×</button><p>SUBSCRIPTION</p><h2 id="manager-title">Manage Pro</h2><span data-manager-copy>Your Pro plan will renew automatically.</span><div class="manager-status"><i></i><span><small>STATUS</small><b data-manager-status>Active</b></span><span><small>NEXT DATE</small><b data-manager-date>—</b></span></div><button class="billing-secondary danger" type="button" data-cancel-plan>Cancel at period end</button><button class="billing-primary" type="button" data-resume-plan hidden><span>Keep Pro active</span><i>→</i></button><small>You keep Pro access through the date shown above.</small></div>
+    </section>
+
+    <script type="module" src="./billing.js"></script>
+    <script type="module" src="./site-nav.js"></script>
+  </body>
+</html>
