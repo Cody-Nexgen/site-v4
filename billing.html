@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08090a" />
+    <meta name="description" content="Manage your FocuzNow plan, renewal, payment method, and invoices." />
+    <title>Billing — FocuzNow</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./billing.css" />
+    <script src="https://js.stripe.com/v3/"></script>
+  </head>
+  <body class="billing-page">
+    <a class="skip-link" href="#billing-main">Skip to billing</a>
+    <header class="site-header site-header-static" id="top"><nav class="nav shell" aria-label="Main navigation"><a class="brand" href="./index.html" aria-label="FocuzNow home"><span class="brand-orbit" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="brand-orbit-ring" cx="10" cy="10" r="6.4"/><circle class="brand-orbit-dot" cx="10" cy="3.6" r="1.35"/></svg></span><span>FocuzNow</span></a><div class="nav-links" id="nav-links"><a href="./index.html#product">Product</a><a href="./features.html">Features</a><a href="./index.html#demo">Live demo</a><a href="./index.html#ai-coach">AI Coach</a></div><div class="nav-actions"><a class="text-link sign-in" href="/login">Sign in</a><a class="button button-small" data-install-cta data-install-header href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a><button class="menu-toggle" type="button" data-site-menu aria-expanded="false" aria-controls="nav-links" aria-label="Open navigation"><i></i><i></i></button></div></nav></header>
+
+    <main class="billing-main shell" id="billing-main">
+      <header class="billing-heading">
+        <div><p>ACCOUNT / BILLING</p><h1>Your plan,<br><span>without the runaround.</span></h1></div>
+        <div class="billing-heading-copy"><p>Upgrade, review renewals, and control your subscription without leaving FocuzNow.</p><span data-billing-identity>Loading your account…</span></div>
+      </header>
+
+      <div class="billing-notice" data-billing-notice hidden role="status"><span></span><p></p><button type="button" aria-label="Dismiss billing notice">×</button></div>
+
+      <section class="billing-dashboard" data-billing-dashboard aria-busy="true">
+        <article class="billing-plan-card">
+          <header><span>CURRENT PLAN</span><em data-plan-status>SYNCING</em></header>
+          <div class="billing-plan-name"><span data-plan-mark>F</span><div><h2 data-plan-name>FocuzNow</h2><p data-plan-copy>Retrieving your plan directly from billing.</p></div></div>
+          <div class="billing-plan-meta"><span><small>PRICE</small><b data-plan-price>—</b></span><span><small data-period-label>RENEWS</small><b data-period-date>—</b></span><span><small>ACCOUNT</small><b data-account-state>Secure</b></span></div>
+          <div class="billing-plan-actions"><button class="billing-primary" type="button" data-upgrade-plan><span>Upgrade to Pro</span><i>→</i></button><button class="billing-secondary" type="button" data-manage-plan>Manage subscription</button></div>
+        </article>
+
+        <article class="billing-detail-card billing-renewal-card">
+          <header><span>NEXT RENEWAL</span><i class="billing-pulse"></i></header>
+          <strong data-renewal-date>—</strong><p data-renewal-copy>Your plan status is loading.</p>
+          <div class="billing-mini-timeline"><i class="done"></i><i class="active"></i><i></i><i></i></div>
+        </article>
+
+        <article class="billing-detail-card billing-payment-card">
+          <header><span>PAYMENT METHOD</span><em data-payment-brand>SECURE</em></header>
+          <div class="billing-card-glyph"><i></i><i></i><span data-payment-last4>••••</span></div>
+          <p data-payment-copy>Payment details are tokenized and handled by Stripe.</p>
+        </article>
+
+        <article class="billing-coverage-card">
+          <header><div><span>PLAN COVERAGE</span><h2>What your workspace can do.</h2></div><p data-coverage-summary>Your current plan includes the focus essentials.</p></header>
+          <div class="billing-feature-list">
+            <span data-pro-feature="core"><i>01</i><b>Focus system</b><small>Dashboard, sessions, lists, calendar, and scratchpad.</small><em>INCLUDED</em></span>
+            <span data-pro-feature="blocking"><i>02</i><b>Advanced protection</b><small>Schedules, route rules, platform controls, and Nuclear Lockdown.</small><em>PRO</em></span>
+            <span data-pro-feature="insights"><i>03</i><b>Complete insights</b><small>Statistics, FocuzAI, progression, challenges, and Forest.</small><em>PRO</em></span>
+            <span data-pro-feature="social"><i>04</i><b>Quiet accountability</b><small>Friends and Focus Rooms without another social feed.</small><em>PRO</em></span>
+          </div>
+        </article>
+
+        <article class="billing-history-card">
+          <header><div><span>BILLING HISTORY</span><h2>Receipts and invoices.</h2></div><p>Every completed payment appears here automatically.</p></header>
+          <div class="billing-history" data-billing-history><span class="billing-empty"><i>○</i><b>No invoices yet</b><small>Your first Pro receipt will appear here.</small></span></div>
+        </article>
+      </section>
+    </main>
+
+    <section class="billing-checkout" data-billing-checkout hidden aria-labelledby="checkout-title">
+      <button class="billing-modal-backdrop" type="button" data-close-checkout aria-label="Close checkout"></button>
+      <div class="billing-checkout-card">
+        <button class="billing-modal-close" type="button" data-close-checkout aria-label="Close checkout">×</button>
+        <aside><p>FOCUZNOW PRO</p><h2 id="checkout-title">One system.<br><span>Fully unlocked.</span></h2><div class="checkout-price"><b>$8</b><span>per month<br>cancel anytime</span></div><ul><li>Advanced blocking and schedules</li><li>Complete statistics and FocuzAI</li><li>Progression, Forest, friends, and rooms</li></ul><small>Payment details never touch FocuzNow servers.</small></aside>
+        <div class="billing-payment-form"><header><p>SECURE PAYMENT</p><h3>Complete your upgrade.</h3><span>Dark, embedded checkout powered by Stripe Elements.</span></header><form data-payment-form><div class="billing-element-loading" data-element-loading><i></i><span>Preparing secure payment fields…</span></div><div id="payment-element"></div><p class="billing-form-message" data-payment-message aria-live="polite"></p><button class="billing-primary billing-pay" type="submit" data-payment-submit disabled><span>Start Pro for $8</span><i>→</i></button></form></div>
+      </div>
+    </section>
+
+    <section class="billing-manager" data-billing-manager hidden aria-labelledby="manager-title">
+      <button class="billing-modal-backdrop" type="button" data-close-manager aria-label="Close subscription manager"></button>
+      <div class="billing-manager-card"><button class="billing-modal-close" type="button" data-close-manager aria-label="Close subscription manager">×</button><p>SUBSCRIPTION CONTROL</p><h2 id="manager-title">Keep your options clear.</h2><span data-manager-copy>Your Pro plan will renew automatically.</span><div class="manager-status"><i></i><span><small>CURRENT STATE</small><b data-manager-status>Active</b></span><span><small>NEXT DATE</small><b data-manager-date>—</b></span></div><button class="billing-secondary danger" type="button" data-cancel-plan>Cancel at period end</button><button class="billing-primary" type="button" data-resume-plan hidden><span>Keep Pro active</span><i>→</i></button><small>You keep Pro access through the date shown above. No surprise cutoff.</small></div>
+    </section>
+
+    <script type="module" src="./billing.js"></script>
+    <script type="module" src="./site-nav.js"></script>
+  </body>
+</html>

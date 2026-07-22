@@ -1,4 +1,5 @@
 import { supabase } from './supabase-client.js';
+import './site-actions.js';
 
 const header = document.querySelector('.site-header');
 const menu = document.querySelector('[data-site-menu]');
@@ -135,13 +136,44 @@ const renderAccount = (session) => {
   identityEmail.textContent = profile.email;
   identity.append(identityName, identityEmail);
 
+  const menuItems = document.createElement('div');
+  menuItems.className = 'account-menu-items';
+  const menuOptions = [
+    ['Account settings', 'User details and security', '', true],
+    ['Billing', 'Plan, renewal, and payments', '/billing', false],
+    ['Preferences', 'Notifications and defaults', '', true],
+    ['Data & privacy', 'Exports and cloud controls', '', true],
+  ];
+  menuOptions.forEach(([label, description, href, disabled]) => {
+    const item = document.createElement(disabled ? 'button' : 'a');
+    item.className = 'account-menu-item';
+    item.setAttribute('role', 'menuitem');
+    if (disabled) {
+      item.type = 'button';
+      item.disabled = true;
+      item.setAttribute('aria-disabled', 'true');
+    } else {
+      item.href = href;
+    }
+    const copy = document.createElement('span');
+    const title = document.createElement('b');
+    const detail = document.createElement('small');
+    title.textContent = label;
+    detail.textContent = description;
+    copy.append(title, detail);
+    const state = document.createElement('em');
+    state.textContent = disabled ? 'Soon' : '→';
+    item.append(copy, state);
+    menuItems.append(item);
+  });
+
   const signOut = document.createElement('button');
   signOut.type = 'button';
   signOut.className = 'account-signout';
   signOut.dataset.accountSignout = '';
   signOut.setAttribute('role', 'menuitem');
   signOut.innerHTML = '<span>Sign out</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 3H3.75A1.25 1.25 0 0 0 2.5 4.25v7.5A1.25 1.25 0 0 0 3.75 13H6.5M9.5 5l3 3-3 3M12.5 8H6"/></svg>';
-  popover.append(identity, signOut);
+  popover.append(identity, menuItems, signOut);
   account.append(trigger, popover);
   target.replaceWith(account);
 
@@ -170,8 +202,8 @@ const previewAccount = import.meta.env.DEV && new URLSearchParams(window.locatio
 if (previewAccount) {
   renderAccount({
     user: {
-      email: 'nora@example.com',
-      user_metadata: { full_name: 'Nora Chen' },
+      email: 'member@focuznow.com',
+      user_metadata: { full_name: 'FocuzNow Member' },
     },
   });
 } else if (supabase) {

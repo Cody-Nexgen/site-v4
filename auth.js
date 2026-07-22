@@ -3,12 +3,37 @@ import { isAuthConfigured as isConfigured, supabase } from './supabase-client.js
 const PRODUCTION_AUTH_ORIGIN = 'https://focuznow.com';
 const PENDING_EXTENSION_REDIRECT_KEY = 'focuznow_redirect_extension';
 const PENDING_EXTENSION_REDIRECT_AT_KEY = 'focuznow_redirect_extension_at';
+const AUTH_RETURN_KEY = 'focuznow_after_auth';
 const PENDING_MAX_AGE_MS = 10 * 60 * 1000;
 
 const forms = [...document.querySelectorAll('[data-auth-form]')];
 const verificationForm = document.querySelector('[data-verification-form]');
 let pendingVerificationEmail = '';
 let handoffStarted = false;
+
+const captureBillingIntent = () => {
+  const query = new URLSearchParams(window.location.search);
+  const next = query.get('next');
+  const billingReturn = next?.startsWith('/billing') ? next : query.get('plan') === 'pro' ? '/billing?checkout=pro&from=auth' : null;
+  try {
+    if (billingReturn) localStorage.setItem(AUTH_RETURN_KEY, billingReturn);
+    return billingReturn || localStorage.getItem(AUTH_RETURN_KEY);
+  } catch {
+    return billingReturn;
+  }
+};
+
+const consumeBillingIntent = () => {
+  try {
+    const value = localStorage.getItem(AUTH_RETURN_KEY);
+    localStorage.removeItem(AUTH_RETURN_KEY);
+    return value?.startsWith('/billing') ? value : null;
+  } catch {
+    return pendingBillingIntent?.startsWith('/billing') ? pendingBillingIntent : null;
+  }
+};
+
+const pendingBillingIntent = captureBillingIntent();
 
 const friendlyError = (error, fallback = 'Something went wrong. Please try again.') => {
   if (!error) return fallback;
@@ -111,12 +136,38 @@ const openExtension = () => window.postMessage({ type: 'OPEN_EXTENSION_OPTIONS' 
 const getOAuthRedirectUrl = () => {
   const host = window.location.hostname.replace(/^www\./, '');
   const isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
+  if (pendingBillingIntent) {
+    const callback = new URL(isLocal ? '/login.html' : '/login', window.location.origin);
+    callback.searchParams.set('oauth_return', '1');
+    callback.searchParams.set('next', pendingBillingIntent);
+    return callback.href;
+  }
   const extensionQuery = hasFocuzNowExtension() ? '?extension_oauth=1' : '';
   if (isLocal) return `${window.location.origin}/dashboard.html${extensionQuery}`;
   return `${PRODUCTION_AUTH_ORIGIN}/dashboard${extensionQuery}`;
 };
 
 const beginDashboardHandoff = (session) => {
+  const billingReturn = consumeBillingIntent();
+  if (billingReturn) {
+    handoffStarted = true;
+    syncSessionWithExtension(session);
+    const source = document.querySelector('[data-verify-panel]:not([hidden]), [data-auth-panel]:not([hidden]), .auth-callback-panel');
+    const rect = source?.getBoundingClientRect();
+    const transition = document.createElement('section');
+    transition.className = 'auth-billing-handoff';
+    if (rect) {
+      transition.style.setProperty('--handoff-left', `${rect.left}px`);
+      transition.style.setProperty('--handoff-top', `${rect.top}px`);
+      transition.style.setProperty('--handoff-width', `${rect.width}px`);
+      transition.style.setProperty('--handoff-height', `${rect.height}px`);
+    }
+    transition.innerHTML = '<div><span class="completion-orbit" aria-hidden="true"><i></i></span><p>ACCOUNT VERIFIED</p><h2>Expanding your secure checkout…</h2><small>Your session is ready. FocuzNow Pro is opening without leaving the site.</small><b><i></i></b></div>';
+    document.body.append(transition);
+    requestAnimationFrame(() => transition.classList.add('is-expanded'));
+    window.setTimeout(() => window.location.assign(billingReturn), 820);
+    return;
+  }
   syncSessionWithExtension(session);
   markPendingExtensionRedirect();
   const host = window.location.hostname.replace(/^www\./, '');
@@ -156,6 +207,10 @@ const renderHandoff = (extensionDetected) => {
 
 const completeAuthentication = async (session) => {
   if (!session || handoffStarted) return;
+  if (localStorage.getItem(AUTH_RETURN_KEY)) {
+    beginDashboardHandoff(session);
+    return;
+  }
   handoffStarted = true;
   syncSessionWithExtension(session);
   const extensionDetected = hasFocuzNowExtension();
@@ -295,6 +350,18 @@ forms.forEach((form) => {
   });
 });
 
+if (pendingBillingIntent) {
+  document.querySelectorAll('.auth-switch a').forEach((link) => {
+    const target = link.getAttribute('href') || '';
+    if (target.includes('login') || target.includes('signup')) {
+      const url = new URL(target, window.location.origin);
+      url.searchParams.set('plan', 'pro');
+      url.searchParams.set('next', pendingBillingIntent);
+      link.href = url.pathname + url.search;
+    }
+  });
+}
+
 verificationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const message = verificationForm.querySelector('[data-verification-message]');
@@ -376,7 +443,7 @@ const initializeAuthReturn = async () => {
   const query = new URLSearchParams(window.location.search);
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const pendingExtensionHandoff = consumePendingExtensionRedirect();
-  const isAuthReturn = query.has('code') || query.get('extension_oauth') === '1' || hash.has('access_token') || pendingExtensionHandoff;
+  const isAuthReturn = query.has('code') || query.get('oauth_return') === '1' || query.get('extension_oauth') === '1' || hash.has('access_token') || pendingExtensionHandoff;
   if (!isAuthReturn) return;
 
   setMessage(formMessage, 'Finishing your secure sign-in…', 'info');
@@ -394,6 +461,11 @@ const initializeAuthReturn = async () => {
 
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('auth_preview') === 'verify' && verificationForm) {
   showVerificationPanel('you@example.com');
+}
+
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('auth_preview') === 'billing-handoff') {
+  localStorage.setItem(AUTH_RETURN_KEY, '/billing?checkout=pro&from=auth&billing_preview=checkout&auth_preview=account');
+  window.setTimeout(() => beginDashboardHandoff({ access_token: 'preview', refresh_token: 'preview', user: { email: 'member@focuznow.com' } }), 500);
 }
 
 initializeAuthReturn();
