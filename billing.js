@@ -92,6 +92,7 @@ const normalizeSnapshot = (raw = {}) => {
     } : null,
     paymentMethod: normalizePaymentMethod(raw.paymentMethod || raw.payment_method),
     invoices: Array.isArray(raw.invoices) ? raw.invoices.map(normalizeInvoice) : [],
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.filter((warning) => typeof warning === 'string') : [],
     source: asText(raw.source, 'stripe'),
   };
 };
@@ -200,7 +201,8 @@ const renderSnapshot = (rawData) => {
   snapshot = data;
   const isPro = data.plan === 'pro';
   const canceling = Boolean(data.subscription?.cancelAtPeriodEnd);
-  const periodDate = isPro ? formatDate(data.subscription?.periodEnd) : 'No expiration';
+  const hasPeriodEnd = Boolean(toDate(data.subscription?.periodEnd));
+  const periodDate = isPro ? formatDate(data.subscription?.periodEnd, 'Unavailable') : 'No expiration';
   const statusLabel = data.status === 'past_due' ? 'Past due' : data.status === 'trialing' ? 'Trial' : canceling ? 'Ends soon' : isPro ? 'Active' : 'Free';
   document.querySelectorAll('[data-pro-section]').forEach((section) => { section.hidden = !isPro; });
   document.querySelector('[data-billing-description]').textContent = isPro
@@ -216,7 +218,8 @@ const renderSnapshot = (rawData) => {
   document.querySelector('[data-account-state]').textContent = isPro ? 'Pro access' : 'Free access';
   document.querySelector('[data-renewal-date]').textContent = periodDate;
   document.querySelector('[data-renewal-copy]').textContent = isPro
-    ? canceling ? `Pro remains available until ${periodDate}.` : `Renews automatically on ${periodDate}.`
+    ? !hasPeriodEnd ? 'Stripe did not return a renewal date for this subscription.'
+      : canceling ? `Pro remains available until ${periodDate}.` : `Renews automatically on ${periodDate}.`
     : 'No automatic renewal.';
   document.querySelector('[data-coverage-summary]').textContent = isPro ? 'All FocuzNow features are included.' : 'Upgrade to unlock the complete focus system.';
   document.querySelectorAll('[data-pro-feature]').forEach((feature) => feature.classList.toggle('is-included', isPro || feature.dataset.proFeature === 'core'));
@@ -325,6 +328,11 @@ async function refreshBilling() {
       renderSnapshot({ ...stripeSnapshot, plan: fallback.plan, status: fallback.status, subscription: fallback.subscription });
     } else {
       renderSnapshot(stripeSnapshot);
+    }
+    if (stripeSnapshot.warnings.includes('customer_not_found')) {
+      showNotice('Your Pro record points to a Stripe customer that is not available to this key. Check that Vercel uses a live secret key from the same Stripe account as the Customer Portal.');
+    } else if (stripeSnapshot.warnings.includes('invoices_unavailable') || stripeSnapshot.warnings.includes('payment_method_unavailable')) {
+      showNotice('Your plan loaded, but the Stripe key could not read every billing detail. Enable Customer, Payment Method, and Invoice read permissions, then redeploy.');
     }
   } catch (error) {
     renderSnapshot(fallback);

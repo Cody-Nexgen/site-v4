@@ -10,6 +10,11 @@ const ACTIVE_SUBSCRIPTION_STATES = new Set(['active', 'trialing', 'past_due', 'u
 const ENTITLED_SUBSCRIPTION_STATES = new Set(['active', 'trialing', 'past_due']);
 const BILLING_LIMITS = [{ limit: 20, windowMs: 60_000 }, { limit: 120, windowMs: 60 * 60_000 }];
 
+const supabaseConfig = () => ({
+  url: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL,
+  anonKey: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY,
+});
+
 const json = (payload, status = 200, headers = {}) => new Response(JSON.stringify(payload), {
   status,
   headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
@@ -18,13 +23,28 @@ const json = (payload, status = 200, headers = {}) => new Response(JSON.stringif
 const requireUser = async (request) => {
   const accessToken = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!accessToken) return null;
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
-  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+  const { url, anonKey } = supabaseConfig();
+  const response = await fetch(`${url}/auth/v1/user`, {
     headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) return null;
   return response.json();
+};
+
+const findSubscriptionRecord = async (request, user) => {
+  const authorization = request.headers.get('authorization');
+  if (!authorization || !user?.id) return null;
+  const { url, anonKey } = supabaseConfig();
+  const endpoint = new URL(`${url}/rest/v1/subscriptions`);
+  endpoint.searchParams.set('select', '*');
+  endpoint.searchParams.set('user_id', `eq.${user.id}`);
+  endpoint.searchParams.set('status', 'in.(active,trialing,past_due,unpaid)');
+  endpoint.searchParams.set('order', 'created_at.desc');
+  endpoint.searchParams.set('limit', '1');
+  const response = await fetch(endpoint, { headers: { apikey: anonKey, Authorization: authorization } });
+  if (!response.ok) return null;
+  const records = await response.json().catch(() => []);
+  return Array.isArray(records) ? records[0] || null : null;
 };
 
 const stripeRequest = async (path, { method = 'GET', params = [] } = {}) => {
@@ -46,6 +66,9 @@ const stripeRequest = async (path, { method = 'GET', params = [] } = {}) => {
   if (!response.ok) {
     const error = new Error(data.error?.message || 'Stripe request failed.');
     error.status = response.status;
+    error.code = data.error?.code || null;
+    error.param = data.error?.param || null;
+    error.requestId = response.headers.get('request-id');
     throw error;
   }
   return data;
@@ -56,14 +79,29 @@ const customerName = (user) => {
   return metadata.full_name || metadata.name || [metadata.first_name, metadata.last_name].filter(Boolean).join(' ') || undefined;
 };
 
-const findCustomer = async (user) => {
-  if (!user.email) return null;
-  const customers = await stripeRequest('/customers', { params: [['email', user.email], ['limit', '100']] });
-  return customers.data?.find((customer) => customer.metadata?.supabase_user_id === user.id || customer.metadata?.user_id === user.id) || customers.data?.[0] || null;
+const retrieveCustomer = async (customerId) => {
+  if (!customerId || !String(customerId).startsWith('cus_')) return null;
+  const customer = await stripeRequest(`/customers/${encodeURIComponent(customerId)}`);
+  return customer?.deleted ? null : customer;
 };
 
-const getOrCreateCustomer = async (user) => {
-  const existing = await findCustomer(user);
+const findCustomer = async (user, preferredCustomerId) => {
+  if (preferredCustomerId) {
+    const preferred = await retrieveCustomer(preferredCustomerId).catch(() => null);
+    if (preferred) return preferred;
+  }
+  if (!user.email) return null;
+  const customers = await stripeRequest('/customers', { params: [['email', user.email], ['limit', '100']] });
+  const candidates = customers.data || [];
+  const metadataMatch = candidates.find((customer) => customer.metadata?.supabase_user_id === user.id || customer.metadata?.user_id === user.id);
+  if (metadataMatch) return metadataMatch;
+  const subscriptionChecks = await Promise.allSettled(candidates.slice(0, 10).map((customer) => listSubscriptions(customer.id)));
+  const activeIndex = subscriptionChecks.findIndex((result) => result.status === 'fulfilled' && selectSubscription(result.value) && ACTIVE_SUBSCRIPTION_STATES.has(selectSubscription(result.value).status));
+  return candidates[activeIndex >= 0 ? activeIndex : 0] || null;
+};
+
+const getOrCreateCustomer = async (user, preferredCustomerId) => {
+  const existing = await findCustomer(user, preferredCustomerId);
   if (existing) return existing;
   const params = [['email', user.email || ''], ['metadata[supabase_user_id]', user.id], ['metadata[user_id]', user.id]];
   const name = customerName(user);
@@ -88,21 +126,29 @@ const selectSubscription = (subscriptions) => {
 
 const getPeriodEnd = (subscription) => subscription?.items?.data?.[0]?.current_period_end
   || subscription?.current_period_end
+  || subscription?.trial_end
   || subscription?.cancel_at
   || subscription?.ended_at
   || null;
 
+const getInvoicePeriodEnd = (invoice) => invoice?.lines?.data?.find((line) => line.period?.end)?.period?.end
+  || invoice?.period_end
+  || invoice?.next_payment_attempt
+  || null;
+
 const subscriptionSecret = (subscription) => subscription?.latest_invoice?.confirmation_secret?.client_secret || null;
 
-const billingSnapshot = async (customer) => {
+const billingSnapshot = async (customer, subscriptionRecord = null) => {
   if (!customer) {
     return { plan: 'free', status: 'active', subscription: null, paymentMethod: null, invoices: [] };
   }
-  const [subscriptions, invoices, paymentMethods] = await Promise.all([
-    listSubscriptions(customer.id),
+  const subscriptions = await listSubscriptions(customer.id);
+  const [invoicesResult, paymentMethodsResult] = await Promise.allSettled([
     stripeRequest('/invoices', { params: [['customer', customer.id], ['limit', '5']] }),
-    stripeRequest('/payment_methods', { params: [['customer', customer.id], ['type', 'card'], ['limit', '10']] }),
+    stripeRequest(`/customers/${encodeURIComponent(customer.id)}/payment_methods`, { params: [['type', 'card'], ['limit', '10']] }),
   ]);
+  const invoices = invoicesResult.status === 'fulfilled' ? invoicesResult.value : { data: [] };
+  const paymentMethods = paymentMethodsResult.status === 'fulfilled' ? paymentMethodsResult.value : { data: [] };
   const subscription = selectSubscription(subscriptions);
   const isPro = subscription && ENTITLED_SUBSCRIPTION_STATES.has(subscription.status);
   const subscriptionPaymentMethod = subscription?.default_payment_method;
@@ -111,18 +157,29 @@ const billingSnapshot = async (customer) => {
     : subscriptionPaymentMethod?.id || customer.invoice_settings?.default_payment_method || null;
   const paymentMethod = typeof subscriptionPaymentMethod === 'object' && subscriptionPaymentMethod
     ? subscriptionPaymentMethod
-    : paymentMethods.data?.find((method) => method.id === preferredPaymentMethodId) || paymentMethods.data?.[0] || null;
+    : paymentMethods.data?.find((method) => method.id === preferredPaymentMethodId)
+      || paymentMethods.data?.[0]
+      || customer.sources?.data?.find((source) => source.id === customer.default_source)
+      || customer.sources?.data?.[0]
+      || null;
+  const warnings = [];
+  if (invoicesResult.status === 'rejected') warnings.push('invoices_unavailable');
+  if (paymentMethodsResult.status === 'rejected' && !paymentMethod) warnings.push('payment_method_unavailable');
+  const periodEnd = getPeriodEnd(subscription)
+    || subscriptionRecord?.current_period_end
+    || subscriptionRecord?.cancel_at
+    || getInvoicePeriodEnd(invoices.data?.[0]);
   return {
     plan: isPro ? 'pro' : 'free',
     status: isPro ? subscription.status : 'active',
     subscription: subscription ? {
       id: subscription.id,
       cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
-      periodEnd: getPeriodEnd(subscription),
+      periodEnd,
       priceId: subscription.items?.data?.[0]?.price?.id || null,
     } : null,
     paymentMethod: paymentMethod && typeof paymentMethod !== 'string' ? {
-      name: paymentMethod.billing_details?.name || null,
+      name: paymentMethod.billing_details?.name || paymentMethod.name || null,
       brand: paymentMethod.card?.brand || paymentMethod.type || 'card',
       last4: paymentMethod.card?.last4 || null,
       expMonth: paymentMethod.card?.exp_month || null,
@@ -140,14 +197,15 @@ const billingSnapshot = async (customer) => {
       status: invoice.status,
       url: invoice.hosted_invoice_url,
     })),
+    warnings,
   };
 };
 
-const createSubscription = async (user) => {
+const createSubscription = async (user, preferredCustomerId) => {
   const priceId = process.env.STRIPE_PRO_PRICE_ID;
   const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY;
   if (!priceId || !publishableKey) throw new Error('BILLING_NOT_CONFIGURED');
-  const customer = await getOrCreateCustomer(user);
+  const customer = await getOrCreateCustomer(user, preferredCustomerId);
   const existing = selectSubscription(await listSubscriptions(customer.id));
   if (existing && ['active', 'trialing', 'past_due', 'unpaid'].includes(existing.status)) {
     return { alreadySubscribed: true, subscriptionId: existing.id };
@@ -174,7 +232,7 @@ const createSubscription = async (user) => {
   return { subscriptionId: subscription.id, clientSecret, publishableKey };
 };
 
-const updateCancellation = async (customer, cancelAtPeriodEnd) => {
+const updateCancellation = async (customer, cancelAtPeriodEnd, subscriptionRecord) => {
   if (!customer) throw new Error('NO_SUBSCRIPTION');
   const subscription = selectSubscription(await listSubscriptions(customer.id));
   if (!subscription || !ACTIVE_SUBSCRIPTION_STATES.has(subscription.status)) throw new Error('NO_SUBSCRIPTION');
@@ -182,7 +240,7 @@ const updateCancellation = async (customer, cancelAtPeriodEnd) => {
     method: 'POST',
     params: [['cancel_at_period_end', cancelAtPeriodEnd ? 'true' : 'false']],
   });
-  return billingSnapshot(customer);
+  return billingSnapshot(customer, subscriptionRecord);
 };
 
 export default {
@@ -193,22 +251,29 @@ export default {
     if (!user) return json({ error: 'Sign in to manage billing.' }, 401, rateLimit.headers);
 
     try {
+      const subscriptionRecord = await findSubscriptionRecord(request, user).catch(() => null);
+      const preferredCustomerId = subscriptionRecord?.stripe_customer_id || subscriptionRecord?.customer_id || null;
       if (request.method === 'GET') {
-        const customer = await findCustomer(user);
-        return json({ ...(await billingSnapshot(customer)), publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY || null }, 200, rateLimit.headers);
+        const customer = await findCustomer(user, preferredCustomerId);
+        const snapshot = await billingSnapshot(customer, subscriptionRecord);
+        if (!customer && preferredCustomerId) snapshot.warnings = [...(snapshot.warnings || []), 'customer_not_found'];
+        return json({ ...snapshot, publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY || null }, 200, rateLimit.headers);
       }
       if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405, rateLimit.headers);
       const body = await request.json().catch(() => ({}));
-      if (body.action === 'create-subscription') return json(await createSubscription(user), 200, rateLimit.headers);
-      const customer = await findCustomer(user);
-      if (body.action === 'cancel-subscription') return json(await updateCancellation(customer, true), 200, rateLimit.headers);
-      if (body.action === 'resume-subscription') return json(await updateCancellation(customer, false), 200, rateLimit.headers);
+      if (body.action === 'create-subscription') return json(await createSubscription(user, preferredCustomerId), 200, rateLimit.headers);
+      const customer = await findCustomer(user, preferredCustomerId);
+      if (body.action === 'cancel-subscription') return json(await updateCancellation(customer, true, subscriptionRecord), 200, rateLimit.headers);
+      if (body.action === 'resume-subscription') return json(await updateCancellation(customer, false, subscriptionRecord), 200, rateLimit.headers);
       return json({ error: 'Unknown billing action.' }, 400, rateLimit.headers);
     } catch (error) {
       const code = error instanceof Error ? error.message : 'BILLING_FAILED';
       if (code === 'BILLING_NOT_CONFIGURED') return json({ error: 'Billing is not configured for this deployment yet.' }, 503, rateLimit.headers);
       if (code === 'NO_SUBSCRIPTION') return json({ error: 'No active subscription was found.' }, 404, rateLimit.headers);
-      console.error('[api/billing]', code);
+      console.error('[api/billing]', { message: code, status: error.status || null, code: error.code || null, param: error.param || null, requestId: error.requestId || null });
+      if (error.status === 401) return json({ error: 'Stripe rejected the configured secret key. Confirm it belongs to this Stripe account and environment.' }, 502, rateLimit.headers);
+      if (error.status === 403) return json({ error: 'The configured Stripe key cannot read subscriptions. Update its billing permissions or use a standard secret key.' }, 502, rateLimit.headers);
+      if (error.status === 404) return json({ error: 'The saved Stripe customer or subscription was not found in this Stripe account.' }, 502, rateLimit.headers);
       return json({ error: 'Billing could not be updated right now.' }, error.status || 502, rateLimit.headers);
     }
   },
