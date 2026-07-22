@@ -98,13 +98,20 @@ const billingSnapshot = async (customer) => {
   if (!customer) {
     return { plan: 'free', status: 'active', subscription: null, paymentMethod: null, invoices: [] };
   }
-  const [subscriptions, invoices] = await Promise.all([
+  const [subscriptions, invoices, paymentMethods] = await Promise.all([
     listSubscriptions(customer.id),
     stripeRequest('/invoices', { params: [['customer', customer.id], ['limit', '5']] }),
+    stripeRequest('/payment_methods', { params: [['customer', customer.id], ['type', 'card'], ['limit', '10']] }),
   ]);
   const subscription = selectSubscription(subscriptions);
   const isPro = subscription && ENTITLED_SUBSCRIPTION_STATES.has(subscription.status);
-  const paymentMethod = subscription?.default_payment_method;
+  const subscriptionPaymentMethod = subscription?.default_payment_method;
+  const preferredPaymentMethodId = typeof subscriptionPaymentMethod === 'string'
+    ? subscriptionPaymentMethod
+    : subscriptionPaymentMethod?.id || customer.invoice_settings?.default_payment_method || null;
+  const paymentMethod = typeof subscriptionPaymentMethod === 'object' && subscriptionPaymentMethod
+    ? subscriptionPaymentMethod
+    : paymentMethods.data?.find((method) => method.id === preferredPaymentMethodId) || paymentMethods.data?.[0] || null;
   return {
     plan: isPro ? 'pro' : 'free',
     status: isPro ? subscription.status : 'active',
@@ -115,9 +122,14 @@ const billingSnapshot = async (customer) => {
       priceId: subscription.items?.data?.[0]?.price?.id || null,
     } : null,
     paymentMethod: paymentMethod && typeof paymentMethod !== 'string' ? {
+      name: paymentMethod.billing_details?.name || null,
       brand: paymentMethod.card?.brand || paymentMethod.type || 'card',
       last4: paymentMethod.card?.last4 || null,
+      expMonth: paymentMethod.card?.exp_month || null,
+      expYear: paymentMethod.card?.exp_year || null,
       expires: paymentMethod.card ? `${String(paymentMethod.card.exp_month).padStart(2, '0')}/${String(paymentMethod.card.exp_year).slice(-2)}` : null,
+      funding: paymentMethod.card?.funding || null,
+      country: paymentMethod.card?.country || null,
     } : null,
     invoices: (invoices.data || []).map((invoice) => ({
       id: invoice.id,

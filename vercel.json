@@ -1,10 +1,16 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "cleanUrls": true,
-  "rewrites": [
-    { "source": "/login", "destination": "/login.html" },
-    { "source": "/signup", "destination": "/signup.html" },
-    { "source": "/dashboard", "destination": "/dashboard.html" },
-    { "source": "/billing", "destination": "/billing.html" }
+  "routes": [
+    { "src": "/login", "dest": "/login.html" },
+    { "src": "/signin", "dest": "/login.html" },
+    { "src": "/signup", "dest": "/signup.html" },
+    { "src": "/dashboard", "dest": "/dashboard.html" },
+    { "src": "/billing", "dest": "/billing.html" },
+    { "src": "/features", "dest": "/features.html" },
+    { "src": "/privacy", "dest": "/privacy.html" },
+    { "src": "/terms", "dest": "/terms.html" },
+    { "src": "/status", "dest": "/status.html" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "status": 404, "dest": "/404.html" }
   ]
 }

@@ -139,12 +139,12 @@ const renderAccount = (session) => {
   const menuItems = document.createElement('div');
   menuItems.className = 'account-menu-items';
   const menuOptions = [
-    ['Account settings', 'User details and security', '', true],
-    ['Billing', 'Plan, renewal, and payments', '/billing', false],
-    ['Preferences', 'Notifications and defaults', '', true],
-    ['Data & privacy', 'Exports and cloud controls', '', true],
+    ['Account settings', '', true, '<circle cx="8" cy="5.25" r="2.25"/><path d="M3.75 13c.35-2.3 1.77-3.45 4.25-3.45S11.9 10.7 12.25 13"/>'],
+    ['Billing', '/billing', false, '<rect x="2.5" y="4" width="11" height="8" rx="1.5"/><path d="M2.5 6.75h11M5 9.5h2.5"/>'],
+    ['Preferences', '', true, '<path d="M3 4.25h10M5.5 8h7.5M3 11.75h10"/><circle cx="4" cy="8" r="1"/>'],
+    ['Data & privacy', '', true, '<rect x="4" y="6.5" width="8" height="6.5" rx="1.5"/><path d="M6 6.5V5a2 2 0 0 1 4 0v1.5"/>'],
   ];
-  menuOptions.forEach(([label, description, href, disabled]) => {
+  menuOptions.forEach(([label, href, disabled, iconPath]) => {
     const item = document.createElement(disabled ? 'button' : 'a');
     item.className = 'account-menu-item';
     item.setAttribute('role', 'menuitem');
@@ -155,15 +155,15 @@ const renderAccount = (session) => {
     } else {
       item.href = href;
     }
-    const copy = document.createElement('span');
-    const title = document.createElement('b');
-    const detail = document.createElement('small');
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('viewBox', '0 0 16 16');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = iconPath;
+    const title = document.createElement('span');
     title.textContent = label;
-    detail.textContent = description;
-    copy.append(title, detail);
     const state = document.createElement('em');
     state.textContent = disabled ? 'Soon' : '→';
-    item.append(copy, state);
+    item.append(icon, title, state);
     menuItems.append(item);
   });
 
@@ -172,7 +172,7 @@ const renderAccount = (session) => {
   signOut.className = 'account-signout';
   signOut.dataset.accountSignout = '';
   signOut.setAttribute('role', 'menuitem');
-  signOut.innerHTML = '<span>Sign out</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 3H3.75A1.25 1.25 0 0 0 2.5 4.25v7.5A1.25 1.25 0 0 0 3.75 13H6.5M9.5 5l3 3-3 3M12.5 8H6"/></svg>';
+  signOut.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 3H3.75A1.25 1.25 0 0 0 2.5 4.25v7.5A1.25 1.25 0 0 0 3.75 13H6.5M9.5 5l3 3-3 3M12.5 8H6"/></svg><span>Sign out</span>';
   popover.append(identity, menuItems, signOut);
   account.append(trigger, popover);
   target.replaceWith(account);
