@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard,
   Clock,
@@ -11,6 +11,7 @@ import {
   LogOut,
   Shield,
   BarChart3,
+  Calendar as CalendarIcon,
   X
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,40 +19,33 @@ import { supabase } from "@/lib/supabase";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { AnimatedInput } from "@/components/ui/AnimatedInput";
-import { StatCard, ActivityChart, HistoryList } from "@/components/dashboard/DashboardComponents";
+import { StatCard } from "@/components/dashboard/DashboardComponents";
+import InstallExtensionCard from "@/components/InstallExtensionCard";
+import { fetchMyWorkspaceState } from "@/lib/workspaceApi";
+
 interface DashboardPageProps {
   session: any;
   onLogout: () => void;
+  onOpenCalendar?: () => void;
 }
 
-// Mock Data for initial render (will be replaced by real data fetch)
-const MOCK_ACTIVITY_DATA = [
-  { name: 'Mon', hours: 2.5 },
-  { name: 'Tue', hours: 3.8 },
-  { name: 'Wed', hours: 4.2 },
-  { name: 'Thu', hours: 1.5 },
-  { name: 'Fri', hours: 5.0 },
-  { name: 'Sat', hours: 3.2 },
-  { name: 'Sun', hours: 2.0 },
-];
+/** Fields synced from the extension via `user_workspace_state.state` (see SYNCABLE_WORKSPACE_KEYS). */
+type WorkspaceState = {
+  blocklist?: unknown[];
+  regexBlocklist?: unknown[];
+  habits?: unknown[];
+  todos?: unknown[];
+  theme?: string;
+  weeklyGoalHours?: number;
+  dailyFocusTarget?: number;
+  profileName?: string;
+};
 
-const MOCK_HISTORY_DATA = [
-  { domain: 'github.com', timeSpent: 4500000, visits: 12, lastVisited: '2023-10-27T10:00:00Z' },
-  { domain: 'stackoverflow.com', timeSpent: 1200000, visits: 5, lastVisited: '2023-10-27T11:30:00Z' },
-  { domain: 'youtube.com', timeSpent: 3600000, visits: 3, lastVisited: '2023-10-27T09:15:00Z' },
-  { domain: 'linear.app', timeSpent: 2400000, visits: 8, lastVisited: '2023-10-27T14:20:00Z' },
-  { domain: 'figma.com', timeSpent: 1800000, visits: 4, lastVisited: '2023-10-27T13:00:00Z' },
-];
-
-export default function DashboardPage({ session, onLogout }: DashboardPageProps) {
+export default function DashboardPage({ session, onLogout, onOpenCalendar }: DashboardPageProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'history'>('overview');
   const [loading, setLoading] = useState(true);
+  const [workspaceState, setWorkspaceState] = useState<WorkspaceState | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [stats, setStats] = useState({
-    timeTracked: '0h',
-    sitesVisited: 0,
-    focusScore: 0
-  });
 
   // Settings State
   const [dailyLimit, setDailyLimit] = useState(2); // hours
@@ -67,15 +61,45 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
   });
 
   useEffect(() => {
-    setTimeout(() => {
-      setStats({
-        timeTracked: '12.5h',
-        sitesVisited: 42,
-        focusScore: 85
-      });
-      setLoading(false);
-    }, 1000);
+    let cancelled = false;
+    (async () => {
+      try {
+        const row = await fetchMyWorkspaceState(supabase);
+        if (cancelled) return;
+        setWorkspaceState((row?.state as WorkspaceState) ?? {});
+      } catch (err) {
+        console.error("[Dashboard] Failed to load cloud workspace state", err);
+        if (!cancelled) setWorkspaceState({});
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  // Overview stats we can actually derive from cloud-synced state — everything else
+  // (live time tracking, focus score, browsing history) only exists in the extension.
+  const derived = useMemo(() => {
+    const state = workspaceState ?? {};
+    const blocklist = Array.isArray(state.blocklist) ? state.blocklist : [];
+    const regexBlocklist = Array.isArray(state.regexBlocklist) ? state.regexBlocklist : [];
+    const habits = Array.isArray(state.habits) ? state.habits : [];
+    const todos = Array.isArray(state.todos) ? state.todos : [];
+    const theme = typeof state.theme === "string" && state.theme ? state.theme : "default";
+    const weeklyGoalHours = typeof state.weeklyGoalHours === "number" ? state.weeklyGoalHours : null;
+    const dailyFocusTarget = typeof state.dailyFocusTarget === "number" ? state.dailyFocusTarget : null;
+    return {
+      blockedSitesCount: blocklist.length + regexBlocklist.length,
+      habitsCount: habits.length,
+      todosCount: todos.length,
+      theme,
+      weeklyGoalHours,
+      dailyFocusTarget,
+      hasSyncedData: Object.keys(state).length > 0,
+    };
+  }, [workspaceState]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -87,42 +111,50 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
                 {billingNotice}
               </div>
             )}
-            {/* Hero Section */}
+            {/* Cloud-synced summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <StatCard
-                title="Time Tracked"
-                value={stats.timeTracked}
-                subtitle="This Week"
-                icon={Clock}
+                title="Blocked Sites"
+                value={loading ? "…" : derived.blockedSitesCount}
+                subtitle="Synced from your blocklist"
+                icon={Shield}
                 color="purple"
                 delay={0.1}
               />
               <StatCard
-                title="Sites Visited"
-                value={stats.sitesVisited}
-                subtitle="Unique Domains"
-                icon={Globe}
+                title="Weekly Focus Goal"
+                value={loading ? "…" : derived.weeklyGoalHours != null ? `${derived.weeklyGoalHours}h` : "Not set"}
+                subtitle={derived.dailyFocusTarget != null ? `${derived.dailyFocusTarget}h daily target` : "Set a goal in the extension"}
+                icon={Clock}
                 color="blue"
                 delay={0.2}
               />
               <StatCard
-                title="Focuz Score"
-                value={stats.focusScore}
-                subtitle="Quality-based · open extension for live score"
+                title="Habits Tracked"
+                value={loading ? "…" : derived.habitsCount}
+                subtitle={`${derived.todosCount} task${derived.todosCount === 1 ? "" : "s"} on your list`}
                 icon={Zap}
                 color="orange"
                 delay={0.3}
               />
             </div>
 
-            {/* Charts & Lists */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <ActivityChart data={MOCK_ACTIVITY_DATA} />
+            {!loading && !derived.hasSyncedData && (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-zinc-400">
+                No synced data yet — install the extension and sign in there to start syncing your blocklist, habits and goals to the cloud.
               </div>
-              <div className="lg:col-span-1">
-                <HistoryList history={MOCK_HISTORY_DATA} />
-              </div>
+            )}
+
+            {/* Browser-only features */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <InstallExtensionCard
+                title="Live focus score & time tracking"
+                description="Real-time focus scores, tab-switch counts, and time-on-site breakdowns run locally in your browser. Install the extension to see them live."
+              />
+              <InstallExtensionCard
+                title="Site blocking & Pomodoro timer"
+                description="Blocking, distraction redirects, and the Pomodoro timer run in your browser via the FocuzNow extension."
+              />
             </div>
           </div>
         );
@@ -130,9 +162,37 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
       case 'analytics':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-white">Detailed Analytics</h2>
-            <ActivityChart data={MOCK_ACTIVITY_DATA} />
-            {/* Add more charts here later */}
+            <div>
+              <h2 className="text-2xl font-bold text-white">Detailed Analytics</h2>
+              <p className="text-zinc-400 mt-1">Cloud snapshot of your synced settings — minute-by-minute analytics live in the extension.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <GlassCard className="p-6">
+                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Cloud Snapshot</h3>
+                <dl className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <dt className="text-zinc-500">Theme</dt>
+                    <dd className="text-white capitalize">{loading ? "…" : derived.theme}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-zinc-500">Blocked sites</dt>
+                    <dd className="text-white">{loading ? "…" : derived.blockedSitesCount}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-zinc-500">Habits</dt>
+                    <dd className="text-white">{loading ? "…" : derived.habitsCount}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-zinc-500">Daily focus target</dt>
+                    <dd className="text-white">{loading ? "…" : derived.dailyFocusTarget != null ? `${derived.dailyFocusTarget}h` : "—"}</dd>
+                  </div>
+                </dl>
+              </GlassCard>
+              <InstallExtensionCard
+                title="Full analytics dashboard"
+                description="Daily and weekly time breakdowns by domain, focus score trends, and tab-switch analytics run entirely in your browser — install the extension to unlock them."
+              />
+            </div>
           </div>
         );
 
@@ -140,7 +200,10 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-white">Browsing History</h2>
-            <HistoryList history={MOCK_HISTORY_DATA} />
+            <InstallExtensionCard
+              title="Browsing history needs the extension"
+              description="FocuzNow tracks page visits locally and never uploads your browsing history to the cloud. Install the extension to see your history and top sites here."
+            />
           </div>
         );
     }
@@ -192,6 +255,19 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
               <span className="font-medium relative z-10">{item.label}</span>
             </button>
           ))}
+
+          <div className="pt-2 mt-2 border-t border-white/5">
+            <button
+              onClick={() => {
+                if (onOpenCalendar) onOpenCalendar();
+                else window.location.href = "/calendar";
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-all group"
+            >
+              <CalendarIcon className="w-5 h-5 group-hover:text-purple-400 transition-colors" />
+              <span className="font-medium">Calendar</span>
+            </button>
+          </div>
         </nav>
 
         <div className="p-4 border-t border-white/5 space-y-2">
@@ -220,12 +296,12 @@ export default function DashboardPage({ session, onLogout }: DashboardPageProps)
           <header className="flex justify-between items-end">
             <div>
               <h2 className="text-3xl font-bold text-white mb-2">Welcome back, {session?.user?.email?.split('@')[0] || 'User'}</h2>
-              <p className="text-zinc-400">Here's your productivity overview for today.</p>
+              <p className="text-zinc-400">Here's your cloud-synced productivity overview.</p>
             </div>
             <div className="flex gap-4">
               <GlassCard className="px-4 py-2 flex items-center gap-2 bg-purple-500/10 border-purple-500/20">
-                <Zap className="w-4 h-4 text-purple-400" />
-                <span className="text-sm font-bold text-purple-200">5 Day Streak</span>
+                <Globe className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-bold text-purple-200">Synced to cloud</span>
               </GlassCard>
             </div>
           </header>

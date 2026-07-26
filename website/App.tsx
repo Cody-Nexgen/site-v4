@@ -26,6 +26,7 @@ import {
 import ExtensionHandoffScreen from "@/components/extension-handoff-screen";
 import { isBillingReturnQuery } from "@/lib/billing-urls";
 import DashboardPage from "@/components/dashboard-page";
+import CalendarPage from "@/components/calendar-page";
 import ManageSubscriptionPage from "@/components/manage-subscription";
 import BlockedPage from "@/components/blocked-page";
 import OnboardingModal from "@/components/onboarding-modal";
@@ -46,6 +47,7 @@ function FocuzNowApp() {
     | "forgot_password"
     | "reset_password"
     | "dashboard"
+    | "calendar"
     | "manage_subscription"
     | "blocked"
     | "notion-auth"
@@ -67,8 +69,8 @@ function FocuzNowApp() {
   const [loading, setLoading] = useState(true);
   const [extensionHandoff, setExtensionHandoff] = useState<"idle" | "redirecting" | "done">("idle");
 
-  const beginExtensionHandoff = (opts?: { freshSignIn?: boolean }) => {
-    if (!shouldHandoffToExtension(opts)) return false;
+  const beginExtensionHandoff = () => {
+    if (!shouldHandoffToExtension()) return false;
     clearExtensionOAuthParam();
     setExtensionHandoff("redirecting");
     return true;
@@ -102,7 +104,17 @@ function FocuzNowApp() {
       const searchParams = new URLSearchParams(window.location.search);
       const viewQuery = searchParams.get("view");
 
-      const isDashboardPath = path === "/dashboard" || hash === "#dashboard" || viewQuery === "dashboard";
+      const isDashboardPath =
+        path === "/app" ||
+        path.startsWith("/app/") ||
+        path === "/dashboard" ||
+        hash === "#dashboard" ||
+        viewQuery === "dashboard";
+      const isCalendarPath =
+        path === "/calendar" ||
+        path.startsWith("/calendar/") ||
+        hash === "#calendar" ||
+        viewQuery === "calendar";
       const isManageSubPath = path === "/manage_subscription" || hash === "#manage_subscription" || viewQuery === "manage_subscription";
       const isBlockedPath = path === "/blocked" || hash === "#blocked" || viewQuery === "blocked";
       const isLoginPath = path === "/login" || path === "/signup" || hash === "#login" || hash === "#signup" || viewQuery === "login" || viewQuery === "signup";
@@ -191,7 +203,9 @@ function FocuzNowApp() {
           setShowOnboarding(true);
         }
 
-        if (isDashboardPath) {
+        if (isCalendarPath) {
+          setCurrentView("calendar");
+        } else if (isDashboardPath) {
           setCurrentView("dashboard");
         } else if (isManageSubPath) {
           setCurrentView("manage_subscription");
@@ -319,6 +333,15 @@ function FocuzNowApp() {
     window.history.pushState({}, "", "/dashboard");
   };
 
+  const goCalendar = () => {
+    if (!session) {
+      goLogin();
+      return;
+    }
+    setCurrentView("calendar");
+    window.history.pushState({}, "", "/calendar");
+  };
+
   const goManageSubscription = () => {
     if (!session) {
       goLogin();
@@ -415,8 +438,16 @@ function FocuzNowApp() {
         onLogout={() => {
           supabase.auth.signOut().then(() => goLanding());
         }}
+        onOpenCalendar={goCalendar}
       />
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // CALENDAR
+  // ---------------------------------------------------------------------------
+  if (currentView === "calendar" && session) {
+    return <CalendarPage session={session} onBack={goDashboard} />;
   }
 
   // ---------------------------------------------------------------------------
@@ -446,7 +477,7 @@ function FocuzNowApp() {
             if (!data.session) return;
             setSession(data.session);
             syncSessionWithExtension(data.session);
-            if (beginExtensionHandoff({ freshSignIn: true })) return;
+            if (beginExtensionHandoff()) return;
             goDashboard();
           });
         }}
