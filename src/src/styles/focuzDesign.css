@@ -187,3 +187,118 @@ html[data-dashboard-theme="light"] .focuz-modal-overlay {
     border-color: rgba(52, 211, 153, 0.3);
     background: rgba(52, 211, 153, 0.06);
 }
+
+/* Extension workspace shell — floating glass sidebar */
+.focuz-dashboard-shell {
+    display: grid;
+    grid-template-columns: 252px minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.75rem;
+    min-height: 100vh;
+    transition: grid-template-columns 0.3s ease, padding 0.3s ease;
+}
+
+.focuz-dashboard-shell.focuz-dashboard--sidebar-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr);
+    gap: 0;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+}
+
+.workspace-sidebar {
+    width: 240px;
+    min-width: 240px;
+    height: calc(100vh - 1.5rem);
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(13, 13, 14, 0.72);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.04) inset,
+        0 24px 48px -24px rgba(0, 0, 0, 0.65);
+    transition:
+        transform 0.3s ease,
+        width 0.3s ease,
+        min-width 0.3s ease,
+        opacity 0.3s ease,
+        margin 0.3s ease;
+    overflow: hidden;
+}
+
+.workspace-sidebar--collapsed {
+    transform: translateX(calc(-100% - 0.75rem));
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+    pointer-events: none;
+    margin-right: -0.75rem;
+}
+
+.workspace-main {
+    min-height: calc(100vh - 1.5rem);
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(10, 10, 11, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: margin 0.3s ease, max-width 0.3s ease;
+}
+
+.focuz-dashboard--sidebar-collapsed .workspace-main {
+    max-width: min(960px, 100%);
+    margin-inline: auto;
+    width: 100%;
+}
+
+.workspace-topbar {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(10, 10, 11, 0.92);
+    backdrop-filter: blur(8px);
+}
+
+.workspace-sidebar-toggle {
+    border-radius: 0.375rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(163, 163, 163, 1);
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.workspace-sidebar-toggle:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(229, 229, 229, 1);
+}
+
+/* Setup onboarding */
+.focuz-setup {
+    font-family: var(--fz-font-display);
+}
+
+.setup-split-card,
+.setup-glass-card {
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+}
+
+.setup-glass-card {
+    background: rgba(12, 12, 14, 0.82);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.05) inset,
+        0 32px 80px -24px rgba(0, 0, 0, 0.85);
+}
+
+html[data-dashboard-theme="light"] .workspace-sidebar {
+    background: rgba(255, 255, 255, 0.82);
+    border-color: rgba(24, 24, 27, 0.1);
+}
+
+html[data-dashboard-theme="light"] .workspace-main {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(24, 24, 27, 0.08);
+}
+
+html[data-dashboard-theme="light"] .workspace-topbar {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(24, 24, 27, 0.08);
+}

@@ -997,32 +997,66 @@ export default function SchedulingCalendarPage({
 
             <AnimatePresence>
                 {leftPanel === 'schedule-menu' && (
-                    <motion.aside
-                        initial={{ width: 0 }}
-                        animate={{ width: 220 }}
-                        exit={{ width: 0 }}
-                        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                        className="flex-shrink-0 border-r border-white/10 bg-[#111] overflow-hidden"
+                    <motion.div
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
                     >
-                        <div className="w-[220px] p-3 space-y-2">
-                            <button
-                                type="button"
-                                onClick={() => openRight('recurring')}
-                                className="glass-edge-btn w-full px-3 py-2.5 text-left text-xs font-medium text-white flex items-center gap-2"
-                            >
-                                <Link2 size={14} className="text-purple-400" />
-                                Recurring link
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => openRight('oneoff')}
-                                className="glass-edge-btn w-full px-3 py-2.5 text-left text-xs font-medium text-white flex items-center gap-2"
-                            >
-                                <Link2 size={14} className="text-blue-400" />
-                                One-off link
-                            </button>
-                        </div>
-                    </motion.aside>
+                        <button
+                            type="button"
+                            aria-label="Close"
+                            className="absolute inset-0 bg-black/55 backdrop-blur-md"
+                            onClick={() => setLeftPanel('none')}
+                        />
+                        <motion.div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="schedule-link-type-title"
+                            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                            className="relative z-10 w-full max-w-md rounded-2xl border border-white/12 bg-[rgba(22,24,32,0.72)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+                        >
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Scheduling</p>
+                            <h2 id="schedule-link-type-title" className="mt-1 text-xl font-semibold tracking-tight text-white">
+                                New scheduling link
+                            </h2>
+                            <p className="mt-1 text-sm text-neutral-400">
+                                Choose a recurring weekly link or a one-off date-based link.
+                            </p>
+                            <div className="mt-5 grid gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => openRight('recurring')}
+                                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left transition-colors hover:bg-white/[0.08]"
+                                >
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
+                                        <Link2 size={16} />
+                                    </span>
+                                    <span>
+                                        <span className="block text-sm font-medium text-white">Recurring link</span>
+                                        <span className="block text-xs text-neutral-500">Weekly availability that repeats</span>
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => openRight('oneoff')}
+                                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left transition-colors hover:bg-white/[0.08]"
+                                >
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
+                                        <Link2 size={16} />
+                                    </span>
+                                    <span>
+                                        <span className="block text-sm font-medium text-white">One-off link</span>
+                                        <span className="block text-xs text-neutral-500">Specific dates only</span>
+                                    </span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 

@@ -959,6 +959,68 @@ export async function updateEngineSettings(settings) {
     }
 }
 
+/**
+ * Merge cloud workspace state into the local engine (except integration secrets).
+ */
+export async function applyCloudWorkspaceState(remote) {
+    if (!remote || typeof remote !== 'object') return;
+
+    const settings = { ...remote };
+    delete settings.googleCalendarToken;
+    delete settings.notionToken;
+    delete settings.googleProfile;
+
+    if (settings.blocklist && typeof settings.blocklist === 'object') {
+        state.blocklist = {};
+        for (const domain of Object.keys(settings.blocklist)) {
+            const rawEntry = settings.blocklist[domain] || {};
+            const sources = Array.isArray(rawEntry.sources)
+                ? rawEntry.sources
+                : (rawEntry === true || rawEntry?.enabled ? ['manual'] : []);
+            state.blocklist[domain] = {
+                sources: new Set(sources.filter((source) =>
+                    ['manual', 'category', 'schedule', 'timer'].includes(source))),
+                categoryKeys: new Set(
+                    (Array.isArray(rawEntry.categoryKeys) ? rawEntry.categoryKeys : [])
+                        .filter(isSafeBlockCategoryKey),
+                ),
+            };
+        }
+        delete settings.blocklist;
+    }
+
+    if (Array.isArray(settings.allowedSites)) {
+        state.allowedSites = new Set(settings.allowedSites);
+        delete settings.allowedSites;
+    }
+
+    if (settings.regexBlocklist && typeof settings.regexBlocklist === 'object') {
+        state.regexBlocklist = {};
+        for (const pattern of Object.keys(settings.regexBlocklist)) {
+            const rawEntry = settings.regexBlocklist[pattern] || {};
+            const sources = Array.isArray(rawEntry.sources) ? rawEntry.sources : ['manual'];
+            state.regexBlocklist[pattern] = {
+                sources: new Set(sources),
+            };
+        }
+        delete settings.regexBlocklist;
+    }
+
+    if (settings.schedules && typeof settings.schedules === 'object') {
+        state.schedules = settings.schedules;
+        delete settings.schedules;
+    }
+
+    if (settings.categoriesActive && typeof settings.categoriesActive === 'object') {
+        state.categoriesActive = { ...state.categoriesActive, ...settings.categoriesActive };
+        delete settings.categoriesActive;
+    }
+
+    await updateEngineSettings(settings);
+    await saveState();
+    applyRules();
+}
+
 // =========================================================
 // STATE EXPORT
 // =========================================================

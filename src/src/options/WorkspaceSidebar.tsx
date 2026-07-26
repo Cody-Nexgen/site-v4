@@ -11,6 +11,7 @@ import {
     LogOut,
     Mic2,
     Moon,
+    PanelLeftClose,
     Search,
     Settings,
     ShoppingBag,
@@ -39,6 +40,8 @@ type Props = {
     username?: string;
     email?: string;
     isPro: boolean;
+    collapsed?: boolean;
+    onToggleCollapse?: () => void;
     onNavigate: (tab: string) => void;
     onOpenPalette: () => void;
     onUpgrade: () => void;
@@ -81,6 +84,8 @@ export function WorkspaceSidebar({
     username,
     email,
     isPro,
+    collapsed = false,
+    onToggleCollapse,
     onNavigate,
     onOpenPalette,
     onUpgrade,
@@ -140,7 +145,10 @@ export function WorkspaceSidebar({
     };
 
     return (
-        <aside className="workspace-sidebar relative flex h-screen w-[240px] min-w-[240px] flex-col overflow-x-hidden border-r border-white/[0.07] bg-[#0d0d0e]">
+        <aside
+            className={`workspace-sidebar relative flex flex-col overflow-x-hidden ${collapsed ? 'workspace-sidebar--collapsed' : ''}`}
+            aria-hidden={collapsed}
+        >
             <div ref={accountRef} className="relative flex h-11 items-center gap-1 px-2">
                 <button
                     ref={accountTriggerRef}
@@ -175,6 +183,17 @@ export function WorkspaceSidebar({
                 >
                     <Search size={13} />
                 </button>
+                {onToggleCollapse && (
+                    <button
+                        type="button"
+                        onClick={onToggleCollapse}
+                        className="workspace-sidebar-toggle flex h-7 w-7 shrink-0 items-center justify-center"
+                        aria-label="Collapse sidebar"
+                        title="Collapse sidebar"
+                    >
+                        <PanelLeftClose size={14} />
+                    </button>
+                )}
 
                 {accountOpen && (
                     <div

@@ -19,6 +19,7 @@ import {
     getTimers,
     getEngineState,
     updateEngineSettings,
+    applyCloudWorkspaceState,
     addAllowedSite,
     removeAllowedSite,
     startNuclearOption,
@@ -151,13 +152,60 @@ setTimerExpiredCallback(async (domain, durationMs) => {
     }
 });
 
-/** Integrations stay in extension local storage only — not the scheduling `profiles` table. */
+/** Cloud sync for workspace settings. Integration tokens stay local. */
+const SYNCABLE_KEYS = [
+    'blocklist', 'allowedSites', 'regexBlocklist', 'categoriesActive', 'schedules',
+    'activeDays', 'activeHours', 'dailyResetTime', 'redirectMessage', 'requireChallenge',
+    'trackBackgroundAudio', 'draggableTimer', 'pomodoroWidget', 'focusMode', 'inAppBlock',
+    'emergencyOverrideSettings', 'weeklyGoalHours', 'theme', 'customTheme', 'todos',
+    'dailyFocusTarget', 'profileName', 'profileInitial', 'profileAvatar', 'pomodoroSettings',
+    'habits', 'scratchpad', 'dailyPlanner', 'savedQuotes', 'dashboardLayout',
+    'proDashboardVisuals', 'notionJournalingEnabled',
+];
+
+function pickSyncableState(state) {
+    const payload = {};
+    for (const key of SYNCABLE_KEYS) {
+        if (state?.[key] !== undefined) payload[key] = state[key];
+    }
+    return payload;
+}
+
 async function syncSettingsToSupabase() {
-    return;
+    if (!currentSession?.user) return;
+    try {
+        const state = getEngineState();
+        const payload = pickSyncableState(state);
+        const { error } = await supabase.rpc('upsert_my_workspace_state', { p_state: payload });
+        if (error) {
+            console.error('[MessageRouter] upsert_my_workspace_state failed:', error);
+            return;
+        }
+        console.log('[MessageRouter] Workspace state synced to cloud');
+    } catch (e) {
+        console.error('[MessageRouter] syncSettingsToSupabase exception:', e?.message || e);
+    }
 }
 
 async function fetchSettingsFromSupabase() {
-    return;
+    if (!currentSession?.user) return;
+    try {
+        const { data, error } = await supabase.rpc('get_my_workspace_state');
+        if (error) {
+            console.error('[MessageRouter] get_my_workspace_state failed:', error);
+            return;
+        }
+        const row = Array.isArray(data) ? data[0] : data;
+        const remote = row?.state;
+        if (!remote || typeof remote !== 'object') {
+            await syncSettingsToSupabase();
+            return;
+        }
+        await applyCloudWorkspaceState(remote);
+        console.log('[MessageRouter] Workspace state loaded from cloud');
+    } catch (e) {
+        console.error('[MessageRouter] fetchSettingsFromSupabase exception:', e?.message || e);
+    }
 }
 
 async function syncNuclearWithSupabase() {
@@ -254,17 +302,20 @@ export function initMessageRouter() {
 
                     case "ADD_BLOCK":
                         await blockDomainManual(msg.domain);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
                         break;
 
                     case "REMOVE_BLOCK":
                         await unblockDomainManual(msg.domain);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
                         break;
 
                     case "CATEGORY_TOGGLE":
                         if (msg.enabled) await enableCategory(msg.category);
                         else await disableCategory(msg.category);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
                         break;
 
@@ -274,11 +325,13 @@ export function initMessageRouter() {
 
                     case "SCHEDULE_ADD":
                         const sId = await addDailySchedule(msg.domain, msg.startHour, msg.startMin, msg.endHour, msg.endMin, msg.days, msg.specificDate);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true, scheduleId: sId });
                         break;
 
                     case "SCHEDULE_REMOVE":
                         await removeDailySchedule(msg.domain, msg.scheduleId);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
                         break;
 
@@ -288,16 +341,19 @@ export function initMessageRouter() {
 
                     case "TIMER_START":
                         const tId = await startTimer(msg.domain, msg.durationMinutes);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true, timerId: tId });
                         break;
 
                     case "TIMER_CANCEL":
                         await cancelTimer(msg.domain, msg.timerId);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
                         break;
 
                     case "REMOVE_BLOCK_SOURCE":
                         await removeBlockSource(msg.domain, msg.source, msg.sourceId || null);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
                         break;
 
@@ -307,11 +363,13 @@ export function initMessageRouter() {
 
                     case "ADD_ALLOWED_SITE":
                         await addAllowedSite(msg.domain);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
                         break;
 
                     case "REMOVE_ALLOWED_SITE":
                         await removeAllowedSite(msg.domain);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
                         break;
 
@@ -430,6 +488,7 @@ export function initMessageRouter() {
                         const mins = msg.duration || 25;
                         const domain = msg.domain || "focus";
                         await startTimer(domain, mins);
+                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
                         break;
                     }
@@ -450,6 +509,7 @@ export function initMessageRouter() {
                                     },
                                 ],
                             });
+                            if (currentSession?.user) await syncSettingsToSupabase();
                         }
                         if (msg.openDashboard) {
                             await openOptionsWithTab('overview', {
@@ -465,6 +525,7 @@ export function initMessageRouter() {
                         const duration = Number(msg.duration) || 25;
                         if (domain) {
                             await startTimer(domain, duration);
+                            if (currentSession?.user) await syncSettingsToSupabase();
                         }
                         if (msg.openDashboard) {
                             await openOptionsWithTab('blocklist', {

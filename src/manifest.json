@@ -62,7 +62,8 @@
                 "http://localhost:3001/*",
                 "http://localhost:5173/*",
                 "https://focuznow.com/*",
-                "https://www.focuznow.com/*"
+                "https://www.focuznow.com/*",
+                "https://dashboard.focuznow.com/*"
             ],
             "js": [
                 "src/content/index.ts"
@@ -96,10 +97,11 @@
             "http://localhost:3001/*",
             "http://localhost:5173/*",
             "https://focuznow.com/*",
-            "https://www.focuznow.com/*"
-        ]
-    },
-    "web_accessible_resources": [
+            "https://www.focuznow.com/*",
+                "https://dashboard.focuznow.com/*"
+            ]
+        },
+        "web_accessible_resources": [
         {
             "resources": [
                 "public/icons/*",

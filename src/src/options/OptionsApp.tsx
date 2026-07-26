@@ -64,6 +64,16 @@ import {
 import { useHostBookingNotifications } from '../hooks/useHostBookingNotifications';
 import { OptionsCommandPalette } from './OptionsCommandPalette';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
+import SetupPage from './SetupPage';
+import {
+    isSetupComplete,
+    markSetupComplete,
+    openWebDashboard,
+    readSidebarCollapsed,
+    WEB_MANAGEMENT_TABS,
+    webAppTabUrl,
+    writeSidebarCollapsed,
+} from '../lib/workspaceSync';
 import { supabase } from '../lib/supabase';
 import {
     fetchMyProfile,
@@ -2401,6 +2411,8 @@ const OptionsApp = () => {
     const [focusToast, setFocusToast] = useState('');
     const [coachInitialPrompt, setCoachInitialPrompt] = useState<string | null>(null);
     const [futureSelfMirror, setFutureSelfMirror] = useState<FutureSelfMirror | null>(null);
+    const [setupDone, setSetupDone] = useState(isSetupComplete);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
 
     useEffect(() => {
         document.body.classList.add('focuz-dashboard');
@@ -2419,10 +2431,22 @@ const OptionsApp = () => {
 
     const navigateTab = (tab: string) => {
         const resolved = resolveTabId(tab);
+        if (WEB_MANAGEMENT_TABS.has(resolved)) {
+            chrome.tabs.create({ url: webAppTabUrl(resolved) });
+            return;
+        }
         setActiveTab(resolved);
         const url = new URL(window.location.href);
         url.searchParams.set('tab', resolved);
         window.history.replaceState({}, '', url.pathname + url.search);
+    };
+
+    const toggleSidebarCollapsed = () => {
+        setSidebarCollapsed((prev) => {
+            const next = !prev;
+            writeSidebarCollapsed(next);
+            return next;
+        });
     };
 
     const openCheckout = async () => {
@@ -2449,30 +2473,29 @@ const OptionsApp = () => {
 
     const applyTabFromUrl = () => {
         const tab = new URLSearchParams(window.location.search).get('tab');
-        if (tab) setActiveTab(resolveTabId(tab));
+        if (!tab) return;
+        const resolved = resolveTabId(tab);
+        if (WEB_MANAGEMENT_TABS.has(resolved)) {
+            chrome.tabs.create({ url: webAppTabUrl(resolved) });
+            return;
+        }
+        setActiveTab(resolved);
     };
 
     useEffect(() => {
         const listener = (msg: { type?: string; tab?: string }) => {
             if (msg.type === 'NAVIGATE_TAB' && msg.tab) {
-                const t = resolveTabId(msg.tab);
-                setActiveTab(t);
-                const url = new URL(window.location.href);
-                url.searchParams.set('tab', t);
-                window.history.replaceState({}, '', url.pathname + url.search);
+                navigateTab(msg.tab);
             }
         };
         const onCustomNav = (e: Event) => {
             const tab = (e as CustomEvent<string>).detail;
             if (!tab) return;
             const resolvedTab = resolveTabId(tab);
-            setActiveTab(resolvedTab);
-            const url = new URL(window.location.href);
-            url.searchParams.set('tab', resolvedTab);
-            if (url.searchParams.get('coachPrompt') === 'auto_schedule') {
+            if (resolvedTab === 'ai_coach' && new URLSearchParams(window.location.search).get('coachPrompt') === 'auto_schedule') {
                 setCoachInitialPrompt(AUTO_SCHEDULE_COACH_PROMPT);
             }
-            window.history.replaceState({}, '', url.pathname + url.search);
+            navigateTab(resolvedTab);
         };
         chrome.runtime.onMessage.addListener(listener);
         window.addEventListener('focus', applyTabFromUrl);
@@ -2504,7 +2527,12 @@ const OptionsApp = () => {
 
         const tab = params.get('tab');
         if (tab) {
-            setActiveTab(resolveTabId(tab));
+            const resolved = resolveTabId(tab);
+            if (WEB_MANAGEMENT_TABS.has(resolved)) {
+                chrome.tabs.create({ url: webAppTabUrl(resolved) });
+            } else {
+                setActiveTab(resolved);
+            }
         }
 
         if (params.get('coachPrompt') === 'auto_schedule') {
@@ -2530,6 +2558,18 @@ const OptionsApp = () => {
     useEffect(() => {
         if (session) void recordDashboardOpen();
     }, [session, recordDashboardOpen]);
+
+    useEffect(() => {
+        if (!session) return;
+        void chrome.storage.local.get(['setupCompleted'], (res) => {
+            if (res.setupCompleted && !isSetupComplete()) {
+                markSetupComplete();
+                setSetupDone(true);
+            } else if (!res.setupCompleted && isSetupComplete()) {
+                setSetupDone(true);
+            }
+        });
+    }, [session]);
 
     useEffect(() => {
         if (!session || !isPro || view !== 'app') return;
@@ -2560,6 +2600,28 @@ const OptionsApp = () => {
 
     if (!session) {
         return <AuthLogin />;
+    }
+
+    if (!setupDone) {
+        const blocklistCount = Object.keys(engineState?.blocklist || {}).length;
+        return (
+            <SetupPage
+                hasSession={!!session}
+                hasBlocklist={blocklistCount > 0}
+                historyConnected={!!useAuthStore.getState().historyPermission}
+                onComplete={() => setSetupDone(true)}
+                onOpenBlocklist={() => {
+                    markSetupComplete();
+                    setSetupDone(true);
+                    setActiveTab('blocklist');
+                }}
+                onImportHistory={() => {
+                    void useAuthStore.getState().setHistoryPermission(true).then(() =>
+                        useAuthStore.getState().importHistory(),
+                    );
+                }}
+            />
+        );
     }
 
     const renderContent = () => {
@@ -2597,7 +2659,9 @@ const OptionsApp = () => {
     };
 
     return (
-        <div className={`focuz-dashboard grid grid-cols-[240px_1fr] min-h-screen selection:bg-white/10 ${proGoldTheme ? 'pro-shell-vignette' : ''}`}>
+        <div
+            className={`focuz-dashboard focuz-dashboard-shell min-h-screen selection:bg-white/10 ${sidebarCollapsed ? 'focuz-dashboard--sidebar-collapsed' : ''} ${proGoldTheme ? 'pro-shell-vignette' : ''}`}
+        >
             {proVisuals && <ProConfettiGate />}
             
             {/* Sidebar */}
@@ -2607,6 +2671,8 @@ const OptionsApp = () => {
                 username={engineState.profileUsername || engineState.profileName}
                 email={session?.user?.email}
                 isPro={isPro}
+                collapsed={sidebarCollapsed}
+                onToggleCollapse={toggleSidebarCollapsed}
                 onNavigate={navigateTab}
                 onOpenPalette={() => setPaletteOpen(true)}
                 onUpgrade={() => void openCheckout()}
@@ -2614,11 +2680,31 @@ const OptionsApp = () => {
             />
 
             {/* Main Content */}
-            <main className="flex flex-col min-w-0 relative bg-[#0a0a0b] overflow-x-hidden h-screen">
+            <main className="workspace-main flex flex-col min-w-0 relative overflow-x-hidden">
                 {/* Topbar */}
-                <header className="h-11 shrink-0 px-6 flex items-center justify-between sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0b]">
-                    <h1 className="text-xs font-medium text-neutral-400">{tabLabel(activeTab)}</h1>
+                <header className="workspace-topbar h-11 shrink-0 px-6 flex items-center justify-between sticky top-0 z-50">
                     <div className="flex items-center gap-2">
+                        {sidebarCollapsed && (
+                            <button
+                                type="button"
+                                onClick={toggleSidebarCollapsed}
+                                className="workspace-sidebar-toggle mr-1"
+                                aria-label="Expand sidebar"
+                            >
+                                <IconMaximize2 size={14} />
+                            </button>
+                        )}
+                        <h1 className="text-xs font-medium text-neutral-400">{tabLabel(activeTab)}</h1>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => openWebDashboard()}
+                            className="flex h-7 items-center gap-1.5 rounded-md border border-violet-500/25 bg-violet-500/10 px-2.5 text-[11px] font-medium text-violet-200 transition-colors hover:bg-violet-500/15 hover:text-violet-100"
+                        >
+                            <IconExternalLink size={12} />
+                            Open web dashboard
+                        </button>
                         {!isPro && (
                             <button
                                 type="button"
