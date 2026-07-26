@@ -7,9 +7,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(process.cwd()),
+      '@focuz': resolve(process.cwd(), 'src/focuz'),
     },
   },
   build: {
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       input: {
         main: resolve(process.cwd(), 'index.html'),
@@ -26,5 +28,8 @@ export default defineConfig({
         notFound: resolve(process.cwd(), '404.html'),
       },
     },
+  },
+  optimizeDeps: {
+    include: ['zustand', 'framer-motion', 'lucide-react', 'date-fns'],
   },
 });

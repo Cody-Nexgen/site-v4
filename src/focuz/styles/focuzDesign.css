@@ -1,0 +1,291 @@
+/* Focuz Design Language — premium productivity, not AI-dashboard */
+
+:root {
+    --fz-bg: #0a0a0b;
+    --fz-surface: #121214;
+    --fz-surface-raised: #171719;
+    --fz-surface-overlay: #1c1c1f;
+    --fz-border: rgba(255, 255, 255, 0.07);
+    --fz-border-strong: rgba(255, 255, 255, 0.11);
+    --fz-text: #ededee;
+    --fz-text-secondary: #a0a0a6;
+    --fz-text-tertiary: #66666d;
+    --fz-accent: #d7d7db;
+    --fz-accent-muted: rgba(255, 255, 255, 0.08);
+    --fz-accent-warm: #f59e0b;
+    --fz-success: #34d399;
+    --fz-danger: #f87171;
+    --fz-radius-sm: 5px;
+    --fz-radius-md: 7px;
+    --fz-radius-lg: 8px;
+    --fz-shadow-sm: none;
+    --fz-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.45);
+    --fz-font-display: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html[data-dashboard-theme="light"] {
+    --fz-bg: #f7f7f8;
+    --fz-surface: #ffffff;
+    --fz-surface-raised: #ffffff;
+    --fz-surface-overlay: #f1f1f3;
+    --fz-border: rgba(20, 20, 24, 0.09);
+    --fz-border-strong: rgba(20, 20, 24, 0.15);
+    --fz-text: #18181b;
+    --fz-text-secondary: #52525b;
+    --fz-text-tertiary: #71717a;
+    --fz-accent: #27272a;
+    --fz-accent-muted: rgba(20, 20, 24, 0.07);
+    --fz-shadow-md: 0 12px 32px rgba(24, 24, 27, 0.14);
+}
+
+.focuznow-calendar {
+    --cal-bg: #181819;
+    --cal-surface: #202021;
+    --cal-surface-raised: #28282a;
+    --cal-border: rgba(255, 255, 255, 0.065);
+    --cal-accent: #ff5a5f;
+    --cal-accent-muted: rgba(255, 90, 95, 0.13);
+    --cal-today: #ff5a5f;
+    --cal-weekend: transparent;
+    --cal-now: #ff5a5f;
+    --cal-hour: #77777d;
+    --cal-event-radius: 4px;
+    color-scheme: dark;
+    background-color: var(--cal-bg);
+    font-family: var(--fz-font-display);
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar {
+    --cal-bg: #f7f7f8;
+    --cal-surface: #ffffff;
+    --cal-surface-raised: #f0f0f2;
+    --cal-border: rgba(20, 20, 24, 0.1);
+    --cal-accent-muted: rgba(225, 48, 55, 0.11);
+    --cal-hour: #71717a;
+    color-scheme: light;
+}
+
+html:has(.focuznow-calendar),
+html:has(.focuznow-calendar) body {
+    background-color: var(--cal-bg);
+}
+
+.focuz-surface-card {
+    background: var(--fz-surface);
+    border: 1px solid var(--fz-border);
+    border-radius: var(--fz-radius-lg);
+    box-shadow: var(--fz-shadow-sm);
+}
+
+.focuz-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fz-text-tertiary);
+}
+
+.focuz-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: rgba(8, 8, 10, 0.82);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+html[data-dashboard-theme="light"] .focuz-modal-overlay {
+    background: rgba(24, 24, 27, 0.42);
+}
+
+.focuz-modal-panel {
+    width: 100%;
+    max-width: 32rem;
+    max-height: min(88vh, 720px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--fz-surface-raised);
+    border: 1px solid var(--fz-border-strong);
+    border-radius: var(--fz-radius-lg);
+    box-shadow: var(--fz-shadow-md);
+}
+
+.focuz-modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--fz-border);
+}
+
+.focuz-modal-body {
+    padding: 1.25rem 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.focuz-modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--fz-border);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.focuz-btn-primary {
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--fz-radius-md);
+    background: var(--fz-accent);
+    color: #0c1220;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    transition: filter 0.15s;
+}
+
+.focuz-btn-primary:hover {
+    filter: brightness(1.08);
+}
+
+.focuz-btn-ghost {
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--fz-radius-md);
+    background: var(--fz-accent-muted);
+    color: var(--fz-text-secondary);
+    font-weight: 600;
+    font-size: 0.8125rem;
+}
+
+.focuz-btn-ghost:hover {
+    background: color-mix(in srgb, var(--fz-accent-muted) 150%, transparent);
+    color: var(--fz-text);
+}
+
+.focuz-category-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--fz-radius-md);
+    border: 1px solid var(--fz-border);
+    background: color-mix(in srgb, var(--fz-accent-muted) 35%, transparent);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.focuz-category-chip:hover {
+    border-color: var(--fz-border-strong);
+    background: color-mix(in srgb, var(--fz-accent-muted) 70%, transparent);
+}
+
+.focuz-category-chip.is-blocked {
+    border-color: rgba(248, 113, 113, 0.35);
+    background: rgba(248, 113, 113, 0.08);
+}
+
+.focuz-category-chip.is-allowed {
+    border-color: rgba(52, 211, 153, 0.3);
+    background: rgba(52, 211, 153, 0.06);
+}
+
+/* Extension workspace shell — floating glass sidebar */
+.focuz-dashboard-shell {
+    display: grid;
+    grid-template-columns: 252px minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.75rem;
+    min-height: 100vh;
+    transition: grid-template-columns 0.3s ease, padding 0.3s ease;
+}
+
+.focuz-dashboard-shell.focuz-dashboard--sidebar-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr);
+    gap: 0;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+}
+
+.workspace-sidebar {
+    width: 240px;
+    min-width: 240px;
+    height: calc(100vh - 1.5rem);
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(13, 13, 14, 0.72);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.04) inset,
+        0 24px 48px -24px rgba(0, 0, 0, 0.65);
+    transition:
+        transform 0.3s ease,
+        width 0.3s ease,
+        min-width 0.3s ease,
+        opacity 0.3s ease,
+        margin 0.3s ease;
+    overflow: hidden;
+}
+
+.workspace-sidebar--collapsed {
+    transform: translateX(calc(-100% - 0.75rem));
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+    pointer-events: none;
+    margin-right: -0.75rem;
+}
+
+.workspace-main {
+    min-height: calc(100vh - 1.5rem);
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(10, 10, 11, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: margin 0.3s ease, max-width 0.3s ease;
+}
+
+.focuz-dashboard--sidebar-collapsed .workspace-main {
+    max-width: min(960px, 100%);
+    margin-inline: auto;
+    width: 100%;
+}
+
+.workspace-topbar {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(10, 10, 11, 0.92);
+    backdrop-filter: blur(8px);
+}
+
+.workspace-sidebar-toggle {
+    border-radius: 0.375rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(163, 163, 163, 1);
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.workspace-sidebar-toggle:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(229, 229, 229, 1);
+}
+
+/* Setup onboarding — modern SaaS / 1Password-style */
+.focuz-setup {
+    font-family: var(--fz-font-display), ui-sans-serif, system-ui, sans-serif;
+}
+
+html[data-dashboard-theme="light"] .workspace-sidebar {
+    background: rgba(255, 255, 255, 0.82);
+    border-color: rgba(24, 24, 27, 0.1);
+}
+
+html[data-dashboard-theme="light"] .workspace-main {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(24, 24, 27, 0.08);
+}
+
+html[data-dashboard-theme="light"] .workspace-topbar {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(24, 24, 27, 0.08);
+}

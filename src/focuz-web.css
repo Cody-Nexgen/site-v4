@@ -1,0 +1,12 @@
+/* Web host styles for the ported OptionsApp (Tailwind v3 scans focuz sources). */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body.focuz-dashboard,
+.focuz-dashboard {
+  background: #0a0a0a;
+  color: #fafafa;
+}

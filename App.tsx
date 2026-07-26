@@ -23,8 +23,7 @@ import {
 } from "@/lib/extension-utils";
 import ExtensionHandoffScreen from "@/components/extension-handoff-screen";
 import { isBillingReturnQuery } from "@/lib/billing-urls";
-import DashboardPage from "@/components/dashboard-page";
-import CalendarPage from "@/components/calendar-page";
+import WebOptionsApp from "@/components/WebOptionsApp";
 import ManageSubscriptionPage from "@/components/manage-subscription";
 import BlockedPage from "@/components/blocked-page";
 import OnboardingModal from "@/components/onboarding-modal";
@@ -386,23 +385,21 @@ function FocuzNowApp() {
   // ---------------------------------------------------------------------------
   // DASHBOARD (REDIRECTING)
   // ---------------------------------------------------------------------------
-  if (currentView === "dashboard" && session) {
+  if ((currentView === "dashboard" || currentView === "calendar") && session) {
+    if (currentView === "calendar" && typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.get("tab")) {
+        url.searchParams.set("tab", "calendar");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      }
+    }
     return (
-      <DashboardPage
-        session={session}
+      <WebOptionsApp
         onLogout={() => {
           supabase.auth.signOut().then(() => goLanding());
         }}
-        onOpenCalendar={goCalendar}
       />
     );
-  }
-
-  // ---------------------------------------------------------------------------
-  // CALENDAR
-  // ---------------------------------------------------------------------------
-  if (currentView === "calendar" && session) {
-    return <CalendarPage session={session} onBack={goDashboard} />;
   }
 
   // ---------------------------------------------------------------------------
