@@ -63,19 +63,7 @@ import {
 } from '../lib/accountApi';
 import { useHostBookingNotifications } from '../hooks/useHostBookingNotifications';
 import { OptionsCommandPalette } from './OptionsCommandPalette';
-import { MobileNavTrigger, WorkspaceSidebar } from './WorkspaceSidebar';
-import {
-    Button as HeroButton,
-    Card as HeroCard,
-    Spinner as HeroSpinner,
-} from '@heroui/react';
-import {
-    ConfirmDialog,
-    DashboardSwitch,
-    PageHeading,
-    SectionCard,
-    SettingRow,
-} from '../components/dashboard/shell';
+import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { supabase } from '../lib/supabase';
 import {
     fetchMyProfile,
@@ -108,13 +96,13 @@ import type { FutureSelfBlockedSummary, FutureSelfMirror } from '../lib/futureSe
 // --- GLASSMORPHISM COMPONENTS ---
 
 export const GlassCard = ({ children, className = "", onClick, style }: { children: React.ReactNode, className?: string, onClick?: (e: React.MouseEvent) => void, style?: React.CSSProperties }) => (
-    <HeroCard
-        onClick={onClick as never}
+    <div
+        onClick={onClick}
         style={style}
-        className={`relative overflow-hidden border border-[var(--fz-border)] bg-[var(--fz-surface)] shadow-none ${onClick ? 'cursor-pointer transition-colors hover:bg-[var(--fz-interactive)]' : ''} ${className}`}
+        className={`surface-card relative overflow-hidden ${onClick ? 'cursor-pointer hover:bg-white/[0.025] transition-colors' : ''} ${className}`}
     >
-        <HeroCard.Content className="relative z-10 p-0">{children}</HeroCard.Content>
-    </HeroCard>
+        <div className="relative z-10">{children}</div>
+    </div>
 );
 
 
@@ -569,57 +557,65 @@ export const SettingsTab = () => {
     };
 
     return (
-        <div className="mx-auto w-full max-w-[820px] animate-fade-in-up space-y-5">
-            <PageHeading
-                eyebrow="Settings"
-                title="Preferences"
-                description="Tune how FocuzNow looks, tracks activity, and protects focus time."
-            />
+        <div className="mx-auto w-full max-w-[820px] animate-fade-in-up space-y-4">
+            <div className="border-b border-[var(--dashboard-border)] pb-4">
+                <p className="focuz-section-label mb-1">Settings</p>
+                <h2 className="text-2xl font-semibold tracking-tight text-[var(--dashboard-text)]">Preferences</h2>
+                <p className="mt-1 text-sm text-[var(--dashboard-text-muted)]">Tune how FocuzNow looks, tracks activity, and protects focus time.</p>
+            </div>
             <BrowsingHistorySettings />
             <Customization />
-            <SectionCard
-                title="Safety controls"
-                description="Protect focus time with reversible, logged overrides."
-                contentClassName="space-y-5"
-            >
-                <SettingRow
-                    title="Emergency override"
-                    description="On blocked pages, users can request temporary access by explaining why. All requests are logged. Disabled during Nuclear Lockdown."
-                    control={
-                        <DashboardSwitch
-                            isSelected={override.enabled}
-                            onChange={(value) => void patchOverride({ enabled: value })}
-                            aria-label={`${override.enabled ? 'Disable' : 'Enable'} emergency override`}
-                        />
-                    }
-                />
-                {override.enabled ? (
-                    <p className="border-t border-[var(--fz-border)] pt-3 text-[11px] text-[var(--fz-text-tertiary)]">
+            <div className="pt-1">
+                <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--dashboard-text-muted)]">Safety controls</p>
+            </div>
+            <GlassCard className="p-4">
+                <div className="flex items-center justify-between gap-6">
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-medium text-[var(--dashboard-text)]">Emergency override</h3>
+                        <p className="mt-1 max-w-lg text-xs leading-relaxed text-[var(--dashboard-text-muted)]">
+                            On blocked pages, users can request temporary access by explaining why.
+                            All requests are logged. Disabled during Nuclear Lockdown.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => patchOverride({ enabled: !override.enabled })}
+                        aria-label={`${override.enabled ? 'Disable' : 'Enable'} emergency override`}
+                        aria-pressed={override.enabled}
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${override.enabled ? 'bg-amber-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
+                    >
+                        <div className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${override.enabled ? 'left-6' : 'left-1'}`} />
+                    </button>
+                </div>
+                {override.enabled && (
+                    <p className="mt-3 border-t border-[var(--dashboard-border)] pt-3 text-[11px] text-[var(--dashboard-text-muted)]">
                         {override.maxPerDay} uses/day · {override.accessMinutes} min access · {override.minReasonLength}+ char reason · {override.cooldownMinutes} min cooldown
                     </p>
-                ) : null}
-                <SettingRow
-                    title="Unblocking challenge"
-                    description="Require a typing test before unblocking any site during active hours."
-                    control={
-                        <DashboardSwitch
-                            isSelected={Boolean(engineState.requireChallenge)}
-                            onChange={(value) => {
-                                void new Promise<void>((resolve) =>
-                                    chrome.runtime.sendMessage(
-                                        {
-                                            type: 'UPDATE_ENGINE_SETTINGS',
-                                            settings: { requireChallenge: value },
-                                        },
-                                        () => resolve(),
-                                    ),
-                                ).then(() => fetchEngineState());
-                            }}
-                            aria-label={`${engineState.requireChallenge ? 'Disable' : 'Enable'} unblocking challenge`}
-                        />
-                    }
-                />
-            </SectionCard>
+                )}
+            </GlassCard>
+            <GlassCard className="p-4">
+                <div className="flex items-center justify-between gap-6">
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-medium text-[var(--dashboard-text)]">Unblocking challenge</h3>
+                        <p className="mt-1 text-xs text-[var(--dashboard-text-muted)]">Require a typing test before unblocking any site during active hours.</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            await new Promise<void>(r => chrome.runtime.sendMessage({
+                                type: 'UPDATE_ENGINE_SETTINGS',
+                                settings: { requireChallenge: !engineState.requireChallenge }
+                            }, () => r()));
+                            fetchEngineState();
+                        }}
+                        aria-label={`${engineState.requireChallenge ? 'Disable' : 'Enable'} unblocking challenge`}
+                        aria-pressed={Boolean(engineState.requireChallenge)}
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${engineState.requireChallenge ? 'bg-purple-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
+                    >
+                        <div className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${engineState.requireChallenge ? 'left-6' : 'left-1'}`} />
+                    </button>
+                </div>
+            </GlassCard>
         </div>
     );
 };
@@ -2401,7 +2397,6 @@ const OptionsApp = () => {
     const [blockedUrl, setBlockedUrl] = useState('');
     const [showEndSession, setShowEndSession] = useState(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
-    const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [focusToast, setFocusToast] = useState('');
     const [coachInitialPrompt, setCoachInitialPrompt] = useState<string | null>(null);
@@ -2553,11 +2548,8 @@ const OptionsApp = () => {
 
     if (loading && !session) {
         return (
-            <div className="focuz-dashboard flex min-h-screen items-center justify-center bg-[var(--fz-bg)]">
-                <div className="flex flex-col items-center gap-3" role="status" aria-live="polite">
-                    <HeroSpinner />
-                    <p className="text-sm text-[var(--fz-text-secondary)]">Loading FocuzNow…</p>
-                </div>
+            <div className="flex items-center justify-center min-h-screen bg-black">
+                <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }
@@ -2604,13 +2596,11 @@ const OptionsApp = () => {
         }
     };
 
-    const flushTabs = ['calendar', 'lists', 'ai_coach', 'focus_rooms'];
-    const isFlush = flushTabs.includes(activeTab);
-
     return (
-        <div className={`focuz-dashboard workspace-shell selection:bg-[var(--fz-accent-muted)] ${proGoldTheme ? 'pro-shell-vignette' : ''}`}>
+        <div className={`focuz-dashboard grid grid-cols-[240px_1fr] min-h-screen selection:bg-white/10 ${proGoldTheme ? 'pro-shell-vignette' : ''}`}>
             {proVisuals && <ProConfettiGate />}
-
+            
+            {/* Sidebar */}
             <WorkspaceSidebar
                 activeTab={activeTab}
                 avatarUrl={engineState.profileAvatar}
@@ -2621,44 +2611,33 @@ const OptionsApp = () => {
                 onOpenPalette={() => setPaletteOpen(true)}
                 onUpgrade={() => void openCheckout()}
                 onSignOut={() => void useAuthStore.getState().signOut()}
-                mobileOpen={mobileNavOpen}
-                onMobileOpenChange={setMobileNavOpen}
             />
 
-            <main className="workspace-main relative overflow-x-hidden">
-                <header className="workspace-topbar">
-                    <div className="flex min-w-0 items-center gap-2">
-                        <MobileNavTrigger onPress={() => setMobileNavOpen(true)} />
-                        <div className="min-w-0">
-                            <h1 className="truncate text-sm font-semibold text-[var(--fz-text)]">
-                                {tabLabel(activeTab)}
-                            </h1>
-                            <p className="hidden truncate text-[11px] text-[var(--fz-text-tertiary)] sm:block">
-                                Stay focused on one useful next step.
-                            </p>
-                        </div>
-                    </div>
+            {/* Main Content */}
+            <main className="flex flex-col min-w-0 relative bg-[#0a0a0b] overflow-x-hidden h-screen">
+                {/* Topbar */}
+                <header className="h-11 shrink-0 px-6 flex items-center justify-between sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0b]">
+                    <h1 className="text-xs font-medium text-neutral-400">{tabLabel(activeTab)}</h1>
                     <div className="flex items-center gap-2">
-                        <HeroButton
-                            size="sm"
-                            variant="ghost"
-                            aria-label="Open command palette"
-                            onPress={() => setPaletteOpen(true)}
-                        >
-                            Search
-                        </HeroButton>
                         {!isPro && (
-                            <HeroButton size="sm" variant="secondary" onPress={() => void openCheckout()}>
+                            <button
+                                type="button"
+                                onClick={() => void openCheckout()}
+                                className="flex h-7 items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.035] px-2.5 text-[11px] font-medium text-neutral-400 transition-colors hover:bg-white/[0.06] hover:text-neutral-200"
+                            >
                                 Upgrade
-                            </HeroButton>
+                            </button>
                         )}
                     </div>
                 </header>
 
-                <div className={isFlush ? 'workspace-content workspace-content--flush' : 'workspace-content scrollbar-hide'}>
+                <div className={['calendar', 'lists', 'ai_coach', 'focus_rooms'].includes(activeTab)
+                    ? 'flex-1 min-h-0 w-full overflow-hidden'
+                    : 'px-6 pb-12 w-full overflow-y-auto scrollbar-hide'}
+                >
                     <div
                         key={activeTab}
-                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${isFlush ? 'h-full' : 'mx-auto w-full max-w-6xl'}`}
+                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${['calendar', 'lists', 'ai_coach', 'focus_rooms'].includes(activeTab) ? 'h-full' : ''}`}
                     >
                         {renderContent()}
                     </div>
@@ -2691,15 +2670,19 @@ const OptionsApp = () => {
                 <ProFocusToast message={focusToast} onDone={() => setFocusToast('')} />
             )}
 
-            <ConfirmDialog
-                open={showEndSession}
-                title="End session?"
-                description="Are you sure you want to end your session? This will lock the dashboard until you authenticate again."
-                confirmLabel="End session"
-                danger
-                onClose={() => setShowEndSession(false)}
-                onConfirm={() => void useAuthStore.getState().signOut()}
-            />
+            {/* Modals */}
+            {showEndSession && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <GlassCard className="max-w-md w-full p-8 space-y-6 animate-fade-in-up">
+                        <h3 className="text-base font-bold text-white">End Session?</h3>
+                        <p className="text-neutral-400 text-sm">Are you sure you want to end your session? This will lock the dashboard until you authenticate again.</p>
+                        <div className="flex space-x-3 pt-4">
+                            <button onClick={() => setShowEndSession(false)} className="flex-1 py-3 bg-white/5 border border-white/10 text-white rounded-xl font-bold hover:bg-white/10 transition-all">Cancel</button>
+                            <button onClick={() => useAuthStore.getState().signOut()} className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all">End Session</button>
+                        </div>
+                    </GlassCard>
+                </div>
+            )}
         </div>
     );
 };

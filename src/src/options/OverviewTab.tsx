@@ -1,7 +1,7 @@
 import { useAuthStore } from '../lib/store';
 import { useMemo, useState, useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import { Button, Card, Checkbox, Input, Modal, useOverlayState } from '@heroui/react';
+import { Plus, Check, Trash2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useProDashboardVisuals } from '../lib/proDashboard';
 import { capDayScreenMs } from '../lib/screenTimeCap';
 import { ProDashboardHero } from '../components/pro-dashboard/ProDashboardVisuals';
@@ -12,25 +12,9 @@ import { useFocusProgression, sendProgressionMessage } from '../hooks/useFocusPr
 import { FocusLevelCard } from '../components/FocusLevelCard';
 import { ActivityGraph } from './OptionsApp';
 import { computeHabitStreak } from '../lib/habitStreak';
-import {
-    DashboardEmptyState,
-    MetricCard,
-    PageHeading,
-    SectionCard,
-    StatusChip,
-} from '../components/dashboard/shell';
 
 export default function OverviewTab() {
-    const {
-        streak,
-        engineState,
-        last7DaysStats,
-        fetchEngineState,
-        offsetWeeks,
-        setOffsetWeeks,
-        dashboardStreak,
-        importHistory,
-    } = useAuthStore();
+    const { streak, engineState, last7DaysStats, fetchEngineState, offsetWeeks, setOffsetWeeks, dashboardStreak, importHistory } = useAuthStore();
     const { proGoldTheme, enabled: proVisuals } = useProDashboardVisuals();
     const { progression } = useFocusProgression();
 
@@ -70,17 +54,11 @@ export default function OverviewTab() {
     const [newTaskName, setNewTaskName] = useState('');
     const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
     const [habitModalOpen, setHabitModalOpen] = useState(false);
-    const [selectedDay, setSelectedDay] = useState<(typeof last7DaysStats)[0] | null>(null);
-    const dayDetailState = useOverlayState({
-        isOpen: !!selectedDay,
-        onOpenChange: (open) => {
-            if (!open) setSelectedDay(null);
-        },
-    });
+    const [selectedDay, setSelectedDay] = useState<typeof last7DaysStats[0] | null>(null);
 
     const addHabitByName = async (name: string) => {
         const updated = [...habits, { id: Date.now(), name, streak: 0, checkins: [], lastCheckin: '' }];
-        await new Promise<void>((r) =>
+        await new Promise<void>(r =>
             chrome.runtime.sendMessage(
                 { type: 'UPDATE_ENGINE_SETTINGS', settings: { habits: updated } },
                 () => r(),
@@ -100,12 +78,7 @@ export default function OverviewTab() {
             const checkins = [...(h.checkins || []), dateStr];
             return { ...h, checkins, streak: computeHabitStreak(checkins) };
         });
-        await new Promise<void>((r) =>
-            chrome.runtime.sendMessage(
-                { type: 'UPDATE_ENGINE_SETTINGS', settings: { habits: updated } },
-                () => r(),
-            ),
-        );
+        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { habits: updated } }, () => r()));
         await fetchEngineState();
         await sendProgressionMessage({ type: 'PROGRESSION_HABIT_CHECKIN', habitId: id });
         useAuthStore.getState().recalculateStreak();
@@ -114,26 +87,14 @@ export default function OverviewTab() {
     const addPlanItem = async () => {
         if (!newTaskName.trim()) return;
         const updated = [...planner, { id: Date.now(), time: 'Anytime', task: newTaskName.trim(), done: false }];
-        await new Promise<void>((r) =>
-            chrome.runtime.sendMessage(
-                { type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } },
-                () => r(),
-            ),
-        );
+        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } }, () => r()));
         setNewTaskName('');
         fetchEngineState();
     };
 
     const togglePlanItem = async (id: number) => {
-        const updated = planner.map((p: { id: number; done: boolean }) =>
-            p.id === id ? { ...p, done: !p.done } : p,
-        );
-        await new Promise<void>((r) =>
-            chrome.runtime.sendMessage(
-                { type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } },
-                () => r(),
-            ),
-        );
+        const updated = planner.map((p: { id: number; done: boolean }) => (p.id === id ? { ...p, done: !p.done } : p));
+        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } }, () => r()));
         fetchEngineState();
     };
 
@@ -142,7 +103,7 @@ export default function OverviewTab() {
         setDeletingTaskId(id);
         try {
             const updated = planner.filter((p: { id: number }) => p.id !== id);
-            await new Promise<void>((r) =>
+            await new Promise<void>(r =>
                 chrome.runtime.sendMessage(
                     { type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } },
                     () => r(),
@@ -158,7 +119,7 @@ export default function OverviewTab() {
     const todayStr = today.toDateString();
     const pomodoroToday =
         engineState.pomodoroSettings?.lastDate === todayStr
-            ? (engineState.pomodoroSettings?.sessionsCompleted ?? 0)
+            ? engineState.pomodoroSettings?.sessionsCompleted ?? 0
             : 0;
 
     const weekStats = useMemo(() => {
@@ -191,281 +152,237 @@ export default function OverviewTab() {
     );
 
     const doneTasks = planner.filter((p: { done: boolean }) => p.done).length;
-    const focusActive = Boolean(engineState.focusMode);
 
     return (
-        <div className="relative space-y-6 pb-10 pt-2 animate-fade-in-up pro-page-enter font-sans">
+        <div className="relative space-y-10 pt-6 animate-fade-in-up pro-page-enter pb-24 font-sans w-full max-w-5xl mx-auto">
             {proGoldTheme && proVisuals && <ProDashboardHero streak={streak} blockedToday={blockedCount} />}
             {progression && <FocusLevelCard progression={progression} compact />}
 
-            <PageHeading
-                eyebrow={today.toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                })}
-                title="Dashboard"
-                description="See today’s progress, start the next useful action, and keep distractions blocked."
-                actions={<StatusChip tone="success">Live sync</StatusChip>}
-            />
+            <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <div>
+                    <p className="text-[11px] font-semibold text-neutral-500 tracking-wide mb-2">
+                        {today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </p>
+                    <h1 className="text-4xl sm:text-5xl font-semibold text-white tracking-tight">Dashboard</h1>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
+                    <span className="inline-flex w-2 h-2 rounded-full bg-emerald-400" />
+                    Live sync
+                </div>
+            </header>
 
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <MetricCard
-                    label="Focuz score"
-                    value={String(focusResult.score)}
-                    accent={focusScoreColor(focusResult.score)}
-                    hint={`${pomodoroToday} sessions today`}
-                />
-                <MetricCard label="Screen time" value={formatTime(todayTotal)} hint={isUp ? `↑ ${diffPercent}% vs yesterday` : `↓ ${diffPercent}% vs yesterday`} />
-                <MetricCard label="Blocked" value={String(blockedCount)} accent="var(--fz-danger)" hint={focusActive ? 'Focus mode on' : 'Focus mode off'} />
-                <MetricCard label="Streak" value={`${dashboardStreak}d`} accent="var(--fz-accent-warm)" hint={`${doneTasks}/${planner.length} tasks done`} />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                    { label: 'Focuz score', value: String(focusResult.score), accent: focusScoreColor(focusResult.score) },
+                    { label: 'Screen time', value: formatTime(todayTotal), accent: '#fff' },
+                    { label: 'Blocked', value: String(blockedCount), accent: '#f87171' },
+                    { label: 'Streak', value: `${dashboardStreak}d`, accent: '#c4b5fd' },
+                ].map((stat) => (
+                    <div key={stat.label} className="rounded-2xl border border-white/[0.06] bg-[#0c0c0e] px-5 py-5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">{stat.label}</p>
+                        <p className="text-2xl font-semibold mt-2 tabular-nums" style={{ color: stat.accent }}>{stat.value}</p>
+                    </div>
+                ))}
             </div>
 
-            <SectionCard
-                title="Weekly activity"
-                description={`${weekRangeLabel} · ${pomodoroToday} focus sessions today`}
-                actions={
-                    <div className="flex items-center gap-1">
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            isIconOnly
+            <section className="rounded-2xl border border-white/[0.06] bg-[#0c0c0e] overflow-hidden">
+                <div className="px-6 pt-6 pb-3 flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h2 className="text-sm font-semibold text-white">Weekly activity</h2>
+                        <p className="text-[11px] text-neutral-500 mt-1">
+                            {isUp ? '↑' : '↓'} {diffPercent}% vs yesterday · {pomodoroToday} sessions today
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-medium text-neutral-500">{weekRangeLabel}</span>
+                        <button
+                            type="button"
+                            disabled={!canGoOlder}
+                            onClick={() => setOffsetWeeks(offsetWeeks + 1)}
+                            className="w-7 h-7 rounded-lg text-neutral-400 hover:bg-white/[0.06] hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                             aria-label="Older week"
-                            isDisabled={!canGoOlder}
-                            onPress={() => setOffsetWeeks(offsetWeeks + 1)}
                         >
                             ‹
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            isIconOnly
+                        </button>
+                        <button
+                            type="button"
+                            disabled={offsetWeeks === 0}
+                            onClick={() => setOffsetWeeks(Math.max(0, offsetWeeks - 1))}
+                            className="w-7 h-7 rounded-lg text-neutral-400 hover:bg-white/[0.06] hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                             aria-label="Newer week"
-                            isDisabled={offsetWeeks === 0}
-                            onPress={() => setOffsetWeeks(Math.max(0, offsetWeeks - 1))}
                         >
                             ›
-                        </Button>
+                        </button>
                     </div>
-                }
-                contentClassName="space-y-3"
-            >
-                <div className="h-56 sm:h-64 md:h-72">
+                </div>
+                <div className="px-2 pb-4 h-56 sm:h-64 md:h-72">
                     <ActivityGraph stats={weekStats} onSelectDay={setSelectedDay} />
                 </div>
-                <div className="flex justify-between text-[10px] font-semibold uppercase tracking-wider text-[var(--fz-text-tertiary)]">
+                <div className="px-5 pb-4 flex justify-between text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">
                     {weekStats.map((s, i) => (
                         <span key={i}>{new Date(s.date).toLocaleDateString('en-US', { weekday: 'short' })}</span>
                     ))}
                 </div>
-            </SectionCard>
+            </section>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <SectionCard
-                    title="Tasks"
-                    description={`${doneTasks}/${planner.length} complete`}
-                    contentClassName="space-y-4"
-                >
-                    <div className="flex gap-2">
-                        <Input
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <section className="rounded-2xl border border-white/[0.06] bg-[#0c0c0e] p-5 flex flex-col min-h-[320px]">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-sm font-semibold text-white">Tasks</h2>
+                            <p className="text-[11px] text-neutral-500">{doneTasks}/{planner.length} complete</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 mb-4">
+                        <input
+                            type="text"
                             value={newTaskName}
                             onChange={(e) => setNewTaskName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && void addPlanItem()}
+                            onKeyDown={(e) => e.key === 'Enter' && addPlanItem()}
                             placeholder="Add a task"
-                            aria-label="New task"
+                            className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-white/20 placeholder:text-neutral-600"
                         />
-                        <Button variant="primary" onPress={() => void addPlanItem()}>
+                        <button type="button" onClick={addPlanItem} className="px-4 rounded-xl bg-white text-black text-xs font-semibold hover:bg-neutral-200">
                             Add
-                        </Button>
+                        </button>
                     </div>
-                    <div className="min-h-[180px] space-y-1">
-                        {planner.length === 0 ? (
-                            <DashboardEmptyState
-                                title="Nothing scheduled yet"
-                                description="Add a quick task to decide what deserves your focus next."
-                            />
-                        ) : (
-                            planner.map((p: { id: number; task: string; done: boolean }) => (
-                                <div
-                                    key={p.id}
-                                    className="group flex items-center gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-[var(--fz-interactive)]"
-                                >
-                                    <Checkbox
-                                        isSelected={p.done}
-                                        onChange={() => void togglePlanItem(p.id)}
-                                        aria-label={`${p.done ? 'Mark incomplete' : 'Mark complete'}: ${p.task}`}
-                                    >
-                                        <Checkbox.Control>
-                                            <Checkbox.Indicator />
-                                        </Checkbox.Control>
-                                    </Checkbox>
-                                    <span
-                                        className={`min-w-0 flex-1 truncate text-sm ${
-                                            p.done
-                                                ? 'text-[var(--fz-text-tertiary)] line-through'
-                                                : 'text-[var(--fz-text)]'
-                                        }`}
-                                    >
-                                        {p.task}
-                                    </span>
-                                    <Button
-                                        isIconOnly
-                                        size="sm"
-                                        variant="ghost"
-                                        aria-label={`Delete task: ${p.task}`}
-                                        isDisabled={deletingTaskId !== null}
-                                        className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                                        onPress={() => void deletePlanItem(p.id)}
-                                    >
-                                        <Trash2 size={15} aria-hidden="true" />
-                                    </Button>
-                                </div>
-                            ))
+                    <div className="flex-1 space-y-1 overflow-y-auto">
+                        {planner.length === 0 && (
+                            <p className="text-neutral-600 text-sm py-8 text-center">Nothing scheduled yet.</p>
                         )}
+                        {planner.map((p: { id: number; task: string; done: boolean }) => (
+                            <div
+                                key={p.id}
+                                className="group flex w-full items-center rounded-xl transition-colors hover:bg-white/[0.03] focus-within:bg-white/[0.03]"
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => togglePlanItem(p.id)}
+                                    className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/40"
+                                    aria-label={`${p.done ? 'Mark incomplete' : 'Mark complete'}: ${p.task}`}
+                                    aria-pressed={p.done}
+                                >
+                                    <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${p.done ? 'bg-white border-white' : 'border-white/20'}`}>
+                                        {p.done && <Check size={12} className="text-black" />}
+                                    </span>
+                                    <span className={`text-sm truncate ${p.done ? 'line-through text-neutral-600' : 'text-neutral-200'}`}>{p.task}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void deletePlanItem(p.id);
+                                    }}
+                                    disabled={deletingTaskId !== null}
+                                    className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-600 opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 disabled:cursor-wait disabled:opacity-40 group-hover:opacity-100"
+                                    aria-label={`Delete task: ${p.task}`}
+                                    title={`Delete ${p.task}`}
+                                >
+                                    <Trash2 size={15} aria-hidden="true" />
+                                </button>
+                            </div>
+                        ))}
                     </div>
-                </SectionCard>
+                </section>
 
-                <SectionCard
-                    title="Habits"
-                    description={`${habits.length} active`}
-                    actions={
-                        <div className="flex items-center gap-1">
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                isIconOnly
-                                aria-label="Older habit week"
-                                onPress={() => setOffsetWeeks(offsetWeeks + 1)}
-                            >
-                                ‹
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                isIconOnly
-                                aria-label="Newer habit week"
-                                isDisabled={offsetWeeks === 0}
-                                onPress={() => setOffsetWeeks(Math.max(0, offsetWeeks - 1))}
-                            >
-                                ›
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="secondary"
-                                isIconOnly
-                                aria-label="Add habit"
-                                onPress={() => setHabitModalOpen(true)}
-                            >
-                                <Plus size={16} />
-                            </Button>
+                <section className="rounded-2xl border border-white/[0.06] bg-[#0c0c0e] p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-sm font-semibold text-white">Habits</h2>
+                            <p className="text-[11px] text-neutral-500">{habits.length} active</p>
                         </div>
-                    }
-                >
+                        <div className="flex items-center gap-1">
+                            <button type="button" onClick={() => setOffsetWeeks(offsetWeeks + 1)} className="w-8 h-8 rounded-lg text-neutral-500 hover:bg-white/5">‹</button>
+                            <button type="button" disabled={offsetWeeks === 0} onClick={() => setOffsetWeeks(Math.max(0, offsetWeeks - 1))} className="w-8 h-8 rounded-lg text-neutral-500 hover:bg-white/5 disabled:opacity-30">›</button>
+                            <button type="button" onClick={() => setHabitModalOpen(true)} className="w-8 h-8 rounded-lg bg-white/10 text-white flex items-center justify-center ml-1">
+                                <Plus size={16} />
+                            </button>
+                        </div>
+                    </div>
                     {habits.length === 0 ? (
-                        <DashboardEmptyState
-                            title="No habits yet"
-                            description="Add a habit to track daily consistency."
-                            action={
-                                <Button size="sm" variant="secondary" onPress={() => setHabitModalOpen(true)}>
-                                    Add habit
-                                </Button>
-                            }
-                        />
+                        <p className="text-neutral-600 text-sm py-12 text-center">Add a habit to track consistency.</p>
                     ) : (
                         <div className="space-y-3">
                             {habits.slice(0, 5).map((h: { id: number; name: string; streak?: number; checkins?: string[] }) => (
-                                <Card
-                                    key={h.id}
-                                    className="border border-[var(--fz-border)] bg-[var(--fz-surface-raised)] shadow-none"
-                                >
-                                    <Card.Content className="space-y-2 px-3 py-3">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <span className="text-sm font-medium text-[var(--fz-text)]">{h.name}</span>
-                                            <span className="text-xs font-semibold text-[var(--fz-text-secondary)]">
-                                                {computeHabitStreak(h.checkins || [])}d
-                                            </span>
-                                        </div>
-                                        <div className="flex gap-1.5">
-                                            {last7DaysStrings.map((ds, i) => (
-                                                <HabitDayCell
-                                                    key={i}
-                                                    checked={!!h.checkins?.includes(ds)}
-                                                    isToday={ds === today.toDateString()}
-                                                    disabled={ds !== today.toDateString()}
-                                                    title={ds}
-                                                    onCheckIn={() => checkInHabit(h.id, ds)}
-                                                />
-                                            ))}
-                                        </div>
-                                    </Card.Content>
-                                </Card>
+                                <div key={h.id} className="rounded-xl border border-white/[0.05] px-3 py-3">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm font-medium text-white">{h.name}</span>
+                                        <span className="text-xs font-semibold text-neutral-400">
+                                            {computeHabitStreak(h.checkins || [])}d
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-1.5">
+                                        {last7DaysStrings.map((ds, i) => (
+                                            <HabitDayCell
+                                                key={i}
+                                                checked={!!h.checkins?.includes(ds)}
+                                                isToday={ds === today.toDateString()}
+                                                disabled={ds !== today.toDateString()}
+                                                title={ds}
+                                                onCheckIn={() => checkInHabit(h.id, ds)}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     )}
-                </SectionCard>
+                </section>
             </div>
 
-            <Modal state={dayDetailState}>
-                <Modal.Backdrop>
-                    <Modal.Container>
-                        <Modal.Dialog className="border border-[var(--fz-border-strong)] bg-[var(--fz-surface-raised)]">
-                            <Modal.CloseTrigger />
-                            <Modal.Header>
-                                <Modal.Heading>
-                                    {selectedDay
-                                        ? new Date(selectedDay.date).toLocaleDateString('en-US', {
-                                              weekday: 'long',
-                                              month: 'long',
-                                              day: 'numeric',
-                                          })
-                                        : 'Day details'}
-                                </Modal.Heading>
-                            </Modal.Header>
-                            <Modal.Body className="space-y-4">
-                                {selectedDay ? (
-                                    <>
-                                        <div>
-                                            <p className="text-3xl font-semibold tabular-nums text-[var(--fz-text)]">
-                                                {formatTime(selectedDay.total)}
-                                            </p>
-                                            <p className="text-xs text-[var(--fz-text-secondary)]">total screen time</p>
-                                        </div>
-                                        <div className="max-h-72 space-y-1 overflow-y-auto">
-                                            {Object.entries(selectedDay.sites ?? {})
-                                                .sort(([, a], [, b]) => (b as number) - (a as number))
-                                                .slice(0, 12)
-                                                .map(([site, ms]) => (
-                                                    <div
-                                                        key={site}
-                                                        className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-[var(--fz-interactive)]"
-                                                    >
-                                                        <img
-                                                            src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(site)}&sz=32`}
-                                                            alt=""
-                                                            className="h-5 w-5 shrink-0 rounded"
-                                                            loading="lazy"
-                                                        />
-                                                        <span className="min-w-0 flex-1 truncate text-sm text-[var(--fz-text)]">
-                                                            {site}
-                                                        </span>
-                                                        <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--fz-text-secondary)]">
-                                                            {formatTime(ms as number)}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            {Object.keys(selectedDay.sites ?? {}).length === 0 ? (
-                                                <p className="py-8 text-center text-sm text-[var(--fz-text-tertiary)]">
-                                                    No sites recorded that day.
-                                                </p>
-                                            ) : null}
-                                        </div>
-                                    </>
-                                ) : null}
-                            </Modal.Body>
-                        </Modal.Dialog>
-                    </Modal.Container>
-                </Modal.Backdrop>
-            </Modal>
+            {selectedDay && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="absolute inset-0 z-40 flex items-start justify-center rounded-2xl bg-black/60 backdrop-blur-md p-4 pt-12 overflow-y-auto"
+                    onClick={() => setSelectedDay(null)}
+                >
+                    <motion.div
+                        initial={{ scale: 0.97, opacity: 0, y: 8 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#111114] shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-6 pt-6 pb-4 border-b border-white/[0.06] flex items-start justify-between gap-3">
+                            <div>
+                                <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">
+                                    {new Date(selectedDay.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                                </p>
+                                <p className="text-3xl font-semibold text-white mt-1 tabular-nums">{formatTime(selectedDay.total)}</p>
+                                <p className="text-[11px] text-neutral-500 mt-0.5">total screen time</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedDay(null)}
+                                className="w-8 h-8 rounded-lg text-neutral-500 hover:text-white hover:bg-white/[0.06] transition-colors text-lg leading-none"
+                                aria-label="Close"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div className="px-3 py-3 max-h-72 overflow-y-auto">
+                            {Object.entries(selectedDay.sites ?? {})
+                                .sort(([, a], [, b]) => (b as number) - (a as number))
+                                .slice(0, 12)
+                                .map(([site, ms]) => (
+                                    <div key={site} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.03] transition-colors">
+                                        <img
+                                            src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(site)}&sz=32`}
+                                            alt=""
+                                            className="w-5 h-5 rounded shrink-0"
+                                            loading="lazy"
+                                        />
+                                        <span className="text-sm text-neutral-200 truncate flex-1">{site}</span>
+                                        <span className="text-xs font-semibold text-neutral-400 tabular-nums shrink-0">{formatTime(ms as number)}</span>
+                                    </div>
+                                ))}
+                            {Object.keys(selectedDay.sites ?? {}).length === 0 && (
+                                <p className="text-sm text-neutral-600 text-center py-8">No sites recorded that day.</p>
+                            )}
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
 
             <HabitNameModal open={habitModalOpen} onClose={() => setHabitModalOpen(false)} onSubmit={addHabitByName} />
         </div>

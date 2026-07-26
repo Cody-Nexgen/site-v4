@@ -4,7 +4,6 @@ import type {
     InputHTMLAttributes,
     ReactNode,
 } from 'react';
-import { Button, Card, Input } from '@heroui/react';
 
 const join = (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(' ');
@@ -15,75 +14,53 @@ export function SurfaceCard({
     ...props
 }: HTMLAttributes<HTMLDivElement> & { children?: ReactNode }) {
     return (
-        <Card
-            className={join(
-                'border border-[var(--fz-border)] bg-[var(--fz-surface)] shadow-none',
-                className,
-            )}
-            {...props}
-        >
-            <Card.Content className="p-0">{children}</Card.Content>
-        </Card>
+        <div className={join('surface-card', className)} {...props}>
+            {children}
+        </div>
     );
 }
 
 type SurfaceButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
-const VARIANT_MAP: Record<SurfaceButtonVariant, 'primary' | 'secondary' | 'ghost' | 'danger'> = {
-    primary: 'primary',
-    secondary: 'secondary',
-    ghost: 'ghost',
-    danger: 'danger',
-};
-
 export function SurfaceButton({
     children,
     className,
     variant = 'secondary',
-    onClick,
-    type = 'button',
-    disabled,
     ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
     children?: ReactNode;
     variant?: SurfaceButtonVariant;
 }) {
+    const variants: Record<SurfaceButtonVariant, string> = {
+        primary: 'bg-primary text-primary-foreground border border-primary hover:bg-primary/90',
+        secondary: 'surface-button text-secondary-foreground hover:text-foreground',
+        ghost: 'border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+        danger: 'border border-red-400/15 bg-red-400/[0.07] text-red-300 hover:bg-red-400/[0.11]',
+    };
+
     return (
-        <Button
-            type={type}
-            variant={VARIANT_MAP[variant]}
-            size="sm"
-            isDisabled={disabled}
-            className={className}
-            aria-label={props['aria-label']}
-            onPress={() => {
-                if (!onClick) return;
-                onClick({} as React.MouseEvent<HTMLButtonElement>);
-            }}
+        <button
+            type="button"
+            className={join(
+                'inline-flex h-8 items-center justify-center gap-2 rounded-md px-3 text-xs font-medium disabled:pointer-events-none disabled:opacity-40',
+                variants[variant],
+                className,
+            )}
+            {...props}
         >
             {children}
-        </Button>
+        </button>
     );
 }
 
-export function DashboardInput({ className, onChange, value, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function DashboardInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
     return (
-        <Input
-            className={join('w-full', className)}
-            value={value as string | undefined}
-            onChange={onChange as never}
-            placeholder={props.placeholder}
-            type={props.type}
-            disabled={props.disabled}
-            name={props.name}
-            id={props.id}
-            aria-label={props['aria-label']}
-            min={props.min as number | string | undefined}
-            max={props.max as number | string | undefined}
-            step={props.step as number | string | undefined}
-            autoComplete={props.autoComplete}
-            required={props.required}
-            readOnly={props.readOnly}
+        <input
+            className={join(
+                'h-8 w-full rounded-md border border-input bg-input/30 px-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground hover:border-ring/50 focus:border-ring',
+                className,
+            )}
+            {...props}
         />
     );
 }
@@ -94,13 +71,7 @@ export function SectionLabel({
     ...props
 }: HTMLAttributes<HTMLParagraphElement> & { children?: ReactNode }) {
     return (
-        <p
-            className={join(
-                'text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fz-text-tertiary)]',
-                className,
-            )}
-            {...props}
-        >
+        <p className={join('text-[11px] font-medium text-muted-foreground', className)} {...props}>
             {children}
         </p>
     );
