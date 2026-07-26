@@ -1,16 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { motion } from 'framer-motion';
-import { ChevronDown, X } from 'lucide-react';
+import { CalendarDays, ChevronDown, Clock3, Globe2, Repeat2, X } from 'lucide-react';
 import type { CalendarEvent, CalendarGroup } from '../lib/schedulingTypes';
+import { durationFromRange, eventEndMinutes, formatMinutes, TIME_OPTIONS } from '../lib/calendarUtils';
 import {
-    durationFromRange,
-    EVENT_COLOR_PRESETS,
-    eventEndMinutes,
-    formatMinutes,
-    normalizeHexColor,
-    TIME_OPTIONS,
-} from '../lib/calendarUtils';
+    isGeneratedOccurrence,
+    type RecurrenceEditTarget,
+} from '../lib/calendarRecurrence';
 
 export type EventModalState = {
     day: Date;
@@ -33,8 +30,11 @@ export default function EventModal({
     state: EventModalState;
     groups: CalendarGroup[];
     onClose: () => void;
-    onSave: (ev: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
-    onDelete?: () => void;
+    onSave: (
+        event: Omit<CalendarEvent, 'id'> & { id?: string },
+        target: RecurrenceEditTarget,
+    ) => void;
+    onDelete?: (target: RecurrenceEditTarget) => void;
 }) {
     const initialStart = state.editing
         ? state.editing.startHour * 60 + state.editing.startMin
@@ -44,226 +44,259 @@ export default function EventModal({
         : state.endHour !== undefined && state.endMin !== undefined
           ? state.endHour * 60 + state.endMin
           : initialStart + (state.durationMin ?? 30);
+    const customGroups = groups.filter((group) => group.kind === 'custom');
+    const initialGroup = customGroups.find((group) => group.id === state.editing?.groupId)
+        ?? customGroups.find((group) => group.id === state.defaultGroupId)
+        ?? customGroups[0];
 
     const [title, setTitle] = useState(state.editing?.title ?? '');
-    const [eventDay, setEventDay] = useState<Date>(state.day);
+    const [groupId, setGroupId] = useState(initialGroup?.id ?? '');
+    const [eventDay, setEventDay] = useState(state.day);
     const [allDay, setAllDay] = useState(state.editing?.allDay ?? false);
-    const [startMinVal, setStartMinVal] = useState(initialStart);
-    const [endMinVal, setEndMinVal] = useState(Math.max(initialStart + 15, initialEnd));
-    const [groupId, setGroupId] = useState(
-        state.editing?.groupId ?? state.defaultGroupId ?? groups.find((g) => g.kind === 'custom')?.id,
+    const [startMin, setStartMin] = useState(initialStart);
+    const [endMin, setEndMin] = useState(Math.max(initialStart + 15, initialEnd));
+    const [repeat, setRepeat] = useState<NonNullable<CalendarEvent['repeat']>>(state.editing?.repeat ?? 'none');
+    const [recurrenceWeekdays, setRecurrenceWeekdays] = useState<number[]>(
+        state.editing?.recurrenceWeekdays?.length
+            ? state.editing.recurrenceWeekdays
+            : [state.day.getDay()],
     );
-    const linkedGroup = groups.find((g) => g.id === groupId);
-    const [color, setColor] = useState(
-        normalizeHexColor(
-            linkedGroup?.color ?? state.editing?.color ?? groups.find((g) => g.kind === 'custom')?.color ?? '#38bdf8',
-        ),
+    const occurrenceEditing = Boolean(state.editing && isGeneratedOccurrence(state.editing));
+    const [editTarget, setEditTarget] = useState<RecurrenceEditTarget>(
+        occurrenceEditing ? 'occurrence' : 'series',
     );
     const [description, setDescription] = useState(state.editing?.description ?? '');
-
-    const customGroups = useMemo(() => groups.filter((g) => g.kind === 'custom'), [groups]);
+    const selectedGroup = customGroups.find((group) => group.id === groupId);
 
     const save = () => {
         if (!title.trim()) return;
-        const startHour = Math.floor(startMinVal / 60);
-        const startMin = startMinVal % 60;
-        const durationMin = allDay ? 0 : durationFromRange(startMinVal, endMinVal);
         onSave({
             id: state.editing?.id,
             title: title.trim(),
             date: eventDay.toDateString(),
             allDay,
-            startHour,
-            startMin,
-            durationMin,
-            color,
-            groupId,
+            startHour: Math.floor(startMin / 60),
+            startMin: startMin % 60,
+            durationMin: allDay ? 0 : durationFromRange(startMin, endMin),
+            color: selectedGroup?.color ?? state.editing?.color ?? '#5ea2ff',
+            groupId: selectedGroup?.id,
             bookingLinkId: state.editing?.bookingLinkId,
             description: description.trim() || undefined,
-        });
+            repeat,
+            seriesId: repeat === 'none' ? undefined : state.editing?.seriesId,
+            recurrenceWeekdays: repeat === 'weekly' ? recurrenceWeekdays : undefined,
+            recurrenceExceptions: state.editing?.recurrenceExceptions,
+            recurrenceMasterId: state.editing?.recurrenceMasterId,
+            recurrenceMasterDate: state.editing?.recurrenceMasterDate,
+            occurrenceDate: state.editing?.occurrenceDate,
+            sourceListId: state.editing?.sourceListId,
+        }, editTarget);
         onClose();
     };
 
     return (
-        <div className="fixed inset-0 z-[500] flex items-start justify-center bg-[#0a0a0a]/92 p-4 pt-[8vh]">
+        <div className="fixed inset-0 z-[500] flex items-start justify-center bg-black/55 p-4 pt-[6vh]" onMouseDown={onClose}>
             <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] shadow-2xl"
+                initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                onMouseDown={(event) => event.stopPropagation()}
+                className="relative w-full max-w-[430px] overflow-hidden rounded-[10px] border border-white/[0.09] bg-[#202021] text-neutral-300 shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
             >
-                <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                    <span className="text-xs font-bold text-neutral-400">Event</span>
-                    <button type="button" onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
-                        <X size={18} />
-                    </button>
-                </div>
-                <div className="max-h-[70vh] space-y-4 overflow-y-auto p-4">
+                <div className="p-3 pt-4">
                     <input
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Title"
-                        className="w-full bg-transparent text-xl font-black text-white outline-none placeholder:text-neutral-600"
                         autoFocus
+                        value={title}
+                        onChange={(event) => setTitle(event.target.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter') save();
+                        }}
+                        placeholder="Add title"
+                        className="mb-3 w-full rounded-md border border-white/[0.05] bg-white/[0.045] px-3 py-2.5 pr-10 text-base font-semibold text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-white/[0.14] focus:bg-white/[0.06]"
                     />
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Close event"
+                        className="absolute right-4 top-[22px] rounded p-1 text-neutral-600 hover:bg-white/[0.05] hover:text-neutral-300"
+                    >
+                        <X size={15} />
+                    </button>
 
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                            <label className="block flex-1 space-y-1">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Date</span>
-                                <input
-                                    type="date"
-                                    value={format(eventDay, 'yyyy-MM-dd')}
-                                    onChange={(e) => {
-                                        if (!e.target.value) return;
-                                        try {
-                                            setEventDay(parseISO(e.target.value + 'T12:00:00'));
-                                        } catch {
-                                            // ignore invalid dates
-                                        }
-                                    }}
-                                    className="w-full appearance-none rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm font-bold text-white outline-none focus:border-blue-500/50 [color-scheme:dark]"
-                                />
-                            </label>
+                    {occurrenceEditing && (
+                        <div className="mb-3 grid grid-cols-2 rounded-md bg-black/20 p-0.5 text-[11px]">
+                            <button
+                                type="button"
+                                onClick={() => setEditTarget('occurrence')}
+                                className={`rounded px-2 py-1.5 ${editTarget === 'occurrence' ? 'bg-white/10 text-white' : 'text-neutral-500'}`}
+                            >
+                                This occurrence
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setEditTarget('series')}
+                                className={`rounded px-2 py-1.5 ${editTarget === 'series' ? 'bg-white/10 text-white' : 'text-neutral-500'}`}
+                            >
+                                Entire series
+                            </button>
                         </div>
+                    )}
+
+                    <div className="space-y-1 text-xs">
+                        <div className="grid grid-cols-[20px_1fr] items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.025]">
+                            <Clock3 size={13} className="text-neutral-600" />
+                            {allDay ? (
+                                <span className="text-neutral-500">All-day event</span>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <TimeSelect value={startMin} onChange={(value) => {
+                                        setStartMin(value);
+                                        if (endMin <= value) setEndMin(value + 15);
+                                    }} />
+                                    <span className="text-neutral-700">→</span>
+                                    <TimeSelect value={endMin} min={startMin + 15} onChange={(value) => setEndMin(Math.max(value, startMin + 15))} />
+                                    <span className="text-[11px] text-neutral-600">{Math.max(15, endMin - startMin)} min</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <label className="grid grid-cols-[20px_1fr] items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.025]">
+                            <CalendarDays size={13} className="text-neutral-600" />
+                            <input
+                                type="date"
+                                value={format(eventDay, 'yyyy-MM-dd')}
+                                onChange={(event) => {
+                                    if (event.target.value) setEventDay(parseISO(`${event.target.value}T12:00:00`));
+                                }}
+                                className="w-fit bg-transparent text-xs text-neutral-300 outline-none [color-scheme:dark]"
+                            />
+                        </label>
+
+                        <label className="grid grid-cols-[20px_1fr] items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.025]">
+                            <Repeat2 size={13} className="text-neutral-600" />
+                            <select
+                                value={repeat}
+                                onChange={(event) => setRepeat(event.target.value as typeof repeat)}
+                                className="w-fit bg-transparent text-xs text-neutral-400 outline-none"
+                            >
+                                <option value="none">Does not repeat</option>
+                                <option value="daily">Every day</option>
+                                <option value="weekly">Selected weekdays</option>
+                            </select>
+                        </label>
+                        {repeat === 'weekly' && editTarget === 'series' && (
+                            <div className="ml-7 flex gap-1 py-1">
+                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, day) => {
+                                    const selected = recurrenceWeekdays.includes(day);
+                                    return (
+                                        <button
+                                            key={day}
+                                            type="button"
+                                            onClick={() =>
+                                                setRecurrenceWeekdays((current) =>
+                                                    selected
+                                                        ? current.length > 1
+                                                            ? current.filter((value) => value !== day)
+                                                            : current
+                                                        : [...current, day].sort(),
+                                                )
+                                            }
+                                            className={`h-7 w-7 rounded text-[10px] font-medium ${
+                                                selected
+                                                    ? 'bg-blue-500/25 text-blue-200'
+                                                    : 'bg-white/[0.04] text-neutral-600'
+                                            }`}
+                                        >
+                                            {label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-[20px_1fr] items-center gap-2 rounded-md px-2 py-1.5 text-neutral-600 hover:bg-white/[0.025]">
+                            <Globe2 size={13} />
+                            <span>{Intl.DateTimeFormat().resolvedOptions().timeZone.replaceAll('_', ' ')}</span>
+                        </div>
+
                         <button
                             type="button"
-                            onClick={() => setAllDay((v) => !v)}
-                            className="text-xs font-bold text-blue-400 hover:text-blue-300"
+                            onClick={() => setAllDay((value) => !value)}
+                            className="ml-7 rounded px-2 py-1 text-[11px] text-neutral-600 hover:bg-white/[0.04] hover:text-neutral-300"
                         >
-                            {allDay ? 'Set times' : 'All-day'}
+                            {allDay ? 'Use specific times' : 'Make all-day'}
                         </button>
                     </div>
 
-                    {!allDay && (
-                        <div className="flex items-center gap-2">
-                            <TimeSelect
-                                label="Start"
-                                value={startMinVal}
-                                onChange={(v) => {
-                                    setStartMinVal(v);
-                                    if (endMinVal <= v) setEndMinVal(v + 15);
-                                }}
-                            />
-                            <span className="pt-5 text-neutral-500">→</span>
-                            <TimeSelect
-                                label="End"
-                                value={endMinVal}
-                                onChange={(v) => setEndMinVal(Math.max(v, startMinVal + 15))}
-                                min={startMinVal + 15}
-                            />
-                        </div>
-                    )}
-
-                    {customGroups.length > 0 && (
-                        <label className="block space-y-1">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                                Group
-                            </span>
-                            <div className="relative">
-                                <select
-                                    value={groupId ?? ''}
-                                    onChange={(e) => {
-                                        const id = e.target.value || undefined;
-                                        setGroupId(id);
-                                        const g = groups.find((x) => x.id === id);
-                                        if (g) setColor(g.color);
-                                    }}
-                                    className="w-full appearance-none rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                                >
-                                    <option value="">None</option>
-                                    {customGroups.map((g) => (
-                                        <option key={g.id} value={g.id}>
-                                            {g.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                <ChevronDown
-                                    size={14}
-                                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
-                                />
-                            </div>
-                        </label>
-                    )}
-
-                    <div className="space-y-2">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                            Color
-                        </span>
-                        {linkedGroup && (
-                            <p className="text-xs text-neutral-400">
-                                Uses group color: <span className="font-bold text-white">{linkedGroup.name}</span>
-                            </p>
-                        )}
-                        {!linkedGroup && (
-                        <>
-                        <div className="flex flex-wrap gap-2">
-                            {EVENT_COLOR_PRESETS.map((c) => (
-                                <button
-                                    key={c}
-                                    type="button"
-                                    onClick={() => setColor(c)}
-                                    className={`h-7 w-7 rounded-lg border-2 ${
-                                        color === c ? 'border-white' : 'border-transparent'
-                                    }`}
-                                    style={{ backgroundColor: c }}
-                                />
-                            ))}
-                        </div>
-                        <input
-                            type="color"
-                            value={color}
-                            onChange={(e) => setColor(normalizeHexColor(e.target.value))}
-                            className="h-9 w-full cursor-pointer rounded-lg border border-white/10 bg-black/40"
-                        />
-                        </>
-                        )}
-                        <div
-                            className="flex overflow-hidden rounded-md"
-                            style={{
-                                backgroundColor: `color-mix(in srgb, ${linkedGroup?.color ?? color} 22%, #0a0a0a)`,
-                            }}
-                        >
-                            <span className="w-1" style={{ backgroundColor: linkedGroup?.color ?? color }} />
-                            <span className="px-2 py-1.5 text-[10px] font-bold text-white">
-                                {title || 'Preview'} · {allDay ? 'All day' : `${formatMinutes(startMinVal)} – ${formatMinutes(endMinVal)}`}
-                            </span>
-                        </div>
-                    </div>
-
+                    <div className="my-3 h-px bg-white/[0.07]" />
                     <textarea
                         value={description}
-                        onChange={(e) => setDescription(e.target.value)}
+                        onChange={(event) => setDescription(event.target.value)}
                         placeholder="Description"
                         rows={3}
-                        className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-neutral-600"
+                        className="w-full resize-none bg-transparent px-2 text-xs leading-5 text-neutral-300 outline-none placeholder:text-neutral-600"
                     />
+                    <div className="my-3 h-px bg-white/[0.07]" />
+
+                    <div className="flex items-center gap-2 px-2">
+                        <label className="group relative flex min-w-0 items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.035] py-1.5 pl-2 pr-7 transition-colors hover:border-white/[0.14] hover:bg-white/[0.055]">
+                            <span
+                                className="h-3 w-3 shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.12)]"
+                                style={{ backgroundColor: selectedGroup?.color ?? '#5ea2ff' }}
+                            />
+                            <select
+                                value={groupId}
+                                onChange={(event) => setGroupId(event.target.value)}
+                                disabled={customGroups.length === 0}
+                                aria-label="Calendar group"
+                                className="min-w-0 appearance-none bg-transparent text-[11px] text-neutral-300 outline-none disabled:text-neutral-600"
+                            >
+                                {customGroups.length === 0 ? (
+                                    <option value="">FocuzNow calendar</option>
+                                ) : (
+                                    customGroups.map((group) => (
+                                        <option key={group.id} value={group.id}>
+                                            {group.name}
+                                        </option>
+                                    ))
+                                )}
+                            </select>
+                            <ChevronDown
+                                size={12}
+                                className="pointer-events-none absolute right-2 text-neutral-600 transition-colors group-hover:text-neutral-400"
+                            />
+                        </label>
+                        {!allDay && (
+                            <span className="ml-auto text-[10px] text-neutral-700">
+                                {formatMinutes(startMin)}–{formatMinutes(endMin)}
+                            </span>
+                        )}
+                    </div>
                 </div>
-                <div className="flex gap-2 border-t border-white/10 p-4">
+
+                <div className="flex items-center justify-end gap-2 border-t border-white/[0.07] px-3 py-2.5">
                     {onDelete && (
                         <button
                             type="button"
                             onClick={() => {
-                                onDelete();
+                                onDelete(editTarget);
                                 onClose();
                             }}
-                            className="glass-edge-btn px-4 py-2.5 text-sm font-bold text-red-400 hover:bg-red-500/10"
+                            className="mr-auto rounded-md px-3 py-1.5 text-xs text-neutral-500 hover:bg-red-500/10 hover:text-red-400"
                         >
                             Delete
                         </button>
                     )}
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="glass-edge-btn flex-1 py-2.5 text-sm font-bold text-neutral-400"
-                    >
+                    <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-xs text-neutral-500 hover:bg-white/[0.05]">
                         Cancel
                     </button>
                     <button
                         type="button"
                         onClick={save}
-                        className="glass-edge-btn flex-1 bg-blue-600 py-2.5 text-sm font-bold text-white"
+                        disabled={!title.trim()}
+                        className="rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-950 disabled:opacity-40"
                     >
-                        Save
+                        {state.editing ? 'Save' : 'Create event'}
                     </button>
                 </div>
             </motion.div>
@@ -271,38 +304,18 @@ export default function EventModal({
     );
 }
 
-function TimeSelect({
-    label,
-    value,
-    onChange,
-    min = 0,
-}: {
-    label: string;
-    value: number;
-    onChange: (v: number) => void;
-    min?: number;
-}) {
-    const options = TIME_OPTIONS.filter((o) => o.value >= min && o.value <= 24 * 60 - 15);
+function TimeSelect({ value, onChange, min = 0 }: { value: number; onChange: (value: number) => void; min?: number }) {
     return (
-        <label className="block flex-1 space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">{label}</span>
-            <div className="relative">
-                <select
-                    value={value}
-                    onChange={(e) => onChange(Number(e.target.value))}
-                    className="w-full appearance-none rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm font-bold text-white outline-none focus:border-blue-500/50"
-                >
-                    {options.map((o) => (
-                        <option key={o.value} value={o.value}>
-                            {o.label}
-                        </option>
-                    ))}
-                </select>
-                <ChevronDown
-                    size={14}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
-                />
-            </div>
-        </label>
+        <select
+            value={value}
+            onChange={(event) => onChange(Number(event.target.value))}
+            className="bg-transparent text-xs text-neutral-300 outline-none"
+        >
+            {TIME_OPTIONS.filter((option) => option.value >= min && option.value <= 24 * 60 - 15).map((option) => (
+                <option key={option.value} value={option.value}>
+                    {option.label}
+                </option>
+            ))}
+        </select>
     );
 }

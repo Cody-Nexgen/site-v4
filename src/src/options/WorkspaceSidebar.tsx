@@ -7,12 +7,15 @@ import {
     Clock,
     HelpCircle,
     LayoutDashboard,
+    ListTodo,
     LogOut,
     Mic2,
+    Moon,
     Search,
     Settings,
     ShoppingBag,
     Sparkles,
+    Sun,
     Target,
     Trees,
     Trophy,
@@ -20,6 +23,14 @@ import {
     Users,
     Zap,
 } from 'lucide-react';
+import {
+    getDashboardColorMode,
+    initializeDashboardColorMode,
+    resolveDashboardColorMode,
+    setDashboardColorMode,
+    subscribeToDashboardColorMode,
+    type DashboardColorMode,
+} from '../lib/themes';
 import { COLLAPSIBLE_NAV, PRIMARY_NAV } from '../lib/workspaceNav';
 
 type Props = {
@@ -37,6 +48,7 @@ type Props = {
 const ICONS: Record<string, ReactNode> = {
     overview: <LayoutDashboard size={14} />,
     calendar: <CalendarDays size={14} />,
+    lists: <ListTodo size={14} />,
     ai_coach: <Sparkles size={14} />,
     sessions: <Clock size={14} />,
     blocklist: <Ban size={14} />,
@@ -50,7 +62,6 @@ const ICONS: Record<string, ReactNode> = {
 };
 
 const STORAGE_KEY = 'focuznow-sidebar-sections-v1';
-
 function readExpanded(): Record<string, boolean> {
     try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -77,14 +88,24 @@ export function WorkspaceSidebar({
 }: Props) {
     const [accountOpen, setAccountOpen] = useState(false);
     const [expanded, setExpanded] = useState<Record<string, boolean>>(readExpanded);
+    const [colorMode, setColorMode] = useState<DashboardColorMode>(getDashboardColorMode);
     const accountRef = useRef<HTMLDivElement>(null);
     const accountTriggerRef = useRef<HTMLButtonElement>(null);
     const displayName = username?.trim() || email?.split('@')[0] || 'Account';
     const initial = displayName.charAt(0).toUpperCase();
+    const resolvedColorMode = resolveDashboardColorMode(colorMode);
+    const nextColorMode = resolvedColorMode === 'dark' ? 'light' : 'dark';
+    const colorModeLabel = `Switch to ${nextColorMode} mode`;
 
     useEffect(() => {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(expanded));
     }, [expanded]);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToDashboardColorMode(setColorMode);
+        void initializeDashboardColorMode().then(setColorMode);
+        return unsubscribe;
+    }, []);
 
     useEffect(() => {
         if (!accountOpen) return;
@@ -119,7 +140,7 @@ export function WorkspaceSidebar({
     };
 
     return (
-        <aside className="relative flex h-screen w-[240px] min-w-[240px] flex-col overflow-x-hidden border-r border-white/[0.07] bg-[#0d0d0e]">
+        <aside className="workspace-sidebar relative flex h-screen w-[240px] min-w-[240px] flex-col overflow-x-hidden border-r border-white/[0.07] bg-[#0d0d0e]">
             <div ref={accountRef} className="relative flex h-11 items-center gap-1 px-2">
                 <button
                     ref={accountTriggerRef}
@@ -131,9 +152,9 @@ export function WorkspaceSidebar({
                     className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[4px] px-1.5 text-left transition-colors hover:bg-white/[0.035]"
                 >
                     {avatarUrl ? (
-                        <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                        <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-[5px] object-cover" />
                     ) : (
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-700 text-[9px] font-medium text-neutral-100">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-neutral-700 text-[9px] font-medium text-neutral-100">
                             {initial}
                         </span>
                     )}
@@ -159,7 +180,7 @@ export function WorkspaceSidebar({
                     <div
                         id="workspace-account-menu"
                         role="menu"
-                        className="absolute left-2 right-2 top-10 z-[90] rounded-lg border border-white/[0.09] bg-[#171719] p-1 shadow-[0_16px_40px_rgba(0,0,0,0.55)]"
+                        className="workspace-account-menu absolute left-2 right-2 top-10 z-[90] rounded-lg border border-white/[0.09] bg-[#171719] p-1 shadow-[0_16px_40px_rgba(0,0,0,0.55)]"
                     >
                         <div className="px-2 py-2">
                             <p className="truncate text-xs font-medium text-neutral-200">{displayName}</p>
@@ -267,6 +288,24 @@ export function WorkspaceSidebar({
                     })}
                 </div>
             </nav>
+            <div className="workspace-theme-switcher flex justify-end border-t border-white/[0.07] px-2 py-2">
+                <button
+                    type="button"
+                    aria-label={colorModeLabel}
+                    title={colorModeLabel}
+                    onClick={() => {
+                        setColorMode(nextColorMode);
+                        void setDashboardColorMode(nextColorMode);
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-[4px] text-neutral-600 transition-colors hover:bg-white/[0.04] hover:text-neutral-300"
+                >
+                    {resolvedColorMode === 'dark' ? (
+                        <Sun size={14} aria-hidden="true" />
+                    ) : (
+                        <Moon size={14} aria-hidden="true" />
+                    )}
+                </button>
+            </div>
         </aside>
     );
 }

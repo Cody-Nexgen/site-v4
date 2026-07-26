@@ -12,11 +12,31 @@ export type PomodoroRuntime = {
     segmentTotalSec: number;
     focusMin: number;
     breakMin: number;
+    segmentId?: string;
+    futureSelfContractId?: string;
 };
 
 export function computeTimeLeft(rt: PomodoroRuntime): number {
     if (rt.paused || !rt.running || !rt.endAt) return rt.timeLeftSec;
     return Math.max(0, Math.ceil((rt.endAt - Date.now()) / 1000));
+}
+
+export function createResetPomodoroRuntime(
+    focusMin: number,
+    breakMin: number,
+    isBreak = false,
+): PomodoroRuntime {
+    const segmentTotalSec = Math.round((isBreak ? breakMin : focusMin) * 60);
+    return {
+        running: false,
+        paused: false,
+        endAt: null,
+        timeLeftSec: segmentTotalSec,
+        isBreak,
+        segmentTotalSec,
+        focusMin,
+        breakMin,
+    };
 }
 
 export async function readPomodoroRuntime(): Promise<PomodoroRuntime | null> {

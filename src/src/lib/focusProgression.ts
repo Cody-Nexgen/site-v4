@@ -43,6 +43,8 @@ export type ActiveChallengeSnapshot = {
     baseline: number;
     xpReward: number;
     coinReward: number;
+    periodKind?: 'day' | 'week';
+    periodKey?: string;
 };
 
 export type FocusProgressionState = {
@@ -113,6 +115,26 @@ export function defaultProgressionState(): FocusProgressionState {
             todayPomodorosCount: 0,
         },
         publicProfileEnabled: false,
+    };
+}
+
+/**
+ * One-time recovery for the Pomodoro completion bug. Progression balances,
+ * counters, and award bookkeeping cannot be reliably separated from the
+ * duplicated awards, so they are reset while user-owned cosmetics and profile
+ * preferences are retained.
+ */
+export function resetProgressionDerivedState(raw: unknown): FocusProgressionState {
+    const current = normalizeProgressionState(raw);
+    const reset = defaultProgressionState();
+    return {
+        ...reset,
+        ownedCosmetics: current.ownedCosmetics,
+        equippedCosmetics: current.equippedCosmetics,
+        completedChallenges: current.completedChallenges,
+        activeChallenges: current.activeChallenges,
+        publicProfileEnabled: current.publicProfileEnabled,
+        lastSyncedAt: current.lastSyncedAt,
     };
 }
 
@@ -329,6 +351,23 @@ export function normalizeProgressionState(raw: unknown): FocusProgressionState {
     const base = defaultProgressionState();
     if (!raw || typeof raw !== 'object') return base;
     const r = raw as Partial<FocusProgressionState>;
+    const completedChallenges = Array.isArray(r.completedChallenges)
+        ? [...new Set(r.completedChallenges.filter((id): id is string => typeof id === 'string'))]
+        : [];
+    const completedIds = new Set(completedChallenges);
+    const activeById = new Map<string, ActiveChallengeSnapshot>();
+    if (Array.isArray(r.activeChallenges)) {
+        for (const challenge of r.activeChallenges) {
+            if (
+                challenge &&
+                typeof challenge === 'object' &&
+                typeof challenge.id === 'string' &&
+                !completedIds.has(challenge.id)
+            ) {
+                activeById.set(challenge.id, challenge);
+            }
+        }
+    }
     return {
         ...base,
         ...r,
@@ -336,8 +375,8 @@ export function normalizeProgressionState(raw: unknown): FocusProgressionState {
         stats: normalizeProgressionStats({ ...base.stats, ...(r.stats ?? {}) }),
         ownedCosmetics: Array.isArray(r.ownedCosmetics) ? r.ownedCosmetics : [],
         equippedCosmetics: r.equippedCosmetics ?? {},
-        completedChallenges: Array.isArray(r.completedChallenges) ? r.completedChallenges : [],
-        activeChallenges: Array.isArray(r.activeChallenges) ? r.activeChallenges : [],
+        completedChallenges,
+        activeChallenges: Array.from(activeById.values()),
         awardedKeys: Array.isArray(r.awardedKeys) ? r.awardedKeys : [],
     };
 }
@@ -355,15 +394,39 @@ export async function awardProgressionEvent(
     event: ProgressionEvent,
     opts?: Parameters<typeof applyProgressionEvent>[2],
 ): Promise<{ state: FocusProgressionState; award: ProgressionAward | null }> {
-    const current = await loadProgressionState();
-    const result = applyProgressionEvent(current, event, opts);
-    await saveProgressionState(result.state);
-    try {
-        chrome.runtime.sendMessage({ type: 'PROGRESSION_UPDATED', state: result.state, award: result.award }).catch(() => {});
-    } catch {
-        /* ignore */
-    }
+    return enqueueProgressionWrite(async () => {
+        const current = await loadProgressionState();
+        const result = applyProgressionEvent(current, event, opts);
+        await saveProgressionState(result.state);
+        try {
+            chrome.runtime.sendMessage({ type: 'PROGRESSION_UPDATED', state: result.state, award: result.award }).catch(() => {});
+        } catch {
+            /* ignore */
+        }
+        return result;
+    });
+}
+
+let progressionWriteQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueProgressionWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const result = progressionWriteQueue.then(operation, operation);
+    progressionWriteQueue = result.then(
+        () => undefined,
+        () => undefined,
+    );
     return result;
+}
+
+export function updateProgressionState(
+    mutator: (state: FocusProgressionState) => FocusProgressionState,
+): Promise<FocusProgressionState> {
+    return enqueueProgressionWrite(async () => {
+        const current = await loadProgressionState();
+        const next = normalizeProgressionState(mutator(current));
+        await saveProgressionState(next);
+        return next;
+    });
 }
 
 /** Update platform-block streak counters (Shorts / TikTok challenges). */

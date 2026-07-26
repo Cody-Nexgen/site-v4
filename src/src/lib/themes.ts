@@ -2,6 +2,131 @@ import type { EngineState } from './store';
 
 export const PRO_GOLD_THEME_ID = 'pro' as const;
 export const CUSTOM_THEME_ID = 'custom' as const;
+export const DASHBOARD_COLOR_MODE_KEY = 'dashboardColorMode' as const;
+const DASHBOARD_COLOR_MODE_CACHE_KEY = 'focuznow-dashboard-color-mode-v1';
+
+export type DashboardColorMode = 'light' | 'dark' | 'system';
+export type ResolvedDashboardColorMode = Exclude<DashboardColorMode, 'system'>;
+
+const dashboardColorModes: DashboardColorMode[] = ['light', 'dark', 'system'];
+let dashboardMode: DashboardColorMode = 'system';
+let dashboardModeInitialized = false;
+let mediaQuery: MediaQueryList | null = null;
+const dashboardModeListeners = new Set<(mode: DashboardColorMode) => void>();
+
+function isDashboardColorMode(value: unknown): value is DashboardColorMode {
+    return typeof value === 'string' && dashboardColorModes.includes(value as DashboardColorMode);
+}
+
+function readCachedDashboardColorMode(): DashboardColorMode {
+    try {
+        const cached = window.localStorage.getItem(DASHBOARD_COLOR_MODE_CACHE_KEY);
+        return isDashboardColorMode(cached) ? cached : 'system';
+    } catch {
+        return 'system';
+    }
+}
+
+export function getDashboardColorMode(): DashboardColorMode {
+    if (!dashboardModeInitialized) dashboardMode = readCachedDashboardColorMode();
+    return dashboardMode;
+}
+
+export function resolveDashboardColorMode(
+    mode: DashboardColorMode,
+): ResolvedDashboardColorMode {
+    if (mode !== 'system') return mode;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+export function applyDashboardColorMode(mode: DashboardColorMode) {
+    dashboardMode = mode;
+    const resolved = resolveDashboardColorMode(mode);
+    const root = document.documentElement;
+    root.dataset.dashboardColorMode = mode;
+    root.dataset.dashboardTheme = resolved;
+    root.style.colorScheme = resolved;
+    root.classList.toggle('light-theme', resolved === 'light');
+    root.classList.toggle('dark-theme', resolved === 'dark');
+    root.classList.toggle('dark', resolved === 'dark');
+    if (document.body) {
+        document.body.dataset.dashboardTheme = resolved;
+        document.body.style.colorScheme = resolved;
+    }
+}
+
+function notifyDashboardModeListeners() {
+    dashboardModeListeners.forEach((listener) => listener(dashboardMode));
+}
+
+function cacheDashboardColorMode(mode: DashboardColorMode) {
+    try {
+        window.localStorage.setItem(DASHBOARD_COLOR_MODE_CACHE_KEY, mode);
+    } catch {
+        // chrome.storage remains the canonical persisted value.
+    }
+}
+
+export async function initializeDashboardColorMode(): Promise<DashboardColorMode> {
+    if (!dashboardModeInitialized) {
+        dashboardModeInitialized = true;
+        dashboardMode = readCachedDashboardColorMode();
+        applyDashboardColorMode(dashboardMode);
+
+        mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        mediaQuery.addEventListener('change', () => {
+            if (dashboardMode === 'system') applyDashboardColorMode('system');
+        });
+
+        chrome.storage.onChanged.addListener((changes, areaName) => {
+            if (areaName !== 'local') return;
+            const next = changes[DASHBOARD_COLOR_MODE_KEY]?.newValue;
+            if (!isDashboardColorMode(next) || next === dashboardMode) return;
+            dashboardMode = next;
+            cacheDashboardColorMode(next);
+            applyDashboardColorMode(next);
+            notifyDashboardModeListeners();
+        });
+    }
+
+    try {
+        const stored = await chrome.storage.local.get([DASHBOARD_COLOR_MODE_KEY, 'theme']);
+        const persisted = isDashboardColorMode(stored[DASHBOARD_COLOR_MODE_KEY])
+            ? stored[DASHBOARD_COLOR_MODE_KEY]
+            : isDashboardColorMode(stored.theme)
+                ? stored.theme
+                : dashboardMode;
+        if (persisted !== dashboardMode) {
+            dashboardMode = persisted;
+            cacheDashboardColorMode(persisted);
+            applyDashboardColorMode(persisted);
+            notifyDashboardModeListeners();
+        }
+        if (!isDashboardColorMode(stored[DASHBOARD_COLOR_MODE_KEY])) {
+            await chrome.storage.local.set({ [DASHBOARD_COLOR_MODE_KEY]: persisted });
+        }
+    } catch {
+        // Keep the synchronously cached mode if extension storage is unavailable.
+    }
+    return dashboardMode;
+}
+
+export async function setDashboardColorMode(mode: DashboardColorMode) {
+    dashboardMode = mode;
+    cacheDashboardColorMode(mode);
+    applyDashboardColorMode(mode);
+    notifyDashboardModeListeners();
+    await chrome.storage.local.set({ [DASHBOARD_COLOR_MODE_KEY]: mode });
+}
+
+export function subscribeToDashboardColorMode(
+    listener: (mode: DashboardColorMode) => void,
+) {
+    dashboardModeListeners.add(listener);
+    return () => {
+        dashboardModeListeners.delete(listener);
+    };
+}
 
 /** @deprecated use PRO_GOLD_THEME_ID */
 export const PRO_THEME_ID = PRO_GOLD_THEME_ID;

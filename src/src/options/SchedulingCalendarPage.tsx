@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     addDays,
     eachDayOfInterval,
@@ -16,7 +16,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Link2, PanelLeftClos
 
 type CalendarView = 'day' | 'week' | 'month';
 import { useAuthStore } from '../lib/store';
-import { buildUsHolidays } from '../lib/usHolidays';
+import { holidaysForRange } from '../lib/usHolidays';
 import {
     buildDateAvailability,
     syncAllSchedulingLinks,
@@ -30,8 +30,11 @@ import {
 import {
     bookingUrl,
     CALENDAR_EVENTS_KEY,
+    CALENDAR_GROUP_TOMBSTONES_KEY,
     CALENDAR_GROUPS_KEY,
     DEFAULT_CALENDAR_GROUPS,
+    mergeStoredCalendarGroups,
+    normalizeCalendarGroupTombstones,
     SCHEDULING_LINKS_KEY,
     SHOW_HOLIDAYS_KEY,
     type CalendarEvent,
@@ -40,6 +43,13 @@ import {
     type WeekdayAvailability,
 } from '../lib/schedulingTypes';
 import { weekHighlightSegments } from '../lib/calendarUtils';
+import {
+    expandCalendarEventsInRange,
+    isGeneratedOccurrence,
+    migrateMaterializedCalendarSeries,
+    withOccurrenceException,
+    type RecurrenceEditTarget,
+} from '../lib/calendarRecurrence';
 import { applyGroupColorToEvents, colorForEvent } from '../lib/eventColors';
 import CalendarGroupsPanel from './CalendarGroupsPanel';
 import EventModal, { type EventModalState } from './EventModal';
@@ -68,9 +78,15 @@ import { newSchedulingLinkId } from '../lib/schedulingLinkId';
 type Panel = 'none' | 'schedule-menu' | 'recurring' | 'oneoff';
 
 const LEGACY_LINKS_KEY = 'focuznow_calendar_links';
-const HOLIDAYS = buildUsHolidays(2024, 2028);
 
 type AllDayChip = { label: string; color: string };
+
+function prepareStoredEvents(stored: CalendarEvent[]): CalendarEvent[] {
+    const normalized = normalizeCalendarEventDates(
+        stored.map((event) => ({ ...event, allDay: event.allDay ?? false })),
+    );
+    return migrateMaterializedCalendarSeries(normalized).events;
+}
 
 export default function SchedulingCalendarPage({
     fullscreen = false,
@@ -132,7 +148,9 @@ export default function SchedulingCalendarPage({
     }, [
         session?.user?.id,
         session?.user?.email,
+        session?.user?.user_metadata?.full_name,
         session?.access_token,
+        session?.refresh_token,
         engineState.profileName,
         engineState.profileAvatar,
     ]);
@@ -153,7 +171,10 @@ export default function SchedulingCalendarPage({
     const [savedLinks, setSavedLinks] = useState<SchedulingLink[]>([]);
     const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
     const [events, setEvents] = useState<CalendarEvent[]>([]);
+    const [eventsLoaded, setEventsLoaded] = useState(false);
     const [groups, setGroups] = useState<CalendarGroup[]>(DEFAULT_CALENDAR_GROUPS());
+    const [groupsLoaded, setGroupsLoaded] = useState(false);
+    const [groupTombstones, setGroupTombstones] = useState<string[]>([]);
     const [copyNotice, setCopyNotice] = useState('');
     const [now, setNow] = useState(new Date());
     const [eventModal, setEventModal] = useState<EventModalState | null>(null);
@@ -184,10 +205,14 @@ export default function SchedulingCalendarPage({
     }>({ active: false, started: false });
 
     const today = new Date();
-    const weekEnd = endOfWeek(weekStart);
-    const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+    const weekDays = useMemo(
+        () => eachDayOfInterval({ start: weekStart, end: endOfWeek(weekStart) }),
+        [weekStart],
+    );
     const weekDaysRef = useRef(weekDays);
-    weekDaysRef.current = weekDays;
+    useEffect(() => {
+        weekDaysRef.current = weekDays;
+    }, [weekDays]);
 
     useEffect(() => {
         const tick = window.setInterval(() => setNow(new Date()), 1000);
@@ -197,13 +222,9 @@ export default function SchedulingCalendarPage({
     const reloadEventsFromStorage = useCallback(() => {
         chrome.storage.local.get([CALENDAR_EVENTS_KEY], (res) => {
             if (!Array.isArray(res[CALENDAR_EVENTS_KEY])) return;
-            const loaded = normalizeCalendarEventDates(
-                (res[CALENDAR_EVENTS_KEY] as CalendarEvent[]).map((e) => ({
-                    ...e,
-                    allDay: e.allDay ?? false,
-                })),
-            );
+            const loaded = prepareStoredEvents(res[CALENDAR_EVENTS_KEY] as CalendarEvent[]);
             setEvents(loaded);
+            setEventsLoaded(true);
             chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: loaded });
         });
     }, []);
@@ -249,7 +270,14 @@ export default function SchedulingCalendarPage({
 
     useEffect(() => {
         chrome.storage.local.get(
-            [SCHEDULING_LINKS_KEY, LEGACY_LINKS_KEY, CALENDAR_EVENTS_KEY, CALENDAR_GROUPS_KEY, SHOW_HOLIDAYS_KEY],
+            [
+                SCHEDULING_LINKS_KEY,
+                LEGACY_LINKS_KEY,
+                CALENDAR_EVENTS_KEY,
+                CALENDAR_GROUPS_KEY,
+                CALENDAR_GROUP_TOMBSTONES_KEY,
+                SHOW_HOLIDAYS_KEY,
+            ],
             (res) => {
                 if (Array.isArray(res[SCHEDULING_LINKS_KEY])) {
                     setSavedLinks(res[SCHEDULING_LINKS_KEY] as SchedulingLink[]);
@@ -257,21 +285,25 @@ export default function SchedulingCalendarPage({
                     setSavedLinks(res[LEGACY_LINKS_KEY] as SchedulingLink[]);
                 }
                 if (Array.isArray(res[CALENDAR_EVENTS_KEY])) {
-                    const loaded = normalizeCalendarEventDates(
-                        (res[CALENDAR_EVENTS_KEY] as CalendarEvent[]).map((e) => ({
-                            ...e,
-                            allDay: e.allDay ?? false,
-                        })),
-                    );
+                    const loaded = prepareStoredEvents(res[CALENDAR_EVENTS_KEY] as CalendarEvent[]);
                     setEvents(loaded);
+                    setEventsLoaded(true);
+                    chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: loaded });
+                } else {
+                    setEventsLoaded(true);
                 }
-                if (Array.isArray(res[CALENDAR_GROUPS_KEY])) {
-                    setGroups(res[CALENDAR_GROUPS_KEY] as CalendarGroup[]);
-                } else if (typeof res[SHOW_HOLIDAYS_KEY] === 'boolean') {
-                    setGroups((g) =>
-                        g.map((x) => (x.kind === 'holidays' ? { ...x, enabled: res[SHOW_HOLIDAYS_KEY] as boolean } : x)),
-                    );
-                }
+                const tombstones = normalizeCalendarGroupTombstones(
+                    res[CALENDAR_GROUP_TOMBSTONES_KEY],
+                );
+                setGroupTombstones(tombstones);
+                setGroups(
+                    mergeStoredCalendarGroups(
+                        res[CALENDAR_GROUPS_KEY],
+                        tombstones,
+                        res[SHOW_HOLIDAYS_KEY],
+                    ),
+                );
+                setGroupsLoaded(true);
             },
         );
     }, []);
@@ -281,12 +313,17 @@ export default function SchedulingCalendarPage({
     }, [savedLinks]);
 
     useEffect(() => {
+        if (!eventsLoaded) return;
         chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: events });
-    }, [events]);
+    }, [events, eventsLoaded]);
 
     useEffect(() => {
-        chrome.storage.local.set({ [CALENDAR_GROUPS_KEY]: groups });
-    }, [groups]);
+        if (!groupsLoaded) return;
+        chrome.storage.local.set({
+            [CALENDAR_GROUPS_KEY]: groups,
+            [CALENDAR_GROUP_TOMBSTONES_KEY]: groupTombstones,
+        });
+    }, [groupTombstones, groups, groupsLoaded]);
 
     const monthStart = startOfMonth(miniMonth);
     const miniGridStart = startOfWeek(monthStart);
@@ -305,20 +342,39 @@ export default function SchedulingCalendarPage({
     const holidaysOn = holidaysGroup?.enabled ?? false;
     const holidaysColor = holidaysGroup?.color ?? '#22c55e';
 
+    const visibleRange = useMemo(() => {
+        if (calView === 'month') {
+            return {
+                start: startOfWeek(startOfMonth(miniMonth)),
+                end: endOfWeek(endOfMonth(miniMonth)),
+            };
+        }
+        const anchor = calView === 'day' ? startOfWeek(dayDate) : weekStart;
+        return { start: addDays(anchor, -7), end: addDays(endOfWeek(anchor), 7) };
+    }, [calView, dayDate, miniMonth, weekStart]);
+    const visibleEvents = useMemo(
+        () => expandCalendarEventsInRange(events, visibleRange.start, visibleRange.end),
+        [events, visibleRange],
+    );
+    const visibleHolidays = useMemo(
+        () => holidaysForRange(visibleRange.start, visibleRange.end),
+        [visibleRange],
+    );
+
     const timedEventsForDay = (day: Date) => {
         const ds = day.toDateString();
-        return events.filter((e) => e.date === ds && !e.allDay && isGroupEnabled(e.groupId));
+        return visibleEvents.filter((e) => e.date === ds && !e.allDay && isGroupEnabled(e.groupId));
     };
 
     const allDayChipsForDay = (day: Date): AllDayChip[] => {
         const chips: AllDayChip[] = [];
         if (holidaysOn) {
             const hk = format(day, 'yyyy-MM-dd');
-            const name = HOLIDAYS[hk];
+            const name = visibleHolidays[hk];
             if (name) chips.push({ label: name, color: holidaysColor });
         }
         const ds = day.toDateString();
-        events
+        visibleEvents
             .filter((e) => e.date === ds && e.allDay && isGroupEnabled(e.groupId))
             .forEach((e) => chips.push({ label: e.title, color: colorForEvent(e, groups) }));
         return chips;
@@ -338,23 +394,95 @@ export default function SchedulingCalendarPage({
         });
     };
 
-    const saveEvent = (ev: Omit<CalendarEvent, 'id'> & { id?: string }) => {
+    const saveEvent = (
+        ev: Omit<CalendarEvent, 'id'> & { id?: string },
+        target: RecurrenceEditTarget = 'series',
+    ) => {
         const color = colorForEvent({ ...ev, id: ev.id ?? '' } as CalendarEvent, groups);
-        const patch = { ...ev, color, id: ev.id ?? String(Date.now()) } as CalendarEvent;
-        if (ev.id) {
-            setEvents((prev) => prev.map((e) => (e.id === ev.id ? { ...e, ...patch } : e)));
+        const generated = Boolean(ev.recurrenceMasterId && ev.occurrenceDate);
+        const patch = {
+            ...ev,
+            color,
+            id: ev.id ?? String(Date.now()),
+            seriesId: ev.repeat && ev.repeat !== 'none'
+                ? ev.seriesId ?? `series_${ev.id ?? Date.now()}`
+                : undefined,
+        } as CalendarEvent;
+
+        if (generated && target === 'occurrence') {
+            setEvents((prev) => {
+                const masterIndex = prev.findIndex((event) => event.id === ev.recurrenceMasterId);
+                if (masterIndex < 0) return prev;
+                const master = prev[masterIndex];
+                const next = [...prev];
+                next[masterIndex] = withOccurrenceException(master, patch);
+                next.push({
+                    ...patch,
+                    id: `event_${Date.now()}`,
+                    repeat: 'none',
+                    seriesId: undefined,
+                    recurrenceWeekdays: undefined,
+                    recurrenceExceptions: undefined,
+                    recurrenceMasterId: undefined,
+                    recurrenceMasterDate: undefined,
+                    occurrenceDate: undefined,
+                });
+                return next;
+            });
+        } else if (ev.id) {
+            const masterId = ev.recurrenceMasterId ?? ev.id;
+            setEvents((prev) =>
+                prev.map((event) => {
+                    if (event.id === masterId) {
+                        return {
+                            ...event,
+                            title: patch.title,
+                            allDay: patch.allDay,
+                            startHour: patch.startHour,
+                            startMin: patch.startMin,
+                            durationMin: patch.durationMin,
+                            color: patch.color,
+                            groupId: patch.groupId,
+                            description: patch.description,
+                            repeat: patch.repeat,
+                            seriesId: patch.repeat && patch.repeat !== 'none'
+                                ? event.seriesId ?? patch.seriesId ?? `series_${event.id}`
+                                : undefined,
+                            recurrenceWeekdays: patch.repeat === 'weekly'
+                                ? patch.recurrenceWeekdays
+                                : undefined,
+                            recurrenceExceptions: patch.repeat && patch.repeat !== 'none'
+                                ? event.recurrenceExceptions
+                                : undefined,
+                        };
+                    }
+                    return event;
+                }),
+            );
         } else {
             setEvents((prev) => [...prev, patch]);
         }
     };
 
-    const deleteEvent = (id: string) => {
-        setEvents((prev) => prev.filter((e) => e.id !== id));
-        setEventModal((modal) => (modal?.editing?.id === id ? null : modal));
+    const deleteEvent = (event: CalendarEvent, target: RecurrenceEditTarget = 'occurrence') => {
+        setEvents((prev) => {
+            if (isGeneratedOccurrence(event) && target === 'occurrence') {
+                return prev.map((candidate) =>
+                    candidate.id === event.recurrenceMasterId
+                        ? withOccurrenceException(candidate, event)
+                        : candidate,
+                );
+            }
+            const id = event.recurrenceMasterId ?? event.id;
+            return prev.filter((candidate) => candidate.id !== id);
+        });
+        setEventModal((modal) => (modal?.editing?.id === event.id ? null : modal));
     };
 
     const dragSelectRef = useRef(grid.dragSelect);
-    dragSelectRef.current = grid.dragSelect;
+    useEffect(() => {
+        dragSelectRef.current = grid.dragSelect;
+    }, [grid.dragSelect]);
 
     useEffect(() => {
         const onMove = (e: PointerEvent) => {
@@ -369,7 +497,10 @@ export default function SchedulingCalendarPage({
             if (pending && !grid.dragEventRef.current) {
                 const dx = e.clientX - pending.startX;
                 const dy = e.clientY - pending.startY;
-                if (dx * dx + dy * dy >= EVENT_DRAG_THRESHOLD_PX * EVENT_DRAG_THRESHOLD_PX) {
+                if (
+                    !isGeneratedOccurrence(pending.ev) &&
+                    dx * dx + dy * dy >= EVENT_DRAG_THRESHOLD_PX * EVENT_DRAG_THRESHOLD_PX
+                ) {
                     grid.startDragEvent(
                         pending.ev,
                         pending.dayIndex,
@@ -408,7 +539,7 @@ export default function SchedulingCalendarPage({
                 }
             }
         };
-        const onUp = (_e: PointerEvent) => {
+        const onUp = () => {
             if (rightDragRef.current.active) {
                 const sel = dragSelectRef.current;
                 grid.setDragSelect(null);
@@ -463,6 +594,26 @@ export default function SchedulingCalendarPage({
         if (patch.color) {
             setEvents((prev) => applyGroupColorToEvents(prev, id, patch.color!));
         }
+    };
+
+    const deleteGroup = (group: CalendarGroup) => {
+        const eventCount = events.filter((event) => event.groupId === group.id).length;
+        const detail = eventCount === 1 ? '1 event' : `${eventCount} events`;
+        const message =
+            group.kind === 'holidays'
+                ? `Delete "${group.name}"? You can restore it only by resetting calendar settings.`
+                : `Delete "${group.name}" and ${detail}? This cannot be undone.`;
+        if (!window.confirm(message)) return false;
+        setEvents((prev) => prev.filter((event) => event.groupId !== group.id));
+        setGroups((prev) => prev.filter((candidate) => candidate.id !== group.id));
+        if (group.kind === 'holidays') {
+            setGroupTombstones((current) =>
+                current.includes(group.id) ? current : [...current, group.id],
+            );
+        }
+        setOpenGroupId((id) => (id === group.id ? null : id));
+        setEditingGroup((editing) => (editing?.id === group.id ? null : editing));
+        return true;
     };
 
     const openGroup = groups.find((g) => g.id === openGroupId);
@@ -689,7 +840,7 @@ export default function SchedulingCalendarPage({
         >
             {/* Left sidebar */}
             <aside
-                className={`flex-shrink-0 border-r flex flex-col transition-all duration-200 ${sidebarCollapsed ? 'w-10' : 'w-[260px]'}`}
+                className={`flex-shrink-0 border-r flex flex-col transition-all duration-200 ${sidebarCollapsed ? 'w-9' : 'w-[224px]'}`}
                 style={{ backgroundColor: 'var(--cal-surface)', borderColor: 'var(--cal-border)' }}
             >
                 {/* Sidebar toggle */}
@@ -704,7 +855,7 @@ export default function SchedulingCalendarPage({
                             Back
                         </button>
                     )}
-                    {!sidebarCollapsed && !onBack && <span className="text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">Calendar</span>}
+                    {!sidebarCollapsed && !onBack && <span className="text-xs font-medium text-neutral-400">Calendar</span>}
                     <button
                         type="button"
                         onClick={() => setSidebarCollapsed((v) => !v)}
@@ -775,9 +926,9 @@ export default function SchedulingCalendarPage({
                                                         setWeekStart(startOfWeek(day));
                                                         setMiniMonth(day);
                                                     }}
-                                                    className={`relative z-[1] h-7 text-[10px] font-medium rounded-md transition-colors tabular-nums ${
+                                                className={`relative z-[1] h-7 text-[10px] font-medium rounded-md transition-colors tabular-nums ${
                                                         !inMonth ? 'text-neutral-700' : inWeek ? 'text-white' : 'text-neutral-400'
-                                                    } ${isToday ? 'bg-purple-600 !text-white font-semibold' : 'hover:bg-white/10'}`}
+                                                    } ${isToday ? 'bg-[#ff5a5f] !text-white font-semibold' : 'hover:bg-white/10'}`}
                                                 >
                                                     {format(day, 'd')}
                                                 </button>
@@ -804,7 +955,7 @@ export default function SchedulingCalendarPage({
                                         <button
                                             type="button"
                                             onClick={() => setLeftPanel((p) => (p === 'schedule-menu' ? 'none' : 'schedule-menu'))}
-                                            className="w-full px-3 py-2 text-left text-xs font-semibold text-neutral-300 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] hover:text-white transition-colors"
+                                            className="w-full px-2 py-1.5 text-left text-xs font-medium text-neutral-400 rounded-md hover:bg-white/[0.06] hover:text-white transition-colors"
                                         >
                                             + New scheduling link
                                         </button>
@@ -820,7 +971,7 @@ export default function SchedulingCalendarPage({
                                                         >
                                                             {l.title}
                                                         </button>
-                                                        <button type="button" onClick={() => editSchedulingLink(l)} className="px-2 py-1.5 text-[10px] font-bold text-purple-400 hover:text-white shrink-0">Edit</button>
+                                                        <button type="button" onClick={() => editSchedulingLink(l)} className="px-2 py-1.5 text-[10px] font-medium text-neutral-500 hover:text-white shrink-0">Edit</button>
                                                         <button type="button" onClick={() => previewSchedulingUrl(l)} className="px-2 py-1.5 text-[10px] font-bold text-blue-400 shrink-0">↗</button>
                                                     </div>
                                                 ))}
@@ -836,6 +987,7 @@ export default function SchedulingCalendarPage({
                                     onOpenGroup={setOpenGroupId}
                                     onChange={setGroups}
                                     onEditGroup={setEditingGroup}
+                                    onDeleteGroup={deleteGroup}
                                 />
                             </div>
                         </div>
@@ -879,8 +1031,10 @@ export default function SchedulingCalendarPage({
                     <GroupDetailPanel
                         group={openGroup}
                         events={events}
+                        holidayRange={visibleRange}
                         onClose={() => setOpenGroupId(null)}
                         onEdit={() => setEditingGroup(openGroup)}
+                        onDeleteGroup={() => deleteGroup(openGroup)}
                         onAddEvent={() => {
                             setEventModal({
                                 day: new Date(),
@@ -900,28 +1054,28 @@ export default function SchedulingCalendarPage({
                                 ev,
                             );
                         }}
-                        onDeleteEvent={(ev) => deleteEvent(ev.id)}
+                        onDeleteEvent={(ev) => deleteEvent(ev, 'series')}
                     />
                 )}
             </AnimatePresence>
 
             <div ref={weekPanRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0a0a0a] flex-shrink-0 gap-2 flex-wrap">
+                <header className="calendar-toolbar flex items-center justify-between px-3 py-2 border-b border-white/[0.07] bg-[#202021] flex-shrink-0 gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
-                        <button type="button" onClick={navBack} className="p-2 rounded-lg hover:bg-white/10 text-neutral-400 transition-colors">
-                            <ChevronLeft size={18} />
+                        <button type="button" onClick={navBack} className="calendar-nav-control p-1.5 rounded-md hover:bg-white/10 text-neutral-500 transition-colors">
+                            <ChevronLeft size={15} />
                         </button>
-                        <button type="button" onClick={navForward} className="p-2 rounded-lg hover:bg-white/10 text-neutral-400 transition-colors">
-                            <ChevronRight size={18} />
+                        <button type="button" onClick={navForward} className="calendar-nav-control p-1.5 rounded-md hover:bg-white/10 text-neutral-500 transition-colors">
+                            <ChevronRight size={15} />
                         </button>
-                        <h1 className="text-base font-semibold ml-1">
+                        <h1 className="text-sm font-medium ml-1">
                             {calView === 'day' ? format(dayDate, 'EEEE, MMMM d') : format(weekStart, 'MMMM yyyy')}
                         </h1>
-                        <button type="button" onClick={goToday} className="ml-2 px-3 py-1 rounded-lg text-[11px] font-semibold border border-white/10 text-neutral-400 hover:text-white hover:bg-white/5 transition-colors">
+                        <button type="button" onClick={goToday} className="ml-2 px-2.5 py-1 rounded-md text-[11px] font-medium border border-white/[0.09] text-neutral-400 hover:text-white hover:bg-white/5 transition-colors">
                             Today
                         </button>
                     </div>
-                    <div className="flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/8">
+                    <div className="calendar-view-controls flex items-center gap-0.5 p-0.5 rounded-md bg-black/15 border border-white/[0.07]">
                         {(['day', 'week', 'month'] as CalendarView[]).map((v) => (
                             <button
                                 key={v}
@@ -935,8 +1089,8 @@ export default function SchedulingCalendarPage({
                                         setWeekStart(startOfWeek(target));
                                     }
                                 }}
-                                className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-colors capitalize ${
-                                    calView === v ? 'bg-purple-600 text-white' : 'text-neutral-500 hover:text-white hover:bg-white/8'
+                                className={`px-2.5 py-1 rounded-[4px] text-[11px] font-medium transition-colors capitalize ${
+                                    calView === v ? 'bg-white/[0.12] text-white' : 'text-neutral-500 hover:text-white hover:bg-white/8'
                                 }`}
                             >
                                 {v}
@@ -987,12 +1141,12 @@ export default function SchedulingCalendarPage({
                                             </span>
                                             <div className="mt-1 space-y-0.5">
                                                 {allDayChips.slice(0, 2).map((chip, i) => (
-                                                    <div key={i} className="text-[9px] font-bold px-1 py-0.5 rounded truncate" style={{ backgroundColor: `${chip.color}33`, color: chip.color }}>
+                                                    <div key={i} className="calendar-event-title text-[9px] font-bold px-1 py-0.5 rounded truncate" style={{ backgroundColor: `${chip.color}33`, color: chip.color }}>
                                                         {chip.label}
                                                     </div>
                                                 ))}
                                                 {dayEvents.slice(0, 2).map((ev) => (
-                                                    <div key={ev.id} className="text-[9px] font-bold px-1 py-0.5 rounded truncate" style={{ backgroundColor: `${ev.color || '#a855f7'}33`, color: ev.color || '#a855f7' }}
+                                                    <div key={ev.id} className="calendar-event-title text-[9px] font-bold px-1 py-0.5 rounded truncate" style={{ backgroundColor: `${ev.color || '#a855f7'}33`, color: ev.color || '#a855f7' }}
                                                         onClick={(e) => { e.stopPropagation(); openModalFromRange(new Date(ev.date), ev.startHour * 60 + ev.startMin, ev.startHour * 60 + ev.startMin + ev.durationMin, ev); }}>
                                                         {ev.title}
                                                     </div>
@@ -1026,7 +1180,7 @@ export default function SchedulingCalendarPage({
                                     onRightPointerDown={(day, dayIndex) => {
                                         rightDragRef.current = { active: true, started: false, day, dayIndex };
                                     }}
-                                    onDeleteEvent={(ev) => deleteEvent(ev.id)}
+                                    onDeleteEvent={(ev) => deleteEvent(ev)}
                                     onEventPointerDown={(ev, day, dayIndex, startMin, e) => {
                                         eventDragMovedRef.current = false;
                                         eventPointerPendingRef.current = { ev, day, dayIndex, startMin, startX: e.clientX, startY: e.clientY, pointerId: e.pointerId };
@@ -1053,7 +1207,7 @@ export default function SchedulingCalendarPage({
                                     onRightPointerDown={(day, dayIndex) => {
                                         rightDragRef.current = { active: true, started: false, day, dayIndex };
                                     }}
-                                    onDeleteEvent={(ev) => deleteEvent(ev.id)}
+                                    onDeleteEvent={(ev) => deleteEvent(ev)}
                                     onEventPointerDown={(ev, day, dayIndex, startMin, e) => {
                                         eventDragMovedRef.current = false;
                                         eventPointerPendingRef.current = { ev, day, dayIndex, startMin, startX: e.clientX, startY: e.clientY, pointerId: e.pointerId };
@@ -1088,7 +1242,11 @@ export default function SchedulingCalendarPage({
                     groups={groups}
                     onClose={() => setEventModal(null)}
                     onSave={saveEvent}
-                    onDelete={eventModal.editing ? () => deleteEvent(eventModal.editing!.id) : undefined}
+                    onDelete={
+                        eventModal.editing
+                            ? (target) => deleteEvent(eventModal.editing!, target)
+                            : undefined
+                    }
                 />
             )}
 
@@ -1097,6 +1255,9 @@ export default function SchedulingCalendarPage({
                     group={editingGroup}
                     onClose={() => setEditingGroup(null)}
                     onSave={(patch) => updateGroup(editingGroup.id, patch)}
+                    onDelete={
+                        () => deleteGroup(editingGroup)
+                    }
                 />
             )}
 

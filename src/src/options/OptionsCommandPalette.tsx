@@ -7,6 +7,7 @@ import {
     Clock,
     FlaskConical,
     LayoutGrid,
+    ListTodo,
     Search,
     Settings,
     Shield,
@@ -35,6 +36,7 @@ const NAV_TARGETS: PaletteNavTarget[] = WORKSPACE_NAV.flatMap((section) =>
 const NAV_ICONS: Record<string, typeof LayoutGrid> = {
     overview: LayoutGrid,
     calendar: Calendar,
+    lists: ListTodo,
     sessions: Clock,
     blocklist: Shield,
     habits: Target,

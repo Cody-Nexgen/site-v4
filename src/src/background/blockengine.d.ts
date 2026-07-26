@@ -12,9 +12,10 @@ export function removeDailySchedule(domain: string, scheduleId: string): Promise
 export function getSchedules(domain?: string): any;
 export function startTimer(domain: string, durationMinutes: number): Promise<string>;
 export function cancelTimer(domain: string, timerId: string): Promise<void>;
+export function removeBlockSource(domain: string, source: string, sourceId?: string | null): Promise<void>;
 export function getTimers(domain?: string): any;
 export function getEngineState(): {
-    blocklist: Record<string, any>;
+    blocklist: Record<string, { sources: string[]; categoryKeys: string[] }>;
     regexBlocklist: Record<string, any>;
     categoriesActive: Record<string, boolean>;
     schedules: Record<string, any>;

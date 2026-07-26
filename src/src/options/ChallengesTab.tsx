@@ -1,20 +1,32 @@
 import { useMemo, useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Target, Zap, Trophy, RefreshCw, Check } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
 import { computeFocusScore } from '../lib/focusScore';
-import { useFocusProgression, sendProgressionMessage } from '../hooks/useFocusProgression';
-import { computeChallengeProgress } from '../lib/challenges';
+import {
+    useFocusProgression,
+    scheduleChallengeFocusScore,
+    sendProgressionMessage,
+} from '../hooks/useFocusProgression';
+import {
+    computeChallengeProgress,
+    hasCompletedChallenge,
+    hasPersistedChallengeStart,
+    isChallengeStartResponseStaleOrPartial,
+    type ChallengeStartResponse,
+} from '../lib/challenges';
 
 export default function ChallengesTab() {
     const { engineState, last7DaysStats, dashboardStreak } = useAuthStore();
     const { progression, refresh } = useFocusProgression();
-    const [notice, setNotice] = useState('');
+    const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
+    const [startPhases, setStartPhases] = useState<Record<string, 'check' | 'started'>>({});
+    const [startingIds, setStartingIds] = useState<Record<string, boolean>>({});
 
     const todayIdx = (last7DaysStats?.length ?? 1) - 1;
     const todayData = todayIdx >= 0 ? last7DaysStats?.[todayIdx] : undefined;
-    const planner = engineState.dailyPlanner ?? [];
-    const habits = engineState.habits ?? [];
+    const planner = useMemo(() => engineState.dailyPlanner ?? [], [engineState.dailyPlanner]);
+    const habits = useMemo(() => engineState.habits ?? [], [engineState.habits]);
 
     const focusScore = useMemo(
         () =>
@@ -30,7 +42,7 @@ export default function ChallengesTab() {
     );
 
     useEffect(() => {
-        void sendProgressionMessage({ type: 'SET_CHALLENGE_FOCUS_SCORE', focusScore });
+        return scheduleChallengeFocusScore(focusScore);
     }, [focusScore]);
 
     const challenges = useMemo(
@@ -51,23 +63,86 @@ export default function ChallengesTab() {
     const dynamic = challenges.filter((c) => c.id.startsWith('dyn_') && !c.completed && !c.active);
 
     const startChallenge = async (def: (typeof challenges)[number]) => {
-        await sendProgressionMessage({
-            type: 'START_CHALLENGE',
-            challengeId: def.id,
-            challenge: {
-                id: def.id,
-                title: def.title,
-                description: def.description,
-                icon: def.icon,
-                metric: def.metric,
-                target: def.target,
-                xpReward: def.xpReward,
-                coinReward: def.coinReward,
-            },
-        });
-        setNotice('Challenge started.');
-        await refresh();
-        window.setTimeout(() => setNotice(''), 2500);
+        if (startPhases[def.id] || startingIds[def.id] || def.active || def.completed) return;
+        setStartingIds((current) => ({ ...current, [def.id]: true }));
+        try {
+            const response = await sendProgressionMessage<ChallengeStartResponse>({
+                type: 'START_CHALLENGE',
+                challengeId: def.id,
+                challenge: {
+                    id: def.id,
+                    title: def.title,
+                    description: def.description,
+                    icon: def.icon,
+                    metric: def.metric,
+                    target: def.target,
+                    xpReward: def.xpReward,
+                    coinReward: def.coinReward,
+                    periodKind: def.periodKind,
+                    periodKey: def.periodKey,
+                },
+            });
+            const staleOrPartial = isChallengeStartResponseStaleOrPartial(response, def.id);
+            let authoritative = response;
+            try {
+                let reloaded = await refresh();
+                // A timed-out/closed response does not cancel the background write.
+                // Give that write a brief chance to settle before declaring failure.
+                if (
+                    staleOrPartial &&
+                    !reloaded.activeChallenges.some((challenge) => challenge.id === def.id) &&
+                    !reloaded.completedChallenges.includes(def.id)
+                ) {
+                    await new Promise((resolve) => window.setTimeout(resolve, 150));
+                    reloaded = await refresh();
+                }
+                authoritative = { ...response, progression: reloaded };
+            } catch (reloadError) {
+                console.warn('[Challenges] Could not verify challenge storage after response:', {
+                    challengeId: def.id,
+                    response,
+                    reloadError,
+                });
+            }
+
+            const persistedActive = hasPersistedChallengeStart(authoritative, def.id);
+            const completed = hasCompletedChallenge(authoritative, def.id);
+            if (completed || response.reason === 'completed') {
+                setNotice({ text: 'This challenge is already completed.', error: false });
+                return;
+            }
+            if (!persistedActive) {
+                const detail = response.error ?? response.reason ?? 'No active challenge was found in storage.';
+                console.error('[Challenges] START_CHALLENGE did not persist:', {
+                    challengeId: def.id,
+                    response,
+                    authoritativeProgression: authoritative.progression,
+                });
+                setNotice({ text: `Could not start challenge: ${detail}`, error: true });
+                return;
+            }
+
+            setStartPhases((current) => ({ ...current, [def.id]: 'check' }));
+            setNotice({
+                text: response.reason === 'already_active' || response.started === false
+                    ? 'Challenge is already active.'
+                    : 'Challenge started.',
+                error: false,
+            });
+            window.setTimeout(() => {
+                setStartPhases((current) => ({ ...current, [def.id]: 'started' }));
+            }, 3000);
+        } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            console.error('[Challenges] Unexpected challenge start failure:', {
+                challengeId: def.id,
+                error,
+            });
+            setNotice({ text: `Could not start challenge: ${detail}`, error: true });
+        } finally {
+            setStartingIds((current) => ({ ...current, [def.id]: false }));
+            window.setTimeout(() => setNotice(null), 2500);
+        }
     };
 
     if (!progression) {
@@ -94,8 +169,12 @@ export default function ChallengesTab() {
             </div>
 
             {notice && (
-                <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] px-4 py-3 text-sm font-medium text-emerald-300">
-                    {notice}
+                <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+                    notice.error
+                        ? 'border-red-500/30 bg-red-500/[0.09] text-red-300'
+                        : 'border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-300'
+                }`}>
+                    {notice.text}
                 </div>
             )}
 
@@ -106,7 +185,7 @@ export default function ChallengesTab() {
                     </h2>
                     <div className="space-y-2">
                         {active.map((c) => (
-                            <ChallengeCard key={c.id} challenge={c} active />
+                            <ChallengeCard key={c.id} challenge={c} active startPhase={startPhases[c.id]} />
                         ))}
                     </div>
                 </section>
@@ -119,7 +198,13 @@ export default function ChallengesTab() {
                     </h2>
                     <div className="space-y-2">
                         {dynamic.map((c) => (
-                            <ChallengeCard key={c.id} challenge={c} onStart={() => void startChallenge(c)} />
+                            <ChallengeCard
+                                key={c.id}
+                                challenge={c}
+                                startPhase={startPhases[c.id]}
+                                starting={startingIds[c.id]}
+                                onStart={() => void startChallenge(c)}
+                            />
                         ))}
                     </div>
                 </section>
@@ -132,7 +217,13 @@ export default function ChallengesTab() {
                     </h2>
                     <div className="space-y-2">
                         {available.map((c) => (
-                            <ChallengeCard key={c.id} challenge={c} onStart={() => void startChallenge(c)} />
+                            <ChallengeCard
+                                key={c.id}
+                                challenge={c}
+                                startPhase={startPhases[c.id]}
+                                starting={startingIds[c.id]}
+                                onStart={() => void startChallenge(c)}
+                            />
                         ))}
                     </div>
                 </section>
@@ -159,11 +250,15 @@ function ChallengeCard({
     onStart,
     active,
     done,
+    startPhase,
+    starting,
 }: {
     challenge: ReturnType<typeof computeChallengeProgress>[number];
     onStart?: () => void;
     active?: boolean;
     done?: boolean;
+    startPhase?: 'check' | 'started';
+    starting?: boolean;
 }) {
     const isDynamic = c.id.startsWith('dyn_');
     return (
@@ -207,20 +302,56 @@ function ChallengeCard({
                         </p>
                     )}
                 </div>
-                {!done && !active && onStart && (
+                {startPhase ? (
+                    <motion.div
+                        layout
+                        initial={{ x: -44, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                        className="relative flex h-8 w-[82px] shrink-0 items-center justify-center overflow-hidden rounded-md bg-emerald-500 px-3 text-xs font-semibold text-emerald-950"
+                    >
+                        <AnimatePresence initial={false} mode="sync">
+                            {startPhase === 'check' ? (
+                                <motion.span
+                                    key="check"
+                                    initial={{ x: -32, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    exit={{ x: 34, opacity: 0 }}
+                                    transition={{ duration: 0.14, ease: [0.4, 0, 1, 1] }}
+                                    className="absolute"
+                                >
+                                    <Check size={17} strokeWidth={2.8} />
+                                </motion.span>
+                            ) : (
+                                <motion.span
+                                    key="started"
+                                    initial={{ x: -32, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                >
+                                    Started
+                                </motion.span>
+                            )}
+                        </AnimatePresence>
+                    </motion.div>
+                ) : !done && !active && onStart ? (
                     <button
                         type="button"
                         onClick={onStart}
-                        className="shrink-0 px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors duration-150"
+                        disabled={starting}
+                        className="shrink-0 px-4 py-2 rounded-md bg-white text-black text-xs font-semibold hover:bg-neutral-200 disabled:cursor-wait disabled:opacity-60 transition-colors duration-150"
                     >
-                        Start
+                        {starting ? 'Starting…' : 'Start'}
                     </button>
-                )}
-                {active && (
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-amber-400 px-2 py-1">
-                        Active
+                ) : active ? (
+                    <span className="flex h-8 w-[82px] shrink-0 items-center justify-center rounded-md bg-emerald-500 px-3 text-xs font-semibold text-emerald-950">
+                        Started
                     </span>
-                )}
+                ) : done ? (
+                    <span className="flex h-8 w-[82px] shrink-0 items-center justify-center rounded-md bg-emerald-500/15 px-3 text-xs font-semibold text-emerald-300">
+                        Finished
+                    </span>
+                ) : null}
             </div>
         </motion.div>
     );

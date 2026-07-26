@@ -10,6 +10,8 @@ export default function CalendarEventCard({
     onPointerDown,
     onPointerUp,
     onDelete,
+    connectedLeft = false,
+    connectedRight = false,
 }: {
     ev: CalendarEvent;
     color: string;
@@ -18,6 +20,8 @@ export default function CalendarEventCard({
     onPointerDown?: (e: PointerEvent<HTMLButtonElement>) => void;
     onPointerUp?: (e: PointerEvent<HTMLButtonElement>) => void;
     onDelete?: () => void;
+    connectedLeft?: boolean;
+    connectedRight?: boolean;
 }) {
     const h = Math.max(height, 20);
     const showTime = !ev.allDay && h >= 22;
@@ -40,17 +44,26 @@ export default function CalendarEventCard({
                 onDelete?.();
             }}
             onClick={(e) => e.preventDefault()}
-            className={`absolute left-0.5 right-0.5 z-[4] flex overflow-hidden text-left touch-none select-none shadow-sm`}
-            style={{ top, height: h, borderRadius: 'var(--cal-event-radius, 12px)' }}
+            className="absolute z-[4] flex overflow-hidden text-left touch-none select-none"
+            style={{
+                top,
+                height: h,
+                left: connectedLeft ? -1 : 2,
+                right: connectedRight ? -1 : 2,
+                borderTopLeftRadius: connectedLeft ? 0 : 'var(--cal-event-radius, 6px)',
+                borderBottomLeftRadius: connectedLeft ? 0 : 'var(--cal-event-radius, 6px)',
+                borderTopRightRadius: connectedRight ? 0 : 'var(--cal-event-radius, 6px)',
+                borderBottomRightRadius: connectedRight ? 0 : 'var(--cal-event-radius, 6px)',
+            }}
         >
-            <span className="w-1 shrink-0" style={{ backgroundColor: color }} />
+            {!connectedLeft && <span className="w-1 shrink-0" style={{ backgroundColor: color }} />}
             <span
                 className="flex min-w-0 flex-1 flex-col justify-start px-1.5 py-0.5"
                 style={{ backgroundColor: eventCardFill(color) }}
             >
-                <span className="truncate text-[10px] font-bold leading-tight text-white">{ev.title}</span>
+                <span className="calendar-event-title truncate text-[10px] font-bold leading-tight text-white">{ev.title}</span>
                 {showTime && (
-                    <span className="truncate text-[9px] font-medium leading-snug text-white/70">
+                    <span className="calendar-event-time truncate text-[9px] font-medium leading-snug text-white/70">
                         {eventTimeLabel(ev)}
                     </span>
                 )}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Pencil, Plus } from 'lucide-react';
+import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { EVENT_COLOR_PRESETS, normalizeHexColor, randomEventColor } from '../lib/calendarUtils';
 import type { CalendarGroup } from '../lib/schedulingTypes';
 
@@ -9,12 +9,14 @@ export default function CalendarGroupsPanel({
     onOpenGroup,
     onChange,
     onEditGroup,
+    onDeleteGroup,
 }: {
     groups: CalendarGroup[];
     openGroupId: string | null;
     onOpenGroup: (id: string | null) => void;
     onChange: (next: CalendarGroup[]) => void;
     onEditGroup: (group: CalendarGroup) => void;
+    onDeleteGroup: (group: CalendarGroup) => void;
 }) {
     const [adding, setAdding] = useState(false);
     const [newName, setNewName] = useState('');
@@ -111,6 +113,17 @@ export default function CalendarGroupsPanel({
                                     }}
                                 >
                                     Edit group
+                                </button>
+                                <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[11px] text-red-400 hover:bg-red-500/10"
+                                    onClick={() => {
+                                        setMenuGroupId(null);
+                                        onDeleteGroup(g);
+                                    }}
+                                >
+                                    <Trash2 size={12} />
+                                    Delete group
                                 </button>
                             </div>
                         )}

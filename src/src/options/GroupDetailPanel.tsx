@@ -1,12 +1,11 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { motion } from 'framer-motion';
-import { MoreHorizontal, Pencil, Pin, Plus, Trash2, X } from 'lucide-react';
-import { buildUsHolidays } from '../lib/usHolidays';
+import { MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { holidaysForRange } from '../lib/usHolidays';
 import { eventCardFill } from '../lib/calendarUtils';
+import { recurrenceLabel } from '../lib/calendarRecurrence';
 import type { CalendarEvent, CalendarGroup } from '../lib/schedulingTypes';
-
-const HOLIDAYS = buildUsHolidays(2024, 2028);
 
 type ListItem = {
     id: string;
@@ -31,8 +30,8 @@ function GroupListCard({
         <>
             <span className="w-1 shrink-0" style={{ backgroundColor: color }} />
             <span className="min-w-0 flex-1 px-3 py-2" style={{ backgroundColor: eventCardFill(color) }}>
-                <span className="block text-sm font-bold text-white">{title}</span>
-                <span className="mt-0.5 block text-xs text-neutral-400">{timeLabel}</span>
+                <span className="calendar-event-title block text-sm font-bold text-white">{title}</span>
+                <span className="calendar-event-time mt-0.5 block text-xs text-neutral-400">{timeLabel}</span>
             </span>
         </>
     );
@@ -53,16 +52,20 @@ function GroupListCard({
 export default function GroupDetailPanel({
     group,
     events,
+    holidayRange,
     onClose,
     onEdit,
+    onDeleteGroup,
     onAddEvent,
     onEditEvent,
     onDeleteEvent,
 }: {
     group: CalendarGroup;
     events: CalendarEvent[];
+    holidayRange: { start: Date; end: Date };
     onClose: () => void;
     onEdit: () => void;
+    onDeleteGroup: () => void;
     onAddEvent: () => void;
     onEditEvent: (ev: CalendarEvent) => void;
     onDeleteEvent?: (ev: CalendarEvent) => void;
@@ -80,7 +83,7 @@ export default function GroupDetailPanel({
 
     const items = useMemo((): ListItem[] => {
         if (group.kind === 'holidays') {
-            return Object.entries(HOLIDAYS)
+            return Object.entries(holidaysForRange(holidayRange.start, holidayRange.end))
                 .map(([key, name]) => ({
                     id: key,
                     date: parseISO(key),
@@ -104,16 +107,15 @@ export default function GroupDetailPanel({
                     id: e.id,
                     date: new Date(e.date),
                     title: e.title,
-                    timeLabel: e.allDay
-                        ? 'All-day'
-                        : `${fmt(e.startHour, e.startMin)} – ${fmt(endH, endM)}`,
+                    timeLabel: recurrenceLabel(e) ??
+                        (e.allDay
+                            ? 'All-day'
+                            : `${fmt(e.startHour, e.startMin)} – ${fmt(endH, endM)}`),
                     event: e,
                 };
             })
             .sort((a, b) => a.date.getTime() - b.date.getTime());
-    }, [group, events]);
-
-    let lastDateKey = '';
+    }, [group, events, holidayRange]);
 
     return (
         <motion.aside
@@ -145,22 +147,29 @@ export default function GroupDetailPanel({
                                 <Pencil size={13} />
                                 Edit group
                             </button>
-                            {group.kind === 'custom' && (
+                            <>
+                                {group.kind === 'custom' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setMoreOpen(false); onAddEvent(); }}
+                                        className="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-white/[0.06] flex items-center gap-2"
+                                    >
+                                        <Plus size={13} />
+                                        Add event
+                                    </button>
+                                )}
                                 <button
                                     type="button"
-                                    onClick={() => { setMoreOpen(false); onAddEvent(); }}
-                                    className="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-white/[0.06] flex items-center gap-2"
+                                    onClick={() => { setMoreOpen(false); onDeleteGroup(); }}
+                                    className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
                                 >
-                                    <Plus size={13} />
-                                    Add event
+                                    <Trash2 size={13} />
+                                    Delete group
                                 </button>
-                            )}
+                            </>
                         </div>
                     )}
                 </div>
-                <button type="button" className="p-1 text-neutral-500 hover:text-white" title="Pin">
-                    <Pin size={16} />
-                </button>
                 <button type="button" onClick={onEdit} className="p-1 text-neutral-500 hover:text-white" title="Edit">
                     <Pencil size={16} />
                 </button>
@@ -181,10 +190,11 @@ export default function GroupDetailPanel({
                     </button>
                 )}
                 <div className="space-y-4">
-                    {items.map((item) => {
+                    {items.map((item, index) => {
                         const dateKey = format(item.date, 'yyyy-MM-dd');
-                        const showDate = dateKey !== lastDateKey;
-                        lastDateKey = dateKey;
+                        const previousDateKey =
+                            index > 0 ? format(items[index - 1].date, 'yyyy-MM-dd') : '';
+                        const showDate = dateKey !== previousDateKey;
                         return (
                             <div key={item.id}>
                                 {showDate && (

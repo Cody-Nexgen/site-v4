@@ -1,5 +1,6 @@
-import { eachDayOfInterval, endOfWeek, format, isSameDay, isWeekend } from 'date-fns';
+import { addDays, eachDayOfInterval, endOfWeek, format, isSameDay, isWeekend } from 'date-fns';
 import type { CalendarEvent, CalendarGroup } from '../../lib/schedulingTypes';
+import { sameSeriesSlot } from '../../lib/calendarRecurrence';
 import { eventCardFill } from '../../lib/calendarUtils';
 import { colorForEvent } from '../../lib/eventColors';
 import CalendarEventCard from '../CalendarEventCard';
@@ -79,18 +80,18 @@ export default function CalendarWeekStrip({
                     return (
                         <div
                             key={day.toISOString()}
-                            className="border-r py-3 px-1 text-center last:border-r-0"
+                            className="border-r py-2 px-1 text-center last:border-r-0"
                             style={{ borderColor: 'var(--cal-border)' }}
                         >
                             <div
-                                className="text-xs font-semibold uppercase tracking-wide"
+                                className="text-[10px] font-medium uppercase tracking-wide"
                                 style={{ color: isToday ? 'var(--cal-accent)' : weekend ? 'var(--cal-hour)' : 'var(--cal-hour)' }}
                             >
                                 {format(day, 'EEE')}
                             </div>
                             <div
-                                className={`mt-1.5 inline-flex h-9 w-9 items-center justify-center rounded-full text-base font-bold ${
-                                    isToday ? 'text-[#0c1220] shadow-md' : 'text-[var(--fz-text)]'
+                                className={`mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${
+                                    isToday ? 'text-white' : 'text-[var(--fz-text)]'
                                 }`}
                                 style={isToday ? { backgroundColor: 'var(--cal-today)' } : undefined}
                             >
@@ -135,7 +136,7 @@ export default function CalendarWeekStrip({
                                     >
                                         <span className="w-1 shrink-0" style={{ backgroundColor: chip.color }} />
                                         <span
-                                            className="min-w-0 flex-1 truncate px-1.5 py-0.5 text-white"
+                                            className="calendar-event-title min-w-0 flex-1 truncate px-1.5 py-0.5 text-white"
                                             style={{ backgroundColor: eventCardFill(chip.color) }}
                                         >
                                             {chip.label}
@@ -228,7 +229,7 @@ export default function CalendarWeekStrip({
                                 ))}
                                 {interactive && grid.dragSelect?.dayIndex === dayIndex && (
                                     <div
-                                        className="pointer-events-none absolute left-0.5 right-0.5 z-[2] rounded-xl border-2"
+                                    className="pointer-events-none absolute left-0.5 right-0.5 z-[2] rounded-[4px] border"
                                         style={{
                                             borderColor: 'var(--cal-accent)',
                                             backgroundColor: 'var(--cal-accent-muted)',
@@ -258,6 +259,16 @@ export default function CalendarWeekStrip({
                                         grid.yFromMinutes(ev.durationMin),
                                     );
                                     const displayColor = colorForEvent(ev, groups);
+                                    const connectedLeft =
+                                        dayIndex > 0 &&
+                                        timedEventsForDay(addDays(day, -1)).some((other) =>
+                                            sameSeriesSlot(ev, other),
+                                        );
+                                    const connectedRight =
+                                        dayIndex < weekDays.length - 1 &&
+                                        timedEventsForDay(addDays(day, 1)).some((other) =>
+                                            sameSeriesSlot(ev, other),
+                                        );
                                     return (
                                         <CalendarEventCard
                                             key={ev.id}
@@ -265,6 +276,8 @@ export default function CalendarWeekStrip({
                                             color={displayColor}
                                             top={topPx}
                                             height={heightPx}
+                                            connectedLeft={connectedLeft}
+                                            connectedRight={connectedRight}
                                             onDelete={() => onDeleteEvent(ev)}
                                             onPointerDown={
                                                 interactive && onEventPointerDown
@@ -288,7 +301,7 @@ export default function CalendarWeekStrip({
                             style={{ top: nowTopPx }}
                         >
                             <span
-                                className="w-[56px] flex-shrink-0 pr-2 text-right text-[10px] font-semibold -translate-y-1/2"
+                                className="w-[56px] flex-shrink-0 pr-2 text-right text-[10px] font-semibold leading-none"
                                 style={{ color: 'var(--cal-now)', backgroundColor: 'var(--cal-bg)' }}
                             >
                                 {format(now, 'h:mm a')}
@@ -297,7 +310,7 @@ export default function CalendarWeekStrip({
                                 className="h-[2px] flex-1"
                                 style={{
                                     backgroundColor: 'var(--cal-now)',
-                                    boxShadow: '0 0 8px rgba(245, 158, 11, 0.45)',
+                                    boxShadow: '0 0 8px rgba(255, 90, 95, 0.35)',
                                 }}
                             />
                         </div>

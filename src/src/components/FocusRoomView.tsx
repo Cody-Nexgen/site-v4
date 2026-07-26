@@ -3,15 +3,18 @@ import {
     ArrowLeft,
     Copy,
     DoorOpen,
+    Download,
     Loader2,
     MessageSquare,
     Mic,
     MicOff,
     MoreVertical,
+    Paperclip,
     Shield,
     Users,
     Video,
     VideoOff,
+    Trash2,
     Volume2,
     X,
 } from 'lucide-react';
@@ -27,6 +30,12 @@ import {
     type FocusRoom,
 } from '../lib/socialApi';
 import { useFocusRoomRtc } from '../lib/focusRoomRtc';
+import {
+    deleteAttachment,
+    downloadAttachment,
+    uploadAttachment,
+    type AttachmentRecord,
+} from '../lib/attachmentApi';
 import {
     PROFILE_AVATAR_FALLBACK_CLASS,
     PROFILE_AVATAR_IMG_CLASS,
@@ -107,7 +116,7 @@ type Props = {
 };
 
 export default function FocusRoomView({ onBack, embedded = false }: Props) {
-    const { session, engineState } = useAuthStore();
+    const { session, engineState, subscriptionTier, upgradeToPro } = useAuthStore();
     const [roomId, setRoomId] = useState<string | null>(null);
     const [room, setRoom] = useState<FocusRoom | null>(null);
     const [title, setTitle] = useState('Focus Room');
@@ -129,7 +138,10 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
         echoCancellation: true,
     });
     const [testTonePlaying, setTestTonePlaying] = useState(false);
+    const [attachmentError, setAttachmentError] = useState('');
+    const [uploadingAttachment, setUploadingAttachment] = useState(false);
     const previewVideoRef = useRef<HTMLVideoElement>(null);
+    const chatFileInputRef = useRef<HTMLInputElement>(null);
 
     const displayName =
         engineState.profileName?.trim() ||
@@ -151,7 +163,34 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
         inRoom && !!(room && roomId),
         isHost,
         joinPrefs,
+        engineState.profileAvatar,
     );
+
+    const uploadRoomAttachment = async (file: File) => {
+        if (!roomId || uploadingAttachment) return;
+        if (subscriptionTier !== 'pro') {
+            setAttachmentError('Chat attachments are available on Pro.');
+            return;
+        }
+        setUploadingAttachment(true);
+        setAttachmentError('');
+        const result = await uploadAttachment(supabase, file, { context: 'room', roomId });
+        setUploadingAttachment(false);
+        if (!result.ok) {
+            setAttachmentError(result.error);
+            return;
+        }
+        rtc.sendChat('', { ...result.attachment, extractedText: null });
+    };
+
+    const removeRoomAttachment = async (attachment: AttachmentRecord) => {
+        const result = await deleteAttachment(supabase, attachment);
+        if (!result.ok) {
+            setAttachmentError(result.error);
+            return;
+        }
+        rtc.removeChatAttachment(attachment.id);
+    };
 
     useEffect(() => {
         const el = previewVideoRef.current;
@@ -184,12 +223,13 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
 
     useEffect(() => {
         if (!roomId || !inRoom) return;
-        void pollRoom(roomId);
+        const initialPoll = window.setTimeout(() => void pollRoom(roomId), 0);
         const poll = window.setInterval(() => void pollRoom(roomId), 5000);
         const tick = window.setInterval(() => {
             if (room?.endsAt) setCountdown(formatCountdown(room.endsAt));
         }, 1000);
         return () => {
+            window.clearTimeout(initialPoll);
             window.clearInterval(poll);
             window.clearInterval(tick);
         };
@@ -490,6 +530,7 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                 key={p.peerId}
                                 stream={p.stream}
                                 label={p.displayName}
+                                avatarUrl={p.avatarUrl}
                                 isLocal={p.isLocal}
                                 camOn={p.isLocal ? rtc.camOn : !!p.stream?.getVideoTracks().some((t) => t.enabled)}
                                 speakerId={rtc.selectedSpeakerId}
@@ -499,7 +540,17 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                 </div>
 
                 {chatOpen && (
-                    <aside className="w-72 border-l border-[#1e1f22] bg-[#1e1f22] flex flex-col shrink-0">
+                    <aside
+                        className="w-72 border-l border-[#1e1f22] bg-[#1e1f22] flex flex-col shrink-0"
+                        onDragOver={(event) => {
+                            if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                            event.preventDefault();
+                            const file = event.dataTransfer.files[0];
+                            if (file) void uploadRoomAttachment(file);
+                        }}
+                    >
                         <div className="h-12 px-3 flex items-center justify-between border-b border-[#2b2d31]">
                             <span className="font-bold text-sm">Chat</span>
                             <button type="button" onClick={() => setChatOpen(false)}><X size={16} /></button>
@@ -508,10 +559,60 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                             {rtc.chat.map((m) => (
                                 <div key={m.id}>
                                     <span className="font-medium text-neutral-400 text-xs">{m.name}</span>
-                                    <p className="text-[#dbdee1]">{m.text}</p>
+                                    {m.text && <p className="text-[#dbdee1] break-words">{m.text}</p>}
+                                    {m.attachment && (
+                                        <div className="mt-1 flex items-center gap-2 rounded-lg border border-white/[0.08] bg-black/20 p-2">
+                                            <Paperclip size={13} className="shrink-0 text-neutral-500" />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-xs text-neutral-300">{m.attachment.fileName}</p>
+                                                <p className="text-[9px] text-neutral-600">
+                                                    {(m.attachment.sizeBytes / 1024).toFixed(1)} KB
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => void downloadAttachment(supabase, m.attachment!).then((result) => {
+                                                    if (!result.ok) setAttachmentError(result.error);
+                                                })}
+                                                aria-label={`Download ${m.attachment.fileName}`}
+                                            >
+                                                <Download size={13} />
+                                            </button>
+                                            {m.attachment.ownerId === session.user.id && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void removeRoomAttachment(m.attachment!)}
+                                                    className="text-red-400"
+                                                    aria-label={`Delete ${m.attachment.fileName}`}
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
+                        <input
+                            ref={chatFileInputRef}
+                            type="file"
+                            className="hidden"
+                            onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                if (file) void uploadRoomAttachment(file);
+                                event.target.value = '';
+                            }}
+                        />
+                        {attachmentError && (
+                            <div className="mx-3 mb-2 rounded-lg bg-amber-400/10 p-2 text-[10px] text-amber-200">
+                                {attachmentError}
+                                {subscriptionTier !== 'pro' && (
+                                    <button type="button" onClick={() => void upgradeToPro()} className="ml-2 font-bold underline">
+                                        Upgrade
+                                    </button>
+                                )}
+                            </div>
+                        )}
                         <form
                             className="p-3 border-t border-[#2b2d31] flex gap-2"
                             onSubmit={(e) => {
@@ -520,7 +621,19 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                 setChatDraft('');
                             }}
                         >
-                            <input value={chatDraft} onChange={(e) => setChatDraft(e.target.value)} placeholder="Message…" className="flex-1 bg-[#111214] rounded-lg px-3 py-2 text-sm outline-none border border-[#2b2d31]" />
+                            <button
+                                type="button"
+                                disabled={uploadingAttachment}
+                                onClick={() => {
+                                    if (subscriptionTier === 'pro') chatFileInputRef.current?.click();
+                                    else setAttachmentError('Chat attachments are available on Pro.');
+                                }}
+                                className="rounded-lg bg-[#111214] p-2 text-neutral-400 hover:text-white disabled:opacity-40"
+                                aria-label="Attach file"
+                            >
+                                {uploadingAttachment ? <Loader2 size={15} className="animate-spin" /> : <Paperclip size={15} />}
+                            </button>
+                            <input value={chatDraft} onChange={(e) => setChatDraft(e.target.value)} placeholder="Message…" className="min-w-0 flex-1 bg-[#111214] rounded-lg px-3 py-2 text-sm outline-none border border-[#2b2d31]" />
                         </form>
                     </aside>
                 )}

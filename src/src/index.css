@@ -32,10 +32,19 @@ body {
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 9%);
   --ring: oklch(0.62 0 0);
+  --dashboard-bg: #0a0a0b;
+  --dashboard-surface: #121214;
+  --dashboard-surface-raised: #171719;
+  --dashboard-interactive: rgba(255, 255, 255, 0.045);
+  --dashboard-interactive-hover: rgba(255, 255, 255, 0.075);
+  --dashboard-border: rgba(255, 255, 255, 0.075);
+  --dashboard-text: #ededee;
+  --dashboard-text-secondary: #a0a0a6;
+  --dashboard-text-muted: #66666d;
   --radius: 0.5rem;
   min-height: 100vh;
-  background: #0a0a0b;
-  color: #ededee;
+  background: var(--dashboard-bg);
+  color: var(--dashboard-text);
   font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
@@ -44,17 +53,17 @@ body {
 
 .focuz-dashboard .glass-edge-card,
 .focuz-dashboard .surface-card {
-  background: #121214;
+  background: var(--dashboard-surface);
   backdrop-filter: none;
-  border: 1px solid rgba(255, 255, 255, 0.075);
+  border: 1px solid var(--dashboard-border);
   border-radius: 8px;
   box-shadow: none;
 }
 
 .focuz-dashboard .glass-edge-btn,
 .focuz-dashboard .surface-button {
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.075);
+  background: var(--dashboard-interactive);
+  border: 1px solid var(--dashboard-border);
   border-radius: 6px;
   box-shadow: none;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
@@ -62,8 +71,8 @@ body {
 
 .focuz-dashboard .glass-edge-btn:hover,
 .focuz-dashboard .surface-button:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.11);
+  background: var(--dashboard-interactive-hover);
+  border-color: var(--fz-border-strong);
 }
 
 .focuz-dashboard .focuz-brand-glow,
@@ -201,6 +210,198 @@ body {
 .focuz-dashboard .to-violet-800,
 .focuz-dashboard .to-pink-600 {
   --tw-gradient-to: rgba(255, 255, 255, 0.015);
+}
+
+/* Dashboard appearance is independent from the selected accent theme. */
+html[data-dashboard-theme="light"] .focuz-dashboard {
+  --background: oklch(0.975 0.003 286);
+  --foreground: oklch(0.2 0.006 286);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.006 286);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.006 286);
+  --primary: oklch(0.25 0.008 286);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.94 0.004 286);
+  --secondary-foreground: oklch(0.28 0.006 286);
+  --muted: oklch(0.94 0.004 286);
+  --muted-foreground: oklch(0.5 0.008 286);
+  --accent: oklch(0.925 0.006 286);
+  --accent-foreground: oklch(0.22 0.006 286);
+  --border: oklch(0.2 0.006 286 / 11%);
+  --input: oklch(0.2 0.006 286 / 9%);
+  --ring: oklch(0.48 0.012 286);
+  --dashboard-bg: #f7f7f8;
+  --dashboard-surface: #ffffff;
+  --dashboard-surface-raised: #f1f1f3;
+  --dashboard-interactive: rgba(24, 24, 27, 0.045);
+  --dashboard-interactive-hover: rgba(24, 24, 27, 0.075);
+  --dashboard-border: rgba(24, 24, 27, 0.1);
+  --dashboard-text: #18181b;
+  --dashboard-text-secondary: #52525b;
+  --dashboard-text-muted: #71717a;
+}
+
+html[data-dashboard-theme="light"] body.focuz-dashboard {
+  background: var(--dashboard-bg);
+  color: var(--dashboard-text);
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(.workspace-sidebar, .workspace-account-menu) {
+  background: var(--dashboard-surface) !important;
+  border-color: var(--dashboard-border) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .workspace-account-menu {
+  box-shadow: var(--fz-shadow-md) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .workspace-theme-switcher {
+  background: var(--dashboard-surface);
+  border-color: var(--dashboard-border) !important;
+}
+
+/* Compatibility layer for dashboard screens that still use dark utility colors. */
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#0"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#1"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#2"] {
+  background-color: var(--dashboard-surface) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-black/20"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-black/30"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/5"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/10"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.018]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.025]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.03]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.035]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.04]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.045]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.05]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.055]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.06]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.07]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.08]"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.1]"] {
+  background-color: var(--dashboard-interactive) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/5:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/10:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.025\]:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.03\]:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.035\]:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.04\]:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.05\]:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.06\]:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.08\]:hover {
+  background-color: var(--dashboard-interactive-hover) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+  .text-white,
+  .text-neutral-50,
+  .text-neutral-100,
+  .text-neutral-200,
+  .text-neutral-300,
+  .text-zinc-100,
+  .text-zinc-200,
+  .text-zinc-300
+) {
+  color: var(--dashboard-text) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+  .text-neutral-400,
+  .text-neutral-500,
+  .text-zinc-400,
+  .text-zinc-500
+) {
+  color: var(--dashboard-text-secondary) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+  .text-neutral-600,
+  .text-neutral-700,
+  .text-neutral-800,
+  .text-zinc-600,
+  .text-zinc-700
+) {
+  color: var(--dashboard-text-muted) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="border-white/"] {
+  border-color: var(--dashboard-border) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+  .bg-neutral-100.text-neutral-950,
+  .bg-neutral-200.text-neutral-950,
+  .bg-white.text-neutral-950
+) {
+  background-color: var(--dashboard-text) !important;
+  color: var(--dashboard-bg) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .pro-shell-vignette {
+  background-color: var(--dashboard-bg);
+  background-image: none;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(button, input, textarea, select):focus-visible {
+  outline-color: rgba(24, 24, 27, 0.38);
+}
+
+.lists-workspace {
+  --list-preview-bg: #1d1d1f;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .activity-chart-controls {
+  background: rgba(24, 24, 27, 0.055) !important;
+  border-color: var(--dashboard-border) !important;
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar .calendar-view-controls {
+  background: rgba(24, 24, 27, 0.055) !important;
+  border-color: var(--cal-border) !important;
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar .calendar-nav-control {
+  color: #52525b !important;
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar .calendar-nav-control:hover {
+  color: #18181b !important;
+  background: rgba(24, 24, 27, 0.075) !important;
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar .calendar-event-title {
+  color: #18181b !important;
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar .calendar-event-time {
+  color: #52525b !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .lists-workspace {
+  --list-preview-bg: #ececef;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .list-preset-card {
+  background: #f8f8f9 !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .list-preview-code {
+  background: rgba(24, 24, 27, 0.065) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .list-code-editor {
+  background: #f8f8f9 !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
+  caret-color: #18181b;
 }
 
 .focuznow-calendar *:focus {

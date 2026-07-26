@@ -39,8 +39,71 @@ export function useFocusProgression() {
 
 export async function sendProgressionMessage<T = unknown>(
     message: Record<string, unknown>,
-): Promise<T & { ok?: boolean; progression?: FocusProgressionState }> {
+    options?: { timeoutMs?: number },
+): Promise<T & {
+    ok?: boolean;
+    error?: string;
+    code?: 'timeout' | 'port_error';
+    progression?: FocusProgressionState;
+}> {
     return new Promise((resolve) => {
-        chrome.runtime.sendMessage(message, (resp) => resolve(resp ?? {}));
+        let settled = false;
+        const timeoutMs = options?.timeoutMs ?? 10_000;
+        const finish = (response: unknown) => {
+            if (settled) return;
+            settled = true;
+            globalThis.clearTimeout(timeout);
+            resolve((response ?? {}) as T & { ok?: boolean; error?: string });
+        };
+        const timeout = globalThis.setTimeout(() => {
+            finish({
+                ok: false,
+                code: 'timeout',
+                error: `Background request timed out after ${timeoutMs}ms. The write may still complete.`,
+            });
+        }, timeoutMs);
+
+        try {
+            chrome.runtime.sendMessage(message, (resp) => {
+                const error = chrome.runtime.lastError;
+                if (error) {
+                    finish({
+                        ok: false,
+                        code: 'port_error',
+                        error: error.message || 'The extension background connection closed.',
+                    });
+                    return;
+                }
+                finish(resp ?? {});
+            });
+        } catch (error) {
+            finish({
+                ok: false,
+                code: 'port_error',
+                error: error instanceof Error ? error.message : 'Could not contact the extension background.',
+            });
+        }
     });
+}
+
+let challengeFocusScoreTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
+
+export function scheduleChallengeFocusScore(score: number, delayMs = 400): () => void {
+    if (challengeFocusScoreTimer) globalThis.clearTimeout(challengeFocusScoreTimer);
+    const timer = globalThis.setTimeout(async () => {
+        if (challengeFocusScoreTimer === timer) challengeFocusScoreTimer = undefined;
+        const response = await sendProgressionMessage({
+            type: 'SET_CHALLENGE_FOCUS_SCORE',
+            focusScore: score,
+        });
+        if (response.ok === false) {
+            console.warn('[Challenges] Focus-score update failed:', response.error ?? response);
+        }
+    }, delayMs);
+    challengeFocusScoreTimer = timer;
+    return () => {
+        if (challengeFocusScoreTimer !== timer) return;
+        globalThis.clearTimeout(timer);
+        challengeFocusScoreTimer = undefined;
+    };
 }

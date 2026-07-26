@@ -7,6 +7,7 @@ import { initMessageRouter } from "./messagerouter.js";
 import { initBlockEngine, incrementBlockedCount } from "./blockengine.js";
 import { initAnalytics } from "./analytics.js";
 import { initPomodoro } from "./pomodoro.js";
+import { initFutureSelfService } from "./futureSelfService.js";
 import { registerSlip } from "../lib/forest";
 
 const blockedPagePath = "view=blocked";
@@ -46,6 +47,7 @@ initMessageRouter();
 initBlockEngine();
 initAnalytics();
 void initPomodoro();
+void initFutureSelfService();
 
 // Open Options Page on Icon Click
 chrome.action.onClicked.addListener(() => {

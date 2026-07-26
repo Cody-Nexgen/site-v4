@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
+import { initializeDashboardColorMode } from '../lib/themes';
 import SchedulingCalendarPage from './SchedulingCalendarPage';
 
 export default function CalendarApp() {
     const { session, loading, init, checkSession } = useAuthStore();
 
     useEffect(() => {
+        void initializeDashboardColorMode();
         init();
         void checkSession();
     }, [init, checkSession]);

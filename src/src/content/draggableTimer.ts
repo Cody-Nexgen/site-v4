@@ -3,6 +3,11 @@ console.log('[Content Script] Draggable Timer logic loaded.');
 
 const POMO_KEY = 'pomodoroRuntimeV1';
 
+function newPomodoroSegmentId(): string {
+    return globalThis.crypto?.randomUUID?.() ??
+        `segment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 let siteTimerDismissed = false;
 let pomoWidgetDismissed = false;
 
@@ -125,8 +130,6 @@ function initPomodoroWidget() {
     let dragging = false;
     let dragIx = 0;
     let dragIy = 0;
-    let completing = false;
-
     const applyShell = (isBreak: boolean) => {
         const border = isBreak ? 'rgba(34,197,94,0.4)' : 'rgba(168,85,247,0.4)';
         const glow = isBreak ? 'rgba(34,197,94,0.15)' : 'rgba(168,85,247,0.15)';
@@ -304,6 +307,9 @@ function initPomodoroWidget() {
                         segmentTotalSec: left,
                         focusMin,
                         breakMin,
+                        segmentId:
+                            rt?.segmentId ??
+                            newPomodoroSegmentId(),
                     });
                 }
             });
@@ -312,7 +318,15 @@ function initPomodoroWidget() {
 
     stopBtn.onclick = (e) => {
         e.stopPropagation();
-        writePomoRuntime(null);
+        readPomoRuntime((rt) => {
+            if (rt?.futureSelfContractId) {
+                chrome.runtime.sendMessage({
+                    type: 'FUTURE_SELF_FINISH',
+                    status: 'cancelled',
+                }).catch(() => {});
+            }
+            writePomoRuntime(null);
+        });
     };
 
     const update = () => {
@@ -340,7 +354,11 @@ function initPomodoroWidget() {
                 const pct = total > 0 ? Math.min(1, (total - left) / total) : 0;
                 const color = rt.isBreak ? '#22c55e' : '#a855f7';
 
-                labelEl.textContent = rt.isBreak ? 'Break Time' : 'Focus Session';
+                labelEl.textContent = rt.isBreak
+                    ? 'Break Time'
+                    : rt.futureSelfContractId
+                        ? 'Future Self'
+                        : 'Focus Session';
                 timeEl.textContent = fmtTime(left);
                 progress.setAttribute('stroke', color);
                 progress.setAttribute('stroke-dashoffset', String(circum * (1 - pct)));
@@ -352,13 +370,6 @@ function initPomodoroWidget() {
                 } else {
                     actionBtn.textContent = 'START';
                     actionBtn.style.background = color;
-                }
-
-                if (rt.running && !rt.paused && left <= 0 && !completing) {
-                    completing = true;
-                    chrome.runtime.sendMessage({ type: 'POMODORO_SEGMENT_COMPLETE' }, () => {
-                        completing = false;
-                    });
                 }
             });
         });

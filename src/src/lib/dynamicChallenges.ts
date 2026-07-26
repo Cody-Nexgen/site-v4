@@ -2,7 +2,7 @@ import type { FocusProgressionState } from './focusProgression';
 import type { ChallengeDefinition, ChallengeMetric } from './challenges';
 import { CHALLENGE_DEFINITIONS } from './challenges';
 
-function isoWeekKey(d = new Date()): string {
+export function challengeWeekKey(d = new Date()): string {
     const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
     const day = date.getUTCDay() || 7;
     date.setUTCDate(date.getUTCDate() + 4 - day);
@@ -11,8 +11,11 @@ function isoWeekKey(d = new Date()): string {
     return `${date.getUTCFullYear()}-W${week}`;
 }
 
-function dayKey(d = new Date()): string {
-    return d.toISOString().slice(0, 10);
+export function challengeDayKey(d = new Date()): string {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 export type DynamicChallengeInput = {
@@ -20,6 +23,7 @@ export type DynamicChallengeInput = {
     dashboardStreak: number;
     focusScore: number;
     habitsCount: number;
+    now?: Date;
 };
 
 function dyn(
@@ -33,12 +37,13 @@ function dyn(
 
 /** Weekly + daily challenges generated from live stats. */
 export function generateDynamicChallenges(input: DynamicChallengeInput): ChallengeDefinition[] {
-    const week = isoWeekKey();
-    const today = dayKey();
+    const now = input.now ?? new Date();
+    const week = challengeWeekKey(now);
+    const today = challengeDayKey(now);
     const s = input.progression.stats;
     const out: ChallengeDefinition[] = [];
 
-    const weeklyTarget = Math.max(5, Math.min(12, 5 + Math.floor(s.weekPomodorosCount / 2)));
+    const weeklyTarget = 5;
     out.push(
         dyn({
             id: `dyn_week_pomo_${week}`,
@@ -47,6 +52,8 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
             icon: '⚡',
             metric: 'week_pomodoros',
             target: weeklyTarget,
+            periodKind: 'week',
+            periodKey: week,
             xpReward: 120,
             coinReward: 60,
         }),
@@ -61,6 +68,8 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
                 icon: '🔥',
                 metric: 'today_pomodoros',
                 target: 1,
+                periodKind: 'day',
+                periodKey: today,
                 xpReward: 80,
                 coinReward: 40,
             }),
@@ -77,20 +86,23 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
                 icon: '🌊',
                 metric: 'focus_minutes',
                 target: 300,
+                periodKind: 'week',
+                periodKey: week,
                 xpReward: 200,
                 coinReward: 100,
             }),
         );
     } else {
-        const nextMilestoneHours = Math.ceil((focusHours + 1) / 1) * 60;
         out.push(
             dyn({
                 id: `dyn_deep_next_${week}`,
                 title: 'Deep Work Climb',
-                description: `Reach ${nextMilestoneHours / 60} hours of focus time`,
+                description: 'Log 1 more hour of deep work',
                 icon: '🏔️',
                 metric: 'focus_minutes',
-                target: nextMilestoneHours,
+                target: 60,
+                periodKind: 'week',
+                periodKey: week,
                 xpReward: 250,
                 coinReward: 125,
             }),
@@ -106,6 +118,8 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
                 icon: '📈',
                 metric: 'focus_score',
                 target: 70,
+                periodKind: 'day',
+                periodKey: today,
                 xpReward: 100,
                 coinReward: 50,
             }),
@@ -121,6 +135,8 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
                 icon: '📵',
                 metric: 'no_shorts_streak',
                 target: 3,
+                periodKind: 'week',
+                periodKey: week,
                 xpReward: 150,
                 coinReward: 75,
             }),

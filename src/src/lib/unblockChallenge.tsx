@@ -22,9 +22,10 @@ type ChallengeModalProps = {
     onClose: () => void;
     onComplete: () => void;
     onDisableChallenge?: () => void;
+    error?: string;
 };
 
-export function ChallengeModal({ isOpen, onClose, onComplete, phrase, onDisableChallenge }: ChallengeModalProps) {
+export function ChallengeModal({ isOpen, onClose, onComplete, phrase, onDisableChallenge, error }: ChallengeModalProps) {
     const [input, setInput] = useState('');
 
     if (!isOpen) return null;
@@ -44,6 +45,11 @@ export function ChallengeModal({ isOpen, onClose, onComplete, phrase, onDisableC
                 </div>
 
                 <div className="space-y-4">
+                    {error && (
+                        <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                            {error}
+                        </p>
+                    )}
                     <input
                         autoFocus
                         value={input}

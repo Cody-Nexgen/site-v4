@@ -204,7 +204,7 @@ function subscriptionPatchFromRow(
 }
 
 export interface EngineState {
-    blocklist: Record<string, { sources: string[] }>;
+    blocklist: Record<string, { sources: string[]; categoryKeys?: string[] }>;
     regexBlocklist: Record<string, { sources: string[] }>;
     categoriesActive: Record<string, boolean>;
     schedules: Record<string, any[]>;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import { EVENT_COLOR_PRESETS, normalizeHexColor } from '../lib/calendarUtils';
 import type { CalendarGroup } from '../lib/schedulingTypes';
 
@@ -8,10 +8,12 @@ export default function GroupEditModal({
     group,
     onClose,
     onSave,
+    onDelete,
 }: {
     group: CalendarGroup;
     onClose: () => void;
     onSave: (patch: Pick<CalendarGroup, 'name' | 'color'>) => void;
+    onDelete?: () => boolean;
 }) {
     const [name, setName] = useState(group.name);
     const [color, setColor] = useState(group.color);
@@ -56,6 +58,18 @@ export default function GroupEditModal({
                     className="mb-4 h-9 w-full cursor-pointer rounded-lg border border-white/10 bg-black/40"
                 />
                 <motion.div className="flex gap-2">
+                    {onDelete && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (onDelete()) onClose();
+                            }}
+                            className="rounded-xl px-3 py-2.5 text-red-400 hover:bg-red-500/10"
+                            title="Delete group"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    )}
                     <button type="button" onClick={onClose} className="flex-1 rounded-xl py-2.5 text-sm font-bold text-neutral-400">
                         Cancel
                     </button>

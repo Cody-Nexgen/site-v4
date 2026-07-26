@@ -15,6 +15,7 @@ import {
     getSchedules,
     startTimer,
     cancelTimer,
+    removeBlockSource,
     getTimers,
     getEngineState,
     updateEngineSettings,
@@ -38,6 +39,14 @@ import {
 } from '../lib/progressionService';
 import { loadProgressionState } from '../lib/focusProgression';
 import { classifyYouTubeViaApi } from './youtubeClassify.js';
+import {
+    finishFutureSelfContract,
+    getCurrentWorkDestination,
+    getFutureSelfState,
+    markFutureSelfMirrorShown,
+    recordFutureSelfEvent,
+    startFutureSelfContract,
+} from './futureSelfService.js';
 
 let lastSyncTime = 0;
 let currentSession = null;
@@ -287,6 +296,11 @@ export function initMessageRouter() {
                         sendResponse({ ok: true });
                         break;
 
+                    case "REMOVE_BLOCK_SOURCE":
+                        await removeBlockSource(msg.domain, msg.source, msg.sourceId || null);
+                        sendResponse({ ok: true });
+                        break;
+
                     case "GET_TIMERS":
                         sendResponse({ ok: true, timers: getTimers(msg.domain) });
                         break;
@@ -302,6 +316,10 @@ export function initMessageRouter() {
                         break;
 
                     case "START_NUCLEAR":
+                        if (!Number.isFinite(Number(msg.duration)) || Number(msg.duration) <= 0) {
+                            sendResponse({ ok: false, error: 'Choose a valid lockdown duration.' });
+                            break;
+                        }
                         await startNuclearOption(msg.target, msg.duration);
                         if (currentSession?.user) {
                             const expiresAt = new Date(Date.now() + msg.duration * 60000).toISOString();
@@ -325,6 +343,55 @@ export function initMessageRouter() {
                     case "POMODORO_SEGMENT_COMPLETE": {
                         const result = await completePomodoroSegment();
                         sendResponse(result);
+                        break;
+                    }
+
+                    case "FUTURE_SELF_ACTIVE_TAB": {
+                        sendResponse({ ok: true, destination: await getCurrentWorkDestination() });
+                        break;
+                    }
+
+                    case "FUTURE_SELF_START": {
+                        sendResponse(await startFutureSelfContract(msg.contract || {}));
+                        break;
+                    }
+
+                    case "FUTURE_SELF_GET": {
+                        sendResponse({ ok: true, ...(await getFutureSelfState({ dashboardOpen: !!msg.dashboardOpen })) });
+                        break;
+                    }
+
+                    case "FUTURE_SELF_BLOCKED": {
+                        let domain = msg.url || '';
+                        try { domain = new URL(msg.url).hostname.replace(/^www\./, ''); } catch {}
+                        await recordFutureSelfEvent('blocked', { domain });
+                        sendResponse({ ok: true, ...(await getFutureSelfState()) });
+                        break;
+                    }
+
+                    case "FUTURE_SELF_OVERRIDE": {
+                        if (!msg.confirmed || String(msg.reason || '').trim().length < 10) {
+                            sendResponse({ ok: false, error: 'Confirm the broken promise and provide a reason.' });
+                            break;
+                        }
+                        const result = await requestEmergencyOverride(msg.url, msg.reason);
+                        if (result.ok) {
+                            let domain = msg.url || '';
+                            try { domain = new URL(msg.url).hostname.replace(/^www\./, ''); } catch {}
+                            await recordFutureSelfEvent('override', { domain, reason: msg.reason });
+                        }
+                        sendResponse(result);
+                        break;
+                    }
+
+                    case "FUTURE_SELF_FINISH": {
+                        await finishFutureSelfContract(msg.status === 'cancelled' ? 'cancelled' : 'completed');
+                        sendResponse({ ok: true });
+                        break;
+                    }
+
+                    case "FUTURE_SELF_MIRROR_SHOWN": {
+                        sendResponse(await markFutureSelfMirrorShown(msg.id));
                         break;
                     }
 
@@ -395,9 +462,8 @@ export function initMessageRouter() {
 
                     case "BLOCK_DOMAIN": {
                         const domain = (msg.domain || "").trim();
-                        const duration = msg.duration || 25;
+                        const duration = Number(msg.duration) || 25;
                         if (domain) {
-                            await blockDomainManual(domain);
                             await startTimer(domain, duration);
                         }
                         if (msg.openDashboard) {
@@ -433,13 +499,42 @@ export function initMessageRouter() {
                         break;
 
                     case "START_CHALLENGE":
-                        await startChallengeById(msg.challengeId, msg.challenge);
-                        sendResponse({ ok: true, progression: await loadProgressionState() });
+                        {
+                            try {
+                                const result = await startChallengeById(msg.challengeId, msg.challenge);
+                                sendResponse({
+                                    // `ok` reports that the handler completed. Challenge lifecycle
+                                    // state is carried separately so completed/not-found are not
+                                    // mistaken for transport failures.
+                                    ok: true,
+                                    started: result.started,
+                                    active: result.active,
+                                    persisted: result.persisted,
+                                    reason: result.reason,
+                                    progression: result.state,
+                                });
+                            } catch (error) {
+                                console.error('[MessageRouter] START_CHALLENGE failed:', {
+                                    challengeId: msg.challengeId,
+                                    error,
+                                });
+                                sendResponse({
+                                    ok: false,
+                                    started: false,
+                                    active: false,
+                                    persisted: false,
+                                    reason: 'handler_error',
+                                    error: error?.message || String(error),
+                                });
+                            }
+                        }
                         break;
 
                     case "SET_CHALLENGE_FOCUS_SCORE":
-                        setChallengeFocusScore(Number(msg.focusScore) || 0);
-                        sendResponse({ ok: true });
+                        sendResponse({
+                            ok: true,
+                            progression: await setChallengeFocusScore(Number(msg.focusScore) || 0),
+                        });
                         break;
 
                     case "PURCHASE_SHOP_ITEM": {
@@ -510,7 +605,7 @@ export function initMessageRouter() {
                 }
             } catch (err) {
                 console.error("[MessageRouter] Error:", err);
-                sendResponse({ ok: false, error: err.message });
+                sendResponse({ ok: false, error: err.message, code: err.code });
             }
         })();
         return true;

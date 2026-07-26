@@ -13,15 +13,34 @@ export type NavSection = {
 
 export const PRIMARY_NAV: NavTab[] = [
     { id: 'overview', label: 'Dashboard' },
-    { id: 'calendar', label: 'Calendar' },
-    { id: 'ai_coach', label: 'AI Coach' },
-    { id: 'sessions', label: 'Sessions' },
-    { id: 'blocklist', label: 'Blocklist' },
-    { id: 'habits', label: 'Habits' },
-    { id: 'statistics', label: 'Stats' },
 ];
 
 export const COLLAPSIBLE_NAV: NavSection[] = [
+    {
+        id: 'planning',
+        label: 'Planning',
+        tabs: [
+            { id: 'calendar', label: 'Calendar' },
+            { id: 'lists', label: 'Lists' },
+        ],
+    },
+    {
+        id: 'focus',
+        label: 'Focus',
+        tabs: [
+            { id: 'sessions', label: 'Pomodoro' },
+            { id: 'blocklist', label: 'Blocklist' },
+            { id: 'habits', label: 'Habits' },
+        ],
+    },
+    {
+        id: 'insights',
+        label: 'Insights',
+        tabs: [
+            { id: 'ai_coach', label: 'AI Coach' },
+            { id: 'statistics', label: 'Stats' },
+        ],
+    },
     {
         id: 'progress',
         label: 'Progress',
@@ -55,16 +74,7 @@ export const WORKSPACE_NAV: NavSection[] = [
         label: 'General',
         tabs: PRIMARY_NAV,
     },
-    {
-        id: 'progress',
-        label: 'Progress',
-        tabs: COLLAPSIBLE_NAV[0].tabs,
-    },
-    {
-        id: 'social',
-        label: 'Social',
-        tabs: COLLAPSIBLE_NAV[1].tabs,
-    },
+    ...COLLAPSIBLE_NAV,
     {
         id: 'account',
         label: 'Account',
@@ -77,6 +87,7 @@ export const TAB_ALIASES: Record<string, string> = {
     achievements: 'progress',
     tasks: 'calendar',
     gamification: 'progress',
+    pomodoro: 'sessions',
 };
 
 export function resolveTabId(tab: string | null | undefined): string {

@@ -1,4 +1,9 @@
 import { isTemporarilyAllowed, pruneTemporaryAllows, grantEmergencyOverride } from '../lib/emergencyOverrideService';
+import {
+    SAFE_BLOCK_CATEGORIES,
+    SAFE_BLOCK_CATEGORY_KEYS,
+    isSafeBlockCategoryKey,
+} from '../lib/blockCategories';
 // Categories + Manual + Daily Schedules + Timers + Persistence
 // =========================================================
 
@@ -81,46 +86,7 @@ const state = {
 // CATEGORY DEFINITIONS
 // =========================================================
 
-const CATEGORIES = {
-    social: [
-        'facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com', 'linkedin.com',
-        'reddit.com', 'pinterest.com', 'snapchat.com', 'tumblr.com', 'whatsapp.com',
-        'threads.net', 'discord.com', 'bluesky.social', 'mastodon.social'
-    ],
-    news: [
-        'cnn.com', 'bbc.com', 'nytimes.com', 'foxnews.com', 'nbcnews.com',
-        'washingtonpost.com', 'theguardian.com', 'usatoday.com', 'dailymail.co.uk',
-        'reuters.com', 'apnews.com', 'bloomberg.com', 'aljazeera.com'
-    ],
-    shopping: [
-        'amazon.com', 'ebay.com', 'walmart.com', 'target.com', 'bestbuy.com',
-        'etsy.com', 'aliexpress.com', 'temu.com', 'shein.com', 'craigslist.org',
-        'shopify.com', 'homedepot.com', 'lowes.com'
-    ],
-    streaming: [
-        'netflix.com', 'youtube.com', 'hulu.com', 'disneyplus.com', 'twitch.tv',
-        'hbomax.com', 'peacocktv.com', 'primevideo.com', 'spotify.com',
-        'apple.com/apple-tv-plus', 'paramountplus.com', 'vimeo.com', 'dailymotion.com'
-    ],
-    adult: [
-        'pornhub.com', 'xvideos.com', 'xnxx.com', 'xhamster.com', 'onlyfans.com',
-        'chaturbate.com', 'livejasmin.com', 'redtube.com', 'youporn.com'
-    ],
-    gambling: [
-        'bet365.com', 'draftkings.com', 'fanduel.com', 'pokerstars.com', '888casino.com',
-        'betway.com', 'bovada.lv', 'roobet.com', 'stake.com', 'williamhill.com',
-        '888poker.com', 'skybet.com'
-    ],
-    gaming: [
-        'steamcommunity.com', 'roblox.com', 'epicgames.com', 'discord.com', 'battle.net',
-        'ubisoft.com', 'minecraft.net', 'leagueoflegends.com', 'ign.com', 'gamespot.com',
-        'twitch.tv', 'nintendo.com'
-    ],
-    dating: [
-        'tinder.com', 'bumble.com', 'hinge.co', 'match.com', 'okcupid.com',
-        'plentyoffish.com', 'grindr.com', 'badoo.com', 'coffeeandbagel.com'
-    ]
-};
+const CATEGORIES = SAFE_BLOCK_CATEGORIES;
 
 function normalizeInAppBlock(raw) {
     const base = state.inAppBlock;
@@ -193,7 +159,8 @@ export async function saveState() {
     // Convert Sets to Arrays for storage
     for (const domain in state.blocklist) {
         serialized.blocklist[domain] = {
-            sources: Array.from(state.blocklist[domain].sources)
+            sources: Array.from(state.blocklist[domain].sources),
+            categoryKeys: Array.from(state.blocklist[domain].categoryKeys || []),
         };
     }
     for (const pattern in state.regexBlocklist) {
@@ -246,9 +213,21 @@ export async function loadState() {
 
         // Restore blocklist (convert Arrays back to Sets)
         state.blocklist = {};
-        for (const domain in loaded.blocklist) {
+        const loadedEntries = loaded.blocklist && typeof loaded.blocklist === 'object'
+            ? loaded.blocklist
+            : {};
+        const hasCategoryMetadata = Object.values(loadedEntries).some((entry) =>
+            entry && Object.prototype.hasOwnProperty.call(entry, 'categoryKeys'));
+        for (const domain in loadedEntries) {
+            const rawEntry = loaded.blocklist[domain] || {};
+            const sources = Array.isArray(rawEntry.sources) ? rawEntry.sources : [];
             state.blocklist[domain] = {
-                sources: new Set(loaded.blocklist[domain].sources)
+                sources: new Set(sources.filter((source) =>
+                    ['manual', 'category', 'schedule', 'timer'].includes(source))),
+                categoryKeys: new Set(
+                    (Array.isArray(rawEntry.categoryKeys) ? rawEntry.categoryKeys : [])
+                        .filter(isSafeBlockCategoryKey),
+                ),
             };
         }
 
@@ -261,10 +240,45 @@ export async function loadState() {
             }
         }
 
-        state.categoriesActive = loaded.categoriesActive || state.categoriesActive;
+        const loadedCategoryStates = loaded.categoriesActive && typeof loaded.categoriesActive === 'object'
+            ? loaded.categoriesActive
+            : {};
+        state.categoriesActive = Object.fromEntries(
+            SAFE_BLOCK_CATEGORY_KEYS.map((key) => [key, loadedCategoryStates[key] === true]),
+        );
+        // Legacy entries only had a generic category source. Rebuild exact
+        // memberships from active safe categories, dropping unknown categories.
+        if (!hasCategoryMetadata) {
+            for (const [categoryKey, domains] of Object.entries(CATEGORIES)) {
+                if (!state.categoriesActive[categoryKey]) continue;
+                for (const domain of domains) {
+                    if (!state.blocklist[domain]) {
+                        state.blocklist[domain] = { sources: new Set(), categoryKeys: new Set() };
+                    }
+                    state.blocklist[domain].categoryKeys.add(categoryKey);
+                    state.blocklist[domain].sources.add('category');
+                }
+            }
+        }
+        for (const domain of Object.keys(state.blocklist)) {
+            const entry = state.blocklist[domain];
+            for (const categoryKey of entry.categoryKeys) {
+                if (!state.categoriesActive[categoryKey]) entry.categoryKeys.delete(categoryKey);
+            }
+            if (entry.categoryKeys.size > 0) entry.sources.add('category');
+            else entry.sources.delete('category');
+            if (entry.sources.size === 0) delete state.blocklist[domain];
+        }
         state.schedules = loaded.schedules || {};
         state.timers = loaded.timers || {};
         state.allowedSites = new Set(loaded.allowedSites || []);
+        // Older palette-created timers also wrote a manual source. Restore the
+        // timer source so each active mechanism can be managed independently.
+        for (const domain in state.timers) {
+            if (state.timers[domain]?.some((timer) => timer.endTime > Date.now())) {
+                addSource(domain, 'timer');
+            }
+        }
 
         state.activeDays = loaded.activeDays || state.activeDays;
         state.activeHours = loaded.activeHours || state.activeHours;
@@ -340,7 +354,10 @@ export async function loadState() {
 function addSource(domain, source) {
     console.log(`[BlockEngine] addSource: ${domain} [${source}]`);
     if (!state.blocklist[domain]) {
-        state.blocklist[domain] = { sources: new Set() };
+        state.blocklist[domain] = { sources: new Set(), categoryKeys: new Set() };
+    }
+    if (!state.blocklist[domain].categoryKeys) {
+        state.blocklist[domain].categoryKeys = new Set();
     }
     state.blocklist[domain].sources.add(source);
 }
@@ -353,6 +370,14 @@ function removeSource(domain, source) {
     if (state.blocklist[domain].sources.size === 0) {
         console.log(`[BlockEngine] Domain ${domain} has no more sources, removing from blocklist`);
         delete state.blocklist[domain];
+    }
+}
+
+function assertCanRemoveBlockSource(domain) {
+    if (state.nuclearState.active) {
+        const error = new Error(`Cannot change blocking for ${domain} during Nuclear Lockdown.`);
+        error.code = 'NUCLEAR_LOCKDOWN_ACTIVE';
+        throw error;
     }
 }
 
@@ -521,10 +546,7 @@ export async function blockDomainManual(rawDomain) {
 }
 
 export async function unblockDomainManual(domain) {
-    if (state.nuclearState.active) {
-        console.warn(`[BlockEngine] CANNOT UNBLOCK ${domain}: Nuclear Lockdown is active.`);
-        return;
-    }
+    assertCanRemoveBlockSource(domain);
     console.log(`[BlockEngine] unblockDomainManual called for: ${domain}`);
     removeSource(domain, "manual");
     applyRules();
@@ -567,8 +589,9 @@ export async function unblockRegexManual(pattern) {
 export async function enableCategory(categoryName) {
     console.log(`[BlockEngine] enableCategory called for: ${categoryName}`);
     if (!CATEGORIES[categoryName]) {
-        console.warn(`[BlockEngine] Category ${categoryName} not found`);
-        return;
+        const error = new Error(`Unsupported block category: ${categoryName}`);
+        error.code = 'INVALID_CATEGORY_KEY';
+        throw error;
     }
 
     state.categoriesActive[categoryName] = true;
@@ -576,8 +599,8 @@ export async function enableCategory(categoryName) {
 
     // Add all domains in this category
     for (const domain of CATEGORIES[categoryName]) {
-        if (state.blocklist[domain]?.sources.has("manual")) continue;
         addSource(domain, "category");
+        state.blocklist[domain].categoryKeys.add(categoryName);
     }
 
     applyRules();
@@ -588,17 +611,26 @@ export async function enableCategory(categoryName) {
 export async function disableCategory(categoryName) {
     if (state.nuclearState.active) {
         console.warn(`[BlockEngine] CANNOT DISABLE CATEGORY ${categoryName}: Nuclear Lockdown is active.`);
-        return;
+        const error = new Error(`Cannot disable ${categoryName} during Nuclear Lockdown.`);
+        error.code = 'NUCLEAR_LOCKDOWN_ACTIVE';
+        throw error;
     }
     console.log(`[BlockEngine] disableCategory called for: ${categoryName}`);
-    if (!CATEGORIES[categoryName]) return;
+    if (!CATEGORIES[categoryName]) {
+        const error = new Error(`Unsupported block category: ${categoryName}`);
+        error.code = 'INVALID_CATEGORY_KEY';
+        throw error;
+    }
 
     state.categoriesActive[categoryName] = false;
     console.log(`[BlockEngine] Category disabled in state: ${categoryName}`);
 
     // Remove category source from all domains
     for (const domain of CATEGORIES[categoryName]) {
-        removeSource(domain, "category");
+        const entry = state.blocklist[domain];
+        if (!entry) continue;
+        entry.categoryKeys?.delete(categoryName);
+        if (!entry.categoryKeys?.size) removeSource(domain, "category");
     }
 
     applyRules();
@@ -672,6 +704,7 @@ export async function addDailySchedule(domain, startHour, startMin, endHour, end
 
 export async function removeDailySchedule(domain, scheduleId) {
     console.log(`[BlockEngine] removeDailySchedule called for: ${domain}, ID: ${scheduleId}`);
+    assertCanRemoveBlockSource(domain);
     if (!state.schedules[domain]) return;
 
     state.schedules[domain] = state.schedules[domain].filter(s => s.id !== scheduleId);
@@ -773,9 +806,8 @@ export async function startTimer(domain, durationMinutes) {
 
     state.timers[domain].push(timer);
 
-    if (!state.blocklist[domain]?.sources.has("manual")) {
-        addSource(domain, "timer");
-    }
+    // Timers remain an independent source even when another source already blocks the domain.
+    addSource(domain, "timer");
 
     applyRules();
     await saveState();
@@ -786,6 +818,7 @@ export async function startTimer(domain, durationMinutes) {
 
 export async function cancelTimer(domain, timerId) {
     console.log(`[BlockEngine] cancelTimer called for: ${domain}, ID: ${timerId}`);
+    assertCanRemoveBlockSource(domain);
     if (!state.timers[domain]) return;
 
     state.timers[domain] = state.timers[domain].filter(t => t.id !== timerId);
@@ -798,6 +831,54 @@ export async function cancelTimer(domain, timerId) {
     applyRules();
     await saveState();
     console.log(`[BlockEngine] cancelTimer finished`);
+}
+
+export async function removeBlockSource(rawDomain, source, sourceId = null) {
+    const domain = sanitizeDomain(rawDomain);
+    if (!domain) return;
+    assertCanRemoveBlockSource(domain);
+
+    if (source === 'manual') {
+        removeSource(domain, source);
+    } else if (source === 'category') {
+        if (!isSafeBlockCategoryKey(sourceId)) {
+            const error = new Error('A valid category key is required to remove a category block.');
+            error.code = 'INVALID_CATEGORY_KEY';
+            throw error;
+        }
+        const entry = state.blocklist[domain];
+        entry?.categoryKeys?.delete(sourceId);
+        if (entry && !entry.categoryKeys?.size) removeSource(domain, 'category');
+    } else if (source === 'timer') {
+        if (sourceId) {
+            state.timers[domain] = (state.timers[domain] || []).filter((timer) => timer.id !== sourceId);
+        } else {
+            delete state.timers[domain];
+        }
+        if (!state.timers[domain]?.length) {
+            delete state.timers[domain];
+            removeSource(domain, 'timer');
+        }
+    } else if (source === 'schedule') {
+        if (sourceId) {
+            state.schedules[domain] = (state.schedules[domain] || []).filter((schedule) => schedule.id !== sourceId);
+        } else {
+            delete state.schedules[domain];
+        }
+        if (!state.schedules[domain]?.length) {
+            delete state.schedules[domain];
+            removeSource(domain, 'schedule');
+        } else {
+            checkSchedules();
+        }
+    } else {
+        const error = new Error(`Unsupported block source: ${source}`);
+        error.code = 'UNSUPPORTED_BLOCK_SOURCE';
+        throw error;
+    }
+
+    applyRules();
+    await saveState();
 }
 
 export function checkTimers() {
@@ -892,7 +973,8 @@ export function getEngineState() {
 
     for (const domain in state.blocklist) {
         formatted[domain] = {
-            sources: Array.from(state.blocklist[domain].sources)
+            sources: Array.from(state.blocklist[domain].sources),
+            categoryKeys: Array.from(state.blocklist[domain].categoryKeys || []),
         };
     }
     return {

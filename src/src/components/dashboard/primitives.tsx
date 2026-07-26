@@ -32,9 +32,9 @@ export function SurfaceButton({
     variant?: SurfaceButtonVariant;
 }) {
     const variants: Record<SurfaceButtonVariant, string> = {
-        primary: 'bg-neutral-100 text-neutral-950 border border-neutral-100 hover:bg-white',
-        secondary: 'surface-button text-neutral-300 hover:text-neutral-100',
-        ghost: 'border border-transparent bg-transparent text-neutral-500 hover:bg-white/[0.04] hover:text-neutral-200',
+        primary: 'bg-primary text-primary-foreground border border-primary hover:bg-primary/90',
+        secondary: 'surface-button text-secondary-foreground hover:text-foreground',
+        ghost: 'border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
         danger: 'border border-red-400/15 bg-red-400/[0.07] text-red-300 hover:bg-red-400/[0.11]',
     };
 
@@ -57,7 +57,7 @@ export function DashboardInput({ className, ...props }: InputHTMLAttributes<HTML
     return (
         <input
             className={join(
-                'h-8 w-full rounded-md border border-white/[0.08] bg-white/[0.025] px-2.5 text-[13px] text-neutral-200 outline-none placeholder:text-neutral-600 hover:border-white/[0.11] focus:border-white/[0.18]',
+                'h-8 w-full rounded-md border border-input bg-input/30 px-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground hover:border-ring/50 focus:border-ring',
                 className,
             )}
             {...props}
@@ -71,7 +71,7 @@ export function SectionLabel({
     ...props
 }: HTMLAttributes<HTMLParagraphElement> & { children?: ReactNode }) {
     return (
-        <p className={join('text-[11px] font-medium text-neutral-600', className)} {...props}>
+        <p className={join('text-[11px] font-medium text-muted-foreground', className)} {...props}>
             {children}
         </p>
     );

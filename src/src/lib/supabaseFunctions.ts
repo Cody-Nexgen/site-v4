@@ -31,14 +31,16 @@ async function messageFromFunctionError(error: unknown): Promise<string | undefi
 }
 
 /** Invoke a Supabase Edge Function with the user's JWT (required for most functions). */
-export async function invokeAuthedFunction(
+export async function invokeAuthedFunction<TResponse extends { error?: string } = StripeSessionResponse>(
     functionName: string,
     accessToken: string,
     body?: Record<string, unknown>,
+    signal?: AbortSignal,
 ) {
-    const result = await supabase.functions.invoke<StripeSessionResponse>(functionName, {
+    const result = await supabase.functions.invoke<TResponse>(functionName, {
         body: body ?? {},
         headers: { Authorization: `Bearer ${accessToken}` },
+        signal,
     });
 
     if (result.error) {

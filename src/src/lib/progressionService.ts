@@ -3,22 +3,34 @@ import {
     loadProgressionState,
     saveProgressionState,
     tickPlatformStreak,
+    updateProgressionState,
     type FocusProgressionState,
 } from './focusProgression';
 import { checkChallengeCompletions, pruneStaleActiveChallenges } from './challenges';
 import { getAllChallengeDefinitions } from './dynamicChallenges';
 
 let cachedFocusScore = 0;
+let hasCachedFocusScore = false;
 
-export function setChallengeFocusScore(score: number) {
-    cachedFocusScore = score;
+export async function setChallengeFocusScore(score: number) {
+    const nextScore = Number.isFinite(score) ? score : 0;
+    if (hasCachedFocusScore && nextScore === cachedFocusScore) {
+        return loadProgressionState();
+    }
+    cachedFocusScore = nextScore;
+    hasCachedFocusScore = true;
+    return runChallengeChecks();
 }
 
-async function runChallengeChecks(state: FocusProgressionState) {
-    const pruned = pruneStaleActiveChallenges(state);
-    const { state: next, completed } = checkChallengeCompletions(pruned, { focusScore: cachedFocusScore });
-    if (completed.length === 0 && pruned === state) return;
-    await saveProgressionState(next);
+async function runChallengeChecks(_state?: FocusProgressionState) {
+    let completed: ReturnType<typeof checkChallengeCompletions>['completed'] = [];
+    const next = await updateProgressionState((current) => {
+        const pruned = pruneStaleActiveChallenges(current);
+        const result = checkChallengeCompletions(pruned, { focusScore: cachedFocusScore });
+        completed = result.completed;
+        return result.state;
+    });
+    if (completed.length === 0) return next;
     try {
         chrome.runtime.sendMessage({
             type: 'PROGRESSION_UPDATED',
@@ -28,12 +40,12 @@ async function runChallengeChecks(state: FocusProgressionState) {
     } catch {
         /* ignore */
     }
+    return next;
 }
 
-export async function onPomodoroComplete(focusMinutes = 25) {
-    const today = new Date().toDateString();
+export async function onPomodoroComplete(segmentId: string, focusMinutes = 25) {
     const { state } = await awardProgressionEvent('pomodoro_complete', {
-        dedupKey: `pomodoro:${today}:${Date.now()}`,
+        dedupKey: `pomodoro:segment:${segmentId}`,
         focusMinutes,
     });
     await runChallengeChecks(state);
@@ -94,22 +106,60 @@ export async function startChallengeById(
         target: number;
         xpReward: number;
         coinReward: number;
+        periodKind?: 'day' | 'week';
+        periodKey?: string;
     },
 ) {
-    const state = await loadProgressionState();
     const { startChallenge } = await import('./challenges');
     const def =
-        (definition as import('./challenges').ChallengeDefinition | undefined) ??
+        (definition?.id === challengeId
+            ? definition as import('./challenges').ChallengeDefinition
+            : undefined) ??
         getAllChallengeDefinitions().find((d) => d.id === challengeId);
-    if (!def) return state;
-    const next = startChallenge(state, def);
-    await saveProgressionState(next);
+    if (!def) {
+        const state = await loadProgressionState();
+        return {
+            state,
+            started: false,
+            active: false,
+            persisted: false,
+            reason: 'not_found' as const,
+        };
+    }
+    let started = false;
+    let reason: 'started' | 'already_active' | 'completed' = 'started';
+    await updateProgressionState((state) => {
+        if (state.completedChallenges.includes(challengeId)) {
+            reason = 'completed';
+            return state;
+        }
+        if (state.activeChallenges.some((challenge) => challenge.id === challengeId)) {
+            reason = 'already_active';
+            return state;
+        }
+        const updated = startChallenge(state, def);
+        started = updated !== state;
+        return updated;
+    });
+    // Reload after the queued write. The storage snapshot, not the in-memory
+    // mutation result, is the authority returned across the message boundary.
+    const persistedState = await loadProgressionState();
+    const active = persistedState.activeChallenges.some((challenge) => challenge.id === challengeId);
+    const completed = persistedState.completedChallenges.includes(challengeId);
+    if (completed) reason = 'completed';
+    else if (active && !started) reason = 'already_active';
     try {
-        chrome.runtime.sendMessage({ type: 'PROGRESSION_UPDATED', state: next }).catch(() => {});
+        chrome.runtime.sendMessage({ type: 'PROGRESSION_UPDATED', state: persistedState }).catch(() => {});
     } catch {
         /* ignore */
     }
-    return next;
+    return {
+        state: persistedState,
+        started,
+        active,
+        persisted: active,
+        reason,
+    };
 }
 
 export async function purchaseShopItem(itemId: string, cost: number) {

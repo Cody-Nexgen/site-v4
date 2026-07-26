@@ -1,6 +1,11 @@
 import type { ActiveChallengeSnapshot, FocusProgressionState } from './focusProgression';
 import { applyProgressionEvent } from './focusProgression';
-import { getAllChallengeDefinitions, type DynamicChallengeInput } from './dynamicChallenges';
+import {
+    challengeDayKey,
+    challengeWeekKey,
+    getAllChallengeDefinitions,
+    type DynamicChallengeInput,
+} from './dynamicChallenges';
 
 export type ChallengeMetric =
     | 'no_shorts_streak'
@@ -20,7 +25,55 @@ export type ChallengeDefinition = {
     target: number;
     xpReward: number;
     coinReward: number;
+    periodKind?: 'day' | 'week';
+    periodKey?: string;
 };
+
+export type ChallengeStartResponse = {
+    ok: boolean;
+    active: boolean;
+    persisted: boolean;
+    started: boolean;
+    reason?: string;
+    error?: string;
+    progression?: FocusProgressionState;
+};
+
+export function hasPersistedChallengeStart(
+    response: Partial<ChallengeStartResponse>,
+    challengeId: string,
+): boolean {
+    return response.progression?.activeChallenges?.some((challenge) => challenge.id === challengeId) === true;
+}
+
+export function hasCompletedChallenge(
+    response: Partial<ChallengeStartResponse>,
+    challengeId: string,
+): boolean {
+    return response.progression?.completedChallenges?.includes(challengeId) === true;
+}
+
+export function isChallengeStartResponseStaleOrPartial(
+    response: Partial<ChallengeStartResponse>,
+    challengeId: string,
+): boolean {
+    if (
+        typeof response.ok !== 'boolean' ||
+        typeof response.started !== 'boolean' ||
+        typeof response.active !== 'boolean' ||
+        typeof response.persisted !== 'boolean' ||
+        !response.reason ||
+        !Array.isArray(response.progression?.activeChallenges) ||
+        !Array.isArray(response.progression?.completedChallenges)
+    ) {
+        return true;
+    }
+    const active = hasPersistedChallengeStart(response, challengeId);
+    const completed = hasCompletedChallenge(response, challengeId);
+    return response.active !== active ||
+        response.persisted !== active ||
+        (response.reason === 'completed' && !completed);
+}
 
 export const CHALLENGE_DEFINITIONS: ChallengeDefinition[] = [
     {
@@ -85,6 +138,7 @@ export type ChallengeProgress = ChallengeDefinition & {
 
 export type ChallengeRuntimeContext = {
     focusScore?: number;
+    now?: Date;
 };
 
 function metricValue(
@@ -103,9 +157,13 @@ function metricValue(
         case 'total_pomodoros':
             return s.totalPomodoros;
         case 'week_pomodoros':
-            return s.weekPomodorosCount ?? 0;
+            return s.weekPomodorosKey === challengeWeekKey(ctx?.now)
+                ? (s.weekPomodorosCount ?? 0)
+                : 0;
         case 'today_pomodoros':
-            return s.todayPomodorosCount ?? 0;
+            return s.todayPomodorosKey === (ctx?.now ?? new Date()).toDateString()
+                ? (s.todayPomodorosCount ?? 0)
+                : 0;
         case 'focus_score':
             return ctx?.focusScore ?? 0;
         default:
@@ -117,11 +175,22 @@ function usesBaseline(metric: ChallengeMetric): boolean {
     return metric === 'focus_minutes' || metric === 'total_pomodoros' || metric === 'week_pomodoros' || metric === 'today_pomodoros';
 }
 
+function isSnapshotInCurrentPeriod(
+    snapshot: Pick<ActiveChallengeSnapshot, 'periodKind' | 'periodKey'>,
+    now = new Date(),
+): boolean {
+    if (!snapshot.periodKind || !snapshot.periodKey) return true;
+    return snapshot.periodKind === 'week'
+        ? snapshot.periodKey === challengeWeekKey(now)
+        : snapshot.periodKey === challengeDayKey(now);
+}
+
 function challengeProgressValue(
     state: FocusProgressionState,
-    snapshot: Pick<ActiveChallengeSnapshot, 'metric' | 'baseline'>,
+    snapshot: Pick<ActiveChallengeSnapshot, 'metric' | 'baseline' | 'periodKind' | 'periodKey'>,
     ctx?: ChallengeRuntimeContext,
 ): number {
+    if (!isSnapshotInCurrentPeriod(snapshot, ctx?.now)) return 0;
     const metric = snapshot.metric as ChallengeMetric;
     const raw = metricValue(state, metric, ctx);
     if (usesBaseline(metric)) {
@@ -140,6 +209,8 @@ function definitionFromSnapshot(snapshot: ActiveChallengeSnapshot): ChallengeDef
         target: snapshot.target,
         xpReward: snapshot.xpReward,
         coinReward: snapshot.coinReward,
+        periodKind: snapshot.periodKind,
+        periodKey: snapshot.periodKey,
     };
 }
 
@@ -148,11 +219,18 @@ export function computeChallengeProgress(
     dynamicInput?: Omit<DynamicChallengeInput, 'progression'>,
     ctx?: ChallengeRuntimeContext,
 ): ChallengeProgress[] {
+    const runtimeContext = ctx ?? {
+        focusScore: dynamicInput?.focusScore,
+        now: dynamicInput?.now,
+    };
     const defs = getAllChallengeDefinitions(
         dynamicInput ? { ...dynamicInput, progression: state } : undefined,
     );
     const activeSnapshots = state.activeChallenges.filter(
-        (c): c is ActiveChallengeSnapshot => typeof c.metric === 'string' && typeof c.target === 'number',
+        (c): c is ActiveChallengeSnapshot =>
+            typeof c.metric === 'string' &&
+            typeof c.target === 'number' &&
+            isSnapshotInCurrentPeriod(c, runtimeContext.now),
     );
 
     const merged = new Map<string, ChallengeDefinition>();
@@ -164,8 +242,8 @@ export function computeChallengeProgress(
         const completed = state.completedChallenges.includes(def.id);
         const effectiveDef = activeEntry ? definitionFromSnapshot(activeEntry) : def;
         const currentRaw = activeEntry
-            ? challengeProgressValue(state, activeEntry, ctx)
-            : metricValue(state, effectiveDef.metric, ctx);
+            ? challengeProgressValue(state, activeEntry, runtimeContext)
+            : metricValue(state, effectiveDef.metric, runtimeContext);
         const current = Math.min(currentRaw, effectiveDef.target);
         const progressPct = effectiveDef.target > 0
             ? Math.min(100, Math.round((current / effectiveDef.target) * 100))
@@ -201,6 +279,8 @@ export function startChallenge(
         baseline,
         xpReward: def.xpReward,
         coinReward: def.coinReward,
+        periodKind: def.periodKind,
+        periodKey: def.periodKey,
     };
 
     return {
@@ -217,7 +297,10 @@ export function checkChallengeCompletions(
     let next = state;
 
     const activeSnapshots = next.activeChallenges.filter(
-        (c): c is ActiveChallengeSnapshot => typeof c.metric === 'string' && typeof c.target === 'number',
+        (c): c is ActiveChallengeSnapshot =>
+            typeof c.metric === 'string' &&
+            typeof c.target === 'number' &&
+            isSnapshotInCurrentPeriod(c, ctx?.now),
     );
 
     for (const snap of activeSnapshots) {
@@ -246,6 +329,8 @@ export function checkChallengeCompletions(
 export function pruneStaleActiveChallenges(state: FocusProgressionState): FocusProgressionState {
     const validIds = new Set(getAllChallengeDefinitions().map((d) => d.id));
     const active = state.activeChallenges.filter((c) => {
+        if (state.completedChallenges.includes(c.id)) return false;
+        if (!isSnapshotInCurrentPeriod(c)) return false;
         if (typeof c.metric === 'string') return true;
         return validIds.has(c.id);
     });

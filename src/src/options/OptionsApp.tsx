@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { useAuthStore } from '../lib/store';
 import {
     Ban as IconBan,
@@ -50,6 +51,7 @@ import { syncPublicFocusProfile, publicProfileUrl } from '../lib/progressionApi'
 import { computeAchievements, unlockedCount } from '../lib/achievements';
 import { computeFocusScore } from '../lib/focusScore';
 import SchedulingCalendarPage from './SchedulingCalendarPage';
+import ListsTab from './ListsTab';
 import { BookingNotificationModal } from '../components/BookingNotificationModal';
 import DeleteAccountModal from '../components/DeleteAccountModal';
 import { EmergencyUnlockModal } from '../components/EmergencyUnlockModal';
@@ -73,7 +75,7 @@ import {
 import { signOutOnAuthError } from '../lib/authErrors';
 import { BILLING_RETURN_URL } from '../lib/billingUrls';
 import { invokeAuthedFunction } from '../lib/supabaseFunctions';
-import { useProDashboardVisuals, FOCUS_COMPLETE_EVENT, dispatchFocusComplete } from '../lib/proDashboard';
+import { useProDashboardVisuals, FOCUS_COMPLETE_EVENT } from '../lib/proDashboard';
 import {
     applyDocumentTheme,
     applyProWelcomePack,
@@ -87,6 +89,9 @@ import {
     ProConfettiGate,
     ProFocusToast,
 } from '../components/pro-dashboard/ProDashboardVisuals';
+import { FutureSelfBlockedOverlay } from '../components/FutureSelfBlockedOverlay';
+import { DailyFocusMirrorModal } from '../components/DailyFocusMirrorModal';
+import type { FutureSelfBlockedSummary, FutureSelfMirror } from '../lib/futureSelfTypes';
 
 // --- GLASSMORPHISM COMPONENTS ---
 
@@ -104,6 +109,7 @@ export const GlassCard = ({ children, className = "", onClick, style }: { childr
 export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { date: string; total: number; sites: Record<string, number> }[]; onSelectDay: (day: any) => void }) => {
     const { last7DaysStats } = useAuthStore();
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    const [chartMode, setChartMode] = useState<'bar' | 'line'>('line');
     const uid = React.useId().replace(/:/g, '');
 
     const source = statsProp ?? last7DaysStats;
@@ -124,6 +130,17 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
     const getBarHeight = (ms: number) => Math.max(ms > 0 ? 4 : 0, ((ms || 0) / maxTotal) * chartHeight);
     const getBarY = (ms: number) => paddingTop + chartHeight - getBarHeight(ms);
     const getY = (pct: number) => paddingTop + chartHeight - (pct * chartHeight / 100);
+    const getPointX = (i: number) => paddingX + (i * chartWidth / Math.max(1, stats.length - 1));
+    const getPointY = (ms: number) => paddingTop + chartHeight - ((ms || 0) / maxTotal) * chartHeight;
+    const linePath = stats.reduce((path, day, i) => {
+        const x = getPointX(i);
+        const y = getPointY(day.total);
+        if (i === 0) return `M ${x} ${y}`;
+        const previousX = getPointX(i - 1);
+        const previousY = getPointY(stats[i - 1].total);
+        const controlX = (previousX + x) / 2;
+        return `${path} C ${controlX} ${previousY}, ${controlX} ${y}, ${x} ${y}`;
+    }, '');
 
     const formatTime = (ms: number) => {
         const mins = Math.round((ms || 0) / 60000);
@@ -133,11 +150,34 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
 
     return (
         <div className="w-full h-full min-h-[12rem] relative overflow-visible">
+            <div
+                className="activity-chart-controls absolute right-1 top-0 z-20 flex rounded-lg border border-white/[0.08] bg-black/50 p-0.5 shadow-sm backdrop-blur"
+                role="group"
+                aria-label="Activity chart type"
+            >
+                {(['bar', 'line'] as const).map((mode) => (
+                    <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setChartMode(mode)}
+                        aria-pressed={chartMode === mode}
+                        className={`rounded-md px-2 py-1 text-[10px] font-semibold capitalize transition-colors ${
+                            chartMode === mode ? 'bg-white/[0.12] text-white' : 'text-neutral-500 hover:text-neutral-300'
+                        }`}
+                    >
+                        {mode}
+                    </button>
+                ))}
+            </div>
             <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
                 <defs>
                     <linearGradient id={`barGradient-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" stopColor="#c084fc" />
                         <stop offset="100%" stopColor="#7c3aed" />
+                    </linearGradient>
+                    <linearGradient id={`lineFill-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#d4d4d4" stopOpacity="0.18" />
+                        <stop offset="100%" stopColor="#d4d4d4" stopOpacity="0" />
                     </linearGradient>
                 </defs>
 
@@ -150,11 +190,39 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                     </g>
                 ))}
 
+                {chartMode === 'line' && (
+                    <>
+                        <motion.path
+                            key={`area-${linePath}`}
+                            d={`${linePath} L ${getPointX(stats.length - 1)} ${paddingTop + chartHeight} L ${getPointX(0)} ${paddingTop + chartHeight} Z`}
+                            fill={`url(#lineFill-${uid})`}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.45 }}
+                        />
+                        <motion.path
+                            key={linePath}
+                            d={linePath}
+                            fill="none"
+                            stroke="#d4d4d4"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            vectorEffect="non-scaling-stroke"
+                            initial={{ pathLength: 0, opacity: 0 }}
+                            animate={{ pathLength: 1, opacity: 1 }}
+                            transition={{ duration: 0.65, ease: 'easeOut' }}
+                        />
+                    </>
+                )}
+
                 {stats.map((day, i) => {
                     const h = getBarHeight(day.total);
                     const x = getBarX(i);
                     const y = getBarY(day.total);
                     const active = hoveredIndex === i;
+                    const pointX = getPointX(i);
+                    const pointY = getPointY(day.total);
                     return (
                         <g
                             key={i}
@@ -162,30 +230,69 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                             onMouseEnter={() => setHoveredIndex(i)}
                             onMouseLeave={() => setHoveredIndex(null)}
                             onClick={() => onSelectDay(day)}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${day.date || `Day ${i + 1}`}: ${formatTime(day.total)}`}
+                            onFocus={() => setHoveredIndex(i)}
+                            onBlur={() => setHoveredIndex(null)}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    onSelectDay(day);
+                                }
+                            }}
                         >
                             <rect
-                                x={x}
+                                x={chartMode === 'bar' ? x : pointX - Math.max(22, chartWidth / stats.length / 2)}
                                 y={paddingTop}
-                                width={barWidth}
+                                width={chartMode === 'bar' ? barWidth : Math.max(44, chartWidth / stats.length)}
                                 height={chartHeight}
                                 fill="transparent"
                             />
-                            <rect
-                                x={x}
-                                y={y}
-                                width={barWidth}
-                                height={h}
-                                rx={8}
-                                fill={`url(#barGradient-${uid})`}
-                                opacity={active ? 1 : 0.85}
-                            />
+                            {chartMode === 'bar' ? (
+                                <motion.rect
+                                    x={x}
+                                    width={barWidth}
+                                    rx={8}
+                                    fill={`url(#barGradient-${uid})`}
+                                    opacity={active ? 1 : 0.85}
+                                    initial={{ y: paddingTop + chartHeight, height: 0 }}
+                                    animate={{ y, height: h }}
+                                    transition={{ duration: 0.45, delay: i * 0.04, ease: 'easeOut' }}
+                                />
+                            ) : (
+                                <>
+                                    <circle
+                                        cx={pointX}
+                                        cy={pointY}
+                                        r={active ? 6 : 4}
+                                        fill="#0a0a0a"
+                                        stroke={active ? '#fff' : '#a3a3a3'}
+                                        strokeWidth="2"
+                                        vectorEffect="non-scaling-stroke"
+                                        className="transition-all duration-150"
+                                    />
+                                    {active && (
+                                        <line
+                                            x1={pointX}
+                                            y1={pointY}
+                                            x2={pointX}
+                                            y2={paddingTop + chartHeight}
+                                            stroke="white"
+                                            strokeOpacity="0.12"
+                                            strokeDasharray="3 4"
+                                            vectorEffect="non-scaling-stroke"
+                                        />
+                                    )}
+                                </>
+                            )}
                             {day.total > 0 && (
                                 <text
-                                    x={x + barWidth / 2}
-                                    y={Math.max(14, y - 8)}
+                                    x={chartMode === 'bar' ? x + barWidth / 2 : pointX}
+                                    y={Math.max(14, (chartMode === 'bar' ? y : pointY) - 8)}
                                     textAnchor="middle"
                                     className="fill-neutral-300 font-semibold"
-                                    style={{ fontSize: 11 }}
+                                    style={{ fontSize: 11, opacity: chartMode === 'bar' || active ? 1 : 0 }}
                                 >
                                     {formatTime(day.total)}
                                 </text>
@@ -450,19 +557,22 @@ export const SettingsTab = () => {
     };
 
     return (
-        <div className="space-y-6 animate-fade-in-up w-full max-w-3xl">
-            <div>
+        <div className="mx-auto w-full max-w-[820px] animate-fade-in-up space-y-4">
+            <div className="border-b border-[var(--dashboard-border)] pb-4">
                 <p className="focuz-section-label mb-1">Settings</p>
-                <h2 className="text-3xl font-semibold text-white tracking-tight">Preferences</h2>
-                <p className="text-sm text-neutral-500 mt-1">Blocking behavior, appearance, and privacy.</p>
+                <h2 className="text-2xl font-semibold tracking-tight text-[var(--dashboard-text)]">Preferences</h2>
+                <p className="mt-1 text-sm text-[var(--dashboard-text-muted)]">Tune how FocuzNow looks, tracks activity, and protects focus time.</p>
             </div>
             <BrowsingHistorySettings />
             <Customization />
-            <GlassCard className="p-8">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="font-semibold text-white">Emergency Override</h3>
-                        <p className="text-xs text-neutral-500 mt-1 max-w-md">
+            <div className="pt-1">
+                <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--dashboard-text-muted)]">Safety controls</p>
+            </div>
+            <GlassCard className="p-4">
+                <div className="flex items-center justify-between gap-6">
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-medium text-[var(--dashboard-text)]">Emergency override</h3>
+                        <p className="mt-1 max-w-lg text-xs leading-relaxed text-[var(--dashboard-text-muted)]">
                             On blocked pages, users can request temporary access by explaining why.
                             All requests are logged. Disabled during Nuclear Lockdown.
                         </p>
@@ -470,22 +580,24 @@ export const SettingsTab = () => {
                     <button
                         type="button"
                         onClick={() => patchOverride({ enabled: !override.enabled })}
-                        className={`w-14 h-8 rounded-full transition-all relative ${override.enabled ? 'bg-amber-600' : 'bg-neutral-800'}`}
+                        aria-label={`${override.enabled ? 'Disable' : 'Enable'} emergency override`}
+                        aria-pressed={override.enabled}
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${override.enabled ? 'bg-amber-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                     >
-                        <div className={`absolute top-1 w-6 h-6 rounded-full bg-white transition-all ${override.enabled ? 'left-7' : 'left-1'}`} />
+                        <div className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${override.enabled ? 'left-6' : 'left-1'}`} />
                     </button>
                 </div>
                 {override.enabled && (
-                    <p className="text-[11px] text-neutral-600 mt-4">
+                    <p className="mt-3 border-t border-[var(--dashboard-border)] pt-3 text-[11px] text-[var(--dashboard-text-muted)]">
                         {override.maxPerDay} uses/day · {override.accessMinutes} min access · {override.minReasonLength}+ char reason · {override.cooldownMinutes} min cooldown
                     </p>
                 )}
             </GlassCard>
-            <GlassCard className="p-8">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="font-semibold text-white">Unblocking Challenge</h3>
-                        <p className="text-xs text-neutral-500 mt-1">Require a typing test before unblocking any site during active hours.</p>
+            <GlassCard className="p-4">
+                <div className="flex items-center justify-between gap-6">
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-medium text-[var(--dashboard-text)]">Unblocking challenge</h3>
+                        <p className="mt-1 text-xs text-[var(--dashboard-text-muted)]">Require a typing test before unblocking any site during active hours.</p>
                     </div>
                     <button
                         type="button"
@@ -496,9 +608,11 @@ export const SettingsTab = () => {
                             }, () => r()));
                             fetchEngineState();
                         }}
-                        className={`w-14 h-8 rounded-full transition-all relative ${engineState.requireChallenge ? 'bg-purple-600' : 'bg-neutral-800'}`}
+                        aria-label={`${engineState.requireChallenge ? 'Disable' : 'Enable'} unblocking challenge`}
+                        aria-pressed={Boolean(engineState.requireChallenge)}
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${engineState.requireChallenge ? 'bg-purple-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                     >
-                        <div className={`absolute top-1 w-6 h-6 rounded-full bg-white transition-all ${engineState.requireChallenge ? 'left-7' : 'left-1'}`} />
+                        <div className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${engineState.requireChallenge ? 'left-6' : 'left-1'}`} />
                     </button>
                 </div>
             </GlassCard>
@@ -651,16 +765,16 @@ export const Customization = () => {
     };
 
     return (
-        <div className="space-y-3 animate-fade-in-up">
-            <h2 className="text-lg font-bold text-white">Customization</h2>
+        <div className="animate-fade-in-up space-y-4">
+            <p className="pt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--dashboard-text-muted)]">Appearance & behavior</p>
 
             <GlassCard className="p-4">
-                <h3 className="font-semibold text-white mb-3 flex items-center space-x-2">
-                    <IconPalette size={20} className="text-purple-400" />
-                    <span>Blocking Message</span>
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--dashboard-text)]">
+                    <IconPalette size={15} className="text-purple-400" />
+                    <span>Blocking message</span>
                 </h3>
-                <div className="space-y-4">
-                    <p className="text-xs text-neutral-500">This message will appear when you try to visit a blocked site.</p>
+                <div>
+                    <p className="mb-3 text-xs text-[var(--dashboard-text-muted)]">Shown when you try to visit a blocked site.</p>
                     <textarea
                         value={engineState.redirectMessage}
                         onChange={async (e) => {
@@ -670,55 +784,61 @@ export const Customization = () => {
                             }, () => r()));
                             fetchEngineState();
                         }}
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white text-sm focus:border-purple-500 outline-none transition-colors h-32 resize-none"
+                        className="h-20 w-full resize-none rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] p-3 text-sm text-[var(--dashboard-text)] outline-none transition-colors focus:border-purple-500/60"
                     />
                 </div>
             </GlassCard>
 
             <ThemeSelector />
 
-            <GlassCard className="p-5 sm:p-6 space-y-5">
-                <h3 className="font-semibold text-white text-base">Focus Engine Features</h3>
+            <GlassCard className="divide-y divide-[var(--dashboard-border)] px-4">
+                <h3 className="py-3 text-sm font-medium text-[var(--dashboard-text)]">Focus engine</h3>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                <div className="flex items-center justify-between gap-6 py-3">
                     <div className="min-w-0">
-                        <span className="font-medium text-white block">Site Clock</span>
-                        <p className="text-xs sm:text-sm text-neutral-500 mt-1 leading-relaxed">Show a per-site time bubble on every page. Turn off to hide the clock overlay.</p>
+                        <span className="block text-sm font-medium text-[var(--dashboard-text)]">Site clock</span>
+                        <p className="mt-0.5 text-xs text-[var(--dashboard-text-muted)]">Show a per-site time bubble on every page.</p>
                     </div>
                     <button
                         type="button"
                         onClick={() => void toggleEngineBool('draggableTimer')}
-                        className={`w-14 h-8 rounded-full transition-all relative ${engineState.draggableTimer ? 'bg-purple-600' : 'bg-neutral-800'}`}
+                        aria-label={`${engineState.draggableTimer ? 'Disable' : 'Enable'} site clock`}
+                        aria-pressed={Boolean(engineState.draggableTimer)}
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${engineState.draggableTimer ? 'bg-purple-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                     >
-                        <div className={`pointer-events-none absolute top-1 w-6 h-6 rounded-full bg-white transition-all ${engineState.draggableTimer ? 'left-7' : 'left-1'}`} />
+                        <div className={`pointer-events-none absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${engineState.draggableTimer ? 'left-6' : 'left-1'}`} />
                     </button>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                <div className="flex items-center justify-between gap-6 py-3">
                     <div className="min-w-0">
-                        <span className="font-medium text-white block">Pomodoro Widget</span>
-                        <p className="text-xs sm:text-sm text-neutral-500 mt-1 leading-relaxed">Show a glassmorphic pomodoro timer widget on all sites, tracking your current session.</p>
+                        <span className="block text-sm font-medium text-[var(--dashboard-text)]">Pomodoro widget</span>
+                        <p className="mt-0.5 text-xs text-[var(--dashboard-text-muted)]">Show the current session timer on all sites.</p>
                     </div>
                     <button
                         type="button"
                         onClick={() => void toggleEngineBool('pomodoroWidget')}
-                        className={`w-14 h-8 rounded-full transition-all relative ${engineState.pomodoroWidget ? 'bg-purple-600' : 'bg-neutral-800'}`}
+                        aria-label={`${engineState.pomodoroWidget ? 'Disable' : 'Enable'} Pomodoro widget`}
+                        aria-pressed={Boolean(engineState.pomodoroWidget)}
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${engineState.pomodoroWidget ? 'bg-purple-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                     >
-                        <div className={`pointer-events-none absolute top-1 w-6 h-6 rounded-full bg-white transition-all ${engineState.pomodoroWidget ? 'left-7' : 'left-1'}`} />
+                        <div className={`pointer-events-none absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${engineState.pomodoroWidget ? 'left-6' : 'left-1'}`} />
                     </button>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                <div className="flex items-center justify-between gap-6 py-3">
                     <div className="min-w-0">
-                        <span className="font-medium text-white block">Track Background Audio Playback</span>
-                        <p className="text-xs sm:text-sm text-neutral-500 mt-1 leading-relaxed">Count time for unfocused tabs playing media.</p>
+                        <span className="block text-sm font-medium text-[var(--dashboard-text)]">Background audio</span>
+                        <p className="mt-0.5 text-xs text-[var(--dashboard-text-muted)]">Count time for unfocused tabs playing media.</p>
                     </div>
                     <button
                         type="button"
                         onClick={() => void toggleEngineBool('trackBackgroundAudio')}
-                        className={`w-14 h-8 rounded-full transition-all relative ${engineState.trackBackgroundAudio ? 'bg-purple-600' : 'bg-neutral-800'}`}
+                        aria-label={`${engineState.trackBackgroundAudio ? 'Disable' : 'Enable'} background audio tracking`}
+                        aria-pressed={Boolean(engineState.trackBackgroundAudio)}
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${engineState.trackBackgroundAudio ? 'bg-purple-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                     >
-                        <div className={`pointer-events-none absolute top-1 w-6 h-6 rounded-full bg-white transition-all ${engineState.trackBackgroundAudio ? 'left-7' : 'left-1'}`} />
+                        <div className={`pointer-events-none absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${engineState.trackBackgroundAudio ? 'left-6' : 'left-1'}`} />
                     </button>
                 </div>
             </GlassCard>
@@ -1002,24 +1122,16 @@ export const Productivity = () => {
             timerRef.current = window.setInterval(() => {
                 const left = Math.max(0, Math.ceil((pomoEndAt - Date.now()) / 1000));
                 setPomoTimeLeft(left);
+                if (left <= 0) {
+                    setPomoRunning(false);
+                    setPomoEndAt(null);
+                    setIsBreak(false);
+                    setPomoTimeLeft(defaultPomo.focusMin * 60);
+                }
             }, 1000);
             return () => { if (timerRef.current) clearInterval(timerRef.current); };
         }
-        if (pomoTimeLeft <= 0 && pomoRunning && pomoEndAt) {
-            setPomoRunning(false);
-            setPomoEndAt(null);
-            if (!isBreak) {
-                const updated = { ...defaultPomo, sessionsCompleted: defaultPomo.sessionsCompleted + 1, lastDate: new Date().toDateString() };
-                chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { pomodoroSettings: updated } });
-                dispatchFocusComplete();
-                setIsBreak(true);
-                setPomoTimeLeft(defaultPomo.breakMin * 60);
-            } else {
-                setIsBreak(false);
-                setPomoTimeLeft(defaultPomo.focusMin * 60);
-            }
-        }
-    }, [pomoRunning, pomoTimeLeft, pomoEndAt, isBreak, defaultPomo.focusMin, defaultPomo.breakMin, defaultPomo.sessionsCompleted]);
+    }, [pomoRunning, pomoEndAt, defaultPomo.focusMin]);
 
     useEffect(() => {
         if (!pomoRunning || pomoEndAt) return;
@@ -1836,18 +1948,22 @@ const AccountSettings = () => {
         : null;
 
     return (
-        <div className="space-y-3 animate-fade-in-up">
-            <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-white">Account Settings</h2>
+        <div className="mx-auto grid w-full max-w-[900px] animate-fade-in-up gap-4 md:grid-cols-2">
+            <div className="col-span-full flex items-end justify-between border-b border-[var(--dashboard-border)] pb-4">
+                <div>
+                    <p className="focuz-section-label mb-1">Settings</p>
+                    <h2 className="text-2xl font-semibold tracking-tight text-[var(--dashboard-text)]">Account</h2>
+                    <p className="mt-1 text-sm text-[var(--dashboard-text-muted)]">Manage your profile, visibility, and subscription.</p>
+                </div>
                 <button onClick={signOut}
-                    className="px-4 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-neutral-400 hover:text-white hover:bg-white/10 transition-all">
-                    Sign Out
+                    className="rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] px-3 py-2 text-xs font-medium text-[var(--dashboard-text-secondary)] transition-colors hover:bg-[var(--dashboard-interactive-hover)] hover:text-[var(--dashboard-text)]">
+                    Sign out
                 </button>
             </div>
 
             {/* Avatar + Name */}
-            <GlassCard className="p-4">
-                <div className="flex items-center space-x-4 mb-3">
+            <GlassCard className="col-span-full p-5">
+                <div className="mb-4 flex items-start gap-5">
                     <div onClick={uploadAvatar} className={`${PROFILE_AVATAR_LARGE_WRAP_CLASS} cursor-pointer hover:border-purple-500 transition-colors relative group`}>
                         {engineState.profileAvatar ? (
                             <img src={engineState.profileAvatar} className={PROFILE_AVATAR_LARGE_IMG_CLASS} alt="Avatar" />
@@ -1858,32 +1974,32 @@ const AccountSettings = () => {
                             <IconUser size={18} className="text-white" />
                         </div>
                     </div>
-                    <div className="flex-1 space-y-2">
+                    <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
                         <div>
-                            <p className="text-[10px] uppercase tracking-widest font-bold text-neutral-600 mb-1">Display Name</p>
+                            <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--dashboard-text-muted)]">Display name</label>
                             <input
                                 value={displayName}
                                 onChange={(e) => setDisplayName(e.target.value)}
                                 onBlur={saveName}
                                 disabled={profileSaving}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm font-bold outline-none focus:border-purple-500 transition-colors"
+                                className="w-full rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] px-3 py-2 text-sm font-medium text-[var(--dashboard-text)] outline-none transition-colors focus:border-purple-500/60"
                             />
                         </div>
                         <div>
-                            <p className="text-[10px] uppercase tracking-widest font-bold text-neutral-600 mb-1">Handle</p>
-                            <div className="flex items-center bg-black/40 border border-white/10 rounded-lg overflow-hidden focus-within:border-purple-500">
-                                <span className="pl-3 text-neutral-500 text-sm font-bold">@</span>
+                            <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--dashboard-text-muted)]">Handle</label>
+                            <div className="flex items-center overflow-hidden rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] focus-within:border-purple-500/60">
+                                <span className="pl-3 text-sm text-[var(--dashboard-text-muted)]">@</span>
                                 <input
                                     value={username}
                                     onChange={(e) => setUsername(normalizeUsername(e.target.value))}
                                     onBlur={saveName}
                                     disabled={profileSaving || !profileLoaded}
                                     placeholder="yourname"
-                                    className="flex-1 bg-transparent px-2 py-2 text-white text-sm font-mono outline-none"
+                                    className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-[var(--dashboard-text)] outline-none"
                                 />
                             </div>
-                            <p className="text-[10px] text-neutral-600 mt-1">
-                                Unique on FocuzNow — shown as @{username || 'handle'}. Display name above can be anything.
+                            <p className="mt-1 text-[10px] text-[var(--dashboard-text-muted)]">
+                                Your unique public FocuzNow handle.
                             </p>
                             {handleStatus === 'checking' && (
                                 <p className="text-[10px] text-neutral-500 mt-0.5">Checking availability…</p>
@@ -1909,17 +2025,17 @@ const AccountSettings = () => {
                         {profileError || profileNotice}
                     </p>
                 )}
-                <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-                    <p className="text-[10px] uppercase tracking-widest font-bold text-neutral-600 mb-0.5">Email</p>
-                    <p className="text-xs text-white font-mono">{session?.user?.email}</p>
+                <div className="flex items-center justify-between gap-4 border-t border-[var(--dashboard-border)] pt-3">
+                    <p className="text-xs text-[var(--dashboard-text-muted)]">Email address</p>
+                    <p className="truncate text-xs font-medium text-[var(--dashboard-text)]">{session?.user?.email}</p>
                 </div>
             </GlassCard>
 
             <GlassCard className="p-4">
                 <div className="flex items-center justify-between gap-4">
                     <div>
-                        <h3 className="font-bold text-white text-sm">Public Focus Profile</h3>
-                        <p className="text-xs text-neutral-500 mt-1">
+                        <h3 className="text-sm font-medium text-[var(--dashboard-text)]">Public focus profile</h3>
+                        <p className="mt-1 text-xs leading-relaxed text-[var(--dashboard-text-muted)]">
                             Share your level, streak, and focus stats — like a GitHub profile for students.
                         </p>
                         {publicProfileEnabled && username.length >= 3 && (
@@ -1936,9 +2052,11 @@ const AccountSettings = () => {
                     <button
                         type="button"
                         onClick={togglePublicProfile}
-                        className={`w-14 h-8 rounded-full transition-all relative shrink-0 ${publicProfileEnabled ? 'bg-purple-600' : 'bg-neutral-800'}`}
+                        aria-label={`${publicProfileEnabled ? 'Disable' : 'Enable'} public focus profile`}
+                        aria-pressed={publicProfileEnabled}
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${publicProfileEnabled ? 'bg-purple-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                     >
-                        <div className={`absolute top-1 w-6 h-6 rounded-full bg-white transition-all ${publicProfileEnabled ? 'left-7' : 'left-1'}`} />
+                        <div className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${publicProfileEnabled ? 'left-6' : 'left-1'}`} />
                     </button>
                 </div>
             </GlassCard>
@@ -2006,15 +2124,17 @@ const AccountSettings = () => {
             })()}
 
             {/* Danger Zone */}
-            <GlassCard className="p-4 border-red-500/10">
-                <h3 className="font-bold text-red-400 text-sm mb-2">Danger Zone</h3>
+            <GlassCard className="col-span-full flex items-center justify-between gap-6 border-red-500/15 p-4">
+                <div>
+                <h3 className="mb-1 text-sm font-medium text-red-400">Delete account</h3>
                 <p className="text-xs text-neutral-500 mb-3">Permanently delete your account and all associated data. This cannot be undone.</p>
+                </div>
                 <button
                     type="button"
                     onClick={() => setShowDeleteAccount(true)}
-                    className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl font-bold text-xs hover:bg-red-500/20 transition-all"
+                    className="shrink-0 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
                 >
-                    DELETE ACCOUNT
+                    Delete account
                 </button>
             </GlassCard>
 
@@ -2055,6 +2175,7 @@ const BlockedView = ({ url }: { url: string }) => {
     const [emergencyOpen, setEmergencyOpen] = useState(false);
     const [overrideNotice, setOverrideNotice] = useState('');
     const [overrideError, setOverrideError] = useState('');
+    const [futureSelfSummary, setFutureSelfSummary] = useState<FutureSelfBlockedSummary | null>(null);
 
     const ytCategory = new URLSearchParams(window.location.search).get('ytCategory');
     const overrideSettings = engineState.emergencyOverrideSettings ?? {
@@ -2081,6 +2202,13 @@ const BlockedView = ({ url }: { url: string }) => {
                 setDomain(url);
             }
         }
+    }, [url]);
+
+    useEffect(() => {
+        if (!url || url === 'LOCKDOWN' || url === 'REDACTED') return;
+        void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_BLOCKED', url }).then((response) => {
+            setFutureSelfSummary(response?.summary ?? null);
+        });
     }, [url]);
 
     const isNuclear = engineState.nuclearState?.active;
@@ -2112,6 +2240,15 @@ const BlockedView = ({ url }: { url: string }) => {
             window.location.href = targetUrl;
         }, 800);
     };
+
+    if (futureSelfSummary) {
+        return (
+            <div className="fixed inset-0 z-[9999] flex min-h-[100dvh] w-screen items-center justify-center overflow-y-auto bg-[#050505] p-4 sm:p-8">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(168,85,247,0.16)_0%,transparent_65%)]" />
+                <FutureSelfBlockedOverlay url={url} summary={futureSelfSummary} />
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 min-h-[100dvh] w-screen bg-[#050505] flex flex-col items-center justify-center px-4 py-10 sm:px-8 sm:py-14 md:py-16 text-white font-sans z-[9999] overflow-y-auto">
@@ -2263,6 +2400,7 @@ const OptionsApp = () => {
     const [toastMessage, setToastMessage] = useState('');
     const [focusToast, setFocusToast] = useState('');
     const [coachInitialPrompt, setCoachInitialPrompt] = useState<string | null>(null);
+    const [futureSelfMirror, setFutureSelfMirror] = useState<FutureSelfMirror | null>(null);
 
     useEffect(() => {
         document.body.classList.add('focuz-dashboard');
@@ -2394,6 +2532,13 @@ const OptionsApp = () => {
     }, [session, recordDashboardOpen]);
 
     useEffect(() => {
+        if (!session || !isPro || view !== 'app') return;
+        void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_GET', dashboardOpen: true }).then((response) => {
+            setFutureSelfMirror(response?.pendingMirror ?? null);
+        });
+    }, [session, isPro, view]);
+
+    useEffect(() => {
         applyDocumentTheme(engineState, isPro);
     }, [engineState, isPro]);
 
@@ -2421,6 +2566,7 @@ const OptionsApp = () => {
         switch (activeTab) {
             case 'overview': return <OverviewTab />;
             case 'calendar': return <SchedulingCalendarPage fullscreen />;
+            case 'lists': return <ListsTab />;
             case 'sessions': return <SessionsTab />;
             case 'blocklist': return <BlocklistTab />;
             case 'habits': return <HabitsTab />;
@@ -2485,13 +2631,13 @@ const OptionsApp = () => {
                     </div>
                 </header>
 
-                <div className={['calendar', 'ai_coach', 'focus_rooms'].includes(activeTab)
+                <div className={['calendar', 'lists', 'ai_coach', 'focus_rooms'].includes(activeTab)
                     ? 'flex-1 min-h-0 w-full overflow-hidden'
                     : 'px-6 pb-12 w-full overflow-y-auto scrollbar-hide'}
                 >
                     <div
                         key={activeTab}
-                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${['calendar', 'ai_coach', 'focus_rooms'].includes(activeTab) ? 'h-full' : ''}`}
+                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${['calendar', 'lists', 'ai_coach', 'focus_rooms'].includes(activeTab) ? 'h-full' : ''}`}
                     >
                         {renderContent()}
                     </div>
@@ -2506,6 +2652,15 @@ const OptionsApp = () => {
                 onFeedback={setToastMessage}
             />
             <ActionToast message={toastMessage} onDone={() => setToastMessage('')} />
+            <DailyFocusMirrorModal
+                mirror={futureSelfMirror}
+                onClose={() => {
+                    if (futureSelfMirror) {
+                        void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_MIRROR_SHOWN', id: futureSelfMirror.id });
+                    }
+                    setFutureSelfMirror(null);
+                }}
+            />
 
             {hostBookings.open && (
                 <BookingNotificationModal bookings={hostBookings.bookings} onDismiss={hostBookings.dismiss} />

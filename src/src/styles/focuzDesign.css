@@ -23,21 +23,46 @@
     --fz-font-display: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
+html[data-dashboard-theme="light"] {
+    --fz-bg: #f7f7f8;
+    --fz-surface: #ffffff;
+    --fz-surface-raised: #ffffff;
+    --fz-surface-overlay: #f1f1f3;
+    --fz-border: rgba(20, 20, 24, 0.09);
+    --fz-border-strong: rgba(20, 20, 24, 0.15);
+    --fz-text: #18181b;
+    --fz-text-secondary: #52525b;
+    --fz-text-tertiary: #71717a;
+    --fz-accent: #27272a;
+    --fz-accent-muted: rgba(20, 20, 24, 0.07);
+    --fz-shadow-md: 0 12px 32px rgba(24, 24, 27, 0.14);
+}
+
 .focuznow-calendar {
-    --cal-bg: #0a0a0b;
-    --cal-surface: #121214;
-    --cal-surface-raised: #18181b;
-    --cal-border: rgba(255, 255, 255, 0.06);
-    --cal-accent: #d7d7db;
-    --cal-accent-muted: rgba(255, 255, 255, 0.08);
-    --cal-today: #d7d7db;
+    --cal-bg: #181819;
+    --cal-surface: #202021;
+    --cal-surface-raised: #28282a;
+    --cal-border: rgba(255, 255, 255, 0.065);
+    --cal-accent: #ff5a5f;
+    --cal-accent-muted: rgba(255, 90, 95, 0.13);
+    --cal-today: #ff5a5f;
     --cal-weekend: transparent;
-    --cal-now: #f59e0b;
-    --cal-hour: #8b8b96;
-    --cal-event-radius: 6px;
+    --cal-now: #ff5a5f;
+    --cal-hour: #77777d;
+    --cal-event-radius: 4px;
     color-scheme: dark;
     background-color: var(--cal-bg);
     font-family: var(--fz-font-display);
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar {
+    --cal-bg: #f7f7f8;
+    --cal-surface: #ffffff;
+    --cal-surface-raised: #f0f0f2;
+    --cal-border: rgba(20, 20, 24, 0.1);
+    --cal-accent-muted: rgba(225, 48, 55, 0.11);
+    --cal-hour: #71717a;
+    color-scheme: light;
 }
 
 html:has(.focuznow-calendar),
@@ -70,6 +95,10 @@ html:has(.focuznow-calendar) body {
     align-items: center;
     justify-content: center;
     padding: 1rem;
+}
+
+html[data-dashboard-theme="light"] .focuz-modal-overlay {
+    background: rgba(24, 24, 27, 0.42);
 }
 
 .focuz-modal-panel {
@@ -121,14 +150,14 @@ html:has(.focuznow-calendar) body {
 .focuz-btn-ghost {
     padding: 0.625rem 1.25rem;
     border-radius: var(--fz-radius-md);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--fz-accent-muted);
     color: var(--fz-text-secondary);
     font-weight: 600;
     font-size: 0.8125rem;
 }
 
 .focuz-btn-ghost:hover {
-    background: rgba(255, 255, 255, 0.09);
+    background: color-mix(in srgb, var(--fz-accent-muted) 150%, transparent);
     color: var(--fz-text);
 }
 
@@ -139,14 +168,14 @@ html:has(.focuznow-calendar) body {
     padding: 0.75rem 1rem;
     border-radius: var(--fz-radius-md);
     border: 1px solid var(--fz-border);
-    background: rgba(255, 255, 255, 0.02);
+    background: color-mix(in srgb, var(--fz-accent-muted) 35%, transparent);
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s;
 }
 
 .focuz-category-chip:hover {
     border-color: var(--fz-border-strong);
-    background: rgba(255, 255, 255, 0.04);
+    background: color-mix(in srgb, var(--fz-accent-muted) 70%, transparent);
 }
 
 .focuz-category-chip.is-blocked {

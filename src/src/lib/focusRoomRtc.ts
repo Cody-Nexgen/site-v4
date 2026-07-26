@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import type { AttachmentRecord } from './attachmentApi';
 
 export type RtcPeer = {
     peerId: string;
@@ -17,6 +18,7 @@ export type ChatMessage = {
     name: string;
     text: string;
     at: number;
+    attachment?: AttachmentRecord;
 };
 
 export type MediaDeviceLists = {
@@ -33,7 +35,9 @@ type SignalPayload = {
     candidate?: RTCIceCandidateInit;
     text?: string;
     name?: string;
+    avatarUrl?: string | null;
     locked?: boolean;
+    attachmentId?: string;
 };
 
 type JoinPrefs = {
@@ -61,6 +65,7 @@ export function useFocusRoomRtc(
     enabled: boolean,
     isHost: boolean,
     joinPrefs?: JoinPrefs,
+    avatarUrl?: string | null,
 ) {
     const [micOn, setMicOn] = useState(true);
     const [camOn, setCamOn] = useState(false);
@@ -79,7 +84,7 @@ export function useFocusRoomRtc(
     const [previewReady, setPreviewReady] = useState(false);
     const [permissionState, setPermissionState] = useState<'pending' | 'granted' | 'denied'>('pending');
 
-    const peerIdRef = useRef(randomPeerId());
+    const [peerId] = useState(randomPeerId);
     const channelRef = useRef<RealtimeChannel | null>(null);
     const pcMapRef = useRef<Map<string, RTCPeerConnection>>(new Map());
     const dcMapRef = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -90,10 +95,15 @@ export function useFocusRoomRtc(
     const audioCtxRef = useRef<AudioContext | null>(null);
     const rafRef = useRef<number>(0);
     const prefsRef = useRef(joinPrefs);
+    const roomLockedRef = useRef(false);
 
     useEffect(() => {
         prefsRef.current = joinPrefs;
     }, [joinPrefs]);
+
+    useEffect(() => {
+        roomLockedRef.current = roomLocked;
+    }, [roomLocked]);
 
     const refreshDevices = useCallback(async () => {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -114,15 +124,16 @@ export function useFocusRoomRtc(
         setPeers((prev) => prev.filter((p) => p.peerId !== remoteId));
     }, []);
 
-    const sendChat = useCallback((text: string) => {
+    const sendChat = useCallback((text: string, attachment?: AttachmentRecord) => {
         const trimmed = text.trim();
-        if (!trimmed) return;
+        if (!trimmed && !attachment) return;
         const msg: ChatMessage = {
-            id: `${Date.now()}`,
-            from: peerIdRef.current,
+            id: crypto.randomUUID(),
+            from: peerId,
             name: displayName,
             text: trimmed,
             at: Date.now(),
+            ...(attachment ? { attachment } : {}),
         };
         setChat((c) => [...c, msg]);
         const channel = channelRef.current;
@@ -130,6 +141,18 @@ export function useFocusRoomRtc(
             void channel.send({ type: 'broadcast', event: 'chat', payload: msg });
         }
     }, [displayName]);
+
+    const removeChatAttachment = useCallback((attachmentId: string) => {
+        setChat((current) => current.filter((message) => message.attachment?.id !== attachmentId));
+        const channel = channelRef.current;
+        if (channel) {
+            void channel.send({
+                type: 'broadcast',
+                event: 'chat-delete',
+                payload: { attachmentId },
+            });
+        }
+    }, []);
 
     const renegotiate = useCallback(async (remoteId: string, channel: RealtimeChannel) => {
         const pc = pcMapRef.current.get(remoteId);
@@ -142,10 +165,12 @@ export function useFocusRoomRtc(
                 type: 'broadcast',
                 event: 'signal',
                 payload: {
-                    from: peerIdRef.current,
+                    from: peerId,
                     to: remoteId,
                     type: 'offer',
                     sdp: offer,
+                    name: displayName,
+                    avatarUrl,
                 } satisfies SignalPayload,
             });
         } catch (err) {
@@ -153,7 +178,7 @@ export function useFocusRoomRtc(
         } finally {
             makingOfferRef.current.delete(remoteId);
         }
-    }, []);
+    }, [displayName, avatarUrl]);
 
     const kickPeer = useCallback(
         (remoteId: string) => {
@@ -163,7 +188,7 @@ export function useFocusRoomRtc(
                 void channel.send({
                     type: 'broadcast',
                     event: 'kick',
-                    payload: { from: peerIdRef.current, to: remoteId },
+                    payload: { from: peerId, to: remoteId },
                 });
             }
             cleanupPeer(remoteId);
@@ -179,7 +204,7 @@ export function useFocusRoomRtc(
                 void channel.send({
                     type: 'broadcast',
                     event: 'signal',
-                    payload: { from: peerIdRef.current, to: remoteId, type: 'mute' } satisfies SignalPayload,
+                    payload: { from: peerId, to: remoteId, type: 'mute' } satisfies SignalPayload,
                 });
             }
             setPeers((prev) =>
@@ -198,7 +223,7 @@ export function useFocusRoomRtc(
                 void channel.send({
                     type: 'broadcast',
                     event: 'signal',
-                    payload: { from: peerIdRef.current, to: '*', type: 'room-lock', locked } satisfies SignalPayload,
+                    payload: { from: peerId, to: '*', type: 'room-lock', locked } satisfies SignalPayload,
                 });
             }
         },
@@ -212,7 +237,7 @@ export function useFocusRoomRtc(
             void channel.send({
                 type: 'broadcast',
                 event: 'signal',
-                payload: { from: peerIdRef.current, to: '*', type: 'end-session' } satisfies SignalPayload,
+                payload: { from: peerId, to: '*', type: 'end-session' } satisfies SignalPayload,
             });
         }
     }, [isHost]);
@@ -222,7 +247,7 @@ export function useFocusRoomRtc(
         dc.onmessage = (ev) => {
             try {
                 const data = JSON.parse(ev.data as string) as ChatMessage & { type?: string };
-                if (data.type === 'chat' && data.text) {
+                if (data.type === 'chat' && (data.text || data.attachment)) {
                     setChat((c) => [
                         ...c,
                         {
@@ -231,6 +256,7 @@ export function useFocusRoomRtc(
                             name: data.name || remoteId.slice(0, 6),
                             text: data.text,
                             at: data.at || Date.now(),
+                            attachment: data.attachment,
                         },
                     ]);
                 }
@@ -266,7 +292,7 @@ export function useFocusRoomRtc(
                     type: 'broadcast',
                     event: 'signal',
                     payload: {
-                        from: peerIdRef.current,
+                        from: peerId,
                         to: remoteId,
                         type: 'ice',
                         candidate: ev.candidate.toJSON(),
@@ -320,8 +346,16 @@ export function useFocusRoomRtc(
                 return;
             }
 
-            if (payload.to !== peerIdRef.current && payload.to !== '*') return;
+            if (payload.to !== peerId && payload.to !== '*') return;
             const remoteId = payload.from;
+            if (payload.name) {
+                setPeers((current) => {
+                    const identity = { displayName: payload.name!, avatarUrl: payload.avatarUrl };
+                    return current.some((peer) => peer.peerId === remoteId)
+                        ? current.map((peer) => peer.peerId === remoteId ? { ...peer, ...identity } : peer)
+                        : [...current, { peerId: remoteId, ...identity, stream: null }];
+                });
+            }
 
             if (payload.type === 'mute') {
                 const stream = localStreamRef.current;
@@ -349,7 +383,7 @@ export function useFocusRoomRtc(
                         type: 'broadcast',
                         event: 'signal',
                         payload: {
-                            from: peerIdRef.current,
+                            from: peerId,
                             to: remoteId,
                             type: 'answer',
                             sdp: answer,
@@ -485,13 +519,19 @@ export function useFocusRoomRtc(
                     void handleSignal(payload as SignalPayload, channel);
                 })
                 .on('broadcast', { event: 'join' }, ({ payload }) => {
-                    const remoteId = (payload as { peerId?: string; name?: string })?.peerId;
-                    const name = (payload as { name?: string })?.name;
-                    if (!remoteId || remoteId === peerIdRef.current) return;
-                    if (roomLocked && !isHost) return;
+                    const join = payload as { peerId?: string; name?: string; avatarUrl?: string | null };
+                    const remoteId = join?.peerId;
+                    const name = join?.name;
+                    if (!remoteId || remoteId === peerId) return;
+                    if (roomLockedRef.current && !isHost) return;
                     setPeers((prev) => {
                         if (prev.some((p) => p.peerId === remoteId)) return prev;
-                        return [...prev, { peerId: remoteId, displayName: name || remoteId.slice(0, 8), stream: null }];
+                        return [...prev, {
+                            peerId: remoteId,
+                            displayName: name || remoteId.slice(0, 8),
+                            avatarUrl: join.avatarUrl,
+                            stream: null,
+                        }];
                     });
                     const pc = createPeerConnection(remoteId, channel, true);
                     void (async () => {
@@ -502,10 +542,12 @@ export function useFocusRoomRtc(
                             type: 'broadcast',
                             event: 'signal',
                             payload: {
-                                from: peerIdRef.current,
+                                from: peerId,
                                 to: remoteId,
                                 type: 'offer',
                                 sdp: offer,
+                                name: displayName,
+                                avatarUrl,
                             } satisfies SignalPayload,
                         });
                         makingOfferRef.current.delete(remoteId);
@@ -517,11 +559,21 @@ export function useFocusRoomRtc(
                 })
                 .on('broadcast', { event: 'chat' }, ({ payload }) => {
                     const msg = payload as ChatMessage;
-                    if (msg?.text) setChat((c) => (c.some((x) => x.id === msg.id) ? c : [...c, msg]));
+                    if (msg?.text || msg?.attachment) {
+                        setChat((c) => (c.some((x) => x.id === msg.id) ? c : [...c, msg]));
+                    }
+                })
+                .on('broadcast', { event: 'chat-delete' }, ({ payload }) => {
+                    const attachmentId = (payload as { attachmentId?: string })?.attachmentId;
+                    if (attachmentId) {
+                        setChat((current) =>
+                            current.filter((message) => message.attachment?.id !== attachmentId),
+                        );
+                    }
                 })
                 .on('broadcast', { event: 'kick' }, ({ payload }) => {
                     const p = payload as { to?: string };
-                    if (p.to === peerIdRef.current) {
+                    if (p.to === peerId) {
                         setRtcError('Removed from room by host');
                         void supabase.removeChannel(channel);
                     }
@@ -531,7 +583,7 @@ export function useFocusRoomRtc(
                         await channel.send({
                             type: 'broadcast',
                             event: 'join',
-                            payload: { peerId: peerIdRef.current, name: displayName },
+                            payload: { peerId, name: displayName, avatarUrl },
                         });
                     }
                 });
@@ -550,7 +602,7 @@ export function useFocusRoomRtc(
                 void channel.send({
                     type: 'broadcast',
                     event: 'leave',
-                    payload: { peerId: peerIdRef.current },
+                    payload: { peerId },
                 });
                 void supabase.removeChannel(channel);
             }
@@ -568,7 +620,7 @@ export function useFocusRoomRtc(
             setPeers([]);
             setChat([]);
         };
-    }, [enabled, roomId, supabase, displayName, handleSignal, createPeerConnection, cleanupPeer, startLocalMedia, camOn, isHost, roomLocked]);
+    }, [enabled, roomId, supabase, displayName, avatarUrl, handleSignal, createPeerConnection, cleanupPeer, startLocalMedia, camOn, isHost]);
 
     const toggleMic = () => {
         const stream = localStreamRef.current;
@@ -604,8 +656,9 @@ export function useFocusRoomRtc(
     const allParticipants: RtcPeer[] = [
         ...(localStream
             ? [{
-                peerId: peerIdRef.current,
+                peerId,
                 displayName: `${displayName} (you)`,
+                avatarUrl,
                 stream: localStream,
                 isLocal: true,
                 speaking: micOn && micLevel > 0.12,
@@ -624,6 +677,7 @@ export function useFocusRoomRtc(
         rtcError,
         chat,
         sendChat,
+        removeChatAttachment,
         kickPeer,
         mutePeer,
         setRoomLock,

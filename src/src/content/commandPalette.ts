@@ -14,7 +14,7 @@ const STYLES = `
     :host { all: initial; }
     .palette-backdrop {
         position: fixed; inset: 0; z-index: 2147483647;
-        background: rgba(0,0,0,0.55); backdrop-filter: blur(8px);
+        background: rgba(0,0,0,0.70);
         display: flex; align-items: flex-start; justify-content: center;
         padding-top: 12vh; opacity: 0; pointer-events: none;
         transition: opacity 0.18s ease;
@@ -23,32 +23,25 @@ const STYLES = `
     .palette-backdrop.open { opacity: 1; pointer-events: auto; }
     .palette-container {
         width: 100%; max-width: 560px;
-        background: #141414; border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 16px; overflow: hidden;
-        box-shadow: 0 24px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+        background: #141416; border: 1px solid rgba(255,255,255,0.09);
+        border-radius: 8px; overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.55);
         transform: scale(0.97) translateY(-6px);
         transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
         color: #fff;
     }
     .palette-backdrop.open .palette-container { transform: scale(1) translateY(0); }
     .palette-container.prompt-active { max-width: 460px; }
-    .palette-chrome { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 0; }
-    .traffic { display: flex; gap: 6px; }
-    .traffic span { width: 10px; height: 10px; border-radius: 50%; cursor: pointer; transition: filter 0.15s, transform 0.1s; }
-    .traffic span:hover { filter: brightness(1.25); transform: scale(1.15); }
-    .traffic span:active { transform: scale(0.9); }
-    .traffic .r { background: #ff5f57; } .traffic .y { background: #febc2e; } .traffic .g { background: #28c840; }
-    .palette-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #666; text-transform: uppercase; }
     .palette-search-wrap {
-        margin: 12px 14px; padding: 12px 14px; background: #1c1c1c;
-        border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+        margin: 8px; padding: 10px 12px; background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.07); border-radius: 6px;
         display: flex; align-items: center; gap: 10px;
     }
-    .palette-search-wrap.prompt-mode { border-color: rgba(168,85,247,0.45); box-shadow: 0 0 0 1px rgba(168,85,247,0.2); }
+    .palette-search-wrap.prompt-mode { border-color: rgba(255,255,255,0.14); }
     .palette-search-wrap svg { width: 18px; height: 18px; color: #666; flex-shrink: 0; }
     .palette-input { flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 15px; }
     .palette-input::placeholder { color: #555; }
-    .palette-hint { font-size: 11px; color: #a855f7; padding: 0 18px 8px; font-weight: 600; }
+    .palette-hint { font-size: 11px; color: #737373; padding: 0 16px 8px; font-weight: 600; }
     .palette-prompt-title { font-size: 12px; color: #d4d4d4; padding: 2px 18px 8px; font-weight: 700; letter-spacing: 0.02em; }
     .group-title {
         font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase;
@@ -61,11 +54,11 @@ const STYLES = `
     }
     .palette-item {
         display: flex; align-items: center; gap: 12px;
-        padding: 11px 18px; cursor: pointer; color: #aaa; transition: background 0.12s;
+        padding: 8px 16px; cursor: pointer; color: #a3a3a3; transition: background 0.12s;
     }
-    .palette-item.selected { background: rgba(168,85,247,0.15); color: #fff; outline: 1px solid rgba(168,85,247,0.25); }
+    .palette-item.selected { background: rgba(255,255,255,0.08); color: #fff; }
     .palette-item-icon { width: 18px; height: 18px; color: #777; display: flex; }
-    .palette-item.selected .palette-item-icon { color: #c4b5fd; }
+    .palette-item.selected .palette-item-icon { color: #e5e5e5; }
     .palette-item-text { flex: 1; font-size: 14px; font-weight: 500; }
     .palette-item-sub { font-size: 11px; color: #666; display: block; margin-top: 1px; }
     .palette-item-meta { font-size: 11px; color: #666; }
@@ -98,6 +91,46 @@ const STYLES = `
         font-size: 13px; font-weight: 600; z-index: 2147483647; border: 1px solid rgba(168,85,247,0.35);
         box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
+    .palette-backdrop[data-theme="light"] {
+        background: rgba(15, 23, 42, 0.28);
+    }
+    .palette-backdrop[data-theme="light"] .palette-container {
+        background: rgba(255,255,255,0.98);
+        border-color: rgba(15,23,42,0.12);
+        box-shadow: 0 24px 70px rgba(15,23,42,0.22), 0 2px 8px rgba(15,23,42,0.08);
+        color: #0f172a;
+    }
+    .palette-backdrop[data-theme="light"] .palette-search-wrap {
+        background: #f8fafc;
+        border-color: rgba(15,23,42,0.1);
+    }
+    .palette-backdrop[data-theme="light"] .palette-search-wrap.prompt-mode {
+        border-color: rgba(37,99,235,0.3);
+        box-shadow: 0 0 0 3px rgba(37,99,235,0.08);
+    }
+    .palette-backdrop[data-theme="light"] .palette-search-wrap svg { color: #64748b; }
+    .palette-backdrop[data-theme="light"] .palette-input { color: #0f172a; }
+    .palette-backdrop[data-theme="light"] .palette-input::placeholder { color: #94a3b8; }
+    .palette-backdrop[data-theme="light"] .palette-hint,
+    .palette-backdrop[data-theme="light"] .palette-item-sub,
+    .palette-backdrop[data-theme="light"] .palette-item-meta,
+    .palette-backdrop[data-theme="light"] .empty { color: #64748b; }
+    .palette-backdrop[data-theme="light"] .palette-prompt-title { color: #334155; }
+    .palette-backdrop[data-theme="light"] .group-title { color: #94a3b8; }
+    .palette-backdrop[data-theme="light"] .palette-item { color: #475569; }
+    .palette-backdrop[data-theme="light"] .palette-item.selected {
+        background: #f1f5f9;
+        color: #0f172a;
+    }
+    .palette-backdrop[data-theme="light"] .palette-item-icon { color: #64748b; }
+    .palette-backdrop[data-theme="light"] .palette-item.selected .palette-item-icon { color: #2563eb; }
+    .palette-backdrop[data-theme="light"] .palette-item-meta .kbd {
+        background: #fff;
+        border-color: #cbd5e1;
+        color: #475569;
+        box-shadow: 0 1px 1px rgba(15,23,42,0.06);
+    }
+    .palette-backdrop[data-theme="light"] .palette-success-text { color: #0f172a; }
 `;
 
 type Cmd = {
@@ -113,11 +146,27 @@ type Cmd = {
 };
 
 let togglePalette: (() => void) | null = null;
+let resolvedPaletteTheme: 'light' | 'dark' = 'dark';
 
 function showToast(msg: string) {
     const t = document.createElement('div');
     t.className = 'toast';
     t.textContent = msg;
+    Object.assign(t.style, {
+        position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+        zIndex: '2147483647',
+        background: resolvedPaletteTheme === 'light' ? '#ffffff' : '#171717',
+        color: resolvedPaletteTheme === 'light' ? '#0f172a' : '#f5f5f5',
+        padding: '10px 14px',
+        borderRadius: '8px',
+        border: resolvedPaletteTheme === 'light'
+            ? '1px solid rgba(15,23,42,0.12)'
+            : '1px solid rgba(255,255,255,0.12)',
+        boxShadow: resolvedPaletteTheme === 'light'
+            ? '0 10px 32px rgba(15,23,42,0.18)'
+            : '0 8px 32px rgba(0,0,0,0.5)',
+        font: '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    });
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 3200);
 }
@@ -222,7 +271,7 @@ export function initCommandPalette() {
                 return;
             }
             if (resp && (resp as { ok?: boolean }).ok === false) {
-                showToast('Command could not complete');
+                showToast((resp as { error?: string }).error || 'Command could not complete');
                 return;
             }
             if (successToast) showToast(successToast);
@@ -238,10 +287,6 @@ export function initCommandPalette() {
     backdrop.className = 'palette-backdrop';
     backdrop.innerHTML = `
         <div class="palette-container">
-            <div class="palette-chrome">
-                <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
-                <span class="palette-label">Command palette</span>
-            </div>
             <div class="palette-search-wrap">
                 ${ICONS.search}
                 <input type="text" class="palette-input" placeholder="Type a command or search…" spellcheck="false" autocomplete="off" />
@@ -261,9 +306,35 @@ export function initCommandPalette() {
     const promptTitleEl = shadow.querySelector('.palette-prompt-title') as HTMLDivElement;
     const resultsContainer = shadow.querySelector('.palette-results') as HTMLDivElement;
     const container = shadow.querySelector('.palette-container') as HTMLDivElement;
-    const trafficR = shadow.querySelector('.traffic .r') as HTMLSpanElement;
-    const trafficY = shadow.querySelector('.traffic .y') as HTMLSpanElement;
-    const trafficG = shadow.querySelector('.traffic .g') as HTMLSpanElement;
+    const colorSchemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+    let paletteColorMode: 'light' | 'dark' | 'system' = 'system';
+
+    const applyPaletteTheme = () => {
+        resolvedPaletteTheme =
+            paletteColorMode === 'system'
+                ? colorSchemeMedia.matches ? 'dark' : 'light'
+                : paletteColorMode;
+        backdrop.dataset.theme = resolvedPaletteTheme;
+    };
+    const isPaletteColorMode = (value: unknown): value is typeof paletteColorMode =>
+        value === 'light' || value === 'dark' || value === 'system';
+
+    applyPaletteTheme();
+    chrome.storage.local.get(['dashboardColorMode'], (stored) => {
+        const mode = stored.dashboardColorMode;
+        if (isPaletteColorMode(mode)) paletteColorMode = mode;
+        applyPaletteTheme();
+    });
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== 'local') return;
+        const mode = changes.dashboardColorMode?.newValue;
+        if (!isPaletteColorMode(mode)) return;
+        paletteColorMode = mode;
+        applyPaletteTheme();
+    });
+    colorSchemeMedia.addEventListener('change', () => {
+        if (paletteColorMode === 'system') applyPaletteTheme();
+    });
 
     let selectedIndex = 0;
     let isOpen = false;
@@ -440,19 +511,6 @@ export function initCommandPalette() {
     }
 
     togglePalette = () => (isOpen ? closePalette() : openPalette());
-
-    // Traffic light button actions
-    trafficR?.addEventListener('click', () => closePalette());
-    trafficY?.addEventListener('click', () => {
-        // Minimize: collapse the results list
-        const isMinimized = resultsContainer.style.display === 'none';
-        resultsContainer.style.display = isMinimized ? '' : 'none';
-        searchWrap.style.borderRadius = isMinimized ? '' : '12px';
-    });
-    trafficG?.addEventListener('click', () => {
-        // Maximize: toggle wide mode
-        container.style.maxWidth = container.style.maxWidth === '800px' ? '' : '800px';
-    });
 
     input.addEventListener('input', () => {
         if (promptCmd) return;

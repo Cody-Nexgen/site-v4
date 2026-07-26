@@ -1,6 +1,6 @@
 import { useAuthStore } from '../lib/store';
 import { useMemo, useState, useEffect } from 'react';
-import { Plus, Check } from 'lucide-react';
+import { Plus, Check, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useProDashboardVisuals } from '../lib/proDashboard';
 import { capDayScreenMs } from '../lib/screenTimeCap';
@@ -11,6 +11,7 @@ import { computeFocusScore, focusScoreColor } from '../lib/focusScore';
 import { useFocusProgression, sendProgressionMessage } from '../hooks/useFocusProgression';
 import { FocusLevelCard } from '../components/FocusLevelCard';
 import { ActivityGraph } from './OptionsApp';
+import { computeHabitStreak } from '../lib/habitStreak';
 
 export default function OverviewTab() {
     const { streak, engineState, last7DaysStats, fetchEngineState, offsetWeeks, setOffsetWeeks, dashboardStreak, importHistory } = useAuthStore();
@@ -51,6 +52,7 @@ export default function OverviewTab() {
     }, [offsetWeeks]);
 
     const [newTaskName, setNewTaskName] = useState('');
+    const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
     const [habitModalOpen, setHabitModalOpen] = useState(false);
     const [selectedDay, setSelectedDay] = useState<typeof last7DaysStats[0] | null>(null);
 
@@ -67,11 +69,14 @@ export default function OverviewTab() {
     };
 
     const checkInHabit = async (id: number, dateStr: string) => {
+        const todayString = new Date().toDateString();
+        if (dateStr !== todayString) return;
         const habit = habits.find((h: { id: number }) => h.id === id);
         if (!habit || habit.checkins?.includes(dateStr)) return;
         const updated = habits.map((h: { id: number; checkins?: string[]; streak?: number }) => {
             if (h.id !== id) return h;
-            return { ...h, checkins: [...(h.checkins || []), dateStr], streak: (h.streak || 0) + 1 };
+            const checkins = [...(h.checkins || []), dateStr];
+            return { ...h, checkins, streak: computeHabitStreak(checkins) };
         });
         await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { habits: updated } }, () => r()));
         await fetchEngineState();
@@ -91,6 +96,23 @@ export default function OverviewTab() {
         const updated = planner.map((p: { id: number; done: boolean }) => (p.id === id ? { ...p, done: !p.done } : p));
         await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } }, () => r()));
         fetchEngineState();
+    };
+
+    const deletePlanItem = async (id: number) => {
+        if (deletingTaskId !== null) return;
+        setDeletingTaskId(id);
+        try {
+            const updated = planner.filter((p: { id: number }) => p.id !== id);
+            await new Promise<void>(r =>
+                chrome.runtime.sendMessage(
+                    { type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } },
+                    () => r(),
+                ),
+            );
+            await fetchEngineState();
+        } finally {
+            setDeletingTaskId(null);
+        }
     };
 
     const todaySites = endIdx >= 0 ? (last7DaysStats[endIdx]?.sites ?? {}) : {};
@@ -229,17 +251,36 @@ export default function OverviewTab() {
                             <p className="text-neutral-600 text-sm py-8 text-center">Nothing scheduled yet.</p>
                         )}
                         {planner.map((p: { id: number; task: string; done: boolean }) => (
-                            <button
+                            <div
                                 key={p.id}
-                                type="button"
-                                onClick={() => togglePlanItem(p.id)}
-                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.03] text-left group"
+                                className="group flex w-full items-center rounded-xl transition-colors hover:bg-white/[0.03] focus-within:bg-white/[0.03]"
                             >
-                                <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${p.done ? 'bg-white border-white' : 'border-white/20'}`}>
-                                    {p.done && <Check size={12} className="text-black" />}
-                                </span>
-                                <span className={`text-sm truncate ${p.done ? 'line-through text-neutral-600' : 'text-neutral-200'}`}>{p.task}</span>
-                            </button>
+                                <button
+                                    type="button"
+                                    onClick={() => togglePlanItem(p.id)}
+                                    className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/40"
+                                    aria-label={`${p.done ? 'Mark incomplete' : 'Mark complete'}: ${p.task}`}
+                                    aria-pressed={p.done}
+                                >
+                                    <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${p.done ? 'bg-white border-white' : 'border-white/20'}`}>
+                                        {p.done && <Check size={12} className="text-black" />}
+                                    </span>
+                                    <span className={`text-sm truncate ${p.done ? 'line-through text-neutral-600' : 'text-neutral-200'}`}>{p.task}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void deletePlanItem(p.id);
+                                    }}
+                                    disabled={deletingTaskId !== null}
+                                    className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-600 opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 disabled:cursor-wait disabled:opacity-40 group-hover:opacity-100"
+                                    aria-label={`Delete task: ${p.task}`}
+                                    title={`Delete ${p.task}`}
+                                >
+                                    <Trash2 size={15} aria-hidden="true" />
+                                </button>
+                            </div>
                         ))}
                     </div>
                 </section>
@@ -266,7 +307,9 @@ export default function OverviewTab() {
                                 <div key={h.id} className="rounded-xl border border-white/[0.05] px-3 py-3">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-sm font-medium text-white">{h.name}</span>
-                                        <span className="text-xs font-semibold text-neutral-400">{h.streak || 0}d</span>
+                                        <span className="text-xs font-semibold text-neutral-400">
+                                            {computeHabitStreak(h.checkins || [])}d
+                                        </span>
                                     </div>
                                     <div className="flex gap-1.5">
                                         {last7DaysStrings.map((ds, i) => (
@@ -274,6 +317,7 @@ export default function OverviewTab() {
                                                 key={i}
                                                 checked={!!h.checkins?.includes(ds)}
                                                 isToday={ds === today.toDateString()}
+                                                disabled={ds !== today.toDateString()}
                                                 title={ds}
                                                 onCheckIn={() => checkInHabit(h.id, ds)}
                                             />
