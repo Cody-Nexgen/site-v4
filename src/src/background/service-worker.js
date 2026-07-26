@@ -49,12 +49,11 @@ initAnalytics();
 void initPomodoro();
 void initFutureSelfService();
 
-// Open Options Page on Icon Click
+// When default_popup is set, Chrome shows the popup and does not fire onClicked.
+// Keep a fallback only if the popup is cleared at runtime.
 chrome.action.onClicked.addListener(() => {
-    console.log("[FocuzNow] Icon clicked. Opening options page...");
     chrome.runtime.openOptionsPage().catch(() => {
-        // Fallback
-        chrome.tabs.create({ url: chrome.runtime.getURL("src/options/index.html") });
+        chrome.tabs.create({ url: chrome.runtime.getURL('src/options/index.html') });
     });
 });
 

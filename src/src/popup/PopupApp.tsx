@@ -1,12 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../index.css';
 import { useAuthStore } from '../lib/store';
 import { ExternalLink, Play, ShieldAlert, Wrench } from 'lucide-react';
 import { Brand } from '../components/shell/Brand';
 import { ShellButton } from '../components/shell/ui';
-import { BookingNotificationModal } from '../components/BookingNotificationModal';
-import { useHostBookingNotifications } from '../hooks/useHostBookingNotifications';
 import { openWebDashboard } from '../lib/workspaceSync';
 
 const EXTENSION_OPTIONS_URL = chrome.runtime.getURL('src/options/index.html');
@@ -144,51 +142,60 @@ function PopupSignedIn({
 
 const PopupApp = () => {
     const { session, streak, engineState, fetchEngineState, focusStartTime, init } = useAuthStore();
-    const hostBookings = useHostBookingNotifications(!!session);
+    const [ready, setReady] = useState(false);
 
     useEffect(() => {
+        let cancelled = false;
         chrome.storage.local.get(['blockEngineState', 'streak'], (res) => {
+            if (cancelled) return;
             if (res.blockEngineState) {
                 useAuthStore.setState({ engineState: res.blockEngineState as typeof engineState });
             }
             if (res.streak !== undefined && res.streak !== null) {
                 useAuthStore.setState({ streak: res.streak as number });
             }
+            setReady(true);
         });
-        void init();
+        void Promise.resolve(init()).finally(() => {
+            if (!cancelled) setReady(true);
+        });
         fetchEngineState();
+        return () => {
+            cancelled = true;
+        };
     }, [fetchEngineState, init]);
 
     const todayStr = new Date().toDateString();
     const sessionsToday =
-        engineState.pomodoroSettings?.lastDate === todayStr
-            ? engineState.pomodoroSettings?.sessionsCompleted ?? 0
+        engineState?.pomodoroSettings?.lastDate === todayStr
+            ? engineState?.pomodoroSettings?.sessionsCompleted ?? 0
             : 0;
-    const blockedToday = engineState.blockedToday ?? 0;
+    const blockedToday = engineState?.blockedToday ?? 0;
 
     return (
-        <>
-            {hostBookings.open && (
-                <BookingNotificationModal bookings={hostBookings.bookings} onDismiss={hostBookings.dismiss} />
-            )}
-            <div className="focuz-popup w-[320px] h-[400px] bg-[#0a0a0a] p-2">
-                <div className="flex h-full flex-col rounded-2xl border border-white/[0.08] bg-[#0c0c0c] p-4 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.8)]">
-                    {session ? (
-                        <PopupSignedIn
-                            streak={streak}
-                            blockedToday={blockedToday}
-                            sessionsToday={sessionsToday}
-                            engineState={engineState}
-                            focusStartTime={focusStartTime}
-                        />
-                    ) : (
-                        <PopupSignedOut />
-                    )}
-                </div>
+        <div className="focuz-popup w-[320px] h-[400px] bg-[#0a0a0a] p-2">
+            <div className="flex h-full flex-col rounded-2xl border border-white/[0.08] bg-[#0c0c0c] p-4 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.8)]">
+                {!ready && !session ? (
+                    <div className="flex h-full items-center justify-center">
+                        <Brand size="sm" glow />
+                    </div>
+                ) : session ? (
+                    <PopupSignedIn
+                        streak={streak}
+                        blockedToday={blockedToday}
+                        sessionsToday={sessionsToday}
+                        engineState={engineState}
+                        focusStartTime={focusStartTime}
+                    />
+                ) : (
+                    <PopupSignedOut />
+                )}
             </div>
-        </>
+        </div>
     );
 };
 
-const root = createRoot(document.getElementById('root')!);
-root.render(<PopupApp />);
+const mount = document.getElementById('root');
+if (mount) {
+    createRoot(mount).render(<PopupApp />);
+}
