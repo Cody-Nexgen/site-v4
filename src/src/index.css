@@ -3,8 +3,11 @@
 @import "@fontsource/inter/600.css";
 @import "@fontsource/inter/700.css";
 @import "tailwindcss";
+@import "@heroui/styles";
 @import "tw-animate-css";
 @import "./styles/focuzDesign.css";
+
+@source "../node_modules/@heroui/react/dist";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -15,33 +18,36 @@ body {
 }
 
 .focuz-dashboard {
-  --background: oklch(0.055 0 0);
-  --foreground: oklch(0.93 0 0);
-  --card: oklch(0.085 0 0);
-  --card-foreground: oklch(0.93 0 0);
-  --popover: oklch(0.095 0 0);
-  --popover-foreground: oklch(0.93 0 0);
-  --primary: oklch(0.9 0 0);
-  --primary-foreground: oklch(0.12 0 0);
-  --secondary: oklch(0.13 0 0);
-  --secondary-foreground: oklch(0.84 0 0);
-  --muted: oklch(0.13 0 0);
-  --muted-foreground: oklch(0.56 0 0);
-  --accent: oklch(0.16 0 0);
-  --accent-foreground: oklch(0.9 0 0);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 9%);
-  --ring: oklch(0.62 0 0);
-  --dashboard-bg: #0a0a0b;
-  --dashboard-surface: #121214;
-  --dashboard-surface-raised: #171719;
-  --dashboard-interactive: rgba(255, 255, 255, 0.045);
-  --dashboard-interactive-hover: rgba(255, 255, 255, 0.075);
-  --dashboard-border: rgba(255, 255, 255, 0.075);
-  --dashboard-text: #ededee;
-  --dashboard-text-secondary: #a0a0a6;
-  --dashboard-text-muted: #66666d;
-  --radius: 0.5rem;
+  --background: var(--fz-bg);
+  --foreground: var(--fz-text);
+  --card: var(--fz-surface);
+  --card-foreground: var(--fz-text);
+  --popover: var(--fz-surface-raised);
+  --popover-foreground: var(--fz-text);
+  --primary: var(--fz-accent);
+  --primary-foreground: var(--fz-primary-foreground);
+  --secondary: var(--fz-surface-overlay);
+  --secondary-foreground: var(--fz-text-secondary);
+  --muted: var(--fz-surface-overlay);
+  --muted-foreground: var(--fz-text-tertiary);
+  --accent: var(--fz-accent-muted);
+  --accent-foreground: var(--fz-text);
+  --border: var(--fz-border);
+  --input: var(--fz-border);
+  --ring: var(--fz-focus-ring);
+  --dashboard-bg: var(--fz-bg);
+  --dashboard-surface: var(--fz-surface);
+  --dashboard-surface-raised: var(--fz-surface-raised);
+  --dashboard-interactive: var(--fz-interactive);
+  --dashboard-interactive-hover: var(--fz-interactive-hover);
+  --dashboard-border: var(--fz-border);
+  --dashboard-text: var(--fz-text);
+  --dashboard-text-secondary: var(--fz-text-secondary);
+  --dashboard-text-muted: var(--fz-text-tertiary);
+  --radius: var(--fz-radius-lg);
+  --success: var(--fz-success);
+  --warning: var(--fz-warning);
+  --danger: var(--fz-danger);
   min-height: 100vh;
   background: var(--dashboard-bg);
   color: var(--dashboard-text);
@@ -49,6 +55,17 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focuz-dashboard *,
+  .focuz-dashboard *::before,
+  .focuz-dashboard *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 .focuz-dashboard .glass-edge-card,

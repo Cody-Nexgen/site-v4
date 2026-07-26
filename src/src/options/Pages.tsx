@@ -12,6 +12,21 @@ import {
 } from '../lib/pomodoroRuntime';
 import { GlassCard } from './OptionsApp';
 import CalendarView from './CalendarView';
+import {
+    Alert,
+    Button,
+    Chip,
+    Input,
+    ProgressCircle,
+    Switch,
+} from '@heroui/react';
+import {
+    DashboardEmptyState,
+    MetricCard,
+    PageHeading,
+    SectionCard,
+    StatusChip,
+} from '../components/dashboard/shell';
 import { 
     Play, Pause, RefreshCw, Plus,
     Trash, Check, Ban, Globe, Zap, X,
@@ -471,31 +486,30 @@ export const HabitsTab = () => {
                     </p>
                 </GlassCard>
             )}
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                    <p className="focuz-section-label">Progress</p>
-                    <h1 className="text-3xl font-semibold text-white tracking-tight">Habits</h1>
-                    <p className="text-sm text-neutral-500 mt-1">Build discipline through consistency.</p>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => setHabitModalOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors duration-150 flex items-center gap-1.5"
-                >
-                    <Plus size={14} />
-                    <span>New habit</span>
-                </button>
-            </div>
-            
+            <PageHeading
+                eyebrow="Progress"
+                title="Habits"
+                description="Build discipline through consistency."
+                actions={
+                    <Button variant="primary" onPress={() => setHabitModalOpen(true)}>
+                        <Plus size={14} />
+                        New habit
+                    </Button>
+                }
+            />
+
             <div className="grid grid-cols-1 gap-4">
                 {habits.length === 0 ? (
-                    <GlassCard className="p-16 flex flex-col items-center justify-center text-center mx-auto max-w-lg">
-                        <div className="w-16 h-16 min-w-[4rem] min-h-[4rem] shrink-0 bg-white/5 rounded-2xl flex items-center justify-center mb-4 mx-auto">
-                            <IconCalendarStats size={32} className="text-neutral-500 shrink-0" stroke={1.5} />
-                        </div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">No active habits</p>
-                        <p className="text-neutral-500 text-sm mt-2 max-w-xs">Start your first streak by adding a habit above.</p>
-                    </GlassCard>
+                    <DashboardEmptyState
+                        title="No active habits"
+                        description="Start your first streak by adding a habit above."
+                        icon={<IconCalendarStats size={22} stroke={1.5} />}
+                        action={
+                            <Button size="sm" variant="secondary" onPress={() => setHabitModalOpen(true)}>
+                                Add habit
+                            </Button>
+                        }
+                    />
                 ) : (
                     habits.map((h: any) => {
                         const checkedToday = h.checkins?.includes(todayStr);
@@ -806,196 +820,198 @@ export const SessionsTab = () => {
         setFutureSelfModalOpen(false);
     };
 
+    const progressValue = Math.round(
+        ((segmentSeconds - Math.min(segmentSeconds, pomoTimeLeft)) / segmentSeconds) * 100,
+    );
+
     return (
         <div className="mx-auto max-w-[980px] animate-fade-in-up space-y-5">
-            <div className="text-center">
-                <p className="focuz-section-label">Focus</p>
-                <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--dashboard-text)]">Focus sessions</h1>
-                <p className="mt-1 text-sm text-[var(--dashboard-text-muted)]">Choose a rhythm, start the clock, and stay with one thing.</p>
-            </div>
-            {pomoNotice && (
-                <div role="status" className="mx-auto max-w-xl rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-2.5 text-center text-sm font-medium text-emerald-400">
-                    {pomoNotice}
-                </div>
-            )}
-            
-            <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
-                <GlassCard className="flex min-h-[500px] w-full flex-col items-center justify-center p-7 sm:p-9">
-                    <span className={`mb-5 rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                        isBreak ? 'bg-emerald-500/10 text-emerald-400' : 'bg-purple-500/10 text-purple-400'
-                    }`}>
-                        {isBreak ? 'Recovery break' : pomoRunning ? 'Focus in progress' : 'Ready to focus'}
-                    </span>
+            <PageHeading
+                eyebrow="Focus"
+                title="Focus sessions"
+                description="Choose a rhythm, start the clock, and stay with one thing."
+                className="text-left sm:text-center sm:items-center"
+            />
+            {pomoNotice ? (
+                <Alert status="success" className="mx-auto max-w-xl">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                        <Alert.Title>{pomoNotice}</Alert.Title>
+                    </Alert.Content>
+                </Alert>
+            ) : null}
 
-                    <div className="flex w-full items-center justify-center">
-                        <div className="relative h-64 w-64 shrink-0 sm:h-72 sm:w-72">
-                            <svg
-                                className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none"
-                                viewBox="0 0 200 200"
-                                aria-hidden
-                            >
-                                <circle cx="100" cy="100" r="82" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="7" />
-                                <circle
-                                    cx="100"
-                                    cy="100"
-                                    r="82"
-                                    fill="none"
-                                    stroke={isBreak ? '#22c55e' : '#a855f7'}
-                                    strokeWidth="7"
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${2 * Math.PI * 82}`}
-                                    strokeDashoffset={`${2 * Math.PI * 82 * (1 - Math.min(1, pomoTimeLeft / segmentSeconds))}`}
-                                    className="transition-all duration-1000"
-                                />
-                            </svg>
-                            <div className="pointer-events-none absolute inset-[18%] flex flex-col items-center justify-center text-center">
-                                <span className="text-5xl font-semibold leading-none tracking-[-0.04em] text-[var(--dashboard-text)] tabular-nums">
-                                    {formatTime(pomoTimeLeft)}
-                                </span>
-                                <span className="mt-3 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--dashboard-text-muted)]">
-                                    {pomoTiming.focusMin} min focus · {pomoTiming.breakMin} min rest
-                                </span>
-                            </div>
+            <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,1fr)_280px]">
+                <SectionCard contentClassName="flex min-h-[500px] flex-col items-center justify-center px-6 py-8 sm:px-9">
+                    <StatusChip tone={isBreak ? 'success' : pomoRunning ? 'info' : 'neutral'}>
+                        {isBreak ? 'Recovery break' : pomoRunning ? 'Focus in progress' : 'Ready to focus'}
+                    </StatusChip>
+
+                    <div className="relative mt-6 flex h-64 w-64 items-center justify-center sm:h-72 sm:w-72">
+                        <ProgressCircle
+                            aria-label="Session progress"
+                            value={progressValue}
+                            className="absolute inset-0 h-full w-full"
+                            color={isBreak ? 'success' : 'accent'}
+                        >
+                            <ProgressCircle.Track>
+                                <ProgressCircle.TrackCircle />
+                                <ProgressCircle.FillCircle />
+                            </ProgressCircle.Track>
+                        </ProgressCircle>
+                        <div className="relative z-10 flex flex-col items-center text-center">
+                            <span className="text-5xl font-semibold tabular-nums tracking-tight text-[var(--fz-text)]">
+                                {formatTime(pomoTimeLeft)}
+                            </span>
+                            <span className="mt-3 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--fz-text-tertiary)]">
+                                {pomoTiming.focusMin} min focus · {pomoTiming.breakMin} min rest
+                            </span>
                         </div>
                     </div>
 
                     <div className="mt-7 flex w-full justify-center gap-2">
-                        <button onClick={() => {
-                            void (async () => {
-                                if (pomoRunning) {
-                                    const left = pomoEndAt
-                                        ? Math.max(0, Math.ceil((pomoEndAt - Date.now()) / 1000))
-                                        : pomoTimeLeft;
-                                    await persistRuntime(
-                                        buildRuntime({
-                                            running: false,
-                                            paused: true,
-                                            endAt: null,
-                                            timeLeftSec: left,
-                                            isBreak,
-                                            segmentTotalSec: runtime?.segmentTotalSec ?? segmentSeconds,
-                                        }),
-                                    );
-                                } else if (runtime?.paused || isBreak) {
-                                    await beginFocus();
-                                } else if (futureSelfEnabled) {
-                                    setFutureSelfModalOpen(true);
-                                } else {
-                                    await beginFocus();
-                                }
-                            })();
-                        }}
-                            className={`flex min-w-32 items-center justify-center gap-2 rounded-md px-6 py-2.5 text-sm font-medium transition-colors ${pomoRunning ? 'border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] text-[var(--dashboard-text)] hover:bg-[var(--dashboard-interactive-hover)]' : 'bg-[var(--dashboard-text)] text-[var(--dashboard-bg)] opacity-95 hover:opacity-100'}`}>
-                            {pomoRunning ? <><Pause size={16} /><span>Pause</span></> : <><Play size={16} /><span>Start focus</span></>}
-                        </button>
-                        <button onClick={() => {
-                            if (runtime?.futureSelfContractId) {
-                                void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_FINISH', status: 'cancelled' });
-                            }
-                            void persistRuntime(null);
-                        }}
+                        <Button
+                            variant={pomoRunning ? 'secondary' : 'primary'}
+                            className="min-w-36"
+                            onPress={() => {
+                                void (async () => {
+                                    if (pomoRunning) {
+                                        const left = pomoEndAt
+                                            ? Math.max(0, Math.ceil((pomoEndAt - Date.now()) / 1000))
+                                            : pomoTimeLeft;
+                                        await persistRuntime(
+                                            buildRuntime({
+                                                running: false,
+                                                paused: true,
+                                                endAt: null,
+                                                timeLeftSec: left,
+                                                isBreak,
+                                                segmentTotalSec: runtime?.segmentTotalSec ?? segmentSeconds,
+                                            }),
+                                        );
+                                    } else if (runtime?.paused || isBreak) {
+                                        await beginFocus();
+                                    } else if (futureSelfEnabled) {
+                                        setFutureSelfModalOpen(true);
+                                    } else {
+                                        await beginFocus();
+                                    }
+                                })();
+                            }}
+                        >
+                            {pomoRunning ? <Pause size={16} /> : <Play size={16} />}
+                            {pomoRunning ? 'Pause' : 'Start focus'}
+                        </Button>
+                        <Button
+                            isIconOnly
+                            variant="ghost"
                             aria-label="Reset session"
-                            title="Reset session"
-                            className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] text-[var(--dashboard-text-muted)] transition-colors hover:bg-[var(--dashboard-interactive-hover)] hover:text-[var(--dashboard-text)]">
+                            onPress={() => {
+                                if (runtime?.futureSelfContractId) {
+                                    void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_FINISH', status: 'cancelled' });
+                                }
+                                void persistRuntime(null);
+                            }}
+                        >
                             <RefreshCw size={16} />
-                        </button>
+                        </Button>
                     </div>
-                </GlassCard>
+                </SectionCard>
+
                 <div className="flex flex-col gap-4">
-                    <GlassCard className="p-4">
+                    <SectionCard
+                        title="Future Self Mode"
+                        description="Make this Pomodoro a deliberate promise."
+                        actions={<Chip className="border-0 bg-violet-500/15 text-violet-300">Pro</Chip>}
+                    >
                         <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Future Self Mode</h2>
-                                    <span className="rounded bg-purple-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-purple-400">Pro</span>
-                                </div>
-                                <p className="mt-1 text-xs text-[var(--dashboard-text-muted)]">Make this Pomodoro a deliberate promise.</p>
-                            </div>
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={futureSelfEnabled}
-                                disabled={pomoRunning}
-                                onClick={() => {
+                            <p className="text-xs text-[var(--fz-text-secondary)]">Enable before starting focus.</p>
+                            <Switch
+                                isSelected={futureSelfEnabled}
+                                isDisabled={pomoRunning}
+                                aria-label="Toggle Future Self Mode"
+                                onChange={(value: boolean) => {
                                     if (subscriptionTier !== 'pro') {
                                         setFutureSelfModalOpen(true);
                                     } else {
-                                        setFutureSelfEnabled((enabled) => !enabled);
+                                        setFutureSelfEnabled(value);
                                     }
                                 }}
-                                className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${futureSelfEnabled ? 'bg-purple-600' : 'bg-white/10'}`}
                             >
-                                <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${futureSelfEnabled ? 'translate-x-1' : '-translate-x-4'}`} />
-                            </button>
+                                <Switch.Content>
+                                    <Switch.Control>
+                                        <Switch.Thumb />
+                                    </Switch.Control>
+                                </Switch.Content>
+                            </Switch>
                         </div>
-                    </GlassCard>
-                    <GlassCard className="p-4">
-                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Session presets</h2>
-                        <p className="mt-0.5 text-xs text-[var(--dashboard-text-muted)]">Set your focus cadence.</p>
-                        <div className="mt-3 space-y-1.5">
-                            {sessionPresets.map((preset) => {
-                                const selected = pomoTiming.focusMin === preset.focus && pomoTiming.breakMin === preset.rest;
-                                return (
-                                    <button
-                                        key={preset.label}
-                                        type="button"
-                                        disabled={pomoRunning}
-                                        onClick={() => void updatePomodoroSettings(preset.focus, preset.rest)}
-                                        className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                                            selected
-                                                ? 'border-purple-500/35 bg-purple-500/10'
-                                                : 'border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] hover:bg-[var(--dashboard-interactive-hover)]'
-                                        }`}
-                                    >
-                                        <span className="text-xs font-medium text-[var(--dashboard-text)]">{preset.label}</span>
-                                        <span className="text-[11px] text-[var(--dashboard-text-muted)]">{preset.focus} / {preset.rest} min</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </GlassCard>
-                    <GlassCard className="p-4">
-                        <div className="flex items-end justify-between border-b border-[var(--dashboard-border)] pb-3">
-                            <div>
-                                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--dashboard-text-muted)]">Today</p>
-                                <p className="mt-1 text-2xl font-semibold text-[var(--dashboard-text)] tabular-nums">{completedToday}</p>
-                            </div>
-                            <p className="pb-1 text-xs text-[var(--dashboard-text-muted)]">completed sessions</p>
-                        </div>
-                        <div className="flex items-center justify-between pt-3">
-                            <span className="text-xs text-[var(--dashboard-text-muted)]">Current streak</span>
-                            <span className="text-xs font-medium text-[var(--dashboard-text)]">{dashboardStreak} days</span>
-                        </div>
-                    </GlassCard>
-                    <GlassCard className="p-4">
-                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Custom timing</h2>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                            <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--dashboard-text-muted)]">
-                                Focus
-                                <input
-                                    type="number"
-                                    min="0.5"
-                                    max="120"
-                                    step="0.5"
-                                    value={pomoTiming.focusMin}
-                                    onChange={(event) => void updatePomodoroSettings(parseFloat(event.target.value) || 25, pomoTiming.breakMin)}
-                                    className="mt-1.5 w-full rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] px-2 py-2 text-center text-xs text-[var(--dashboard-text)] outline-none"
-                                />
-                            </label>
-                            <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--dashboard-text-muted)]">
-                                Break
-                                <input
-                                    type="number"
-                                    min="0.5"
-                                    max="60"
-                                    step="0.5"
-                                    value={pomoTiming.breakMin}
-                                    onChange={(event) => void updatePomodoroSettings(pomoTiming.focusMin, parseFloat(event.target.value) || 5)}
-                                    className="mt-1.5 w-full rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] px-2 py-2 text-center text-xs text-[var(--dashboard-text)] outline-none"
-                                />
-                            </label>
-                        </div>
-                    </GlassCard>
+                    </SectionCard>
+
+                    <SectionCard title="Session presets" description="Set your focus cadence." contentClassName="space-y-1.5">
+                        {sessionPresets.map((preset) => {
+                            const selected =
+                                pomoTiming.focusMin === preset.focus && pomoTiming.breakMin === preset.rest;
+                            return (
+                                <Button
+                                    key={preset.label}
+                                    variant={selected ? 'secondary' : 'ghost'}
+                                    className="h-auto w-full justify-between px-3 py-2"
+                                    isDisabled={pomoRunning}
+                                    onPress={() => void updatePomodoroSettings(preset.focus, preset.rest)}
+                                >
+                                    <span className="text-xs font-medium">{preset.label}</span>
+                                    <span className="text-[11px] text-[var(--fz-text-tertiary)]">
+                                        {preset.focus} / {preset.rest} min
+                                    </span>
+                                </Button>
+                            );
+                        })}
+                    </SectionCard>
+
+                    <MetricCard
+                        label="Today"
+                        value={String(completedToday)}
+                        hint={`${dashboardStreak} day streak`}
+                    />
+
+                    <SectionCard title="Custom timing" contentClassName="grid grid-cols-2 gap-2">
+                        <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--fz-text-tertiary)]">
+                            Focus
+                            <Input
+                                type="number"
+                                min={0.5}
+                                max={120}
+                                step={0.5}
+                                value={String(pomoTiming.focusMin)}
+                                onChange={(event) =>
+                                    void updatePomodoroSettings(
+                                        parseFloat(event.target.value) || 25,
+                                        pomoTiming.breakMin,
+                                    )
+                                }
+                                className="mt-1.5"
+                                aria-label="Focus minutes"
+                            />
+                        </label>
+                        <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--fz-text-tertiary)]">
+                            Break
+                            <Input
+                                type="number"
+                                min={0.5}
+                                max={60}
+                                step={0.5}
+                                value={String(pomoTiming.breakMin)}
+                                onChange={(event) =>
+                                    void updatePomodoroSettings(
+                                        pomoTiming.focusMin,
+                                        parseFloat(event.target.value) || 5,
+                                    )
+                                }
+                                className="mt-1.5"
+                                aria-label="Break minutes"
+                            />
+                        </label>
+                    </SectionCard>
                 </div>
             </div>
             <FutureSelfContractModal
@@ -1152,31 +1168,37 @@ export const BlocklistTab = () => {
                     : executeAction(challengeState.type, challengeState.domain, 'remove')}
                 onDisableChallenge={disableChallenge}
             />
-            <div className="mb-2">
-                <p className="focuz-section-label">Focus</p>
-                <h1 className="text-3xl font-semibold text-white tracking-tight">Site Management</h1>
-                <p className="text-sm text-neutral-500 mt-1">Control what gets blocked and what stays reachable.</p>
-            </div>
-            {blockActionError && (
-                <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                    <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                    <span>{blockActionError}</span>
-                </div>
-            )}
+            <PageHeading
+                eyebrow="Focus"
+                title="Site Management"
+                description="Control what gets blocked and what stays reachable."
+                actions={
+                    <StatusChip tone={engineState.focusMode ? 'success' : 'warning'}>
+                        {engineState.focusMode ? 'Blocking active' : 'Blocking paused'}
+                    </StatusChip>
+                }
+            />
+            {blockActionError ? (
+                <Alert status="danger">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                        <Alert.Title>Could not update blocklist</Alert.Title>
+                        <Alert.Description>{blockActionError}</Alert.Description>
+                    </Alert.Content>
+                </Alert>
+            ) : null}
 
-            <GlassCard className="p-5">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                    <div>
-                        <h3 className="font-semibold text-white text-sm">Block by category</h3>
-                        <p className="text-xs text-neutral-500 mt-1">
-                            Turn on a curated group. Shared sites stay blocked until every matching category is removed.
-                        </p>
-                    </div>
-                    <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold text-neutral-500">
+            <SectionCard
+                title="Block by category"
+                description="Turn on a curated group. Shared sites stay blocked until every matching category is removed."
+                actions={
+                    <Chip className="border-0 bg-[var(--fz-accent-muted)] text-[var(--fz-text-secondary)]">
                         {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).length} active
-                    </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                    </Chip>
+                }
+                contentClassName="space-y-3"
+            >
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     {SAFE_BLOCK_CATEGORY_KEYS.map((category) => {
                         const active = !!engineState.categoriesActive?.[category];
                         const pending = categoryPending === category;
@@ -1190,30 +1212,39 @@ export const BlocklistTab = () => {
                                 onClick={() => void toggleCategory(category)}
                                 className={`flex min-h-20 items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                                     active
-                                        ? 'border-purple-500/40 bg-purple-500/10'
-                                        : 'border-white/[0.08] bg-[#111] hover:border-white/20'
+                                        ? 'border-[var(--fz-border-strong)] bg-[var(--fz-accent-muted)]'
+                                        : 'border-[var(--fz-border)] bg-[var(--fz-surface-raised)] hover:border-[var(--fz-border-strong)]'
                                 }`}
                             >
                                 <span>
-                                    <span className={`block text-sm font-semibold ${active ? 'text-purple-200' : 'text-neutral-200'}`}>
+                                    <span className={`block text-sm font-semibold ${active ? 'text-[var(--fz-text)]' : 'text-[var(--fz-text-secondary)]'}`}>
                                         {SAFE_BLOCK_CATEGORY_LABELS[category]}
                                     </span>
-                                    <span className="mt-1 block text-[10px] text-neutral-500">
+                                    <span className="mt-1 block text-[10px] text-[var(--fz-text-tertiary)]">
                                         {SAFE_BLOCK_CATEGORIES[category].length} sites
                                     </span>
                                 </span>
-                                <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${active ? 'bg-purple-500' : 'bg-neutral-700'}`}>
-                                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${active ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                                <span
+                                    aria-hidden="true"
+                                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                                        active ? 'bg-[var(--fz-accent)]' : 'bg-[var(--fz-surface-overlay)]'
+                                    }`}
+                                >
+                                    <span
+                                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--fz-primary-foreground)] transition-transform ${
+                                            active ? 'translate-x-[18px]' : 'translate-x-0.5'
+                                        }`}
+                                    />
                                 </span>
-                                {pending && <span className="sr-only">Updating</span>}
+                                {pending ? <span className="sr-only">Updating</span> : null}
                             </button>
                         );
                     })}
                 </div>
-                {engineState.nuclearState?.active && (
-                    <p className="mt-3 text-xs text-amber-400/80">Categories cannot be changed during Nuclear Lockdown.</p>
-                )}
-            </GlassCard>
+                {engineState.nuclearState?.active ? (
+                    <p className="text-xs text-amber-400/80">Categories cannot be changed during Nuclear Lockdown.</p>
+                ) : null}
+            </SectionCard>
 
             {/* Platform quick-blocks */}
             <GlassCard className="p-5">
@@ -1586,11 +1617,11 @@ export const StatisticsTab = () => {
 
     return (
         <div className="space-y-6 animate-fade-in-up w-full">
-            <div>
-                <p className="focuz-section-label">Insights</p>
-                <h1 className="text-3xl font-semibold text-white tracking-tight">Statistics & Analytics</h1>
-                <p className="text-sm text-neutral-500 mt-1">Where your time went, day by day.</p>
-            </div>
+            <PageHeading
+                eyebrow="Insights"
+                title="Statistics & Analytics"
+                description="Where your time went, day by day — based on your stored browsing and focus data."
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* BAR GRAPH */}
