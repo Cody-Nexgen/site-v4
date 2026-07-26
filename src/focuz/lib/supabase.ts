@@ -1,42 +1,23 @@
 /// <reference types="vite/client" />
-import { createClient } from '@supabase/supabase-js';
-import { loadSupabaseConfig, resolveSupabaseConfig, type SupabaseConfig } from './supabaseConfig';
+/**
+ * Re-use the site's single Supabase client so we don't create a second
+ * GoTrueClient under the same storage key (which breaks auth / blank screens).
+ */
+export { supabase, supabaseUrl as _supabaseUrl, supabaseAnonKey as _supabaseAnonKey } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
-const DEFAULT_URL = 'https://zbgbszatstigtbfvdfpb.supabase.co';
-const DEFAULT_ANON =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ6Ymdic3phdHN0aWd0YmZ2ZGZwYiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY0MjY2OTQwLCJleHAiOjIwNzk4NDI5NDB9.6Uomu8F8qWp9bTCIwkj4yc48wZDMBT1U8efp9_M2vGw';
-
-function env(key: string): string | undefined {
-  try {
-    return (import.meta as ImportMeta & { env?: Record<string, string> }).env?.[key];
-  } catch {
-    return undefined;
-  }
-}
-
-let activeConfig: SupabaseConfig = resolveSupabaseConfig(
-  env('VITE_SUPABASE_URL') || DEFAULT_URL,
-  env('VITE_SUPABASE_ANON_KEY') || DEFAULT_ANON,
-  null,
-);
-
-function createSupabaseClient(cfg: SupabaseConfig) {
-  const url = cfg.isConfigured ? cfg.url : DEFAULT_URL;
-  const key = cfg.isConfigured ? cfg.anonKey : DEFAULT_ANON;
-  // Default localStorage — shares session with site-v4 marketing auth client.
-  return createClient(url, key, {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  });
-}
-
-export let supabase = createSupabaseClient(activeConfig);
+export type SupabaseConfig = {
+  url: string;
+  anonKey: string;
+  isConfigured: boolean;
+};
 
 export function getSupabaseConfig(): SupabaseConfig {
-  return activeConfig;
+  return {
+    url: 'https://zbgbszatstigtbfvdfpb.supabase.co',
+    anonKey: '',
+    isConfigured: true,
+  };
 }
 
 export function isSupabaseConfigured(): boolean {
@@ -44,21 +25,12 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export async function initSupabaseFromStorage(): Promise<SupabaseConfig> {
-  try {
-    const loaded = await loadSupabaseConfig();
-    if (
-      loaded.isConfigured &&
-      (loaded.url !== activeConfig.url || loaded.anonKey !== activeConfig.anonKey)
-    ) {
-      activeConfig = loaded;
-      supabase = createSupabaseClient(activeConfig);
-    }
-  } catch {
-    /* keep defaults */
-  }
-  return activeConfig;
+  return getSupabaseConfig();
 }
 
 export async function ensureSupabaseReady() {
   return initSupabaseFromStorage();
 }
+
+// Keep a named binding for any code that expects a mutable export.
+void supabase;

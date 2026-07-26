@@ -958,22 +958,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         void get().checkSession({ background: true });
 
         // Listen for real-time analytics updates
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace === 'local') {
-                const isScreenTimeUpdate = Object.keys(changes).some(k => k.startsWith('screenTime_'));
-                if (isScreenTimeUpdate) {
-                    void get().refreshStats();
+        try {
+            chrome.storage?.onChanged?.addListener((changes, namespace) => {
+                if (namespace === 'local') {
+                    const isScreenTimeUpdate = Object.keys(changes).some(k => k.startsWith('screenTime_'));
+                    if (isScreenTimeUpdate) {
+                        void get().refreshStats();
+                    }
+                    if (changes.habits || changes.engineState) {
+                        get().recalculateStreak();
+                    }
                 }
-                if (changes.habits || changes.engineState) {
-                    get().recalculateStreak();
-                }
-            }
-        });
+            });
+        } catch {
+            /* web boot before shim */
+        }
     }
 }));
 
 // Keep session updates from background
-chrome.runtime.onMessage.addListener((message) => {
+try {
+chrome.runtime?.onMessage?.addListener((message) => {
     if (message.type === 'SESSION_UPDATED' && message.session) {
         const prevUserId = useAuthStore.getState().session?.user?.id;
         const nextUserId = message.session.user?.id;
@@ -993,3 +998,6 @@ chrome.runtime.onMessage.addListener((message) => {
         useAuthStore.getState().recalculateStreak();
     }
 });
+} catch {
+    /* web boot before shim */
+}

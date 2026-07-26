@@ -1,7 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { installWebChromeShim } from '@/src/focuz/lib/platform';
 import App from '@/App.tsx';
 import '@/src/app.css';
+
+// Install before any dashboard code that expects chrome.* (dynamic OptionsApp still
+// loads after this; this covers any other early chrome touches).
+installWebChromeShim();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

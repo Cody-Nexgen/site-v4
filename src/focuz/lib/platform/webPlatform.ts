@@ -174,7 +174,10 @@ export function installWebChromeShim() {
     const onChangedListeners = new Set<ChangeListener>();
 
     addWebStorageListener((changes) => {
-        for (const listener of onChangedListeners) listener(changes);
+        for (const listener of onChangedListeners) {
+            // Match chrome.storage.onChanged signature: (changes, areaName)
+            (listener as (c: typeof changes, area?: string) => void)(changes, 'local');
+        }
     });
 
     const chromeShim = {
