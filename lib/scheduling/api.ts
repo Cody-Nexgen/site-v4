@@ -60,7 +60,11 @@ export async function createSchedulingBooking(
     });
     if (error) return { ok: false, error: error.message };
 
-    const row = data as { ok?: boolean; booking_id?: string } | null;
+    const row = data as { ok?: boolean; booking_id?: string; error?: string } | null;
+    if (row?.ok === false) {
+        return { ok: false, error: row.error || 'Booking failed' };
+    }
+
     let bookingId = row?.booking_id;
 
     if (!bookingId) {
@@ -75,6 +79,55 @@ export async function createSchedulingBooking(
     }
 
     return { ok: true, bookingId };
+}
+
+export type MySchedulingLink = SchedulingLink & {
+    /** Row id in `scheduling_links` (also the canonical id inside the payload). */
+    id: string;
+    active: boolean;
+};
+
+/** Scheduling links owned by the signed-in user, via RLS on `scheduling_links`. */
+export async function fetchMySchedulingLinks(
+    supabase: SupabaseClient,
+): Promise<MySchedulingLink[]> {
+    const { data, error } = await supabase
+        .from('scheduling_links')
+        .select('id, slug, payload, active, created_at')
+        .order('created_at', { ascending: false });
+    if (error || !Array.isArray(data)) return [];
+    return data
+        .filter((row: { active: boolean }) => row.active)
+        .map((row: { id: string; slug: string; payload: SchedulingLink; active: boolean }) => ({
+            ...row.payload,
+            id: row.id,
+            slug: row.slug,
+            active: row.active,
+        }));
+}
+
+export type HostBookingNotification = {
+    id: string;
+    slug: string;
+    booking_date: string;
+    start_min: number;
+    duration_min: number;
+    guest_name: string;
+    guest_email: string | null;
+    guest_phone: string | null;
+    guest_details: string | null;
+    link_title: string;
+    link_payload: Record<string, unknown>;
+    created_at: string;
+};
+
+/** All bookings across the host's scheduling links (seen and unseen), for calendar display. */
+export async function fetchHostBookingsForCalendar(
+    supabase: SupabaseClient,
+): Promise<HostBookingNotification[]> {
+    const { data, error } = await supabase.rpc('get_host_bookings_for_calendar');
+    if (error || !Array.isArray(data)) return [];
+    return data as HostBookingNotification[];
 }
 
 export type NotifyBookingResult = { ok: boolean; error?: string; detail?: unknown };

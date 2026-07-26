@@ -7,7 +7,7 @@ export const hasFocuzNowExtension = (): boolean => {
   return !!document.documentElement.getAttribute('data-focuznow-extension');
 };
 
-/** Set after a successful sign-in so we open the extension once. Expires after 10 minutes. */
+/** Only used for explicit extension connect flows (`extension_oauth=1`). */
 export const markPendingExtensionRedirect = () => {
   if (typeof sessionStorage === 'undefined') return;
   sessionStorage.setItem(PENDING_EXTENSION_REDIRECT_KEY, '1');
@@ -26,22 +26,29 @@ export const consumePendingExtensionRedirect = (): boolean => {
 
 export const hasExtensionOAuthParam = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return new URLSearchParams(window.location.search).get('extension_oauth') === '1';
+  const params = new URLSearchParams(window.location.search);
+  return params.get('extension_oauth') === '1' || params.get('extension_handoff') === '1';
 };
 
-export const shouldHandoffToExtension = (opts?: { freshSignIn?: boolean }): boolean => {
+/** Handoff ONLY when explicitly requested — never on every fresh sign-in. */
+export const shouldHandoffToExtension = (_opts?: { freshSignIn?: boolean }): boolean => {
   if (!hasFocuzNowExtension()) return false;
   if (hasExtensionOAuthParam()) return true;
   if (consumePendingExtensionRedirect()) return true;
-  if (opts?.freshSignIn) return true;
   return false;
 };
 
 export const clearExtensionOAuthParam = () => {
   if (typeof window === 'undefined') return;
   const clean = new URL(window.location.href);
-  if (!clean.searchParams.has('extension_oauth')) return;
-  clean.searchParams.delete('extension_oauth');
+  let changed = false;
+  for (const key of ['extension_oauth', 'extension_handoff']) {
+    if (clean.searchParams.has(key)) {
+      clean.searchParams.delete(key);
+      changed = true;
+    }
+  }
+  if (!changed) return;
   window.history.replaceState({}, '', clean.pathname + clean.search + clean.hash);
 };
 
@@ -60,11 +67,8 @@ export const syncSessionWithExtension = (session: any) => {
     },
     "*"
   );
-
-  console.log("[Web] Synced session with FocuzNow Extension");
 };
 
 export const redirectToExtension = () => {
-  console.log("[Web] Triggering extension options redirect...");
   window.postMessage({ type: "OPEN_EXTENSION_OPTIONS" }, "*");
 };

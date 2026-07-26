@@ -1,11 +1,19 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': resolve(process.cwd()),
+    },
+  },
   build: {
     rollupOptions: {
       input: {
         main: resolve(process.cwd(), 'index.html'),
+        app: resolve(process.cwd(), 'app.html'),
         status: resolve(process.cwd(), 'status.html'),
         features: resolve(process.cwd(), 'features.html'),
         login: resolve(process.cwd(), 'login.html'),

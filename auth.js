@@ -1,6 +1,7 @@
 import { isAuthConfigured as isConfigured, supabase } from './supabase-client.js';
 
 const PRODUCTION_AUTH_ORIGIN = 'https://focuznow.com';
+const DASHBOARD_AUTH_ORIGIN = 'https://dashboard.focuznow.com';
 const PENDING_EXTENSION_REDIRECT_KEY = 'focuznow_redirect_extension';
 const PENDING_EXTENSION_REDIRECT_AT_KEY = 'focuznow_redirect_extension_at';
 const AUTH_RETURN_KEY = 'focuznow_after_auth';
@@ -106,6 +107,35 @@ passwordInput?.addEventListener('input', () => {
 
 const hasFocuzNowExtension = () => Boolean(document.documentElement.getAttribute('data-focuznow-extension'));
 
+const wantsExtensionOAuthHandoff = () => {
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('extension_oauth') === '1') return true;
+  return hasFocuzNowExtension() && query.get('extension_handoff') === '1';
+};
+
+const getAuthHostInfo = () => {
+  const host = window.location.hostname.replace(/^www\./, '');
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
+  const isDashboardSubdomain = host === 'dashboard.focuznow.com';
+  return { host, isLocal, isDashboardSubdomain };
+};
+
+const buildAppUrl = ({ extensionOAuth = false } = {}) => {
+  const { isLocal, isDashboardSubdomain } = getAuthHostInfo();
+  const path = '/app';
+  let href;
+  if (isDashboardSubdomain) {
+    href = `${DASHBOARD_AUTH_ORIGIN}${path}`;
+  } else if (isLocal) {
+    href = `${window.location.origin}/app.html`;
+  } else {
+    href = `${PRODUCTION_AUTH_ORIGIN}${path}`;
+  }
+  const url = new URL(href);
+  if (extensionOAuth) url.searchParams.set('extension_oauth', '1');
+  return url;
+};
+
 const markPendingExtensionRedirect = () => {
   sessionStorage.setItem(PENDING_EXTENSION_REDIRECT_KEY, '1');
   sessionStorage.setItem(PENDING_EXTENSION_REDIRECT_AT_KEY, String(Date.now()));
@@ -134,17 +164,14 @@ const syncSessionWithExtension = (session) => {
 const openExtension = () => window.postMessage({ type: 'OPEN_EXTENSION_OPTIONS' }, '*');
 
 const getOAuthRedirectUrl = () => {
-  const host = window.location.hostname.replace(/^www\./, '');
-  const isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
+  const { isLocal } = getAuthHostInfo();
   if (pendingBillingIntent) {
     const callback = new URL(isLocal ? '/login.html' : '/login', window.location.origin);
     callback.searchParams.set('oauth_return', '1');
     callback.searchParams.set('next', pendingBillingIntent);
     return callback.href;
   }
-  const extensionQuery = hasFocuzNowExtension() ? '?extension_oauth=1' : '';
-  if (isLocal) return `${window.location.origin}/dashboard.html${extensionQuery}`;
-  return `${PRODUCTION_AUTH_ORIGIN}/dashboard${extensionQuery}`;
+  return buildAppUrl({ extensionOAuth: wantsExtensionOAuthHandoff() }).href;
 };
 
 const beginDashboardHandoff = (session) => {
@@ -168,12 +195,9 @@ const beginDashboardHandoff = (session) => {
     window.setTimeout(() => window.location.assign(billingReturn), 820);
     return;
   }
+  handoffStarted = true;
   syncSessionWithExtension(session);
-  markPendingExtensionRedirect();
-  const host = window.location.hostname.replace(/^www\./, '');
-  const isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
-  const dashboardPath = isLocal ? '/dashboard.html' : '/dashboard';
-  window.location.assign(`${window.location.origin}${dashboardPath}?extension_oauth=1`);
+  window.location.assign(buildAppUrl({ extensionOAuth: wantsExtensionOAuthHandoff() }).href);
 };
 
 const renderHandoff = (extensionDetected) => {
@@ -190,7 +214,7 @@ const renderHandoff = (extensionDetected) => {
         <span data-completion-copy>Your account is being securely handed to the extension.</span>
         <div class="completion-actions">
           <button type="button" class="auth-submit" data-open-extension><span>Open extension</span><svg viewBox="0 0 18 18"><path d="M3 9h11M10 5l4 4-4 4"/></svg></button>
-          <a href="./index.html">Return to website</a>
+          <a href="/app">Open web dashboard</a>
         </div>
       </div>`;
     document.body.append(handoff);
@@ -213,16 +237,26 @@ const completeAuthentication = async (session) => {
   }
   handoffStarted = true;
   syncSessionWithExtension(session);
-  const extensionDetected = hasFocuzNowExtension();
-  const handoff = renderHandoff(extensionDetected);
 
-  window.setTimeout(() => {
-    openExtension();
-    if (extensionDetected) {
-      handoff.querySelector('[data-completion-title]').textContent = 'Continue in FocuzNow.';
-      handoff.querySelector('[data-completion-copy]').textContent = 'Your account is synced. You can close this tab after the extension opens.';
-    }
-  }, 900);
+  const extensionHandoff =
+    wantsExtensionOAuthHandoff() ||
+    new URLSearchParams(window.location.search).get('extension_oauth') === '1' ||
+    consumePendingExtensionRedirect();
+
+  if (extensionHandoff) {
+    const extensionDetected = hasFocuzNowExtension();
+    const handoff = renderHandoff(extensionDetected);
+    window.setTimeout(() => {
+      if (extensionDetected) {
+        openExtension();
+        handoff.querySelector('[data-completion-title]').textContent = 'Continue in FocuzNow.';
+        handoff.querySelector('[data-completion-copy]').textContent = 'Your account is synced. You can close this tab after the extension opens.';
+      }
+    }, 900);
+    return;
+  }
+
+  window.location.assign(buildAppUrl().href);
 };
 
 const fetchSignInMethods = async (email) => {
@@ -282,7 +316,9 @@ forms.forEach((form) => {
           throw new Error('This account uses email and password. Sign in with your password instead.');
         }
       }
-      markPendingExtensionRedirect();
+      if (wantsExtensionOAuthHandoff()) {
+        markPendingExtensionRedirect();
+      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: getOAuthRedirectUrl() },
