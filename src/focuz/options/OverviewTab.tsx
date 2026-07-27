@@ -24,16 +24,18 @@ export default function OverviewTab() {
 
     const statsLen = last7DaysStats?.length || 0;
     const endIdx = statsLen - 1 - offsetWeeks * 7;
-    const todayTotal = capDayScreenMs(endIdx >= 0 ? (last7DaysStats[endIdx]?.total || 0) : 0);
-    const yesterdayTotal = capDayScreenMs(endIdx > 0 ? (last7DaysStats[endIdx - 1]?.total || 0) : 0);
+    const todayDateStr = endIdx >= 0 ? last7DaysStats[endIdx]?.date : new Date().toDateString();
+    const yesterdayDateStr = endIdx > 0 ? last7DaysStats[endIdx - 1]?.date : undefined;
+    const todayTotal = capDayScreenMs(endIdx >= 0 ? (last7DaysStats[endIdx]?.total || 0) : 0, { date: todayDateStr });
+    const yesterdayTotal = capDayScreenMs(endIdx > 0 ? (last7DaysStats[endIdx - 1]?.total || 0) : 0, { date: yesterdayDateStr });
     const blockedCount = engineState.blockedToday || 0;
 
     const diff = todayTotal - yesterdayTotal;
     const diffPercent = yesterdayTotal === 0 ? 0 : Math.round((Math.abs(diff) / yesterdayTotal) * 100);
     const isUp = diff > 0;
 
-    const formatTime = (ms: number) => {
-        const capped = capDayScreenMs(ms);
+    const formatTime = (ms: number, dateStr?: string) => {
+        const capped = capDayScreenMs(ms, { date: dateStr });
         const mins = Math.round(capped / 60000);
         if (mins < 60) return `${mins}m`;
         return `${Math.min(24, mins / 60).toFixed(1)}h`;

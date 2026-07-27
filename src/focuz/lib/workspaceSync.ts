@@ -35,6 +35,8 @@ export const SYNCABLE_WORKSPACE_KEYS = [
     'dashboardLayout',
     'proDashboardVisuals',
     'notionJournalingEnabled',
+    // Mutation clock — prevents stale cloud pulls from undoing local unblock/block.
+    '_localMutationAt',
     // Cloud-managed dashboard data (not live blocking/history stats)
     'focuznow_calendar_events_v1',
     'focuznow_calendar_groups_v1',

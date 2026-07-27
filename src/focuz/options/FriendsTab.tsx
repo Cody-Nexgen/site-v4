@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, UserPlus, Users, Trophy } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
@@ -69,10 +69,13 @@ export default function FriendsTab() {
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
 
-    const tokens =
-        session?.access_token && session?.refresh_token
-            ? { access_token: session.access_token, refresh_token: session.refresh_token }
-            : null;
+    const tokens = useMemo(
+        () =>
+            session?.access_token && session?.refresh_token
+                ? { access_token: session.access_token, refresh_token: session.refresh_token }
+                : null,
+        [session?.access_token, session?.refresh_token],
+    );
 
     const refresh = useCallback(async () => {
         if (!session) {
@@ -131,7 +134,20 @@ export default function FriendsTab() {
     };
 
     const handleRespond = async (id: string, accept: boolean) => {
-        await respondFriendRequest(supabase, id, accept, tokens);
+        setError('');
+        const res = await respondFriendRequest(supabase, id, accept, tokens);
+        if (!res.ok) {
+            setError(
+                res.error === 'NOT_AUTHENTICATED'
+                    ? 'Sign in again to respond'
+                    : res.error === 'NOT_FOUND'
+                      ? 'That request is no longer available'
+                      : res.error || (accept ? 'Could not accept request' : 'Could not decline request'),
+            );
+            return;
+        }
+        setNotice(accept ? 'Friend added' : 'Request declined');
+        window.setTimeout(() => setNotice(''), 2500);
         void refresh();
     };
 

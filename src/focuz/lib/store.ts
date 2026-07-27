@@ -685,7 +685,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             const rawTotal = Object.values(dayData).reduce((a: number, b: any) => a + (b as number), 0);
             stats.push({
                 date: ds,
-                total: capDayScreenMs(rawTotal as number),
+                total: capDayScreenMs(rawTotal as number, { date: ds }),
                 sites: dayData as Record<string, number>,
             });
         });
@@ -958,27 +958,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         void get().checkSession({ background: true });
 
         // Listen for real-time analytics updates
-        try {
-            chrome.storage?.onChanged?.addListener((changes, namespace) => {
-                if (namespace === 'local') {
-                    const isScreenTimeUpdate = Object.keys(changes).some(k => k.startsWith('screenTime_'));
-                    if (isScreenTimeUpdate) {
-                        void get().refreshStats();
-                    }
-                    if (changes.habits || changes.engineState) {
-                        get().recalculateStreak();
-                    }
+        chrome.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace === 'local') {
+                const isScreenTimeUpdate = Object.keys(changes).some(k => k.startsWith('screenTime_'));
+                if (isScreenTimeUpdate) {
+                    void get().refreshStats();
                 }
-            });
-        } catch {
-            /* web boot before shim */
-        }
+                if (changes.habits || changes.engineState) {
+                    get().recalculateStreak();
+                }
+            }
+        });
     }
 }));
 
 // Keep session updates from background
-try {
-chrome.runtime?.onMessage?.addListener((message) => {
+chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'SESSION_UPDATED' && message.session) {
         const prevUserId = useAuthStore.getState().session?.user?.id;
         const nextUserId = message.session.user?.id;
@@ -998,6 +993,3 @@ chrome.runtime?.onMessage?.addListener((message) => {
         useAuthStore.getState().recalculateStreak();
     }
 });
-} catch {
-    /* web boot before shim */
-}

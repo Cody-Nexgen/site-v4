@@ -61,7 +61,7 @@ async function storageGet(keys?: string | string[] | Record<string, unknown> | n
     return out;
 }
 
-async function storageSet(items: Record<string, unknown>) {
+async function storageSet(items: Record<string, unknown>, opts?: { syncCloud?: boolean }) {
     const changes: Record<string, { oldValue?: unknown; newValue?: unknown }> = {};
     for (const [key, value] of Object.entries(items)) {
         const oldValue = readRaw(key);
@@ -77,9 +77,12 @@ async function storageSet(items: Record<string, unknown>) {
     for (const listener of storageListeners) listener(changes);
     window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: changes }));
 
-    // Best-effort cloud sync for workspace state
+    // Only upsert after intentional mutations — never during cloud hydrate / stats pull.
+    if (opts?.syncCloud === false) return;
+
     try {
-        const engine = (items.blockEngineState || readRaw('blockEngineState')) as Record<string, unknown> | undefined;
+        if (!('blockEngineState' in items)) return;
+        const engine = items.blockEngineState as Record<string, unknown> | undefined;
         if (engine && typeof window !== 'undefined') {
             const { supabase } = await import('../supabase');
             const syncable = pickSyncableWorkspaceState(engine);
@@ -273,7 +276,11 @@ async function handleMessage(message: PlatformMessage): Promise<unknown> {
             await storageSet({ blockEngineState: { ...getEngineState(), ...resp.state } });
         } else if (
             resp?.ok &&
-            (type === 'CATEGORY_TOGGLE' || type === 'ADD_BLOCK' || type === 'REMOVE_BLOCK' || type === 'UPDATE_ENGINE_SETTINGS')
+            (type === 'CATEGORY_TOGGLE' ||
+                type === 'ADD_BLOCK' ||
+                type === 'REMOVE_BLOCK' ||
+                type === 'REMOVE_BLOCK_SOURCE' ||
+                type === 'UPDATE_ENGINE_SETTINGS')
         ) {
             const stateResp = await sendExtensionRpc<{ ok?: boolean; state?: Record<string, unknown> }>({
                 type: 'GET_STATE',
@@ -464,7 +471,7 @@ export async function hydrateWebWorkspaceFromCloud() {
             }
         }
         const existing = getEngineState();
-        await storageSet({ blockEngineState: { ...existing, ...remote }, ...extras });
+        await storageSet({ blockEngineState: { ...existing, ...remote }, ...extras }, { syncCloud: false });
     } catch {
         /* ignore */
     }
@@ -512,7 +519,7 @@ export async function hydrateWebStatsFromExtension(): Promise<boolean> {
                             blockedToday: data.blockedToday ?? existing.blockedToday,
                         };
                     }
-                    if (Object.keys(patch).length) await storageSet(patch);
+                    if (Object.keys(patch).length) await storageSet(patch, { syncCloud: false });
                     // Nudge web store to re-read screenTime_* keys
                     window.dispatchEvent(new CustomEvent('focuznow-web-storage-changed', { detail: patch }));
                     resolve(true);

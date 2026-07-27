@@ -1807,7 +1807,7 @@ export const StatisticsTab = () => {
         .slice(0, 8);
 
     const formatTime = (ms: number) => {
-        const capped = capDayScreenMs(ms || 0);
+        const capped = capDayScreenMs(ms || 0, { date: activeData.date });
         const mins = Math.round(capped / 60000);
         if (mins < 60) return `${mins}m`;
         return `${Math.min(24, mins / 60).toFixed(1)}h`;
@@ -1816,7 +1816,7 @@ export const StatisticsTab = () => {
     const colors = ['#a855f7', '#3b82f6', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#6366f1'];
 
     const sitesTotalMs = sitesArr.reduce((sum, [, time]) => sum + (time as number), 0);
-    const dayTotalMs = capDayScreenMs(Math.max(activeData.total || 0, sitesTotalMs));
+    const dayTotalMs = capDayScreenMs(Math.max(activeData.total || 0, sitesTotalMs), { date: activeData.date });
     const totalMs = Math.max(dayTotalMs, 1);
     let cumPct = 0;
     const slices = sitesArr.map(([site, time]: any, i) => {
