@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MeshGradient } from '@paper-design/shaders-react';
 import {
     ArrowLeft,
+    Check,
+    ChevronUp,
     Copy,
     DoorOpen,
     Download,
@@ -11,7 +13,9 @@ import {
     MicOff,
     MoreVertical,
     Paperclip,
+    Plus,
     Shield,
+    Sparkles,
     Users,
     Video,
     VideoOff,
@@ -30,7 +34,7 @@ import {
     leaveFocusRoom,
     type FocusRoom,
 } from '../lib/socialApi';
-import { useFocusRoomRtc } from '../lib/focusRoomRtc';
+import { FREE_FOCUS_ROOM_MAX_MIN, PRO_FOCUS_ROOM_MAX_MIN, useFocusRoomRtc } from '../lib/focusRoomRtc';
 import {
     deleteAttachment,
     downloadAttachment,
@@ -158,6 +162,101 @@ function ParticipantTile({
     );
 }
 
+/** Discord-style control with corner chevron that opens a device picker. */
+function DeviceToggleButton({
+    active,
+    onToggle,
+    icon,
+    offIcon,
+    label,
+    menuTitle,
+    sections,
+    open,
+    onOpenChange,
+}: {
+    active: boolean;
+    onToggle: () => void;
+    icon: ReactNode;
+    offIcon: ReactNode;
+    label: string;
+    menuTitle: string;
+    sections: { heading: string; devices: MediaDeviceInfo[]; selectedId: string; onSelect: (id: string) => void; emptyLabel: string }[];
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const rootRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDoc = (e: MouseEvent) => {
+            if (rootRef.current && !rootRef.current.contains(e.target as Node)) onOpenChange(false);
+        };
+        document.addEventListener('mousedown', onDoc);
+        return () => document.removeEventListener('mousedown', onDoc);
+    }, [open, onOpenChange]);
+
+    return (
+        <div ref={rootRef} className="relative flex items-stretch">
+            <button
+                type="button"
+                onClick={onToggle}
+                aria-label={label}
+                className={`w-12 h-12 rounded-l-full flex items-center justify-center transition-colors ${
+                    active ? 'bg-[#35373c] hover:bg-[#404249]' : 'bg-red-500/30 hover:bg-red-500/40'
+                }`}
+            >
+                {active ? icon : offIcon}
+            </button>
+            <button
+                type="button"
+                aria-label={`${menuTitle} options`}
+                aria-expanded={open}
+                onClick={() => onOpenChange(!open)}
+                className={`w-5 h-12 rounded-r-full flex items-center justify-center border-l border-black/30 transition-colors ${
+                    active ? 'bg-[#35373c] hover:bg-[#404249]' : 'bg-red-500/30 hover:bg-red-500/40'
+                }`}
+            >
+                <ChevronUp size={12} className={`transition-transform ${open ? '' : 'rotate-180'}`} />
+            </button>
+            {open && (
+                <div className="absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2 w-64 max-h-72 overflow-y-auto rounded-xl border border-white/10 bg-[#111214]/backdrop-blur-xl shadow-2xl shadow-black/50 z-50 py-1.5">
+                    <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#949ba4]">{menuTitle}</p>
+                    {sections.map((section) => (
+                        <div key={section.heading} className="mb-1">
+                            <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#6d6f78]">
+                                {section.heading}
+                            </p>
+                            {section.devices.length === 0 ? (
+                                <p className="px-3 py-1.5 text-xs text-[#6d6f78]">{section.emptyLabel}</p>
+                            ) : (
+                                section.devices.map((d) => {
+                                    const selected = d.deviceId === section.selectedId || (!section.selectedId && section.devices[0]?.deviceId === d.deviceId);
+                                    return (
+                                        <button
+                                            key={d.deviceId}
+                                            type="button"
+                                            onClick={() => {
+                                                section.onSelect(d.deviceId);
+                                                onOpenChange(false);
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-[#dbdee1] hover:bg-white/[0.06]"
+                                        >
+                                            <span className="w-4 shrink-0 text-emerald-400">
+                                                {selected ? <Check size={12} /> : null}
+                                            </span>
+                                            <span className="truncate">{d.label || section.heading}</span>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 type Props = {
     onBack?: () => void;
     embedded?: boolean;
@@ -165,10 +264,12 @@ type Props = {
 
 export default function FocusRoomView({ onBack, embedded = false }: Props) {
     const { session, engineState, subscriptionTier, upgradeToPro } = useAuthStore();
+    const isPro = subscriptionTier === 'pro';
+    const maxDurationMin = isPro ? PRO_FOCUS_ROOM_MAX_MIN : FREE_FOCUS_ROOM_MAX_MIN;
     const [roomId, setRoomId] = useState<string | null>(null);
     const [room, setRoom] = useState<FocusRoom | null>(null);
     const [title, setTitle] = useState('Focus Room');
-    const [durationMin, setDurationMin] = useState(25);
+    const [durationMin, setDurationMin] = useState(FREE_FOCUS_ROOM_MAX_MIN);
     const [joinInput, setJoinInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -176,6 +277,8 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
     const [copied, setCopied] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
     const [hostOpen, setHostOpen] = useState(false);
+    const [micMenuOpen, setMicMenuOpen] = useState(false);
+    const [camMenuOpen, setCamMenuOpen] = useState(false);
     const [chatDraft, setChatDraft] = useState('');
     const [inRoom, setInRoom] = useState(false);
     const [joinPrefs, setJoinPrefs] = useState({
@@ -190,6 +293,10 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
     const [uploadingAttachment, setUploadingAttachment] = useState(false);
     const previewVideoRef = useRef<HTMLVideoElement>(null);
     const chatFileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setDurationMin((prev) => Math.min(Math.max(5, prev), maxDurationMin));
+    }, [maxDurationMin]);
 
     const displayName =
         engineState.profileName?.trim() ||
@@ -285,8 +392,10 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
 
     const handleCreate = async () => {
         if (!session) return;
+        const clamped = Math.min(Math.max(5, durationMin), maxDurationMin);
+        setDurationMin(clamped);
         setLoading(true);
-        const res = await createFocusRoom(supabase, title, durationMin, tokens);
+        const res = await createFocusRoom(supabase, title, clamped, tokens);
         setLoading(false);
         if (res.ok && res.roomId) {
             setRoomId(res.roomId);
@@ -374,15 +483,28 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
 
     if (!inRoom || !room || !roomId) {
         return (
-            <div className={`${embedded ? 'h-full' : 'h-screen'} bg-[#0a0a0b] text-neutral-200 flex flex-col overflow-hidden`}>
+            <div
+                className={`${embedded ? 'h-full' : 'h-screen'} relative bg-[#070708] text-neutral-200 flex flex-col overflow-hidden`}
+            >
+                <div
+                    className="pointer-events-none absolute inset-0 opacity-80"
+                    style={{
+                        background:
+                            'radial-gradient(ellipse 80% 50% at 20% 20%, rgba(88,101,242,0.14), transparent 55%), radial-gradient(ellipse 60% 40% at 85% 70%, rgba(16,185,129,0.08), transparent 50%)',
+                    }}
+                />
                 {onBack && !embedded && (
-                    <button type="button" onClick={onBack} className="m-4 flex items-center gap-2 text-sm text-[#949ba4] hover:text-white w-fit">
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        className="relative z-10 m-4 flex items-center gap-2 text-sm text-[#949ba4] hover:text-white w-fit"
+                    >
                         <ArrowLeft size={16} /> Back
                     </button>
                 )}
-                <div className="flex-1 grid lg:grid-cols-2 gap-0 min-h-0 overflow-y-auto lg:overflow-hidden">
-                    <div className="flex flex-col justify-center p-8 lg:p-12 border-b lg:border-b-0 lg:border-r border-white/[0.07]">
-                        <div className="relative aspect-video max-h-[420px] rounded-2xl overflow-hidden bg-[#121214] border border-white/[0.08] shadow-lg shadow-black/20">
+                <div className="relative z-10 flex-1 grid lg:grid-cols-[1.05fr_0.95fr] gap-0 min-h-0 overflow-y-auto lg:overflow-hidden">
+                    <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-12 lg:pr-8">
+                        <div className="relative aspect-video max-h-[440px] rounded-3xl overflow-hidden border border-white/[0.1] bg-white/[0.03] shadow-[0_24px_80px_-20px_rgba(0,0,0,0.7)] backdrop-blur-xl">
                             <video
                                 ref={previewVideoRef}
                                 autoPlay
@@ -393,45 +515,56 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                             {!rtc.camOn && (
                                 <>
                                     <ParticipantAvatar seed={displayName} avatarUrl={engineState.profileAvatar} size={96} />
-                                    <p className="absolute inset-x-0 bottom-14 text-center text-sm font-medium text-white/70">
+                                    <p className="absolute inset-x-0 bottom-16 text-center text-sm font-medium text-white/70">
                                         Camera off
                                     </p>
                                 </>
                             )}
                             <div className="absolute bottom-4 left-4 right-4">
-                                <div className="h-1.5 rounded-full bg-black/40 overflow-hidden">
+                                <div className="h-1.5 rounded-full bg-black/40 overflow-hidden backdrop-blur-sm">
                                     <div
                                         className="h-full bg-emerald-400 transition-all duration-75"
                                         style={{ width: `${Math.round(rtc.micLevel * 100)}%` }}
                                     />
                                 </div>
                                 <p className="text-[10px] text-[#949ba4] mt-1.5 uppercase tracking-wider font-semibold">
-                                    Mic level · {rtc.permissionState === 'granted' ? 'Ready' : rtc.permissionState === 'denied' ? 'Blocked' : 'Waiting'}
+                                    Mic level ·{' '}
+                                    {rtc.permissionState === 'granted'
+                                        ? 'Ready'
+                                        : rtc.permissionState === 'denied'
+                                          ? 'Blocked'
+                                          : 'Waiting'}
                                 </p>
                             </div>
                         </div>
                         <div className="flex gap-2 mt-4">
-                            <button type="button" onClick={() => void rtc.toggleCam()} className="flex-1 py-2.5 rounded-lg bg-[#2b2d31] hover:bg-[#35373c] text-sm font-semibold flex items-center justify-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void rtc.toggleCam()}
+                                className="flex-1 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-sm font-semibold flex items-center justify-center gap-2 backdrop-blur-md"
+                            >
                                 {rtc.camOn ? <Video size={16} /> : <VideoOff size={16} />}
                                 {rtc.camOn ? 'Camera on' : 'Camera off'}
                             </button>
-                            <button type="button" onClick={rtc.toggleMic} className="flex-1 py-2.5 rounded-lg bg-[#2b2d31] hover:bg-[#35373c] text-sm font-semibold flex items-center justify-center gap-2">
+                            <button
+                                type="button"
+                                onClick={rtc.toggleMic}
+                                className="flex-1 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-sm font-semibold flex items-center justify-center gap-2 backdrop-blur-md"
+                            >
                                 {rtc.micOn ? <Mic size={16} /> : <MicOff size={16} />}
                                 {rtc.micOn ? 'Mic on' : 'Mic off'}
                             </button>
-                            <button type="button" onClick={() => void playTestTone()} className="px-4 py-2.5 rounded-lg bg-[#2b2d31] hover:bg-[#35373c] text-sm font-semibold flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void playTestTone()}
+                                className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-sm font-semibold flex items-center gap-2 backdrop-blur-md"
+                            >
                                 <Volume2 size={16} />
                                 {testTonePlaying ? '…' : 'Test'}
                             </button>
                         </div>
-                    </div>
-
-                    <div className="flex flex-col p-8 lg:p-12 lg:overflow-y-auto">
-                        <h1 className="text-2xl font-bold text-white mb-1">Join a focus room</h1>
-                        <p className="text-sm text-[#949ba4] mb-8">Configure devices, then create or join a session.</p>
-
-                        <div className="space-y-5 flex-1">
-                            <label className="block">
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <label className="block rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 backdrop-blur-md">
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#949ba4]">Camera</span>
                                 <select
                                     value={joinPrefs.cameraId || rtc.selectedCameraId}
@@ -440,15 +573,15 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                         setJoinPrefs((p) => ({ ...p, cameraId: id }));
                                         void rtc.selectCamera(id);
                                     }}
-                                    className="mt-1.5 w-full bg-[#1e1f22] border border-[#2b2d31] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#5865f2]"
+                                    className="mt-1 w-full bg-transparent text-sm outline-none"
                                 >
-                                    <option value="">Default camera</option>
+                                    <option value="">Default</option>
                                     {rtc.videoInputs.map((d) => (
                                         <option key={d.deviceId} value={d.deviceId}>{d.label || 'Camera'}</option>
                                     ))}
                                 </select>
                             </label>
-                            <label className="block">
+                            <label className="block rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 backdrop-blur-md">
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#949ba4]">Microphone</span>
                                 <select
                                     value={joinPrefs.micId || rtc.selectedMicId}
@@ -457,15 +590,15 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                         setJoinPrefs((p) => ({ ...p, micId: id }));
                                         void rtc.selectMic(id);
                                     }}
-                                    className="mt-1.5 w-full bg-[#1e1f22] border border-[#2b2d31] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#5865f2]"
+                                    className="mt-1 w-full bg-transparent text-sm outline-none"
                                 >
-                                    <option value="">Default microphone</option>
+                                    <option value="">Default</option>
                                     {rtc.audioInputs.map((d) => (
                                         <option key={d.deviceId} value={d.deviceId}>{d.label || 'Microphone'}</option>
                                     ))}
                                 </select>
                             </label>
-                            <label className="block">
+                            <label className="block rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 backdrop-blur-md">
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#949ba4]">Speaker</span>
                                 <select
                                     value={joinPrefs.speakerId || rtc.selectedSpeakerId}
@@ -474,65 +607,149 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                         setJoinPrefs((p) => ({ ...p, speakerId: id }));
                                         rtc.selectSpeaker(id);
                                     }}
-                                    className="mt-1.5 w-full bg-[#1e1f22] border border-[#2b2d31] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#5865f2]"
+                                    className="mt-1 w-full bg-transparent text-sm outline-none"
                                 >
-                                    <option value="">Default speaker</option>
+                                    <option value="">Default</option>
                                     {rtc.audioOutputs.map((d) => (
                                         <option key={d.deviceId} value={d.deviceId}>{d.label || 'Speaker'}</option>
                                     ))}
                                 </select>
                             </label>
-                            <div className="flex flex-wrap gap-4 text-sm">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={joinPrefs.noiseSuppression}
-                                        onChange={(e) => setJoinPrefs((p) => ({ ...p, noiseSuppression: e.target.checked }))}
-                                        className="rounded"
-                                    />
-                                    Noise suppression
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={joinPrefs.echoCancellation}
-                                        onChange={(e) => setJoinPrefs((p) => ({ ...p, echoCancellation: e.target.checked }))}
-                                        className="rounded"
-                                    />
-                                    Echo cancellation
-                                </label>
-                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-4 mt-3 text-sm text-[#b5bac1]">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={joinPrefs.noiseSuppression}
+                                    onChange={(e) => setJoinPrefs((p) => ({ ...p, noiseSuppression: e.target.checked }))}
+                                    className="rounded"
+                                />
+                                Noise suppression
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={joinPrefs.echoCancellation}
+                                    onChange={(e) => setJoinPrefs((p) => ({ ...p, echoCancellation: e.target.checked }))}
+                                    className="rounded"
+                                />
+                                Echo cancellation
+                            </label>
+                        </div>
+                    </div>
 
-                            <div className="pt-4 border-t border-[#2b2d31] space-y-3">
-                                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Room name" className="w-full bg-[#1e1f22] border border-[#2b2d31] rounded-lg px-4 py-3 text-white outline-none focus:border-[#5865f2]" />
-                                <div className="flex gap-2">
-                                    <input value={joinInput} onChange={(e) => setJoinInput(e.target.value)} placeholder="Room ID to join" className="flex-1 bg-[#1e1f22] border border-[#2b2d31] rounded-lg px-4 py-3 text-white font-mono text-sm outline-none" />
-                                    <input type="number" min={5} max={180} value={durationMin} onChange={(e) => setDurationMin(Number(e.target.value) || 25)} className="w-20 bg-[#1e1f22] border border-[#2b2d31] rounded-lg px-3 py-3 text-white text-sm outline-none" title="Duration (min)" />
+                    <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-12 lg:pl-4 lg:overflow-y-auto">
+                        <div className="rounded-3xl border border-white/[0.1] bg-white/[0.04] p-6 sm:p-8 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.65)] backdrop-blur-2xl">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-400/90">Focuz Rooms</p>
+                            <h1 className="mt-2 text-3xl font-bold text-white tracking-tight">Join a focus room</h1>
+                            <p className="mt-2 text-sm text-[#949ba4] leading-relaxed">
+                                Create a timed co-focus session or enter a room code to join friends.
+                            </p>
+
+                            <div className="mt-7 space-y-5">
+                                <section className="rounded-2xl border border-white/[0.08] bg-black/20 p-4 sm:p-5">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 rounded-lg bg-white/[0.08] flex items-center justify-center">
+                                            <Plus size={16} className="text-white" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-sm font-bold text-white">Create a room</h2>
+                                            <p className="text-[11px] text-[#949ba4]">You&apos;ll be the host</p>
+                                        </div>
+                                    </div>
+                                    <input
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        placeholder="Room name"
+                                        className="w-full bg-[#121214]/80 border border-white/[0.08] rounded-xl px-4 py-3 text-white outline-none focus:border-[#5865f2]/70"
+                                    />
+                                    <div className="mt-3 flex items-end gap-3">
+                                        <label className="flex-1">
+                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#949ba4]">
+                                                Duration (min)
+                                            </span>
+                                            <input
+                                                type="number"
+                                                min={5}
+                                                max={maxDurationMin}
+                                                value={durationMin}
+                                                onChange={(e) => {
+                                                    const next = Number(e.target.value) || FREE_FOCUS_ROOM_MAX_MIN;
+                                                    setDurationMin(Math.min(Math.max(5, next), maxDurationMin));
+                                                }}
+                                                className="mt-1.5 w-full bg-[#121214]/80 border border-white/[0.08] rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#5865f2]/70"
+                                            />
+                                        </label>
+                                        <button
+                                            type="button"
+                                            disabled={loading}
+                                            onClick={() => void handleCreate()}
+                                            className="shrink-0 px-5 py-3 rounded-xl bg-neutral-100 hover:bg-white font-semibold text-neutral-950 disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                            {loading ? <Loader2 className="animate-spin" size={16} /> : null}
+                                            Create room
+                                        </button>
+                                    </div>
+                                    {!isPro ? (
+                                        <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2.5">
+                                            <Sparkles size={14} className="mt-0.5 shrink-0 text-amber-300" />
+                                            <p className="text-xs text-amber-100/90 leading-relaxed">
+                                                Free plan rooms last up to <strong>{FREE_FOCUS_ROOM_MAX_MIN} minutes</strong>.
+                                                Upgrade to Pro for sessions up to {PRO_FOCUS_ROOM_MAX_MIN} minutes.
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void upgradeToPro()}
+                                                    className="ml-1 font-bold underline underline-offset-2"
+                                                >
+                                                    Upgrade
+                                                </button>
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <p className="mt-2 text-[11px] text-[#6d6f78]">
+                                            Pro · up to {PRO_FOCUS_ROOM_MAX_MIN} minutes per room
+                                        </p>
+                                    )}
+                                </section>
+
+                                <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-[#6d6f78]">
+                                    <span className="flex-1 h-px bg-white/[0.08]" />
+                                    or
+                                    <span className="flex-1 h-px bg-white/[0.08]" />
                                 </div>
-                            </div>
-                        </div>
 
-                        <div className="flex gap-3 mt-8 justify-end">
-                            <button
-                                type="button"
-                                disabled={loading || !joinInput.trim()}
-                                onClick={() => void handleJoinRoom()}
-                                className="px-5 py-3 rounded-xl bg-[#35373c] hover:bg-[#404249] font-bold disabled:opacity-40"
-                            >
-                                Join with ID
-                            </button>
-                            <button
-                                type="button"
-                                disabled={loading}
-                                onClick={() => void handleCreate()}
-                                className="px-5 py-2 rounded-md bg-neutral-100 hover:bg-white font-medium text-neutral-950 disabled:opacity-50 flex items-center gap-2"
-                            >
-                                {loading ? <Loader2 className="animate-spin" size={18} /> : null}
-                                Join Focus Room
-                            </button>
+                                <section className="rounded-2xl border border-white/[0.08] bg-black/20 p-4 sm:p-5">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 rounded-lg bg-white/[0.08] flex items-center justify-center">
+                                            <Users size={16} className="text-white" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-sm font-bold text-white">Join with code</h2>
+                                            <p className="text-[11px] text-[#949ba4]">Paste a room ID from an invite</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            value={joinInput}
+                                            onChange={(e) => setJoinInput(e.target.value)}
+                                            placeholder="Room code"
+                                            className="flex-1 min-w-0 bg-[#121214]/80 border border-white/[0.08] rounded-xl px-4 py-3 text-white font-mono text-sm outline-none focus:border-[#5865f2]/70 tracking-wide"
+                                        />
+                                        <button
+                                            type="button"
+                                            disabled={loading || !joinInput.trim()}
+                                            onClick={() => void handleJoinRoom()}
+                                            className="px-5 py-3 rounded-xl bg-[#35373c] hover:bg-[#404249] font-semibold disabled:opacity-40"
+                                        >
+                                            Join
+                                        </button>
+                                    </div>
+                                </section>
+                            </div>
+
+                            {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
+                            {rtc.rtcError && <p className="text-amber-400 text-sm mt-2">{rtc.rtcError}</p>}
                         </div>
-                        {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
-                        {rtc.rtcError && <p className="text-amber-400 text-sm mt-2">{rtc.rtcError}</p>}
                     </div>
                 </div>
             </div>
@@ -691,12 +908,66 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
             </main>
 
             <footer className="h-[72px] px-4 flex items-center justify-center gap-2 bg-[#1e1f22] border-t border-[#111214] shrink-0 relative">
-                <button type="button" onClick={rtc.toggleMic} className={`w-12 h-12 rounded-full flex items-center justify-center ${rtc.micOn ? 'bg-[#35373c] hover:bg-[#404249]' : 'bg-red-500/30'}`}>
-                    {rtc.micOn ? <Mic size={20} /> : <MicOff size={20} className="text-red-400" />}
-                </button>
-                <button type="button" onClick={() => void rtc.toggleCam()} className={`w-12 h-12 rounded-full flex items-center justify-center ${rtc.camOn ? 'bg-[#35373c]' : 'bg-red-500/30'}`}>
-                    {rtc.camOn ? <Video size={20} /> : <VideoOff size={20} className="text-red-400" />}
-                </button>
+                <DeviceToggleButton
+                    active={rtc.micOn}
+                    onToggle={rtc.toggleMic}
+                    icon={<Mic size={20} />}
+                    offIcon={<MicOff size={20} className="text-red-400" />}
+                    label={rtc.micOn ? 'Mute microphone' : 'Unmute microphone'}
+                    menuTitle="Audio devices"
+                    open={micMenuOpen}
+                    onOpenChange={(open) => {
+                        setMicMenuOpen(open);
+                        if (open) setCamMenuOpen(false);
+                    }}
+                    sections={[
+                        {
+                            heading: 'Microphone',
+                            devices: rtc.audioInputs,
+                            selectedId: rtc.selectedMicId,
+                            onSelect: (id) => {
+                                setJoinPrefs((p) => ({ ...p, micId: id }));
+                                void rtc.selectMic(id);
+                            },
+                            emptyLabel: 'No microphones found',
+                        },
+                        {
+                            heading: 'Speaker',
+                            devices: rtc.audioOutputs,
+                            selectedId: rtc.selectedSpeakerId,
+                            onSelect: (id) => {
+                                setJoinPrefs((p) => ({ ...p, speakerId: id }));
+                                rtc.selectSpeaker(id);
+                            },
+                            emptyLabel: 'No speakers found',
+                        },
+                    ]}
+                />
+                <DeviceToggleButton
+                    active={rtc.camOn}
+                    onToggle={() => void rtc.toggleCam()}
+                    icon={<Video size={20} />}
+                    offIcon={<VideoOff size={20} className="text-red-400" />}
+                    label={rtc.camOn ? 'Turn off camera' : 'Turn on camera'}
+                    menuTitle="Video devices"
+                    open={camMenuOpen}
+                    onOpenChange={(open) => {
+                        setCamMenuOpen(open);
+                        if (open) setMicMenuOpen(false);
+                    }}
+                    sections={[
+                        {
+                            heading: 'Camera',
+                            devices: rtc.videoInputs,
+                            selectedId: rtc.selectedCameraId,
+                            onSelect: (id) => {
+                                setJoinPrefs((p) => ({ ...p, cameraId: id }));
+                                void rtc.selectCamera(id);
+                            },
+                            emptyLabel: 'No cameras found',
+                        },
+                    ]}
+                />
                 <button type="button" onClick={() => setChatOpen((o) => !o)} className="w-12 h-12 rounded-full bg-[#35373c] hover:bg-[#404249] flex items-center justify-center">
                     <MessageSquare size={20} />
                 </button>

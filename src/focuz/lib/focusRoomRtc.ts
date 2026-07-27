@@ -2,6 +2,44 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { AttachmentRecord } from './attachmentApi';
 
+/**
+ * Focus Room WebSocket signaling protocol
+ * ---------------------------------------
+ * Prefer WS when a URL is configured (storage/env). Media stays WebRTC; only
+ * offer/answer/ICE (+ room control/chat) ride the socket.
+ *
+ * Resolve URL from (first match wins):
+ *   1. chrome.storage.local / localStorage key `focuzFocusRoomWsUrl`
+ *   2. import.meta.env.VITE_FOCUS_ROOM_WS_URL
+ *   3. process.env.VITE_FOCUS_ROOM_WS_URL | process.env.FOCUS_ROOM_WS_URL
+ * If none, fall back to Supabase Realtime broadcast on `focus-room:{roomId}`.
+ *
+ * Messages are JSON objects:
+ *   { type, roomId, from, to?, ...payload }
+ *
+ * Client → server (and fan-out to peers):
+ *   join         { name?, avatarUrl? }          — also sent as type on connect
+ *   leave        {}                             — peer leaving
+ *   offer        { to, sdp, name?, avatarUrl? }
+ *   answer       { to, sdp }
+ *   ice          { to, candidate }
+ *   chat         { id, name, text, at, attachment? }
+ *   chat-delete  { attachmentId }
+ *   kick         { to }                         — host only
+ *   mute         { to }                         — host only
+ *   room-lock    { to: '*', locked }
+ *   end-session  { to: '*' }
+ *
+ * Server → client: same shapes; ignore messages from self; route directed
+ * messages when `to` is set (or `to === '*'` for room-wide).
+ */
+
+export const FOCUS_ROOM_WS_URL_KEY = 'focuzFocusRoomWsUrl';
+
+/** Free tier meeting cap (minutes). Pro can go higher. */
+export const FREE_FOCUS_ROOM_MAX_MIN = 24;
+export const PRO_FOCUS_ROOM_MAX_MIN = 180;
+
 export type RtcPeer = {
     peerId: string;
     displayName: string;
@@ -49,6 +87,39 @@ type JoinPrefs = {
     autoGainControl?: boolean;
 };
 
+type WsEnvelope = {
+    type: string;
+    roomId: string;
+    from: string;
+    to?: string;
+    peerId?: string;
+    name?: string;
+    avatarUrl?: string | null;
+    sdp?: RTCSessionDescriptionInit;
+    candidate?: RTCIceCandidateInit;
+    locked?: boolean;
+    attachmentId?: string;
+    id?: string;
+    text?: string;
+    at?: number;
+    attachment?: AttachmentRecord;
+    [key: string]: unknown;
+};
+
+type SignalingHandlers = {
+    onSignal: (payload: SignalPayload) => void;
+    onJoin: (payload: { peerId?: string; name?: string; avatarUrl?: string | null }) => void;
+    onLeave: (payload: { peerId?: string }) => void;
+    onChat: (payload: ChatMessage) => void;
+    onChatDelete: (payload: { attachmentId?: string }) => void;
+    onKick: (payload: { to?: string }) => void;
+};
+
+type SignalingBus = {
+    send: (event: 'signal' | 'join' | 'leave' | 'chat' | 'chat-delete' | 'kick', payload: Record<string, unknown>) => void;
+    close: () => void;
+};
+
 function randomPeerId() {
     return `peer_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -64,6 +135,240 @@ const ICE_SERVERS: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
 ];
+
+async function resolveFocusRoomWsUrl(): Promise<string | null> {
+    try {
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            const stored = await chrome.storage.local.get(FOCUS_ROOM_WS_URL_KEY);
+            const value = stored[FOCUS_ROOM_WS_URL_KEY];
+            if (typeof value === 'string' && value.trim()) return value.trim();
+        }
+    } catch {
+        /* ignore */
+    }
+    try {
+        if (typeof localStorage !== 'undefined') {
+            const value = localStorage.getItem(FOCUS_ROOM_WS_URL_KEY);
+            if (value?.trim()) return value.trim();
+        }
+    } catch {
+        /* ignore */
+    }
+    try {
+        const vite = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+            ?.VITE_FOCUS_ROOM_WS_URL;
+        if (typeof vite === 'string' && vite.trim()) return vite.trim();
+    } catch {
+        /* ignore */
+    }
+    try {
+        const env = (typeof process !== 'undefined' ? process.env : undefined) as
+            | Record<string, string | undefined>
+            | undefined;
+        const value = env?.VITE_FOCUS_ROOM_WS_URL || env?.FOCUS_ROOM_WS_URL;
+        if (typeof value === 'string' && value.trim()) return value.trim();
+    } catch {
+        /* ignore */
+    }
+    return null;
+}
+
+function connectWsSignaling(
+    url: string,
+    roomId: string,
+    peerId: string,
+    displayName: string,
+    avatarUrl: string | null | undefined,
+    handlers: SignalingHandlers,
+): Promise<SignalingBus> {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const ws = new WebSocket(url);
+
+        const sendEnvelope = (type: string, payload: Record<string, unknown> = {}) => {
+            if (ws.readyState !== WebSocket.OPEN) return;
+            const { to, ...rest } = payload;
+            ws.send(
+                JSON.stringify({
+                    type,
+                    roomId,
+                    from: peerId,
+                    ...(typeof to === 'string' ? { to } : {}),
+                    ...rest,
+                }),
+            );
+        };
+
+        const bus: SignalingBus = {
+            send: (event, payload) => {
+                if (event === 'signal') {
+                    const type = String(payload.type ?? '');
+                    sendEnvelope(type, payload);
+                    return;
+                }
+                if (event === 'join') {
+                    sendEnvelope('join', {
+                        peerId,
+                        name: (payload.name as string) ?? displayName,
+                        avatarUrl: (payload.avatarUrl as string | null | undefined) ?? avatarUrl,
+                    });
+                    return;
+                }
+                if (event === 'leave') {
+                    sendEnvelope('leave', { peerId: (payload.peerId as string) ?? peerId });
+                    return;
+                }
+                if (event === 'kick') {
+                    sendEnvelope('kick', payload);
+                    return;
+                }
+                if (event === 'chat-delete') {
+                    sendEnvelope('chat-delete', payload);
+                    return;
+                }
+                sendEnvelope(event, payload);
+            },
+            close: () => {
+                try {
+                    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                        sendEnvelope('leave', { peerId });
+                        ws.close();
+                    }
+                } catch {
+                    /* ignore */
+                }
+            },
+        };
+
+        ws.onopen = () => {
+            if (settled) return;
+            settled = true;
+            bus.send('join', { peerId, name: displayName, avatarUrl });
+            resolve(bus);
+        };
+
+        ws.onerror = () => {
+            if (!settled) {
+                settled = true;
+                reject(new Error('Focus room WebSocket failed to connect'));
+            }
+        };
+
+        ws.onmessage = (event) => {
+            let msg: WsEnvelope;
+            try {
+                msg = JSON.parse(String(event.data)) as WsEnvelope;
+            } catch {
+                return;
+            }
+            if (!msg?.type || msg.from === peerId) return;
+            if (msg.roomId && msg.roomId !== roomId) return;
+
+            switch (msg.type) {
+                case 'join':
+                    handlers.onJoin({
+                        peerId: msg.peerId || msg.from,
+                        name: msg.name,
+                        avatarUrl: msg.avatarUrl,
+                    });
+                    break;
+                case 'leave':
+                    handlers.onLeave({ peerId: msg.peerId || msg.from });
+                    break;
+                case 'offer':
+                case 'answer':
+                case 'ice':
+                case 'mute':
+                case 'room-lock':
+                case 'end-session':
+                    handlers.onSignal({
+                        from: msg.from,
+                        to: msg.to ?? '*',
+                        type: msg.type,
+                        sdp: msg.sdp,
+                        candidate: msg.candidate,
+                        name: msg.name,
+                        avatarUrl: msg.avatarUrl,
+                        locked: msg.locked,
+                    });
+                    break;
+                case 'chat':
+                    handlers.onChat({
+                        id: msg.id || `${Date.now()}`,
+                        from: msg.from,
+                        name: msg.name || PENDING_PEER_LABEL,
+                        text: msg.text || '',
+                        at: msg.at || Date.now(),
+                        attachment: msg.attachment,
+                    });
+                    break;
+                case 'chat-delete':
+                    handlers.onChatDelete({ attachmentId: msg.attachmentId });
+                    break;
+                case 'kick':
+                    handlers.onKick({ to: msg.to });
+                    break;
+                default:
+                    break;
+            }
+        };
+    });
+}
+
+function connectRealtimeSignaling(
+    supabase: SupabaseClient,
+    roomId: string,
+    peerId: string,
+    displayName: string,
+    avatarUrl: string | null | undefined,
+    handlers: SignalingHandlers,
+): Promise<{ bus: SignalingBus; channel: RealtimeChannel }> {
+    return new Promise((resolve) => {
+        const channel = supabase.channel(`focus-room:${roomId}`, {
+            config: { broadcast: { self: false } },
+        });
+
+        const bus: SignalingBus = {
+            send: (event, payload) => {
+                void channel.send({ type: 'broadcast', event, payload });
+            },
+            close: () => {
+                void channel.send({
+                    type: 'broadcast',
+                    event: 'leave',
+                    payload: { peerId },
+                });
+                void supabase.removeChannel(channel);
+            },
+        };
+
+        channel
+            .on('broadcast', { event: 'signal' }, ({ payload }) => {
+                handlers.onSignal(payload as SignalPayload);
+            })
+            .on('broadcast', { event: 'join' }, ({ payload }) => {
+                handlers.onJoin(payload as { peerId?: string; name?: string; avatarUrl?: string | null });
+            })
+            .on('broadcast', { event: 'leave' }, ({ payload }) => {
+                handlers.onLeave(payload as { peerId?: string });
+            })
+            .on('broadcast', { event: 'chat' }, ({ payload }) => {
+                handlers.onChat(payload as ChatMessage);
+            })
+            .on('broadcast', { event: 'chat-delete' }, ({ payload }) => {
+                handlers.onChatDelete(payload as { attachmentId?: string });
+            })
+            .on('broadcast', { event: 'kick' }, ({ payload }) => {
+                handlers.onKick(payload as { to?: string });
+            })
+            .subscribe(async (status) => {
+                if (status === 'SUBSCRIBED') {
+                    bus.send('join', { peerId, name: displayName, avatarUrl });
+                    resolve({ bus, channel });
+                }
+            });
+    });
+}
 
 export function useFocusRoomRtc(
     supabase: SupabaseClient,
@@ -92,7 +397,7 @@ export function useFocusRoomRtc(
     const [permissionState, setPermissionState] = useState<'pending' | 'granted' | 'denied'>('pending');
 
     const [peerId] = useState(randomPeerId);
-    const channelRef = useRef<RealtimeChannel | null>(null);
+    const busRef = useRef<SignalingBus | null>(null);
     const pcMapRef = useRef<Map<string, RTCPeerConnection>>(new Map());
     const dcMapRef = useRef<Map<string, RTCDataChannel>>(new Map());
     const localStreamRef = useRef<MediaStream | null>(null);
@@ -143,111 +448,83 @@ export function useFocusRoomRtc(
             ...(attachment ? { attachment } : {}),
         };
         setChat((c) => [...c, msg]);
-        const channel = channelRef.current;
-        if (channel) {
-            void channel.send({ type: 'broadcast', event: 'chat', payload: msg });
-        }
-    }, [displayName]);
+        busRef.current?.send('chat', msg as unknown as Record<string, unknown>);
+    }, [displayName, peerId]);
 
     const removeChatAttachment = useCallback((attachmentId: string) => {
         setChat((current) => current.filter((message) => message.attachment?.id !== attachmentId));
-        const channel = channelRef.current;
-        if (channel) {
-            void channel.send({
-                type: 'broadcast',
-                event: 'chat-delete',
-                payload: { attachmentId },
-            });
-        }
+        busRef.current?.send('chat-delete', { attachmentId });
     }, []);
 
-    const renegotiate = useCallback(async (remoteId: string, channel: RealtimeChannel) => {
+    const renegotiate = useCallback(async (remoteId: string) => {
         const pc = pcMapRef.current.get(remoteId);
-        if (!pc || makingOfferRef.current.has(remoteId)) return;
+        const bus = busRef.current;
+        if (!pc || !bus || makingOfferRef.current.has(remoteId)) return;
         try {
             makingOfferRef.current.add(remoteId);
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-            await channel.send({
-                type: 'broadcast',
-                event: 'signal',
-                payload: {
-                    from: peerId,
-                    to: remoteId,
-                    type: 'offer',
-                    sdp: offer,
-                    name: displayName,
-                    avatarUrl,
-                } satisfies SignalPayload,
+            bus.send('signal', {
+                from: peerId,
+                to: remoteId,
+                type: 'offer',
+                sdp: offer,
+                name: displayName,
+                avatarUrl,
             });
         } catch (err) {
             console.warn('[FocusRoomRtc] renegotiate', err);
         } finally {
             makingOfferRef.current.delete(remoteId);
         }
-    }, [displayName, avatarUrl]);
+    }, [displayName, avatarUrl, peerId]);
 
     const kickPeer = useCallback(
         (remoteId: string) => {
             if (!isHost) return;
-            const channel = channelRef.current;
-            if (channel) {
-                void channel.send({
-                    type: 'broadcast',
-                    event: 'kick',
-                    payload: { from: peerId, to: remoteId },
-                });
-            }
+            busRef.current?.send('kick', { from: peerId, to: remoteId });
             cleanupPeer(remoteId);
         },
-        [isHost, cleanupPeer],
+        [isHost, cleanupPeer, peerId],
     );
 
     const mutePeer = useCallback(
         (remoteId: string) => {
             if (!isHost) return;
-            const channel = channelRef.current;
-            if (channel) {
-                void channel.send({
-                    type: 'broadcast',
-                    event: 'signal',
-                    payload: { from: peerId, to: remoteId, type: 'mute' } satisfies SignalPayload,
-                });
-            }
+            busRef.current?.send('signal', {
+                from: peerId,
+                to: remoteId,
+                type: 'mute',
+            });
             setPeers((prev) =>
                 prev.map((p) => (p.peerId === remoteId ? { ...p, mutedByHost: true } : p)),
             );
         },
-        [isHost],
+        [isHost, peerId],
     );
 
     const setRoomLock = useCallback(
         (locked: boolean) => {
             if (!isHost) return;
             setRoomLocked(locked);
-            const channel = channelRef.current;
-            if (channel) {
-                void channel.send({
-                    type: 'broadcast',
-                    event: 'signal',
-                    payload: { from: peerId, to: '*', type: 'room-lock', locked } satisfies SignalPayload,
-                });
-            }
+            busRef.current?.send('signal', {
+                from: peerId,
+                to: '*',
+                type: 'room-lock',
+                locked,
+            });
         },
-        [isHost],
+        [isHost, peerId],
     );
 
     const endSession = useCallback(() => {
         if (!isHost) return;
-        const channel = channelRef.current;
-        if (channel) {
-            void channel.send({
-                type: 'broadcast',
-                event: 'signal',
-                payload: { from: peerId, to: '*', type: 'end-session' } satisfies SignalPayload,
-            });
-        }
-    }, [isHost]);
+        busRef.current?.send('signal', {
+            from: peerId,
+            to: '*',
+            type: 'end-session',
+        });
+    }, [isHost, peerId]);
 
     const wireDataChannel = useCallback((dc: RTCDataChannel, remoteId: string) => {
         dcMapRef.current.set(remoteId, dc);
@@ -274,7 +551,7 @@ export function useFocusRoomRtc(
     }, []);
 
     const createPeerConnection = useCallback(
-        (remoteId: string, channel: RealtimeChannel, initiator: boolean) => {
+        (remoteId: string, initiator: boolean) => {
             const existing = pcMapRef.current.get(remoteId);
             if (existing) return existing;
 
@@ -295,15 +572,11 @@ export function useFocusRoomRtc(
 
             pc.onicecandidate = (ev) => {
                 if (!ev.candidate) return;
-                void channel.send({
-                    type: 'broadcast',
-                    event: 'signal',
-                    payload: {
-                        from: peerId,
-                        to: remoteId,
-                        type: 'ice',
-                        candidate: ev.candidate.toJSON(),
-                    } satisfies SignalPayload,
+                busRef.current?.send('signal', {
+                    from: peerId,
+                    to: remoteId,
+                    type: 'ice',
+                    candidate: ev.candidate.toJSON(),
                 });
             };
 
@@ -324,7 +597,7 @@ export function useFocusRoomRtc(
             };
 
             pc.onnegotiationneeded = () => {
-                if (initiator) void renegotiate(remoteId, channel);
+                if (initiator) void renegotiate(remoteId);
             };
 
             pc.onconnectionstatechange = () => {
@@ -336,11 +609,11 @@ export function useFocusRoomRtc(
             pcMapRef.current.set(remoteId, pc);
             return pc;
         },
-        [cleanupPeer, wireDataChannel, renegotiate],
+        [cleanupPeer, wireDataChannel, renegotiate, peerId],
     );
 
     const handleSignal = useCallback(
-        async (payload: SignalPayload, channel: RealtimeChannel) => {
+        async (payload: SignalPayload) => {
             if (!payload) return;
 
             if (payload.type === 'room-lock' && payload.to === '*') {
@@ -377,7 +650,7 @@ export function useFocusRoomRtc(
             }
 
             const polite = politeRef.current.get(remoteId) ?? true;
-            const pc = createPeerConnection(remoteId, channel, false);
+            const pc = createPeerConnection(remoteId, false);
 
             try {
                 if (payload.type === 'offer' && payload.sdp) {
@@ -386,15 +659,11 @@ export function useFocusRoomRtc(
                     await pc.setRemoteDescription(payload.sdp);
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
-                    await channel.send({
-                        type: 'broadcast',
-                        event: 'signal',
-                        payload: {
-                            from: peerId,
-                            to: remoteId,
-                            type: 'answer',
-                            sdp: answer,
-                        } satisfies SignalPayload,
+                    busRef.current?.send('signal', {
+                        from: peerId,
+                        to: remoteId,
+                        type: 'answer',
+                        sdp: answer,
                     });
                 } else if (payload.type === 'answer' && payload.sdp) {
                     await pc.setRemoteDescription(payload.sdp);
@@ -407,7 +676,7 @@ export function useFocusRoomRtc(
                 console.warn('[FocusRoomRtc] signal', err);
             }
         },
-        [createPeerConnection],
+        [createPeerConnection, peerId],
     );
 
     const startLocalMedia = useCallback(async (opts?: {
@@ -480,7 +749,7 @@ export function useFocusRoomRtc(
                         if (sender) void sender.replaceTrack(track);
                         else pc.addTrack(track, stream);
                     });
-                    void renegotiate(remoteId, channelRef.current!);
+                    void renegotiate(remoteId);
                 }
             }
         } catch {
@@ -517,16 +786,11 @@ export function useFocusRoomRtc(
             await startLocalMedia({ withVideo: camOn });
             if (cancelled) return;
 
-            const channel = supabase.channel(`focus-room:${roomId}`, {
-                config: { broadcast: { self: false } },
-            });
-
-            channel
-                .on('broadcast', { event: 'signal' }, ({ payload }) => {
-                    void handleSignal(payload as SignalPayload, channel);
-                })
-                .on('broadcast', { event: 'join' }, ({ payload }) => {
-                    const join = payload as { peerId?: string; name?: string; avatarUrl?: string | null };
+            const handlers: SignalingHandlers = {
+                onSignal: (payload) => {
+                    void handleSignal(payload);
+                },
+                onJoin: (join) => {
                     const remoteId = join?.peerId;
                     const name = join?.name;
                     if (!remoteId || remoteId === peerId) return;
@@ -540,62 +804,103 @@ export function useFocusRoomRtc(
                             stream: null,
                         }];
                     });
-                    const pc = createPeerConnection(remoteId, channel, true);
+                    const pc = createPeerConnection(remoteId, true);
                     void (async () => {
                         makingOfferRef.current.add(remoteId);
                         const offer = await pc.createOffer();
                         await pc.setLocalDescription(offer);
-                        await channel.send({
-                            type: 'broadcast',
-                            event: 'signal',
-                            payload: {
-                                from: peerId,
-                                to: remoteId,
-                                type: 'offer',
-                                sdp: offer,
-                                name: displayName,
-                                avatarUrl,
-                            } satisfies SignalPayload,
+                        busRef.current?.send('signal', {
+                            from: peerId,
+                            to: remoteId,
+                            type: 'offer',
+                            sdp: offer,
+                            name: displayName,
+                            avatarUrl,
                         });
                         makingOfferRef.current.delete(remoteId);
                     })();
-                })
-                .on('broadcast', { event: 'leave' }, ({ payload }) => {
-                    const remoteId = (payload as { peerId?: string })?.peerId;
+                },
+                onLeave: (payload) => {
+                    const remoteId = payload?.peerId;
                     if (remoteId) cleanupPeer(remoteId);
-                })
-                .on('broadcast', { event: 'chat' }, ({ payload }) => {
-                    const msg = payload as ChatMessage;
+                },
+                onChat: (msg) => {
                     if (msg?.text || msg?.attachment) {
                         setChat((c) => (c.some((x) => x.id === msg.id) ? c : [...c, msg]));
                     }
-                })
-                .on('broadcast', { event: 'chat-delete' }, ({ payload }) => {
-                    const attachmentId = (payload as { attachmentId?: string })?.attachmentId;
+                },
+                onChatDelete: (payload) => {
+                    const attachmentId = payload?.attachmentId;
                     if (attachmentId) {
                         setChat((current) =>
                             current.filter((message) => message.attachment?.id !== attachmentId),
                         );
                     }
-                })
-                .on('broadcast', { event: 'kick' }, ({ payload }) => {
-                    const p = payload as { to?: string };
-                    if (p.to === peerId) {
+                },
+                onKick: (payload) => {
+                    if (payload.to === peerId) {
                         setRtcError('Removed from room by host');
-                        void supabase.removeChannel(channel);
+                        busRef.current?.close();
+                        busRef.current = null;
                     }
-                })
-                .subscribe(async (status) => {
-                    if (status === 'SUBSCRIBED') {
-                        await channel.send({
-                            type: 'broadcast',
-                            event: 'join',
-                            payload: { peerId, name: displayName, avatarUrl },
-                        });
-                    }
-                });
+                },
+            };
 
-            channelRef.current = channel;
+            const wsUrl = await resolveFocusRoomWsUrl();
+            if (cancelled) return;
+
+            try {
+                if (wsUrl) {
+                    const bus = await connectWsSignaling(
+                        wsUrl,
+                        roomId,
+                        peerId,
+                        displayName,
+                        avatarUrl,
+                        handlers,
+                    );
+                    if (cancelled) {
+                        bus.close();
+                        return;
+                    }
+                    busRef.current = bus;
+                } else {
+                    const { bus } = await connectRealtimeSignaling(
+                        supabase,
+                        roomId,
+                        peerId,
+                        displayName,
+                        avatarUrl,
+                        handlers,
+                    );
+                    if (cancelled) {
+                        bus.close();
+                        return;
+                    }
+                    busRef.current = bus;
+                }
+            } catch (err) {
+                console.warn('[FocusRoomRtc] WS signaling failed, falling back to Realtime', err);
+                if (cancelled) return;
+                try {
+                    const { bus } = await connectRealtimeSignaling(
+                        supabase,
+                        roomId,
+                        peerId,
+                        displayName,
+                        avatarUrl,
+                        handlers,
+                    );
+                    if (cancelled) {
+                        bus.close();
+                        return;
+                    }
+                    busRef.current = bus;
+                } catch (fallbackErr) {
+                    console.warn('[FocusRoomRtc] signaling connect failed', fallbackErr);
+                    setRtcError('Could not connect to room signaling');
+                }
+            }
         };
 
         void connect();
@@ -604,16 +909,8 @@ export function useFocusRoomRtc(
             cancelled = true;
             cancelAnimationFrame(rafRef.current);
             void audioCtxRef.current?.close();
-            const channel = channelRef.current;
-            if (channel) {
-                void channel.send({
-                    type: 'broadcast',
-                    event: 'leave',
-                    payload: { peerId },
-                });
-                void supabase.removeChannel(channel);
-            }
-            channelRef.current = null;
+            busRef.current?.close();
+            busRef.current = null;
             pcMapRef.current.forEach((pc) => pc.close());
             pcMapRef.current.clear();
             dcMapRef.current.clear();
@@ -627,7 +924,7 @@ export function useFocusRoomRtc(
             setPeers([]);
             setChat([]);
         };
-    }, [enabled, roomId, supabase, displayName, avatarUrl, handleSignal, createPeerConnection, cleanupPeer, startLocalMedia, camOn, isHost]);
+    }, [enabled, roomId, supabase, displayName, avatarUrl, handleSignal, createPeerConnection, cleanupPeer, startLocalMedia, camOn, isHost, peerId]);
 
     const toggleMic = () => {
         const stream = localStreamRef.current;

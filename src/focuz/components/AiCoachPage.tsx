@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
+import { invokeAuthedFunction } from '../lib/supabaseFunctions';
 import { streamAiCoachChat } from '../lib/aiCoachApi';
 import {
     approveCoachAnalytics,
@@ -70,12 +71,13 @@ type CoachMessage = {
     actions?: CoachAction[];
     actionUi?: CoachActionUiItem[];
     showUpgrade?: boolean;
+    imageUrl?: string;
     /** Present on user messages that have been edited/regenerated at least once. */
     variants?: MessageVariant[];
     activeVariantIndex?: number;
 };
 
-type LibraryImage = { id: string; url: string; name: string };
+type LibraryImage = { id: string; url: string; name: string; extractedText?: string };
 
 type SidebarView = 'chats' | 'library' | 'explore';
 
@@ -347,6 +349,7 @@ export default function AiCoachPage({
     // Library / attachments (client-side only — the coach API is text-only today).
     const [libraryImages, setLibraryImages] = useState<LibraryImage[]>([]);
     const [pendingAttachment, setPendingAttachment] = useState<LibraryImage | null>(null);
+    const [ocrBusy, setOcrBusy] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const buildActionUi = useCallback((actions: CoachAction[]): CoachActionUiItem[] => {
@@ -759,7 +762,13 @@ export default function AiCoachPage({
         if (!rawText || streaming) return;
 
         const attachment = continueQuestion ? null : pendingAttachment;
-        const userMsg = attachment ? `${rawText}\n\n[Attached image: ${attachment.name}]` : rawText;
+        const ocrBlock = attachment?.extractedText?.trim()
+            ? `\n\n[Image text]\n${attachment.extractedText.trim()}`
+            : '';
+        const userMsg = rawText;
+        const apiUserContent = attachment
+            ? `${rawText}${ocrBlock}`
+            : rawText;
 
         if (!continueQuestion) {
             setInput('');
@@ -768,13 +777,20 @@ export default function AiCoachPage({
 
         if (continueQuestion) {
             const base = messages.filter((m) => !m.streaming);
-            const apiUserContent = `The user already asked: "${continueQuestion}". Screen time analytics are approved. Continue your previous answer and fully address their question — do not ask for approval again.`;
-            await sendTurn(apiUserContent, base, { isContinuation: true });
+            const continueContent = `The user already asked: "${continueQuestion}". Screen time analytics are approved. Continue your previous answer and fully address their question — do not ask for approval again.`;
+            await sendTurn(continueContent, base, { isContinuation: true });
             return;
         }
 
         const base = messages.filter((m) => !m.streaming);
-        await sendTurn(userMsg, [...base, { role: 'user', content: userMsg }]);
+        await sendTurn(apiUserContent, [
+            ...base,
+            {
+                role: 'user',
+                content: userMsg,
+                imageUrl: attachment?.url,
+            },
+        ]);
     };
 
     /** Edit (newUserContent set) or regenerate (newUserContent null) the turn starting at `userIdx`.
@@ -856,6 +872,32 @@ export default function AiCoachPage({
             };
             setLibraryImages((prev) => [img, ...prev]);
             setPendingAttachment(img);
+            void (async () => {
+                const token = session?.access_token;
+                if (!token || !img.url.startsWith('data:image/')) return;
+                setOcrBusy(true);
+                try {
+                    const { data, error } = await invokeAuthedFunction<{ text?: string; error?: string }>(
+                        'extract-image-text',
+                        token,
+                        { imageDataUrl: img.url },
+                    );
+                    if (!error && data?.text) {
+                        setPendingAttachment((prev) =>
+                            prev && prev.id === img.id ? { ...prev, extractedText: data.text } : prev,
+                        );
+                        setLibraryImages((prev) =>
+                            prev.map((item) =>
+                                item.id === img.id ? { ...item, extractedText: data.text } : item,
+                            ),
+                        );
+                    }
+                } catch (e) {
+                    console.warn('[AiCoach] OCR failed', e);
+                } finally {
+                    setOcrBusy(false);
+                }
+            })();
         };
         reader.readAsDataURL(file);
     };
@@ -893,7 +935,7 @@ export default function AiCoachPage({
     const currentTitle = sessions.find((s) => s.id === sessionId)?.title || (hasConversation ? 'Chat' : 'AI Coach');
 
     return (
-        <div className={`${embedded ? 'relative h-full min-h-0' : 'fixed inset-0 z-[200]'} flex bg-[#0a0a0b] text-neutral-100`}>
+        <div className={`${embedded ? 'relative h-full min-h-0' : 'fixed inset-0 z-[200]'} flex min-h-0 overflow-hidden bg-[#0a0a0b] text-neutral-100`}>
             {errorState && <ErrorOverlay error={errorState} onClose={() => setErrorState(null)} />}
 
             {embedded && embeddedSidebarOpen && (
@@ -1106,7 +1148,7 @@ export default function AiCoachPage({
                 )}
             </aside>
 
-            <main className="flex-1 flex flex-col min-w-0 bg-[#0d0d0d]">
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#0d0d0d]">
                 <header className="shrink-0 flex items-center justify-between gap-2 border-b border-white/[0.05] px-3 sm:px-4 h-12">
                     <div className="flex items-center gap-1.5 min-w-0">
                         {embedded && (
@@ -1187,15 +1229,24 @@ export default function AiCoachPage({
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            setExpandedUserIdx((v) => (v === idx ? null : idx))
-                                                        }
-                                                        className="text-left max-w-full bg-[#2f2f2f] rounded-[1.25rem] px-4 py-2.5 text-white text-[15px] leading-relaxed whitespace-pre-wrap break-words hover:bg-[#333333] transition-colors"
-                                                    >
-                                                        {msg.content}
-                                                    </button>
+                                                    <div className="text-left max-w-full bg-[#2f2f2f] rounded-[1.25rem] px-4 py-2.5 text-white text-[15px] leading-relaxed">
+                                                        {msg.imageUrl && (
+                                                            <img
+                                                                src={msg.imageUrl}
+                                                                alt=""
+                                                                className="mb-2 max-h-56 w-full rounded-xl object-cover border border-white/10"
+                                                            />
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setExpandedUserIdx((v) => (v === idx ? null : idx))
+                                                            }
+                                                            className="w-full text-left whitespace-pre-wrap break-words hover:opacity-90 transition-opacity"
+                                                        >
+                                                            {msg.content}
+                                                        </button>
+                                                    </div>
                                                 )}
 
                                                 {isExpanded && !isEditing && (
@@ -1375,29 +1426,33 @@ export default function AiCoachPage({
                         />
 
                         {pendingAttachment && (
-                            <div className="flex items-center gap-2 mb-2 px-1">
+                            <div className="mb-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#1a1a1a]">
                                 <div className="relative">
                                     <img
                                         src={pendingAttachment.url}
                                         alt={pendingAttachment.name}
-                                        className="w-12 h-12 rounded-lg object-cover border border-white/10"
+                                        className="max-h-64 w-full object-cover"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setPendingAttachment(null)}
                                         aria-label="Remove attachment"
-                                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-neutral-800 border border-white/20 text-neutral-300 flex items-center justify-center"
+                                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-black/60 text-neutral-200 backdrop-blur"
                                     >
-                                        <X className="w-2.5 h-2.5" />
+                                        <X className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
-                                <span className="text-xs text-neutral-500 truncate max-w-[200px]">
-                                    {pendingAttachment.name}
-                                </span>
+                                <div className="px-3 py-2 text-[11px] text-neutral-500">
+                                    {ocrBusy
+                                        ? 'Extracting text…'
+                                        : pendingAttachment.extractedText
+                                          ? 'Text extracted — it will be sent with your question'
+                                          : pendingAttachment.name}
+                                </div>
                             </div>
                         )}
 
-                        <div className="flex items-end gap-2 rounded-[1.75rem] bg-[#2a2a2a] border border-white/[0.08] px-2 py-2 shadow-lg">
+                        <div className={`flex items-end gap-2 rounded-[1.75rem] border border-white/[0.08] bg-[#2a2a2a] px-2 py-2 shadow-lg ${pendingAttachment ? 'min-h-[4.5rem]' : ''}`}>
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}

@@ -12,7 +12,7 @@ import {
     startOfWeek,
 } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Link2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Link2, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 
 type CalendarView = 'day' | 'week' | 'month';
 import { useAuthStore } from '../lib/store';
@@ -1027,66 +1027,77 @@ export default function SchedulingCalendarPage({
 
             <AnimatePresence>
                 {leftPanel === 'schedule-menu' && (
-                    <motion.div
-                        className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
+                    <motion.aside
+                        key="schedule-link-chooser"
+                        role="dialog"
+                        aria-modal="false"
+                        aria-labelledby="schedule-link-type-title"
+                        initial={{ opacity: 0, x: -12, width: 0 }}
+                        animate={{ opacity: 1, x: 0, width: 224 }}
+                        exit={{ opacity: 0, x: -8, width: 0 }}
+                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                        className="relative z-20 flex h-full shrink-0 flex-col overflow-hidden border-r border-white/10"
+                        style={{
+                            backgroundColor: 'rgba(18, 20, 28, 0.72)',
+                            backdropFilter: 'blur(18px)',
+                            WebkitBackdropFilter: 'blur(18px)',
+                            borderColor: 'var(--cal-border)',
+                        }}
                     >
-                        <button
-                            type="button"
-                            aria-label="Close"
-                            className="absolute inset-0 bg-black/55 backdrop-blur-md"
-                            onClick={() => setLeftPanel('none')}
-                        />
-                        <motion.div
-                            role="dialog"
-                            aria-modal="true"
-                            aria-labelledby="schedule-link-type-title"
-                            initial={{ opacity: 0, scale: 0.96, y: 12 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.96, y: 8 }}
-                            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                            className="relative z-10 w-full max-w-md rounded-2xl border border-white/12 bg-[rgba(22,24,32,0.72)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
-                        >
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Scheduling</p>
-                            <h2 id="schedule-link-type-title" className="mt-1 text-xl font-semibold tracking-tight text-white">
-                                New scheduling link
-                            </h2>
-                            <p className="mt-1 text-sm text-neutral-400">
-                                Choose a recurring weekly link or a one-off date-based link.
+                        <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                                Scheduling
                             </p>
-                            <div className="mt-5 grid gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => openRight('recurring')}
-                                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left transition-colors hover:bg-white/[0.08]"
-                                >
-                                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
-                                        <Link2 size={16} />
-                                    </span>
-                                    <span>
-                                        <span className="block text-sm font-medium text-white">Recurring link</span>
-                                        <span className="block text-xs text-neutral-500">Weekly availability that repeats</span>
-                                    </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => openRight('oneoff')}
-                                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left transition-colors hover:bg-white/[0.08]"
-                                >
-                                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
-                                        <Link2 size={16} />
-                                    </span>
-                                    <span>
-                                        <span className="block text-sm font-medium text-white">One-off link</span>
-                                        <span className="block text-xs text-neutral-500">Specific dates only</span>
-                                    </span>
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
+                            <button
+                                type="button"
+                                aria-label="Close"
+                                onClick={() => setLeftPanel('none')}
+                                className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-white/5 hover:text-white"
+                            >
+                                <X size={14} />
+                            </button>
+                        </div>
+                        <div className="flex flex-1 flex-col gap-2 p-3">
+                            <h2 id="schedule-link-type-title" className="text-sm font-semibold tracking-tight text-white">
+                                New link
+                            </h2>
+                            <p className="text-[11px] leading-relaxed text-neutral-500">
+                                Pick a type — this panel closes after you choose.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    openRight('recurring');
+                                    setLeftPanel('none');
+                                }}
+                                className="mt-1 flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition-colors hover:border-violet-400/35 hover:bg-violet-500/[0.08]"
+                            >
+                                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
+                                    <Link2 size={14} />
+                                </span>
+                                <span>
+                                    <span className="block text-xs font-medium text-white">Recurring</span>
+                                    <span className="mt-0.5 block text-[10px] text-neutral-500">Weekly availability</span>
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    openRight('oneoff');
+                                    setLeftPanel('none');
+                                }}
+                                className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition-colors hover:border-sky-400/35 hover:bg-sky-500/[0.08]"
+                            >
+                                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
+                                    <Link2 size={14} />
+                                </span>
+                                <span>
+                                    <span className="block text-xs font-medium text-white">One-off</span>
+                                    <span className="mt-0.5 block text-[10px] text-neutral-500">Specific dates only</span>
+                                </span>
+                            </button>
+                        </div>
+                    </motion.aside>
                 )}
             </AnimatePresence>
 

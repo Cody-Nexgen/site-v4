@@ -16,7 +16,7 @@ import {
     Play, Pause, RefreshCw, Plus,
     Trash, Check, Ban, Globe, Zap, X,
     AlertTriangle, TrendingDown, Lightbulb,
-    Sparkles, ShieldCheck, Loader2, Sliders,
+    Sparkles, ShieldCheck, Loader2, Sliders, ChevronDown,
 } from 'lucide-react';
 import { HabitCheckInButton } from '../components/pro-dashboard/HabitCheckInButton';
 import { IconCalendarStats } from '@tabler/icons-react';
@@ -721,10 +721,15 @@ export const SessionsTab = () => {
 
     useEffect(() => {
         const onMsg = (msg: { type?: string }) => {
-            if (msg.type === 'POMODORO_SEGMENT_DONE') {
+            if (msg.type === 'POMODORO_SEGMENT_DONE' || msg.type === 'POMODORO_AFK_PAUSED') {
                 void readPomodoroRuntime().then((rt) => {
                     applyRuntimeToUi(rt);
                     fetchEngineState();
+                    if (msg.type === 'POMODORO_AFK_PAUSED') {
+                        setPomoNotice('Paused — no movement detected for 5 minutes');
+                        window.setTimeout(() => setPomoNotice(''), 5000);
+                        return;
+                    }
                     if (rt?.isBreak && rt.running) {
                         dispatchFocusComplete();
                         setPomoNotice('Focus complete — break started');
@@ -744,13 +749,22 @@ export const SessionsTab = () => {
             if (timerRef.current) clearInterval(timerRef.current);
             return;
         }
+        let completing = false;
         timerRef.current = window.setInterval(() => {
-            setPomoTimeLeft(Math.max(0, Math.ceil((pomoEndAt - Date.now()) / 1000)));
+            const left = Math.max(0, Math.ceil((pomoEndAt - Date.now()) / 1000));
+            setPomoTimeLeft(left);
+            if (left <= 0 && !completing) {
+                completing = true;
+                void chrome.runtime
+                    .sendMessage({ type: 'POMODORO_SEGMENT_COMPLETE' })
+                    .then(() => readPomodoroRuntime().then(applyRuntimeToUi))
+                    .catch(() => {});
+            }
         }, 1000);
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [pomoRunning, pomoEndAt]);
+    }, [pomoRunning, pomoEndAt, applyRuntimeToUi]);
 
     const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
     const updatePomodoroSettings = async (focusMin: number, breakMin: number) => {
@@ -823,7 +837,7 @@ export const SessionsTab = () => {
             
             <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
                 <GlassCard className="flex min-h-[500px] w-full flex-col items-center justify-center p-7 sm:p-9">
-                    <span className={`mb-5 rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                    <span className={`mx-auto mb-5 self-center rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
                         isBreak ? 'bg-emerald-500/10 text-emerald-400' : 'bg-purple-500/10 text-purple-400'
                     }`}>
                         {isBreak ? 'Recovery break' : pomoRunning ? 'Focus in progress' : 'Ready to focus'}
@@ -1058,6 +1072,7 @@ export const BlocklistTab = () => {
     const [categoryPending, setCategoryPending] = useState<SafeBlockCategoryKey | null>(null);
     const [resolvingField, setResolvingField] = useState<'block' | 'allowed_site' | null>(null);
     const [bulkActionPending, setBulkActionPending] = useState<string | null>(null);
+    const [expandedBlockedCategories, setExpandedBlockedCategories] = useState<Partial<Record<SafeBlockCategoryKey, boolean>>>({});
 
     const blocklistCount = Object.keys(engineState.blocklist || {}).filter(
         (d) => engineState.blocklist[d],
@@ -1213,11 +1228,11 @@ export const BlocklistTab = () => {
             label: 'Enable all categories',
             icon: Check,
             run: async () => {
-                await Promise.all(
-                    SAFE_BLOCK_CATEGORY_KEYS
-                        .filter((key) => !engineState.categoriesActive?.[key])
-                        .map((key) => sendEngineMessage({ type: 'CATEGORY_TOGGLE', category: key, enabled: true })),
-                );
+                for (const key of SAFE_BLOCK_CATEGORY_KEYS) {
+                    if (engineState.categoriesActive?.[key]) continue;
+                    const res = await sendEngineMessage({ type: 'CATEGORY_TOGGLE', category: key, enabled: true });
+                    if (res.ok === false) throw new Error(res.error || `Could not enable ${SAFE_BLOCK_CATEGORY_LABELS[key]}`);
+                }
             },
         },
         {
@@ -1225,11 +1240,11 @@ export const BlocklistTab = () => {
             label: 'Disable all categories',
             icon: X,
             run: async () => {
-                await Promise.all(
-                    SAFE_BLOCK_CATEGORY_KEYS
-                        .filter((key) => engineState.categoriesActive?.[key])
-                        .map((key) => sendEngineMessage({ type: 'CATEGORY_TOGGLE', category: key, enabled: false })),
-                );
+                for (const key of SAFE_BLOCK_CATEGORY_KEYS) {
+                    if (!engineState.categoriesActive?.[key]) continue;
+                    const res = await sendEngineMessage({ type: 'CATEGORY_TOGGLE', category: key, enabled: false });
+                    if (res.ok === false) throw new Error(res.error || `Could not disable ${SAFE_BLOCK_CATEGORY_LABELS[key]}`);
+                }
             },
         },
         {
@@ -1237,7 +1252,7 @@ export const BlocklistTab = () => {
             label: 'Block all platforms',
             icon: Ban,
             run: async () => {
-                await sendEngineMessage({
+                const res = await sendEngineMessage({
                     type: 'UPDATE_ENGINE_SETTINGS',
                     settings: {
                         inAppBlock: {
@@ -1246,6 +1261,7 @@ export const BlocklistTab = () => {
                         },
                     },
                 });
+                if (res.ok === false) throw new Error(res.error || 'Could not block platforms');
             },
         },
         {
@@ -1253,7 +1269,7 @@ export const BlocklistTab = () => {
             label: 'Unblock all platforms',
             icon: Globe,
             run: async () => {
-                await sendEngineMessage({
+                const res = await sendEngineMessage({
                     type: 'UPDATE_ENGINE_SETTINGS',
                     settings: {
                         inAppBlock: {
@@ -1262,6 +1278,7 @@ export const BlocklistTab = () => {
                         },
                     },
                 });
+                if (res.ok === false) throw new Error(res.error || 'Could not unblock platforms');
             },
         },
     ];
@@ -1272,8 +1289,8 @@ export const BlocklistTab = () => {
         try {
             await action.run();
             setBlockActionError('');
-        } catch {
-            setBlockActionError('Could not complete that quick action.');
+        } catch (err) {
+            setBlockActionError(err instanceof Error ? err.message : 'Could not complete that quick action.');
         } finally {
             await fetchEngineState();
             setBulkActionPending(null);
@@ -1281,7 +1298,7 @@ export const BlocklistTab = () => {
     };
 
     return (
-        <div className="space-y-6 animate-fade-in-up w-full">
+        <div className="mx-auto w-full max-w-[640px] space-y-6 animate-fade-in-up">
             <ChallengeModal
                 isOpen={challengeState.isOpen}
                 phrase={challengeState.phrase}
@@ -1304,75 +1321,43 @@ export const BlocklistTab = () => {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <GlassCard className="p-5">
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300">
-                            <Sliders size={16} />
-                        </span>
-                        <h3 className="font-semibold text-white text-sm">Quick Actions</h3>
-                    </div>
-                    <p className="text-xs text-neutral-500 mb-4">One-tap changes across categories and platform blockers.</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        {quickActions.map((action) => {
-                            const Icon = action.icon;
-                            const pending = bulkActionPending === action.id;
-                            return (
-                                <button
-                                    key={action.id}
-                                    type="button"
-                                    disabled={!!bulkActionPending || nuclearActive}
-                                    onClick={() => void runQuickAction(action)}
-                                    className="flex flex-col items-start gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 text-left transition-colors hover:border-violet-400/40 hover:bg-violet-500/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300">
-                                        {pending ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} />}
-                                    </span>
-                                    <span className="text-xs font-semibold text-neutral-200">{action.label}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                    {nuclearActive && (
-                        <p className="mt-3 text-xs text-amber-400/80">Quick actions are locked during Nuclear Lockdown.</p>
-                    )}
-                </GlassCard>
-
-                <GlassCard className="p-5 relative overflow-hidden">
-                    <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-gradient-to-br from-sky-500/20 to-violet-500/20 blur-3xl" />
-                    <div className="relative">
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500/20 to-violet-500/20 text-sky-300">
-                                <Sparkles size={16} />
-                            </span>
-                            <h3 className="font-semibold text-white text-sm">AI Assistant</h3>
-                            {!isPro && (
-                                <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-300">
-                                    Pro
-                                </span>
-                            )}
-                        </div>
-                        <p className="text-xs text-neutral-400 leading-relaxed mb-4 max-w-sm">
-                            Type what a site is, not its URL. Hold{' '}
-                            <span className="rounded border border-white/15 bg-white/5 px-1 font-mono text-[10px] text-neutral-300">Alt</span>
-                            {' '}and press Enter (or Alt+click Add) on the Blocked or Allowed inputs below and AI will resolve it — e.g. "reddit" → reddit.com.
-                        </p>
-                        {isPro ? (
-                            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-sky-400/80">
-                                <ShieldCheck size={12} /> Enabled for your account
-                            </span>
-                        ) : (
+            <GlassCard className="p-5">
+                <div className="flex items-center gap-2 mb-1">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300">
+                        <Sliders size={16} />
+                    </span>
+                    <h3 className="font-semibold text-white text-sm">Quick Actions</h3>
+                </div>
+                <p className="text-xs text-neutral-500 mb-4">One-tap changes across categories and platform blockers.</p>
+                <div className="grid grid-cols-2 gap-3">
+                    {quickActions.map((action) => {
+                        const Icon = action.icon;
+                        const pending = bulkActionPending === action.id;
+                        return (
                             <button
+                                key={action.id}
                                 type="button"
-                                onClick={() => void upgradeToPro()}
-                                className="rounded-xl bg-gradient-to-r from-sky-500 to-violet-500 px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                                disabled={!!bulkActionPending || nuclearActive}
+                                onClick={() => void runQuickAction(action)}
+                                className="flex flex-col items-start gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 text-left transition-colors hover:border-violet-400/40 hover:bg-violet-500/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                                Upgrade to unlock
+                                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300">
+                                    {pending ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} />}
+                                </span>
+                                <span className="text-xs font-semibold text-neutral-200">{action.label}</span>
                             </button>
-                        )}
-                    </div>
-                </GlassCard>
-            </div>
+                        );
+                    })}
+                </div>
+                {nuclearActive && (
+                    <p className="mt-3 text-xs text-amber-400/80">Quick actions are locked during Nuclear Lockdown.</p>
+                )}
+                <p className="mt-3 text-[10px] text-neutral-600">
+                    Tip: on Blocked / Allowed inputs, hold{' '}
+                    <span className="rounded border border-white/15 bg-white/5 px-1 font-mono text-[10px] text-neutral-400">Alt</span>
+                    {' '}+ Enter to resolve a site name with AI{!isPro ? ' (Pro)' : ''}.
+                </p>
+            </GlassCard>
 
             <p className="focuz-section-label mt-2">Rules</p>
 
@@ -1388,7 +1373,7 @@ export const BlocklistTab = () => {
                         {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).length} active
                     </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {SAFE_BLOCK_CATEGORY_KEYS.map((category) => {
                         const active = !!engineState.categoriesActive?.[category];
                         const pending = categoryPending === category;
@@ -1466,7 +1451,7 @@ export const BlocklistTab = () => {
 
             <p className="focuz-section-label mt-2">Custom Rules</p>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
                 <GlassCard className="p-5">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="font-semibold text-white text-base">Blocked</h3>
@@ -1495,21 +1480,73 @@ export const BlocklistTab = () => {
                     <p className="mb-4 text-[10px] text-neutral-600">
                         Hold Alt for AI lookup on a natural-language name{!isPro ? ' · Pro' : ''}
                     </p>
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide">
+                    <div className="max-h-[min(28rem,calc(4*5.25rem))] space-y-2 overflow-y-auto scrollbar-hide">
+                        {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).map((category) => {
+                            const expanded = !!expandedBlockedCategories[category];
+                            const sites = SAFE_BLOCK_CATEGORIES[category];
+                            return (
+                                <div
+                                    key={`cat-${category}`}
+                                    className="overflow-hidden rounded-xl border border-purple-500/25 bg-purple-500/[0.07]"
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedBlockedCategories((prev) => ({
+                                            ...prev,
+                                            [category]: !prev[category],
+                                        }))}
+                                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                                    >
+                                        <span>
+                                            <span className="block text-sm font-semibold text-purple-100">
+                                                {SAFE_BLOCK_CATEGORY_LABELS[category]}
+                                            </span>
+                                            <span className="mt-0.5 block text-[10px] text-purple-200/60">
+                                                Category · {sites.length} sites
+                                            </span>
+                                        </span>
+                                        <span className="flex items-center gap-2">
+                                            {!nuclearActive && (
+                                                <span
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        void toggleCategory(category);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            void toggleCategory(category);
+                                                        }
+                                                    }}
+                                                    className="rounded-md px-2 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-500/15"
+                                                >
+                                                    Remove
+                                                </span>
+                                            )}
+                                            <ChevronDown
+                                                size={14}
+                                                className={`text-purple-300/70 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                                            />
+                                        </span>
+                                    </button>
+                                    {expanded && (
+                                        <div className="max-h-40 space-y-1 overflow-y-auto border-t border-purple-500/20 px-4 py-2.5">
+                                            {sites.map((domain) => (
+                                                <p key={domain} className="truncate text-[11px] text-neutral-400">{domain}</p>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                         {Object.entries(engineState.blocklist || {})
-                            .filter(([, entry]) => entry.sources?.length > 0)
+                            .filter(([, entry]) => (entry.sources || []).some((s: string) => s !== 'category'))
                             .map(([domain, entry]) => {
-                                const sourceItems: { source: string; id?: string; label: string }[] = entry.sources.flatMap((source) => {
-                                    if (source === 'category') {
-                                        return (entry.categoryKeys || [])
-                                            .filter((key): key is SafeBlockCategoryKey =>
-                                                SAFE_BLOCK_CATEGORY_KEYS.includes(key as SafeBlockCategoryKey))
-                                            .map((category) => ({
-                                                source,
-                                                id: category,
-                                                label: SAFE_BLOCK_CATEGORY_LABELS[category],
-                                            }));
-                                    }
+                                const sourceItems: { source: string; id?: string; label: string }[] = entry.sources.flatMap((source: string) => {
+                                    if (source === 'category') return [];
                                     if (source === 'timer') {
                                         const timers = engineState.timers?.[domain] || [];
                                         return timers.length
@@ -1535,10 +1572,11 @@ export const BlocklistTab = () => {
                                         label: source === 'manual' ? 'Manual' : source,
                                     }];
                                 });
+                                if (!sourceItems.length) return null;
 
                                 return (
-                                    <div key={domain} className="p-4 bg-[#111] rounded-xl border border-white/5 hover:border-white/10 transition-colors duration-150">
-                                        <span className="block text-sm font-medium text-white mb-2">{domain}</span>
+                                    <div key={domain} className="rounded-xl border border-white/5 bg-[#111] p-4 transition-colors duration-150 hover:border-white/10">
+                                        <span className="mb-2 block text-sm font-medium text-white">{domain}</span>
                                         <div className="flex flex-wrap gap-2">
                                             {sourceItems.map((item, index) => (
                                                 <span
@@ -1550,7 +1588,7 @@ export const BlocklistTab = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => triggerSourceRemoval(domain, item.source, item.id)}
-                                                            className="rounded-md p-1 text-neutral-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                                                            className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
                                                             aria-label={`Remove ${item.label.toLowerCase()} block for ${domain}`}
                                                         >
                                                             <X size={12} />
@@ -1562,7 +1600,8 @@ export const BlocklistTab = () => {
                                     </div>
                                 );
                             })}
-                        {Object.values(engineState.blocklist || {}).every((entry) => !entry.sources?.length) && (
+                        {!SAFE_BLOCK_CATEGORY_KEYS.some((key) => engineState.categoriesActive?.[key])
+                            && Object.values(engineState.blocklist || {}).every((entry) => !(entry.sources || []).some((s: string) => s !== 'category')) && (
                             <p className="py-8 text-center text-sm text-neutral-600">No sites are currently blocked.</p>
                         )}
                     </div>

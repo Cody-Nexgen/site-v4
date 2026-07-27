@@ -22,7 +22,7 @@ import {
     leaveFocusRoom,
     type FocusRoom,
 } from '../lib/socialApi';
-import { useFocusRoomRtc } from '../lib/focusRoomRtc';
+import { FREE_FOCUS_ROOM_MAX_MIN, PRO_FOCUS_ROOM_MAX_MIN, useFocusRoomRtc } from '../lib/focusRoomRtc';
 import {
     PROFILE_AVATAR_FALLBACK_CLASS,
     PROFILE_AVATAR_IMG_CLASS,
@@ -79,11 +79,13 @@ function VideoTile({
 }
 
 export default function FocusRoomPanel() {
-    const { session, engineState } = useAuthStore();
+    const { session, engineState, subscriptionTier, upgradeToPro } = useAuthStore();
+    const isPro = subscriptionTier === 'pro';
+    const maxDurationMin = isPro ? PRO_FOCUS_ROOM_MAX_MIN : FREE_FOCUS_ROOM_MAX_MIN;
     const [roomId, setRoomId] = useState<string | null>(null);
     const [room, setRoom] = useState<FocusRoom | null>(null);
     const [title, setTitle] = useState('Focus Room');
-    const [durationMin, setDurationMin] = useState(25);
+    const [durationMin, setDurationMin] = useState(FREE_FOCUS_ROOM_MAX_MIN);
     const [joinInput, setJoinInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -160,9 +162,11 @@ export default function FocusRoomPanel() {
 
     const handleCreate = async () => {
         if (!session) return;
+        const clamped = Math.min(Math.max(5, durationMin), maxDurationMin);
+        setDurationMin(clamped);
         setLoading(true);
         setError('');
-        const res = await createFocusRoom(supabase, title, durationMin, tokens);
+        const res = await createFocusRoom(supabase, title, clamped, tokens);
         setLoading(false);
         if (res.ok && res.roomId) {
             setRoomId(res.roomId);
@@ -346,11 +350,22 @@ export default function FocusRoomPanel() {
                     <input
                         type="number"
                         min={5}
-                        max={180}
+                        max={maxDurationMin}
                         value={durationMin}
-                        onChange={(e) => setDurationMin(Number(e.target.value) || 25)}
+                        onChange={(e) => {
+                            const next = Number(e.target.value) || FREE_FOCUS_ROOM_MAX_MIN;
+                            setDurationMin(Math.min(Math.max(5, next), maxDurationMin));
+                        }}
                         className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-sky-500/50"
                     />
+                    {!isPro && (
+                        <p className="text-[10px] text-amber-300/90 leading-relaxed">
+                            Free plan: max {FREE_FOCUS_ROOM_MAX_MIN} minutes.{' '}
+                            <button type="button" onClick={() => void upgradeToPro()} className="font-bold underline">
+                                Upgrade to Pro
+                            </button>
+                        </p>
+                    )}
                     <button
                         type="button"
                         disabled={loading}

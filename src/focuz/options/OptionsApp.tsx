@@ -2440,9 +2440,13 @@ const OptionsApp = () => {
         window.history.replaceState({}, '', url.pathname + url.search);
     };
 
+    const sidebarExpandLockUntilRef = useRef(0);
     const toggleSidebarCollapsed = () => {
         setSidebarCollapsed((prev) => {
             const next = !prev;
+            // After collapsing, ignore the hover rail briefly so the cursor
+            // still sitting on the left edge doesn't bounce it open again.
+            if (next) sidebarExpandLockUntilRef.current = Date.now() + 800;
             writeSidebarCollapsed(next);
             return next;
         });
@@ -2685,14 +2689,21 @@ const OptionsApp = () => {
             />
 
             {/* Main Content */}
-            <main className="workspace-main flex flex-col min-w-0 relative overflow-x-hidden">
+            <main className="workspace-main flex flex-col min-w-0 relative overflow-hidden">
                 {sidebarCollapsed && (
                     <>
                         <div
                             className="workspace-sidebar-hover-rail"
                             onMouseEnter={() => {
-                                setSidebarCollapsed(false);
-                                writeSidebarCollapsed(false);
+                                window.clearTimeout((window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover);
+                                (window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover = window.setTimeout(() => {
+                                    if (Date.now() < sidebarExpandLockUntilRef.current) return;
+                                    setSidebarCollapsed(false);
+                                    writeSidebarCollapsed(false);
+                                }, 550);
+                            }}
+                            onMouseLeave={() => {
+                                window.clearTimeout((window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover);
                             }}
                             aria-hidden
                         />
@@ -2701,6 +2712,8 @@ const OptionsApp = () => {
                             className="workspace-sidebar-expand-fab"
                             aria-label="Expand sidebar"
                             onClick={() => {
+                                window.clearTimeout((window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover);
+                                sidebarExpandLockUntilRef.current = 0;
                                 setSidebarCollapsed(false);
                                 writeSidebarCollapsed(false);
                             }}

@@ -219,6 +219,22 @@ async function handleMessage(message: PlatformMessage): Promise<unknown> {
         return { ok: false, needsExtension: true };
     }
 
+    if (typeof type === 'string' && type.startsWith('FUTURE_SELF_')) {
+        return {
+            ok: false,
+            needsExtension: true,
+            error: 'Future Self Mode needs the FocuzNow browser extension.',
+        };
+    }
+
+    if (type === 'CATEGORY_TOGGLE' || type === 'ADD_BLOCK' || type === 'REMOVE_BLOCK') {
+        return {
+            ok: false,
+            needsExtension: true,
+            error: 'Blocking actions require the FocuzNow browser extension.',
+        };
+    }
+
     // Default: acknowledge without crashing UI
     return { ok: false, needsExtension: true };
 }
@@ -392,4 +408,53 @@ export async function hydrateWebWorkspaceFromCloud() {
     } catch {
         /* ignore */
     }
+    await hydrateWebStatsFromExtension();
+}
+
+/** Pull weekly/history/pomodoro stats from the installed extension (content-script bridge). */
+export async function hydrateWebStatsFromExtension(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    return new Promise((resolve) => {
+        const requestId = `stats-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const timeout = window.setTimeout(() => {
+            window.removeEventListener('message', onMessage);
+            resolve(false);
+        }, 2500);
+
+        const onMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) return;
+            const data = event.data;
+            if (!data || data.type !== 'FOCUZNOW_STATS_PAYLOAD' || data.requestId !== requestId) return;
+            window.clearTimeout(timeout);
+            window.removeEventListener('message', onMessage);
+            void (async () => {
+                try {
+                    if (!data.ok) {
+                        resolve(false);
+                        return;
+                    }
+                    const patch: Record<string, unknown> = {};
+                    if (data.screenTime && typeof data.screenTime === 'object') {
+                        Object.assign(patch, data.screenTime);
+                    }
+                    if (data.pomodoroRuntime) patch.pomodoroRuntimeV1 = data.pomodoroRuntime;
+                    if (data.pomodoroSettings) {
+                        const existing = getEngineState();
+                        patch.blockEngineState = {
+                            ...existing,
+                            pomodoroSettings: data.pomodoroSettings,
+                            blockedToday: data.blockedToday ?? existing.blockedToday,
+                        };
+                    }
+                    if (Object.keys(patch).length) await storageSet(patch);
+                    resolve(true);
+                } catch {
+                    resolve(false);
+                }
+            })();
+        };
+
+        window.addEventListener('message', onMessage);
+        window.postMessage({ type: 'FOCUZNOW_REQUEST_STATS', requestId }, '*');
+    });
 }

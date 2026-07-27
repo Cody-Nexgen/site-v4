@@ -3,7 +3,7 @@ import { installWebChromeShim, webPlatform } from './webPlatform';
 import type { Platform } from './types';
 
 export type { Platform, PlatformMessage } from './types';
-export { installWebChromeShim, hydrateWebWorkspaceFromCloud } from './webPlatform';
+export { installWebChromeShim, hydrateWebWorkspaceFromCloud, hydrateWebStatsFromExtension } from './webPlatform';
 
 function detectKind(): 'chrome' | 'web' {
     try {
