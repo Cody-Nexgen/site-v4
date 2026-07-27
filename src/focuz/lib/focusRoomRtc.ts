@@ -36,6 +36,9 @@ import type { AttachmentRecord } from './attachmentApi';
 
 export const FOCUS_ROOM_WS_URL_KEY = 'focuzFocusRoomWsUrl';
 
+/** Production signaling host (VPS). Server must listen on 0.0.0.0:8080, not only localhost. */
+export const DEFAULT_FOCUS_ROOM_WS_URL = 'ws://170.205.37.149:8080';
+
 /** Free tier meeting cap (minutes). Pro can go higher. */
 export const FREE_FOCUS_ROOM_MAX_MIN = 24;
 export const PRO_FOCUS_ROOM_MAX_MIN = 180;
@@ -136,12 +139,14 @@ const ICE_SERVERS: RTCIceServer[] = [
     { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
-async function resolveFocusRoomWsUrl(): Promise<string | null> {
+async function resolveFocusRoomWsUrl(): Promise<string> {
+    const candidates: string[] = [];
+
     try {
         if (typeof chrome !== 'undefined' && chrome.storage?.local) {
             const stored = await chrome.storage.local.get(FOCUS_ROOM_WS_URL_KEY);
             const value = stored[FOCUS_ROOM_WS_URL_KEY];
-            if (typeof value === 'string' && value.trim()) return value.trim();
+            if (typeof value === 'string' && value.trim()) candidates.push(value.trim());
         }
     } catch {
         /* ignore */
@@ -149,15 +154,17 @@ async function resolveFocusRoomWsUrl(): Promise<string | null> {
     try {
         if (typeof localStorage !== 'undefined') {
             const value = localStorage.getItem(FOCUS_ROOM_WS_URL_KEY);
-            if (value?.trim()) return value.trim();
+            if (value?.trim()) candidates.push(value.trim());
         }
     } catch {
         /* ignore */
     }
     try {
-        const vite = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
-            ?.VITE_FOCUS_ROOM_WS_URL;
-        if (typeof vite === 'string' && vite.trim()) return vite.trim();
+        const envBag = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+        const vite =
+            envBag?.VITE_FOCUS_ROOM_WS_URL ||
+            envBag?.NEXT_PUBLIC_FOCUS_ROOM_WS_URL;
+        if (typeof vite === 'string' && vite.trim()) candidates.push(vite.trim());
     } catch {
         /* ignore */
     }
@@ -165,12 +172,29 @@ async function resolveFocusRoomWsUrl(): Promise<string | null> {
         const env = (typeof process !== 'undefined' ? process.env : undefined) as
             | Record<string, string | undefined>
             | undefined;
-        const value = env?.VITE_FOCUS_ROOM_WS_URL || env?.FOCUS_ROOM_WS_URL;
-        if (typeof value === 'string' && value.trim()) return value.trim();
+        const value =
+            env?.NEXT_PUBLIC_FOCUS_ROOM_WS_URL ||
+            env?.VITE_FOCUS_ROOM_WS_URL ||
+            env?.FOCUS_ROOM_WS_URL;
+        if (typeof value === 'string' && value.trim()) candidates.push(value.trim());
     } catch {
         /* ignore */
     }
-    return null;
+
+    return candidates[0] || DEFAULT_FOCUS_ROOM_WS_URL;
+}
+
+function signalingUrlAlternates(primary: string): string[] {
+    const urls = [primary];
+    if (primary.startsWith('wss://')) urls.push(`ws://${primary.slice('wss://'.length)}`);
+    else if (primary.startsWith('ws://')) urls.push(`wss://${primary.slice('ws://'.length)}`);
+    // On HTTPS pages, prefer wss first (mixed-content blocks plain ws://).
+    const secure =
+        typeof window !== 'undefined' && window.location?.protocol === 'https:';
+    if (secure) {
+        return [...urls].sort((a, b) => Number(b.startsWith('wss://')) - Number(a.startsWith('wss://')));
+    }
+    return urls;
 }
 
 function connectWsSignaling(
@@ -846,11 +870,13 @@ export function useFocusRoomRtc(
                 },
             };
 
-            const wsUrl = await resolveFocusRoomWsUrl();
+            const preferred = await resolveFocusRoomWsUrl();
             if (cancelled) return;
 
-            try {
-                if (wsUrl) {
+            let connected = false;
+            for (const wsUrl of signalingUrlAlternates(preferred)) {
+                if (cancelled || connected) break;
+                try {
                     const bus = await connectWsSignaling(
                         wsUrl,
                         roomId,
@@ -864,24 +890,26 @@ export function useFocusRoomRtc(
                         return;
                     }
                     busRef.current = bus;
-                } else {
-                    const { bus } = await connectRealtimeSignaling(
-                        supabase,
-                        roomId,
-                        peerId,
-                        displayName,
-                        avatarUrl,
-                        handlers,
-                    );
-                    if (cancelled) {
-                        bus.close();
-                        return;
+                    connected = true;
+                    try {
+                        localStorage.setItem(FOCUS_ROOM_WS_URL_KEY, preferred.startsWith('ws') ? preferred : wsUrl);
+                    } catch {
+                        /* ignore */
                     }
-                    busRef.current = bus;
+                    try {
+                        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                            void chrome.storage.local.set({ [FOCUS_ROOM_WS_URL_KEY]: DEFAULT_FOCUS_ROOM_WS_URL });
+                        }
+                    } catch {
+                        /* ignore */
+                    }
+                } catch (err) {
+                    console.warn('[FocusRoomRtc] WS connect failed for', wsUrl, err);
                 }
-            } catch (err) {
-                console.warn('[FocusRoomRtc] WS signaling failed, falling back to Realtime', err);
-                if (cancelled) return;
+            }
+
+            if (!connected) {
+                console.warn('[FocusRoomRtc] WS signaling failed, falling back to Realtime');
                 try {
                     const { bus } = await connectRealtimeSignaling(
                         supabase,
