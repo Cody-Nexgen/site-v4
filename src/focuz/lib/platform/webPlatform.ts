@@ -195,9 +195,79 @@ const PROGRESSION_MESSAGE_TYPES = new Set([
     'SET_PUBLIC_PROFILE',
 ]);
 
+const EXTENSION_RPC_TYPES = new Set([
+    'START_SESSION',
+    'TIMER_START',
+    'TIMER_CANCEL',
+    'BLOCK_DOMAIN',
+    'CATEGORY_TOGGLE',
+    'ADD_BLOCK',
+    'REMOVE_BLOCK',
+    'REMOVE_BLOCK_SOURCE',
+    'POMODORO_SEGMENT_COMPLETE',
+    'EXPORT_LOCAL_STATS',
+]);
+
+function shouldUseExtensionRpc(type: string | undefined): boolean {
+    if (!type) return false;
+    if (type.startsWith('FUTURE_SELF_')) return true;
+    return EXTENSION_RPC_TYPES.has(type);
+}
+
+/** Forward a chrome.runtime message through the installed extension content script. */
+export function sendExtensionRpc<T = unknown>(message: PlatformMessage, timeoutMs = 8000): Promise<T> {
+    if (typeof window === 'undefined') {
+        return Promise.resolve({ ok: false, needsExtension: true, error: 'Not in browser' } as T);
+    }
+    return new Promise((resolve) => {
+        const requestId = `rpc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const timeout = window.setTimeout(() => {
+            window.removeEventListener('message', onMessage);
+            resolve({
+                ok: false,
+                needsExtension: true,
+                error: 'Extension did not respond. Reload focuznow.com with the extension enabled.',
+            } as T);
+        }, timeoutMs);
+
+        const onMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) return;
+            const data = event.data;
+            if (!data || data.type !== 'FOCUZNOW_EXTENSION_RPC_RESULT' || data.requestId !== requestId) return;
+            window.clearTimeout(timeout);
+            window.removeEventListener('message', onMessage);
+            const { type: _t, requestId: _r, ...payload } = data as Record<string, unknown>;
+            resolve(payload as T);
+        };
+
+        window.addEventListener('message', onMessage);
+        window.postMessage({ type: 'FOCUZNOW_EXTENSION_RPC', requestId, message }, '*');
+    });
+}
+
 async function handleMessage(message: PlatformMessage): Promise<unknown> {
     const type = message.type;
     if (!type) return { ok: false };
+
+    if (shouldUseExtensionRpc(type)) {
+        const rpc = await sendExtensionRpc(message);
+        // After blocking/settings mutations, mirror engine state into web storage when provided.
+        const resp = rpc as { ok?: boolean; state?: Record<string, unknown>; needsExtension?: boolean };
+        if (resp?.ok && resp.state && typeof resp.state === 'object') {
+            await storageSet({ blockEngineState: { ...getEngineState(), ...resp.state } });
+        } else if (
+            resp?.ok &&
+            (type === 'CATEGORY_TOGGLE' || type === 'ADD_BLOCK' || type === 'REMOVE_BLOCK' || type === 'UPDATE_ENGINE_SETTINGS')
+        ) {
+            const stateResp = await sendExtensionRpc<{ ok?: boolean; state?: Record<string, unknown> }>({
+                type: 'GET_STATE',
+            });
+            if (stateResp?.state) {
+                await storageSet({ blockEngineState: stateResp.state });
+            }
+        }
+        return rpc;
+    }
 
     if (PROGRESSION_MESSAGE_TYPES.has(type)) {
         const result = await handleProgressionMessage(message);
@@ -213,26 +283,6 @@ async function handleMessage(message: PlatformMessage): Promise<unknown> {
         const next = { ...getEngineState(), ...patch };
         await storageSet({ blockEngineState: next });
         return { ok: true, state: next };
-    }
-
-    if (type === 'START_SESSION' || type === 'TIMER_START' || type === 'TIMER_CANCEL' || type === 'BLOCK_DOMAIN') {
-        return { ok: false, needsExtension: true };
-    }
-
-    if (typeof type === 'string' && type.startsWith('FUTURE_SELF_')) {
-        return {
-            ok: false,
-            needsExtension: true,
-            error: 'Future Self Mode needs the FocuzNow browser extension.',
-        };
-    }
-
-    if (type === 'CATEGORY_TOGGLE' || type === 'ADD_BLOCK' || type === 'REMOVE_BLOCK') {
-        return {
-            ok: false,
-            needsExtension: true,
-            error: 'Blocking actions require the FocuzNow browser extension.',
-        };
     }
 
     // Default: acknowledge without crashing UI
@@ -419,7 +469,7 @@ export async function hydrateWebStatsFromExtension(): Promise<boolean> {
         const timeout = window.setTimeout(() => {
             window.removeEventListener('message', onMessage);
             resolve(false);
-        }, 2500);
+        }, 6000);
 
         const onMessage = (event: MessageEvent) => {
             if (event.origin !== window.location.origin) return;
@@ -447,6 +497,8 @@ export async function hydrateWebStatsFromExtension(): Promise<boolean> {
                         };
                     }
                     if (Object.keys(patch).length) await storageSet(patch);
+                    // Nudge web store to re-read screenTime_* keys
+                    window.dispatchEvent(new CustomEvent('focuznow-web-storage-changed', { detail: patch }));
                     resolve(true);
                 } catch {
                     resolve(false);

@@ -144,9 +144,9 @@ function FocusScoreBarGraph({ points }: { points: { date: string; score: number 
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 vectorEffect="non-scaling-stroke"
-                                initial={{ pathLength: 0, opacity: 0 }}
-                                animate={{ pathLength: 1, opacity: 1 }}
-                                transition={{ duration: 0.65, ease: 'easeOut' }}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ duration: 0.45, ease: 'easeOut' }}
                             />
                         </>
                     )}
@@ -1973,9 +1973,9 @@ export const StatisticsTab = () => {
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
                                         vectorEffect="non-scaling-stroke"
-                                        initial={{ pathLength: 0, opacity: 0 }}
-                                        animate={{ pathLength: 1, opacity: 1 }}
-                                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ duration: 0.45, ease: 'easeOut' }}
                                     />
                                 </>
                             )}

@@ -42,7 +42,17 @@ export async function syncPublicFocusProfile(
     if (!auth.ok) return { ok: false, error: 'NOT_AUTHENTICATED' };
 
     const progression = input.progression ?? (await loadProgressionState());
-    if (!progression.publicProfileEnabled) {
+    const publicEnabled = !!progression.publicProfileEnabled;
+
+    // Always sync the flag — turning public off must revoke /u/{username}.
+    if (!publicEnabled) {
+        const { data, error } = await supabase.rpc('sync_my_focus_stats', {
+            p_focus_stats: {},
+            p_public_enabled: false,
+        });
+        if (error) return { ok: false, error: error.message };
+        const row = data as { ok?: boolean; error?: string } | null;
+        if (row && row.ok === false) return { ok: false, error: row.error ?? 'SYNC_FAILED' };
         return { ok: true };
     }
 

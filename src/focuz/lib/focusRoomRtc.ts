@@ -113,7 +113,12 @@ type WsEnvelope = {
 
 type SignalingHandlers = {
     onSignal: (payload: SignalPayload) => void;
-    onJoin: (payload: { peerId?: string; name?: string; avatarUrl?: string | null }) => void;
+    onJoin: (payload: {
+        peerId?: string;
+        name?: string;
+        avatarUrl?: string | null;
+        accountUserId?: string | null;
+    }) => void;
     onLeave: (payload: { peerId?: string }) => void;
     onChat: (payload: ChatMessage) => void;
     onChatDelete: (payload: { attachmentId?: string }) => void;
@@ -212,6 +217,7 @@ function connectWsSignaling(
     displayName: string,
     avatarUrl: string | null | undefined,
     handlers: SignalingHandlers,
+    accountUserId?: string | null,
 ): Promise<SignalingBus> {
     return new Promise((resolve, reject) => {
         let settled = false;
@@ -253,6 +259,7 @@ function connectWsSignaling(
                         peerId,
                         name: (payload.name as string) ?? displayName,
                         avatarUrl: (payload.avatarUrl as string | null | undefined) ?? avatarUrl,
+                        accountUserId: (payload.accountUserId as string | null | undefined) ?? accountUserId,
                     });
                     return;
                 }
@@ -286,7 +293,7 @@ function connectWsSignaling(
             if (settled) return;
             settled = true;
             window.clearTimeout(timeoutId);
-            bus.send('join', { peerId, name: displayName, avatarUrl });
+            bus.send('join', { peerId, name: displayName, avatarUrl, accountUserId });
             resolve(bus);
         };
 
@@ -314,6 +321,7 @@ function connectWsSignaling(
                         peerId: msg.peerId || msg.from,
                         name: msg.name,
                         avatarUrl: msg.avatarUrl,
+                        accountUserId: (msg as WsEnvelope & { accountUserId?: string }).accountUserId,
                     });
                     break;
                 case 'leave':
@@ -366,6 +374,7 @@ function connectRealtimeSignaling(
     displayName: string,
     avatarUrl: string | null | undefined,
     handlers: SignalingHandlers,
+    accountUserId?: string | null,
 ): Promise<{ bus: SignalingBus; channel: RealtimeChannel }> {
     return new Promise((resolve) => {
         const channel = supabase.channel(`focus-room:${roomId}`, {
@@ -407,7 +416,7 @@ function connectRealtimeSignaling(
             })
             .subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
-                    bus.send('join', { peerId, name: displayName, avatarUrl });
+                    bus.send('join', { peerId, name: displayName, avatarUrl, accountUserId });
                     resolve({ bus, channel });
                 }
             });
@@ -422,6 +431,7 @@ export function useFocusRoomRtc(
     isHost: boolean,
     joinPrefs?: JoinPrefs,
     avatarUrl?: string | null,
+    accountUserId?: string | null,
 ) {
     const [micOn, setMicOn] = useState(true);
     const [camOn, setCamOn] = useState(false);
@@ -625,17 +635,32 @@ export function useFocusRoomRtc(
             };
 
             pc.ontrack = (ev) => {
-                const remoteStream = ev.streams[0] ?? new MediaStream([ev.track]);
                 setPeers((prev) => {
                     const hit = prev.find((p) => p.peerId === remoteId);
+                    const stream = hit?.stream ?? new MediaStream();
+                    if (!stream.getTracks().some((t) => t.id === ev.track.id)) {
+                        stream.addTrack(ev.track);
+                    }
+                    // Also pull any tracks from the event's stream(s)
+                    for (const inbound of ev.streams) {
+                        for (const track of inbound.getTracks()) {
+                            if (!stream.getTracks().some((t) => t.id === track.id)) {
+                                stream.addTrack(track);
+                            }
+                        }
+                    }
                     if (hit) {
                         return prev.map((p) =>
-                            p.peerId === remoteId ? { ...p, stream: remoteStream } : p,
+                            p.peerId === remoteId ? { ...p, stream: new MediaStream(stream.getTracks()) } : p,
                         );
                     }
                     return [
                         ...prev,
-                        { peerId: remoteId, displayName: PENDING_PEER_LABEL, stream: remoteStream },
+                        {
+                            peerId: remoteId,
+                            displayName: PENDING_PEER_LABEL,
+                            stream: new MediaStream(stream.getTracks()),
+                        },
                     ];
                 });
             };
@@ -788,11 +813,21 @@ export function useFocusRoomRtc(
 
             if (!opts?.previewOnly) {
                 for (const [remoteId, pc] of pcMapRef.current.entries()) {
-                    stream.getTracks().forEach((track) => {
-                        const sender = pc.getSenders().find((s) => s.track?.kind === track.kind);
-                        if (sender) void sender.replaceTrack(track);
-                        else pc.addTrack(track, stream);
-                    });
+                    const audioTrack = stream.getAudioTracks()[0] ?? null;
+                    const videoTrack = stream.getVideoTracks()[0] ?? null;
+
+                    const audioSender = pc.getSenders().find((s) => s.track?.kind === 'audio');
+                    if (audioSender) void audioSender.replaceTrack(audioTrack);
+                    else if (audioTrack) pc.addTrack(audioTrack, stream);
+
+                    const videoSender = pc.getSenders().find((s) => s.track?.kind === 'video');
+                    if (videoSender) {
+                        // null clears remote video so tiles fall back to the mesh avatar
+                        void videoSender.replaceTrack(videoTrack);
+                    } else if (videoTrack) {
+                        pc.addTrack(videoTrack, stream);
+                    }
+
                     void renegotiate(remoteId);
                 }
             }
@@ -838,6 +873,15 @@ export function useFocusRoomRtc(
                     const remoteId = join?.peerId;
                     const name = join?.name;
                     if (!remoteId || remoteId === peerId) return;
+                    // Same logged-in account cannot occupy two peer slots.
+                    if (
+                        accountUserId &&
+                        join.accountUserId &&
+                        join.accountUserId === accountUserId
+                    ) {
+                        busRef.current?.send('kick', { from: peerId, to: remoteId });
+                        return;
+                    }
                     if (roomLockedRef.current && !isHost) return;
                     setPeers((prev) => {
                         if (prev.some((p) => p.peerId === remoteId)) return prev;
@@ -910,6 +954,7 @@ export function useFocusRoomRtc(
                             displayName,
                             avatarUrl,
                             handlers,
+                            accountUserId,
                         );
                         if (cancelled) {
                             bus.close();
@@ -947,6 +992,7 @@ export function useFocusRoomRtc(
                         displayName,
                         avatarUrl,
                         handlers,
+                        accountUserId,
                     );
                     if (cancelled) {
                         bus.close();
@@ -981,7 +1027,7 @@ export function useFocusRoomRtc(
             setPeers([]);
             setChat([]);
         };
-    }, [enabled, roomId, supabase, displayName, avatarUrl, handleSignal, createPeerConnection, cleanupPeer, startLocalMedia, camOn, isHost, peerId]);
+    }, [enabled, roomId, supabase, displayName, avatarUrl, accountUserId, handleSignal, createPeerConnection, cleanupPeer, startLocalMedia, camOn, isHost, peerId]);
 
     const toggleMic = () => {
         const stream = localStreamRef.current;

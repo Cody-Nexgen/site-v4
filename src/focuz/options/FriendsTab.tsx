@@ -110,9 +110,23 @@ export default function FriendsTab() {
         if (res.ok) {
             setNotice(`Request sent to @${handle}`);
             setUsername('');
+            void refresh();
             window.setTimeout(() => setNotice(''), 3000);
         } else {
-            setError(res.error === 'USER_NOT_FOUND' ? 'User not found' : res.error ?? 'Request failed');
+            const code = res.error || '';
+            const friendly =
+                code === 'USER_NOT_FOUND'
+                    ? 'User not found — check the exact username'
+                    : code === 'SELF_REQUEST'
+                      ? "You can't add yourself"
+                      : code === 'ALREADY_FRIENDS'
+                        ? 'You are already friends'
+                        : code === 'NOT_AUTHENTICATED'
+                          ? 'Sign in again to add friends'
+                          : code === 'PENDING_EXISTS' || code.includes('duplicate') || code.includes('unique')
+                            ? 'A request is already pending'
+                            : code || 'Request failed';
+            setError(friendly);
         }
     };
 

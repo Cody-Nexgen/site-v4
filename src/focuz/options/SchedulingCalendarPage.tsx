@@ -860,7 +860,7 @@ export default function SchedulingCalendarPage({
 
     return (
         <div
-            className={`focuznow-calendar flex overflow-hidden text-white ${
+            className={`focuznow-calendar relative flex overflow-hidden text-white ${
                 fullscreen ? 'h-full w-full' : 'h-[calc(100vh-8rem)] min-h-[640px] rounded-[20px] border shadow-xl'
             }`}
             style={{
@@ -1027,77 +1027,86 @@ export default function SchedulingCalendarPage({
 
             <AnimatePresence>
                 {leftPanel === 'schedule-menu' && (
-                    <motion.aside
+                    <motion.div
                         key="schedule-link-chooser"
-                        role="dialog"
-                        aria-modal="false"
-                        aria-labelledby="schedule-link-type-title"
-                        initial={{ opacity: 0, x: -12, width: 0 }}
-                        animate={{ opacity: 1, x: 0, width: 224 }}
-                        exit={{ opacity: 0, x: -8, width: 0 }}
-                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                        className="relative z-20 flex h-full shrink-0 flex-col overflow-hidden border-r border-white/10"
-                        style={{
-                            backgroundColor: 'rgba(18, 20, 28, 0.72)',
-                            backdropFilter: 'blur(18px)',
-                            WebkitBackdropFilter: 'blur(18px)',
-                            borderColor: 'var(--cal-border)',
-                        }}
+                        className="pointer-events-none absolute inset-0 z-30"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.18 }}
                     >
-                        <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
-                                Scheduling
-                            </p>
-                            <button
-                                type="button"
-                                aria-label="Close"
-                                onClick={() => setLeftPanel('none')}
-                                className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-white/5 hover:text-white"
-                            >
-                                <X size={14} />
-                            </button>
-                        </div>
-                        <div className="flex flex-1 flex-col gap-2 p-3">
-                            <h2 id="schedule-link-type-title" className="text-sm font-semibold tracking-tight text-white">
+                        <button
+                            type="button"
+                            aria-label="Close"
+                            className="pointer-events-auto absolute inset-0 bg-black/35 backdrop-blur-[2px]"
+                            onClick={() => setLeftPanel('none')}
+                        />
+                        <motion.div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="schedule-link-type-title"
+                            initial={{ opacity: 0, x: -10, scale: 0.98 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: -8, scale: 0.98 }}
+                            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                            className="pointer-events-auto absolute top-16 left-[min(232px,calc(100%-260px))] w-[240px] rounded-2xl border border-white/12 bg-[rgba(18,20,28,0.78)] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+                            style={{ WebkitBackdropFilter: 'blur(24px)' }}
+                        >
+                            <div className="flex items-center justify-between">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                                    Scheduling
+                                </p>
+                                <button
+                                    type="button"
+                                    aria-label="Close"
+                                    onClick={() => setLeftPanel('none')}
+                                    className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-white/5 hover:text-white"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <h2 id="schedule-link-type-title" className="mt-2 text-sm font-semibold tracking-tight text-white">
                                 New link
                             </h2>
-                            <p className="text-[11px] leading-relaxed text-neutral-500">
-                                Pick a type — this panel closes after you choose.
+                            <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
+                                Pick a type — this closes after you choose.
                             </p>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    openRight('recurring');
-                                    setLeftPanel('none');
-                                }}
-                                className="mt-1 flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition-colors hover:border-violet-400/35 hover:bg-violet-500/[0.08]"
-                            >
-                                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
-                                    <Link2 size={14} />
-                                </span>
-                                <span>
-                                    <span className="block text-xs font-medium text-white">Recurring</span>
-                                    <span className="mt-0.5 block text-[10px] text-neutral-500">Weekly availability</span>
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    openRight('oneoff');
-                                    setLeftPanel('none');
-                                }}
-                                className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition-colors hover:border-sky-400/35 hover:bg-sky-500/[0.08]"
-                            >
-                                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
-                                    <Link2 size={14} />
-                                </span>
-                                <span>
-                                    <span className="block text-xs font-medium text-white">One-off</span>
-                                    <span className="mt-0.5 block text-[10px] text-neutral-500">Specific dates only</span>
-                                </span>
-                            </button>
-                        </div>
-                    </motion.aside>
+                            <div className="mt-3 flex flex-col gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        openRight('recurring');
+                                        setLeftPanel('none');
+                                    }}
+                                    className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition-colors hover:border-violet-400/35 hover:bg-violet-500/[0.08]"
+                                >
+                                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
+                                        <Link2 size={14} />
+                                    </span>
+                                    <span>
+                                        <span className="block text-xs font-medium text-white">Recurring</span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">Weekly availability</span>
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        openRight('oneoff');
+                                        setLeftPanel('none');
+                                    }}
+                                    className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition-colors hover:border-sky-400/35 hover:bg-sky-500/[0.08]"
+                                >
+                                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
+                                        <Link2 size={14} />
+                                    </span>
+                                    <span>
+                                        <span className="block text-xs font-medium text-white">One-off</span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">Specific dates only</span>
+                                    </span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 

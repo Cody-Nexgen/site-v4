@@ -110,7 +110,9 @@ function ParticipantTile({
 }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
-    const hasVideo = camOn && (stream?.getVideoTracks().some((t) => t.enabled) ?? false);
+    const hasVideo =
+        camOn &&
+        (stream?.getVideoTracks().some((t) => t.enabled && t.readyState === 'live') ?? false);
     const showMutedBadge = mutedByHost || micOn === false;
 
     useEffect(() => {
@@ -319,6 +321,7 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
         isHost,
         joinPrefs,
         engineState.profileAvatar,
+        session?.user?.id ?? null,
     );
 
     const uploadRoomAttachment = async (file: File) => {
@@ -420,12 +423,18 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
     };
 
     const handleLeave = async () => {
-        if (roomId) await leaveFocusRoom(supabase, roomId, tokens);
+        const leavingId = roomId;
+        setInRoom(false);
         setRoom(null);
         setRoomId(null);
-        setInRoom(false);
         await chrome.storage.local.remove(FOCUS_ROOM_STORAGE_KEY);
-        onBack?.();
+        if (leavingId) {
+            try {
+                await leaveFocusRoom(supabase, leavingId, tokens);
+            } catch (e) {
+                console.warn('[FocusRoom] leave failed', e);
+            }
+        }
     };
 
     const playTestTone = async () => {
@@ -770,19 +779,24 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                     <span className="text-xs text-[#949ba4]">{room.participantCount} in room</span>
                     {rtc.roomLocked && <Shield size={14} className="text-amber-400" aria-label="Room locked" />}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
+                    <div className="hidden sm:flex flex-col items-end mr-1">
+                        <span className="text-[10px] uppercase tracking-wider text-[#949ba4]">Room code</span>
+                        <span className="text-xs font-mono text-white">{roomId}</span>
+                    </div>
                     <span className="text-lg font-semibold text-neutral-300 tabular-nums">{countdown}</span>
                     <button
                         type="button"
                         onClick={() => {
-                            void navigator.clipboard.writeText(shareUrl).then(() => {
+                            const text = `Join my FocuzNow focus room\nCode: ${roomId}\n${shareUrl}`;
+                            void navigator.clipboard.writeText(text).then(() => {
                                 setCopied(true);
                                 window.setTimeout(() => setCopied(false), 2000);
                             });
                         }}
                         className="text-xs font-bold text-[#949ba4] hover:text-white flex items-center gap-1"
                     >
-                        <Copy size={12} /> {copied ? 'Copied' : 'Invite'}
+                        <Copy size={12} /> {copied ? 'Copied invite' : 'Invite'}
                     </button>
                 </div>
             </header>
@@ -797,7 +811,13 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                 label={p.displayName}
                                 avatarUrl={p.avatarUrl}
                                 isLocal={p.isLocal}
-                                camOn={p.isLocal ? rtc.camOn : !!p.stream?.getVideoTracks().some((t) => t.enabled)}
+                                camOn={
+                                    p.isLocal
+                                        ? rtc.camOn
+                                        : !!p.stream?.getVideoTracks().some(
+                                              (t) => t.enabled && t.readyState === 'live',
+                                          )
+                                }
                                 speakerId={rtc.selectedSpeakerId}
                                 speaking={p.speaking}
                                 micOn={p.isLocal ? rtc.micOn : undefined}

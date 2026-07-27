@@ -638,7 +638,21 @@ export default function AiCoachPage({
         }
 
         const historyForApi = [
-            ...baseMessages.filter((m) => !m.streaming).map((m) => ({ role: m.role, content: m.content })),
+            ...baseMessages
+                .filter((m) => !m.streaming)
+                .map((m, idx, arr) => {
+                    // Last user turn may carry OCR-enriched apiUserContent while UI content stays clean.
+                    if (
+                        !opts?.isContinuation &&
+                        idx === arr.length - 1 &&
+                        m.role === 'user' &&
+                        apiUserContent &&
+                        apiUserContent !== m.content
+                    ) {
+                        return { role: m.role, content: apiUserContent };
+                    }
+                    return { role: m.role, content: m.content };
+                }),
             ...(opts?.isContinuation ? [{ role: 'user' as const, content: apiUserContent }] : []),
         ];
 
@@ -1477,7 +1491,7 @@ export default function AiCoachPage({
                             <button
                                 type="button"
                                 onClick={() => void handleSend()}
-                                disabled={streaming || !input.trim()}
+                                disabled={streaming || !input.trim() || ocrBusy}
                                 className="p-2.5 rounded-full bg-white text-black hover:bg-neutral-200 disabled:opacity-30 disabled:bg-neutral-600 disabled:text-neutral-400 mb-0.5 transition-colors"
                                 aria-label="Send"
                             >

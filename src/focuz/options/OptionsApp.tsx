@@ -1659,7 +1659,7 @@ const AccountSettings = () => {
         setPublicProfileEnabled(next);
         await sendProgressionMessage({ type: 'SET_PUBLIC_PROFILE', enabled: next });
         await refreshProgression();
-        if (next) await syncPublicProfile(true);
+        await syncPublicProfile(next);
     };
 
     useEffect(() => {
