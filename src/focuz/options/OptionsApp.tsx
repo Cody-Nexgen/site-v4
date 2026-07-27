@@ -142,15 +142,10 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
     const getY = (pct: number) => paddingTop + chartHeight - (pct * chartHeight / 100);
     const getPointX = (i: number) => paddingX + (i * chartWidth / Math.max(1, stats.length - 1));
     const getPointY = (ms: number) => paddingTop + chartHeight - ((ms || 0) / maxTotal) * chartHeight;
-    const linePath = stats.reduce((path, day, i) => {
-        const x = getPointX(i);
-        const y = getPointY(day.total);
-        if (i === 0) return `M ${x} ${y}`;
-        const previousX = getPointX(i - 1);
-        const previousY = getPointY(stats[i - 1].total);
-        const controlX = (previousX + x) / 2;
-        return `${path} C ${controlX} ${previousY}, ${controlX} ${y}, ${x} ${y}`;
-    }, '');
+    // Straight segments only — cubic/pathLength animations were clipping the stroke mid-chart.
+    const linePath = stats
+        .map((day, i) => `${i === 0 ? 'M' : 'L'} ${getPointX(i)} ${getPointY(day.total)}`)
+        .join(' ');
 
     const formatTime = (ms: number) => {
         const mins = Math.round((ms || 0) / 60000);
@@ -200,18 +195,13 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                     </g>
                 ))}
 
-                {chartMode === 'line' && (
+                {chartMode === 'line' && linePath && (
                     <>
-                        <motion.path
-                            key={`area-${linePath}`}
+                        <path
                             d={`${linePath} L ${getPointX(stats.length - 1)} ${paddingTop + chartHeight} L ${getPointX(0)} ${paddingTop + chartHeight} Z`}
                             fill={`url(#lineFill-${uid})`}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.45 }}
                         />
-                        <motion.path
-                            key={linePath}
+                        <path
                             d={linePath}
                             fill="none"
                             stroke="#d4d4d4"
@@ -219,9 +209,7 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             vectorEffect="non-scaling-stroke"
-                            initial={{ pathLength: 0, opacity: 0 }}
-                            animate={{ pathLength: 1, opacity: 1 }}
-                            transition={{ duration: 0.65, ease: 'easeOut' }}
+                            style={{ strokeDasharray: 'none' }}
                         />
                     </>
                 )}

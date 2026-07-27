@@ -16,7 +16,7 @@ import {
     Play, Pause, RefreshCw, Plus,
     Trash, Check, Ban, Globe, Zap, X,
     AlertTriangle, TrendingDown, Lightbulb,
-    Sparkles, ShieldCheck, Loader2, Sliders, ChevronDown,
+    ShieldCheck, Loader2, Sliders, ChevronDown,
 } from 'lucide-react';
 import { HabitCheckInButton } from '../components/pro-dashboard/HabitCheckInButton';
 import { IconCalendarStats } from '@tabler/icons-react';
@@ -1051,7 +1051,7 @@ async function resolveSiteViaAI(
 }
 
 export const BlocklistTab = () => {
-    const { engineState, fetchEngineState, session, subscriptionTier, upgradeToPro } = useAuthStore();
+    const { engineState, fetchEngineState, session, subscriptionTier } = useAuthStore();
     const isPro = subscriptionTier === 'pro';
     const nuclearActive = !!engineState.nuclearState?.active;
 
@@ -1856,15 +1856,10 @@ export const StatisticsTab = () => {
     const barW = Math.max(20, (plotW - barGap * (chartData.length - 1)) / Math.max(1, chartData.length));
     const getActivityPointX = (index: number) => padX + (index * plotW / Math.max(1, chartData.length - 1));
     const getActivityY = (total: number) => padTop + plotH - ((total || 0) / maxTime) * plotH;
-    const activityLinePath = chartData.reduce((path: string, day, index: number) => {
-        const x = getActivityPointX(index);
-        const y = getActivityY(day.total);
-        if (index === 0) return `M ${x} ${y}`;
-        const previousX = getActivityPointX(index - 1);
-        const previousY = getActivityY(chartData[index - 1].total);
-        const controlX = (previousX + x) / 2;
-        return `${path} C ${controlX} ${previousY}, ${controlX} ${y}, ${x} ${y}`;
-    }, '');
+    // Straight segments — avoid cubic/pathLength clipping that stopped mid-week.
+    const activityLinePath = chartData
+        .map((day, index: number) => `${index === 0 ? 'M' : 'L'} ${getActivityPointX(index)} ${getActivityY(day.total)}`)
+        .join(' ');
 
     return (
         <div className="space-y-6 animate-fade-in-up w-full">
@@ -1956,16 +1951,13 @@ export const StatisticsTab = () => {
                                 );
                             })}
 
-                            {activityChartMode === 'line' && chartData.length > 0 && (
+                            {activityChartMode === 'line' && activityLinePath && (
                                 <>
-                                    <motion.path
+                                    <path
                                         d={`${activityLinePath} L ${getActivityPointX(chartData.length - 1)} ${padTop + plotH} L ${getActivityPointX(0)} ${padTop + plotH} Z`}
                                         fill="url(#weekly-activity-area)"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        transition={{ duration: 0.4 }}
                                     />
-                                    <motion.path
+                                    <path
                                         d={activityLinePath}
                                         fill="none"
                                         stroke="#d4d4d4"
@@ -1973,9 +1965,7 @@ export const StatisticsTab = () => {
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
                                         vectorEffect="non-scaling-stroke"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        transition={{ duration: 0.45, ease: 'easeOut' }}
+                                        style={{ strokeDasharray: 'none' }}
                                     />
                                 </>
                             )}

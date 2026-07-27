@@ -204,6 +204,8 @@ const EXTENSION_RPC_TYPES = new Set([
     'ADD_BLOCK',
     'REMOVE_BLOCK',
     'REMOVE_BLOCK_SOURCE',
+    'GET_CATEGORY_STATES',
+    'UPDATE_ENGINE_SETTINGS',
     'POMODORO_SEGMENT_COMPLETE',
     'EXPORT_LOCAL_STATS',
 ]);
@@ -214,10 +216,22 @@ function shouldUseExtensionRpc(type: string | undefined): boolean {
     return EXTENSION_RPC_TYPES.has(type);
 }
 
+function extensionPresent(): boolean {
+    if (typeof document === 'undefined') return false;
+    return (
+        document.documentElement.getAttribute('data-focuznow-extension') === 'true' ||
+        document.documentElement.getAttribute('data-focuznow-bridge') === 'rpc-v1'
+    );
+}
+
 /** Forward a chrome.runtime message through the installed extension content script. */
 export function sendExtensionRpc<T = unknown>(message: PlatformMessage, timeoutMs = 8000): Promise<T> {
     if (typeof window === 'undefined') {
         return Promise.resolve({ ok: false, needsExtension: true, error: 'Not in browser' } as T);
+    }
+    if (!extensionPresent()) {
+        // Still attempt postMessage — attribute may appear a tick late — but warn clearly.
+        console.warn('[FocuzNow] Extension attribute missing; attempting RPC anyway');
     }
     return new Promise((resolve) => {
         const requestId = `rpc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -226,12 +240,14 @@ export function sendExtensionRpc<T = unknown>(message: PlatformMessage, timeoutM
             resolve({
                 ok: false,
                 needsExtension: true,
-                error: 'Extension did not respond. Reload focuznow.com with the extension enabled.',
+                error:
+                    'Extension did not respond to RPC. Rebuild/reload the FocuzNow extension (v1.0.1+), then hard-refresh this page.',
             } as T);
         }, timeoutMs);
 
         const onMessage = (event: MessageEvent) => {
-            if (event.origin !== window.location.origin) return;
+            // Content scripts post with target '*'; origin is still this page when same-window.
+            if (event.source !== window && event.origin !== window.location.origin) return;
             const data = event.data;
             if (!data || data.type !== 'FOCUZNOW_EXTENSION_RPC_RESULT' || data.requestId !== requestId) return;
             window.clearTimeout(timeout);

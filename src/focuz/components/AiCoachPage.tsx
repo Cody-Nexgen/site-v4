@@ -646,8 +646,7 @@ export default function AiCoachPage({
                         !opts?.isContinuation &&
                         idx === arr.length - 1 &&
                         m.role === 'user' &&
-                        apiUserContent &&
-                        apiUserContent !== m.content
+                        apiUserContent
                     ) {
                         return { role: m.role, content: apiUserContent };
                     }
@@ -776,13 +775,16 @@ export default function AiCoachPage({
         if (!rawText || streaming) return;
 
         const attachment = continueQuestion ? null : pendingAttachment;
-        const ocrBlock = attachment?.extractedText?.trim()
-            ? `\n\n[Image text]\n${attachment.extractedText.trim()}`
+        const extracted = attachment?.extractedText?.trim() || '';
+        const ocrBlock = attachment
+            ? `\n\n[User attached an image: ${attachment.name}]${
+                  extracted
+                      ? `\n[Image text]\n${extracted}`
+                      : '\n[Image text]\n(OCR found no readable text. Still treat the attachment as present and answer from the user question.)'
+              }`
             : '';
         const userMsg = rawText;
-        const apiUserContent = attachment
-            ? `${rawText}${ocrBlock}`
-            : rawText;
+        const apiUserContent = attachment ? `${rawText}${ocrBlock}` : rawText;
 
         if (!continueQuestion) {
             setInput('');
