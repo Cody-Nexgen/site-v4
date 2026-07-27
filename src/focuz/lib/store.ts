@@ -217,6 +217,8 @@ export interface EngineState {
     redirectMessage: string;
     requireChallenge: boolean;
     focusMode: boolean;
+    /** When true with a non-empty allowlist, block all sites except allowlisted ones. */
+    allowlistMode?: boolean;
     blockedToday: number;
     trackBackgroundAudio: boolean;
     draggableTimer: boolean;
@@ -374,6 +376,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         redirectMessage: 'This site is blocked by FocuzNow. Stay focused!',
         requireChallenge: false,
         focusMode: true,
+        allowlistMode: false,
         blockedToday: 0,
         trackBackgroundAudio: false,
         draggableTimer: false,
