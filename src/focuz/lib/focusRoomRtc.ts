@@ -36,8 +36,10 @@ import type { AttachmentRecord } from './attachmentApi';
 
 export const FOCUS_ROOM_WS_URL_KEY = 'focuzFocusRoomWsUrl';
 
-/** Production signaling host (VPS). Server must listen on 0.0.0.0:8080, not only localhost. */
-export const DEFAULT_FOCUS_ROOM_WS_URL = 'ws://170.205.37.149:8080';
+/** Production WSS (Caddy/TLS on the VPS). HTTPS sites require wss:// — plain ws:// is blocked. */
+export const DEFAULT_FOCUS_ROOM_WS_URL = 'wss://signal.focuznow.com';
+/** Direct IP fallback for local/extension testing when DNS/TLS is down. */
+export const FALLBACK_FOCUS_ROOM_WS_URL = 'ws://170.205.37.149:8080';
 
 /** Free tier meeting cap (minutes). Pro can go higher. */
 export const FREE_FOCUS_ROOM_MAX_MIN = 24;
@@ -185,16 +187,22 @@ async function resolveFocusRoomWsUrl(): Promise<string> {
 }
 
 function signalingUrlAlternates(primary: string): string[] {
-    const urls = [primary];
-    if (primary.startsWith('wss://')) urls.push(`ws://${primary.slice('wss://'.length)}`);
-    else if (primary.startsWith('ws://')) urls.push(`wss://${primary.slice('ws://'.length)}`);
-    // On HTTPS pages, prefer wss first (mixed-content blocks plain ws://).
+    const urls: string[] = [];
+    const push = (u: string) => {
+        if (u && !urls.includes(u)) urls.push(u);
+    };
+    push(primary);
+    if (primary.startsWith('wss://')) push(`ws://${primary.slice('wss://'.length)}`);
+    else if (primary.startsWith('ws://')) push(`wss://${primary.slice('ws://'.length)}`);
+    push(DEFAULT_FOCUS_ROOM_WS_URL);
+    push(FALLBACK_FOCUS_ROOM_WS_URL);
+    push(`wss://${FALLBACK_FOCUS_ROOM_WS_URL.slice('ws://'.length)}`);
+
     const secure =
         typeof window !== 'undefined' && window.location?.protocol === 'https:';
-    if (secure) {
-        return [...urls].sort((a, b) => Number(b.startsWith('wss://')) - Number(a.startsWith('wss://')));
-    }
-    return urls;
+    // On HTTPS, only attempt wss:// (browsers block mixed-content ws://).
+    const filtered = secure ? urls.filter((u) => u.startsWith('wss://')) : urls;
+    return filtered.length ? filtered : [DEFAULT_FOCUS_ROOM_WS_URL];
 }
 
 function connectWsSignaling(
@@ -208,6 +216,16 @@ function connectWsSignaling(
     return new Promise((resolve, reject) => {
         let settled = false;
         const ws = new WebSocket(url);
+        const timeoutId = window.setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            try {
+                ws.close();
+            } catch {
+                /* ignore */
+            }
+            reject(new Error(`Focus room WebSocket timed out (${url})`));
+        }, 8000);
 
         const sendEnvelope = (type: string, payload: Record<string, unknown> = {}) => {
             if (ws.readyState !== WebSocket.OPEN) return;
@@ -267,6 +285,7 @@ function connectWsSignaling(
         ws.onopen = () => {
             if (settled) return;
             settled = true;
+            window.clearTimeout(timeoutId);
             bus.send('join', { peerId, name: displayName, avatarUrl });
             resolve(bus);
         };
@@ -274,6 +293,7 @@ function connectWsSignaling(
         ws.onerror = () => {
             if (!settled) {
                 settled = true;
+                window.clearTimeout(timeoutId);
                 reject(new Error('Focus room WebSocket failed to connect'));
             }
         };
@@ -874,42 +894,51 @@ export function useFocusRoomRtc(
             if (cancelled) return;
 
             let connected = false;
-            for (const wsUrl of signalingUrlAlternates(preferred)) {
-                if (cancelled || connected) break;
-                try {
-                    const bus = await connectWsSignaling(
-                        wsUrl,
-                        roomId,
-                        peerId,
-                        displayName,
-                        avatarUrl,
-                        handlers,
-                    );
-                    if (cancelled) {
-                        bus.close();
-                        return;
-                    }
-                    busRef.current = bus;
-                    connected = true;
+            const urls = signalingUrlAlternates(preferred);
+            // Two full passes before Realtime — recovers from brief VPS/Caddy blips.
+            for (let attempt = 0; attempt < 2 && !connected && !cancelled; attempt += 1) {
+                if (attempt > 0) {
+                    await new Promise((r) => window.setTimeout(r, 700 * attempt));
+                }
+                for (const wsUrl of urls) {
+                    if (cancelled || connected) break;
                     try {
-                        localStorage.setItem(FOCUS_ROOM_WS_URL_KEY, preferred.startsWith('ws') ? preferred : wsUrl);
-                    } catch {
-                        /* ignore */
-                    }
-                    try {
-                        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-                            void chrome.storage.local.set({ [FOCUS_ROOM_WS_URL_KEY]: DEFAULT_FOCUS_ROOM_WS_URL });
+                        const bus = await connectWsSignaling(
+                            wsUrl,
+                            roomId,
+                            peerId,
+                            displayName,
+                            avatarUrl,
+                            handlers,
+                        );
+                        if (cancelled) {
+                            bus.close();
+                            return;
                         }
-                    } catch {
-                        /* ignore */
+                        busRef.current = bus;
+                        connected = true;
+                        try {
+                            localStorage.setItem(FOCUS_ROOM_WS_URL_KEY, DEFAULT_FOCUS_ROOM_WS_URL);
+                        } catch {
+                            /* ignore */
+                        }
+                        try {
+                            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                                void chrome.storage.local.set({
+                                    [FOCUS_ROOM_WS_URL_KEY]: DEFAULT_FOCUS_ROOM_WS_URL,
+                                });
+                            }
+                        } catch {
+                            /* ignore */
+                        }
+                    } catch (err) {
+                        console.warn('[FocusRoomRtc] WS connect failed for', wsUrl, err);
                     }
-                } catch (err) {
-                    console.warn('[FocusRoomRtc] WS connect failed for', wsUrl, err);
                 }
             }
 
             if (!connected) {
-                console.warn('[FocusRoomRtc] WS signaling failed, falling back to Realtime');
+                console.warn('[FocusRoomRtc] WS signaling failed after retries, falling back to Realtime');
                 try {
                     const { bus } = await connectRealtimeSignaling(
                         supabase,

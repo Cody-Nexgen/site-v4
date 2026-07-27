@@ -1,0 +1,22 @@
+[Unit]
+Description=FocuzNow focus-room WebSocket signaling
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/focuz-signaling
+Environment=HOST=127.0.0.1
+Environment=PORT=8080
+# Caddy talks to localhost; Node does not need a public bind when Caddy is in front.
+ExecStart=/usr/bin/node /opt/focuz-signaling/focus-room-signaling-server.mjs
+Restart=always
+RestartSec=2
+KillMode=process
+
+# Soft resource limits — bump if you expect large rooms
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
