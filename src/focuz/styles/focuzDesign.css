@@ -199,9 +199,9 @@ html[data-dashboard-theme="light"] .focuz-modal-overlay {
 }
 
 .focuz-dashboard-shell.focuz-dashboard--sidebar-collapsed {
-    grid-template-columns: 0 minmax(0, 1fr);
-    gap: 0;
-    padding-left: 0.75rem;
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: 0.75rem;
+    padding-left: 0.5rem;
     padding-right: 0.75rem;
 }
 
@@ -218,21 +218,56 @@ html[data-dashboard-theme="light"] .focuz-modal-overlay {
         0 1px 0 rgba(255, 255, 255, 0.04) inset,
         0 24px 48px -24px rgba(0, 0, 0, 0.65);
     transition:
-        transform 0.3s ease,
-        width 0.3s ease,
-        min-width 0.3s ease,
-        opacity 0.3s ease,
-        margin 0.3s ease;
+        transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+        width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+        min-width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 0.2s ease,
+        margin 0.28s ease;
     overflow: hidden;
 }
 
 .workspace-sidebar--collapsed {
-    transform: translateX(calc(-100% - 0.75rem));
+    transform: translateX(calc(-100% - 0.5rem));
     width: 0;
     min-width: 0;
     opacity: 0;
     pointer-events: none;
-    margin-right: -0.75rem;
+    margin-right: 0;
+}
+
+.workspace-sidebar-hover-rail {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    z-index: 80;
+}
+
+.workspace-sidebar-expand-fab {
+    position: fixed;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 90;
+    display: flex;
+    height: 36px;
+    width: 28px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(18, 18, 22, 0.92);
+    color: rgba(212, 212, 216, 0.9);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.workspace-sidebar-expand-fab:hover {
+    background: rgba(28, 28, 34, 0.98);
+    color: #fff;
+    transform: translateY(-50%) translateX(2px);
 }
 
 .workspace-main {
@@ -242,12 +277,14 @@ html[data-dashboard-theme="light"] .focuz-modal-overlay {
     background: rgba(10, 10, 11, 0.88);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    transition: margin 0.3s ease, max-width 0.3s ease;
+    transition: margin 0.3s ease;
+    width: 100%;
+    max-width: none;
 }
 
 .focuz-dashboard--sidebar-collapsed .workspace-main {
-    max-width: min(960px, 100%);
-    margin-inline: auto;
+    max-width: none;
+    margin-inline: 0;
     width: 100%;
 }
 

@@ -53,6 +53,13 @@ function randomPeerId() {
     return `peer_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Shown for the brief window before a peer's real name/avatar has arrived via the join or
+ * signal broadcast (both of which always carry `name`/`avatarUrl`). Never surface the raw
+ * internal peer id (e.g. "peer_x223e89") in the UI.
+ */
+const PENDING_PEER_LABEL = 'Guest';
+
 const ICE_SERVERS: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
@@ -253,7 +260,7 @@ export function useFocusRoomRtc(
                         {
                             id: data.id || `${Date.now()}`,
                             from: remoteId,
-                            name: data.name || remoteId.slice(0, 6),
+                            name: data.name || PENDING_PEER_LABEL,
                             text: data.text,
                             at: data.at || Date.now(),
                             attachment: data.attachment,
@@ -311,7 +318,7 @@ export function useFocusRoomRtc(
                     }
                     return [
                         ...prev,
-                        { peerId: remoteId, displayName: remoteId.slice(0, 8), stream: remoteStream },
+                        { peerId: remoteId, displayName: PENDING_PEER_LABEL, stream: remoteStream },
                     ];
                 });
             };
@@ -528,7 +535,7 @@ export function useFocusRoomRtc(
                         if (prev.some((p) => p.peerId === remoteId)) return prev;
                         return [...prev, {
                             peerId: remoteId,
-                            displayName: name || remoteId.slice(0, 8),
+                            displayName: name || PENDING_PEER_LABEL,
                             avatarUrl: join.avatarUrl,
                             stream: null,
                         }];

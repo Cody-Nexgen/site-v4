@@ -105,7 +105,10 @@ export default function ChallengesTab() {
                 });
             }
 
-            const persistedActive = hasPersistedChallengeStart(authoritative, def.id);
+            // Supabase is the durable source of truth: even if the local chrome.storage read
+            // above raced (e.g. a suspended service worker), a cloud confirmation means the
+            // challenge really did start and the UI should not report a false failure.
+            const persistedActive = hasPersistedChallengeStart(authoritative, def.id) || response.cloudPersisted === true;
             const completed = hasCompletedChallenge(authoritative, def.id);
             if (completed || response.reason === 'completed') {
                 setNotice({ text: 'This challenge is already completed.', error: false });

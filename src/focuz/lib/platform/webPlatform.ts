@@ -65,9 +65,15 @@ async function storageSet(items: Record<string, unknown>) {
     const changes: Record<string, { oldValue?: unknown; newValue?: unknown }> = {};
     for (const [key, value] of Object.entries(items)) {
         const oldValue = readRaw(key);
+        try {
+            if (JSON.stringify(oldValue) === JSON.stringify(value)) continue;
+        } catch {
+            /* fall through and write */
+        }
         writeRaw(key, value);
         changes[key] = { oldValue, newValue: value };
     }
+    if (Object.keys(changes).length === 0) return;
     for (const listener of storageListeners) listener(changes);
     window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: changes }));
 
@@ -98,9 +104,105 @@ function getEngineState(): Record<string, unknown> {
     return (readRaw('blockEngineState') as Record<string, unknown>) || {};
 }
 
+/**
+ * The website has no background service worker, so progression/challenge messages that the
+ * extension normally routes to `messagerouter.js` must be handled locally here. Without this,
+ * every progression action (including START_CHALLENGE) silently returned `needsExtension: true`
+ * on the web, which is what produced "No active challenge was found in storage."
+ */
+async function handleProgressionMessage(message: PlatformMessage): Promise<unknown> {
+    const type = message.type;
+    const progressionService = await import('../progressionService');
+    const { loadProgressionState } = await import('../focusProgression');
+
+    switch (type) {
+        case 'GET_PROGRESSION':
+            return { ok: true, progression: await loadProgressionState() };
+
+        case 'START_CHALLENGE': {
+            try {
+                const result = await progressionService.startChallengeById(
+                    message.challengeId as string,
+                    message.challenge as never,
+                );
+                return {
+                    ok: true,
+                    started: result.started,
+                    active: result.active,
+                    persisted: result.persisted,
+                    cloudPersisted: result.cloudPersisted,
+                    reason: result.reason,
+                    progression: result.state,
+                };
+            } catch (error) {
+                return {
+                    ok: false,
+                    started: false,
+                    active: false,
+                    persisted: false,
+                    reason: 'handler_error',
+                    error: error instanceof Error ? error.message : String(error),
+                };
+            }
+        }
+
+        case 'SET_CHALLENGE_FOCUS_SCORE':
+            return {
+                ok: true,
+                progression: await progressionService.setChallengeFocusScore(Number(message.focusScore) || 0),
+            };
+
+        case 'PROGRESSION_HABIT_CHECKIN':
+            await progressionService.onHabitCheckin(message.habitId as number);
+            return { ok: true, progression: await loadProgressionState() };
+
+        case 'PROGRESSION_ACHIEVEMENT':
+            await progressionService.onAchievementUnlock(message.achievementId as string);
+            return { ok: true, progression: await loadProgressionState() };
+
+        case 'PURCHASE_SHOP_ITEM': {
+            const result = await progressionService.purchaseShopItem(
+                message.itemId as string,
+                message.cost as number,
+            );
+            return { ...result, progression: await loadProgressionState() };
+        }
+
+        case 'EQUIP_COSMETIC':
+            await progressionService.equipShopItem(
+                message.cosmeticType as 'frame' | 'badge' | 'widget',
+                (message.itemId as string) ?? null,
+            );
+            return { ok: true, progression: await loadProgressionState() };
+
+        case 'SET_PUBLIC_PROFILE':
+            await progressionService.setPublicProfileEnabled(!!message.enabled);
+            return { ok: true, progression: await loadProgressionState() };
+
+        default:
+            return null;
+    }
+}
+
+const PROGRESSION_MESSAGE_TYPES = new Set([
+    'GET_PROGRESSION',
+    'START_CHALLENGE',
+    'SET_CHALLENGE_FOCUS_SCORE',
+    'PROGRESSION_HABIT_CHECKIN',
+    'PROGRESSION_ACHIEVEMENT',
+    'PURCHASE_SHOP_ITEM',
+    'EQUIP_COSMETIC',
+    'SET_PUBLIC_PROFILE',
+]);
+
 async function handleMessage(message: PlatformMessage): Promise<unknown> {
     const type = message.type;
     if (!type) return { ok: false };
+
+    if (PROGRESSION_MESSAGE_TYPES.has(type)) {
+        const result = await handleProgressionMessage(message);
+        if (result !== null) return result;
+    }
 
     if (type === 'GET_STATE' || type === 'GET_ENGINE_STATE') {
         return { state: getEngineState(), ok: true };
@@ -175,7 +277,6 @@ export function installWebChromeShim() {
 
     addWebStorageListener((changes) => {
         for (const listener of onChangedListeners) {
-            // Match chrome.storage.onChanged signature: (changes, areaName)
             (listener as (c: typeof changes, area?: string) => void)(changes, 'local');
         }
     });
@@ -263,8 +364,31 @@ export async function hydrateWebWorkspaceFromCloud() {
         if (error) return;
         const row = (Array.isArray(data) ? data[0] : data) as { state?: Record<string, unknown> } | null;
         if (!row?.state || typeof row.state !== 'object') return;
+        const remote = { ...row.state };
+        const EXTRA_KEYS = [
+            'focuznow_calendar_events_v1',
+            'focuznow_calendar_groups_v1',
+            'focuznow_scheduling_links_v2',
+            'focuznow_lists_v1',
+            'activeChallenges',
+            'challengeProgress',
+            'completedChallenges',
+        ];
+        const extras: Record<string, unknown> = {};
+        for (const key of EXTRA_KEYS) {
+            if (remote[key] !== undefined) {
+                extras[key] = remote[key];
+                delete remote[key];
+            }
+        }
         const existing = getEngineState();
-        await storageSet({ blockEngineState: { ...existing, ...row.state } });
+        await storageSet({ blockEngineState: { ...existing, ...remote }, ...extras });
+    } catch {
+        /* ignore */
+    }
+    try {
+        const { hydrateChallengesFromCloud } = await import('../progressionService');
+        await hydrateChallengesFromCloud();
     } catch {
         /* ignore */
     }

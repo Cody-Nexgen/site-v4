@@ -35,6 +35,14 @@ export const SYNCABLE_WORKSPACE_KEYS = [
     'dashboardLayout',
     'proDashboardVisuals',
     'notionJournalingEnabled',
+    // Cloud-managed dashboard data (not live blocking/history stats)
+    'focuznow_calendar_events_v1',
+    'focuznow_calendar_groups_v1',
+    'focuznow_scheduling_links_v2',
+    'focuznow_lists_v1',
+    'activeChallenges',
+    'challengeProgress',
+    'completedChallenges',
 ] as const;
 
 export type SyncableWorkspaceKey = (typeof SYNCABLE_WORKSPACE_KEYS)[number];

@@ -32,6 +32,12 @@ async function runChallengeChecks(_state?: FocusProgressionState) {
     });
     if (completed.length === 0) return next;
     try {
+        const { upsertCloudChallenge } = await import('./challengeSync');
+        await Promise.all(completed.map((c) => upsertCloudChallenge(c.id, 'completed')));
+    } catch {
+        /* offline / unauthenticated — local completion still stands */
+    }
+    try {
         chrome.runtime.sendMessage({
             type: 'PROGRESSION_UPDATED',
             state: next,
@@ -143,11 +149,54 @@ export async function startChallengeById(
     });
     // Reload after the queued write. The storage snapshot, not the in-memory
     // mutation result, is the authority returned across the message boundary.
-    const persistedState = await loadProgressionState();
-    const active = persistedState.activeChallenges.some((challenge) => challenge.id === challengeId);
-    const completed = persistedState.completedChallenges.includes(challengeId);
+    let persistedState = await loadProgressionState();
+    let active = persistedState.activeChallenges.some((challenge) => challenge.id === challengeId);
+    let completed = persistedState.completedChallenges.includes(challengeId);
     if (completed) reason = 'completed';
     else if (active && !started) reason = 'already_active';
+
+    // Persist the lifecycle to Supabase (source of truth). chrome.storage above is only the
+    // fast local cache, so this durable write is what actually "fixes" a lost/evicted local
+    // write: even if the storage read above raced and came back empty, the cloud confirmation
+    // below lets the caller know the challenge really did start.
+    const { upsertCloudChallenge, isChallengeConfirmedInCloud } = await import('./challengeSync');
+    let cloudPersisted = false;
+    if (completed) {
+        cloudPersisted = await upsertCloudChallenge(challengeId, 'completed');
+    } else if (active) {
+        const snapshot = persistedState.activeChallenges.find((challenge) => challenge.id === challengeId);
+        cloudPersisted = await upsertCloudChallenge(challengeId, 'active', snapshot ?? def);
+    } else {
+        // Local write did not stick. Fall back to the cloud before reporting failure, and
+        // heal the local cache if the cloud already has it (e.g. a retried/duplicate call).
+        const cloudState = await isChallengeConfirmedInCloud(challengeId);
+        if (cloudState.completed) {
+            completed = true;
+            reason = 'completed';
+            cloudPersisted = true;
+        } else if (cloudState.active) {
+            active = true;
+            cloudPersisted = true;
+            reason = started ? 'started' : 'already_active';
+            persistedState = await updateProgressionState((state) => {
+                if (state.activeChallenges.some((challenge) => challenge.id === challengeId)) return state;
+                return startChallenge(state, def);
+            });
+        } else {
+            // Neither local nor cloud has it yet — start it fresh in the cloud so a retry
+            // (or the next hydrate) can recover even if local storage keeps failing.
+            cloudPersisted = await upsertCloudChallenge(challengeId, 'active', def);
+            if (cloudPersisted) {
+                active = true;
+                reason = 'started';
+                persistedState = await updateProgressionState((state) => {
+                    if (state.activeChallenges.some((challenge) => challenge.id === challengeId)) return state;
+                    return startChallenge(state, def);
+                });
+            }
+        }
+    }
+
     try {
         chrome.runtime.sendMessage({ type: 'PROGRESSION_UPDATED', state: persistedState }).catch(() => {});
     } catch {
@@ -158,8 +207,25 @@ export async function startChallengeById(
         started,
         active,
         persisted: active,
+        cloudPersisted,
         reason,
     };
+}
+
+/**
+ * Pull cloud challenge rows into the local cache. Called on session sync so a wiped/fresh
+ * chrome.storage (new device, reinstalled extension) is repopulated from the durable source
+ * of truth instead of silently losing in-progress/completed challenges.
+ */
+export async function hydrateChallengesFromCloud(): Promise<FocusProgressionState> {
+    try {
+        const { fetchCloudChallenges, mergeCloudChallengesIntoProgression } = await import('./challengeSync');
+        const rows = await fetchCloudChallenges();
+        if (rows.length === 0) return loadProgressionState();
+        return updateProgressionState((state) => mergeCloudChallengesIntoProgression(state, rows));
+    } catch {
+        return loadProgressionState();
+    }
 }
 
 export async function purchaseShopItem(itemId: string, cost: number) {

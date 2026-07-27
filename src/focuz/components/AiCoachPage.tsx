@@ -4,15 +4,26 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
     ArrowLeft,
+    Bot,
+    Check,
+    ChevronLeft,
+    ChevronRight,
+    Compass,
+    Copy,
+    Image as ImageIcon,
     Loader2,
+    MessageSquare,
     MoreHorizontal,
+    Paperclip,
     Pencil,
     PanelLeft,
-    Plus,
+    RefreshCw,
     Search,
     Send,
+    Settings,
     SquarePen,
     Trash2,
+    X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
@@ -46,6 +57,12 @@ import { CoachActionPreview } from './CoachActionPreview';
 import { ErrorOverlay } from './ChatInterface';
 import { pickFreeTierCoachReply } from '../lib/aiCoachFreeTier';
 
+/** One past state of a user turn — captured whenever it is edited or regenerated. */
+type MessageVariant = {
+    userContent: string;
+    following: CoachMessage[];
+};
+
 type CoachMessage = {
     role: 'user' | 'assistant';
     content: string;
@@ -53,14 +70,59 @@ type CoachMessage = {
     actions?: CoachAction[];
     actionUi?: CoachActionUiItem[];
     showUpgrade?: boolean;
+    /** Present on user messages that have been edited/regenerated at least once. */
+    variants?: MessageVariant[];
+    activeVariantIndex?: number;
 };
+
+type LibraryImage = { id: string; url: string; name: string };
+
+type SidebarView = 'chats' | 'library' | 'explore';
 
 function stripAnalyticsActions(actions: CoachAction[], analyticsApproved: boolean): CoachAction[] {
     if (!analyticsApproved) return actions;
     return actions.filter((a) => a.action_type !== 'read_analytics');
 }
 
+function findUserIndexBefore(messages: CoachMessage[], idx: number): number {
+    for (let i = idx; i >= 0; i--) {
+        if (messages[i]?.role === 'user') return i;
+    }
+    return -1;
+}
+
 type ChatSession = { id: string; title: string; updated_at?: string };
+
+const EXPLORE_CAPABILITIES: {
+    title: string;
+    description: string;
+    slot: string;
+}[] = [
+    {
+        title: 'Auto-schedule your day',
+        description:
+            'Turn your daily goal, tasks, and calendar into an optimal deep-work timeline in one message.',
+        slot: 'auto-schedule-infographic.png',
+    },
+    {
+        title: 'One-tap focus lockdown',
+        description:
+            'Ask the coach to block distracting sites or start a nuclear lockdown when you need to lock in.',
+        slot: 'site-blocking-infographic.png',
+    },
+    {
+        title: 'Habit & Pomodoro coaching',
+        description:
+            'Build streak-friendly habits and dial in your focus/break timers with a quick chat.',
+        slot: 'habit-pomodoro-infographic.png',
+    },
+    {
+        title: 'Screen-time insights',
+        description:
+            'Share your analytics (opt-in) so the coach can give personalized, data-backed suggestions.',
+        slot: 'analytics-infographic.png',
+    },
+];
 
 function HelpWordSwitcher() {
     const [index, setIndex] = useState(0);
@@ -155,14 +217,59 @@ function ChatRowMenu({
     );
 }
 
-function CoachUserFooter({
+/** Small popup menu shown under each finished AI reply — currently just "Try again". */
+function AssistantMenu({ onRegenerate, disabled }: { onRegenerate: () => void; disabled?: boolean }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const onDoc = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', onDoc);
+        return () => document.removeEventListener('mousedown', onDoc);
+    }, []);
+
+    return (
+        <div ref={ref} className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                disabled={disabled}
+                className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-white/[0.08] transition-colors disabled:opacity-30"
+                aria-label="More options"
+            >
+                <MoreHorizontal className="w-3.5 h-3.5" />
+            </button>
+            {open && (
+                <div className="absolute left-0 top-full mt-1 z-30 w-36 rounded-lg border border-white/10 bg-[#2a2a2a] shadow-xl py-1 text-sm">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setOpen(false);
+                            onRegenerate();
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/[0.06] text-neutral-200"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Try again
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function CoachUserHeader({
     profile,
     engineState,
     sessionEmail,
+    onOpenAccount,
 }: {
     profile: UserProfile | null;
     engineState: { profileName?: string; profileAvatar?: string };
     sessionEmail?: string;
+    onOpenAccount: () => void;
 }) {
     const avatarUrl = profile?.avatarUrl || engineState.profileAvatar;
     const displayName =
@@ -177,7 +284,11 @@ function CoachUserFooter({
     const initial = displayName.charAt(0).toUpperCase() || 'F';
 
     return (
-        <div className="p-3 border-t border-white/[0.06] flex items-center gap-3 min-w-0">
+        <button
+            type="button"
+            onClick={onOpenAccount}
+            className="w-full p-3 border-b border-white/[0.06] flex items-center gap-3 min-w-0 text-left hover:bg-white/[0.04] transition-colors"
+        >
             {avatarUrl ? (
                 <img src={avatarUrl} alt="" className={PROFILE_AVATAR_IMG_CLASS} />
             ) : (
@@ -187,7 +298,8 @@ function CoachUserFooter({
                 <p className="text-sm font-medium text-white truncate">{displayName}</p>
                 <p className="text-xs text-neutral-500 truncate">@{username}</p>
             </div>
-        </div>
+            <Settings className="w-4 h-4 text-neutral-600 shrink-0" />
+        </button>
     );
 }
 
@@ -216,6 +328,7 @@ export default function AiCoachPage({
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
     const [embeddedSidebarOpen, setEmbeddedSidebarOpen] = useState(false);
+    const [sidebarView, setSidebarView] = useState<SidebarView>('chats');
     const [chatAnalyticsApproved, setChatAnalyticsApproved] = useState(false);
     const chatAnalyticsApprovedRef = useRef(false);
     const analyticsContinueQuestionRef = useRef<string | null>(null);
@@ -224,6 +337,17 @@ export default function AiCoachPage({
     const hasConversation = messages.some((m) => m.role === 'user');
     const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
     const initialPromptSentRef = useRef(false);
+
+    // Message-turn editing / regenerating / browsing variants.
+    const [expandedUserIdx, setExpandedUserIdx] = useState<number | null>(null);
+    const [editingUserIdx, setEditingUserIdx] = useState<number | null>(null);
+    const [editDraft, setEditDraft] = useState('');
+    const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
+    // Library / attachments (client-side only — the coach API is text-only today).
+    const [libraryImages, setLibraryImages] = useState<LibraryImage[]>([]);
+    const [pendingAttachment, setPendingAttachment] = useState<LibraryImage | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const buildActionUi = useCallback((actions: CoachAction[]): CoachActionUiItem[] => {
         return actions.map((action) => ({
@@ -376,6 +500,9 @@ export default function AiCoachPage({
 
     const loadChatHistory = useCallback(
         async (sid: string | null) => {
+            setSidebarView('chats');
+            setExpandedUserIdx(null);
+            setEditingUserIdx(null);
             if (!sid) {
                 setSessionId(null);
                 setMessages([]);
@@ -439,6 +566,9 @@ export default function AiCoachPage({
             .select('id')
             .single();
         if (data?.id) {
+            setSidebarView('chats');
+            setExpandedUserIdx(null);
+            setEditingUserIdx(null);
             setSessionId(data.id);
             setMessages([]);
             setChatAnalyticsApproved(false);
@@ -468,69 +598,51 @@ export default function AiCoachPage({
         void loadSessions();
     };
 
-    const handleSend = async (
-        textOverride?: string,
-        opts?: { continueAfterAnalytics?: string },
+    /** Core send/stream pipeline. `baseMessages` is the exact message list to keep as-is
+     * (it must already include the new user turn, except for silent continuations). */
+    const sendTurn = async (
+        apiUserContent: string,
+        baseMessages: CoachMessage[],
+        opts?: { isContinuation?: boolean },
     ) => {
-        const continueQuestion = opts?.continueAfterAnalytics?.trim();
-        const userMsg = (continueQuestion ?? textOverride ?? input).trim();
-        if (!userMsg || streaming) return;
-
         await syncSubscriptionFromDb();
         const tier = useAuthStore.getState().subscriptionTier;
+
         if (tier !== 'pro') {
-            if (!continueQuestion) {
-                setInput('');
-                setMessages((prev) => [
-                    ...prev.filter((m) => !m.streaming),
-                    { role: 'user', content: userMsg },
-                    { role: 'assistant', content: '', streaming: true },
-                ]);
-                setStreaming(true);
-                const delay = 500 + Math.floor(Math.random() * 500);
-                window.setTimeout(() => {
-                    setMessages((prev) => {
-                        const base = prev.filter((m) => !m.streaming);
-                        return [
-                            ...base,
-                            {
-                                role: 'assistant',
-                                content: pickFreeTierCoachReply(),
-                                showUpgrade: true,
-                            },
-                        ];
-                    });
-                    setStreaming(false);
-                }, delay);
-            }
+            if (opts?.isContinuation) return;
+            setMessages([...baseMessages, { role: 'assistant', content: '', streaming: true }]);
+            setStreaming(true);
+            const delay = 500 + Math.floor(Math.random() * 500);
+            window.setTimeout(() => {
+                setMessages((prev) => {
+                    const base = prev.filter((m) => !m.streaming);
+                    return [
+                        ...base,
+                        {
+                            role: 'assistant',
+                            content: pickFreeTierCoachReply(),
+                            showUpgrade: true,
+                        },
+                    ];
+                });
+                setStreaming(false);
+            }, delay);
             return;
         }
 
-        if (!continueQuestion) {
-            setInput('');
-            analyticsContinueQuestionRef.current = userMsg;
+        if (!opts?.isContinuation) {
+            analyticsContinueQuestionRef.current = apiUserContent;
         }
 
-        const apiUserContent = continueQuestion
-            ? `The user already asked: "${continueQuestion}". Screen time analytics are approved. Continue your previous answer and fully address their question — do not ask for approval again.`
-            : userMsg;
-
         const historyForApi = [
-            ...messages.filter((m) => !m.streaming),
-            { role: 'user' as const, content: apiUserContent },
+            ...baseMessages.filter((m) => !m.streaming).map((m) => ({ role: m.role, content: m.content })),
+            ...(opts?.isContinuation ? [{ role: 'user' as const, content: apiUserContent }] : []),
         ];
 
-        setMessages((prev) => {
-            const base = prev.filter((m) => !m.streaming);
-            if (continueQuestion) {
-                return [...base, { role: 'assistant', content: '', streaming: true }];
-            }
-            return [
-                ...base,
-                { role: 'user', content: userMsg },
-                { role: 'assistant', content: '', streaming: true },
-            ];
-        });
+        setMessages([
+            ...baseMessages.filter((m) => !m.streaming),
+            { role: 'assistant', content: '', streaming: true },
+        ]);
         setStreaming(true);
         setErrorState(null);
 
@@ -543,92 +655,92 @@ export default function AiCoachPage({
         const coachContext = await buildCoachContext(analyticsApproved);
 
         try {
-        await streamAiCoachChat({
-            model,
-            messages: historyForApi,
-            sessionId: activeSessionId,
-            coachContext,
-            callbacks: {
-                onSession: (id) => {
-                    activeSessionId = id;
-                    setSessionId(id);
-                    if (chatAnalyticsApprovedRef.current) {
-                        persistChatAnalyticsApproved(id, true);
-                    }
-                },
-                onToken: (_chunk, visible) => {
-                    setMessages((prev) => {
-                        const i = prev.length - 1;
-                        if (i < 0 || !prev[i]?.streaming) return prev;
-                        const next = [...prev];
-                        next[i] = { ...next[i], content: visible };
-                        return next;
-                    });
-                },
-                onDone: async (payload) => {
-                    try {
-                        activeSessionId = payload.session_id || activeSessionId;
-                        setSessionId(activeSessionId);
-                        const raw = payload.actions?.length
-                            ? payload.actions
-                            : payload.action_data;
-                        const approvedForActions =
-                            chatAnalyticsApprovedRef.current ||
-                            chatAnalyticsApproved ||
-                            getChatAnalyticsApproved(activeSessionId) ||
-                            (await getAnalyticsConsent());
-                        const actions = stripAnalyticsActions(
-                            normalizeActions(raw),
-                            approvedForActions,
-                        );
-                        const actionUi = actions.length ? buildActionUi(actions) : undefined;
-
+            await streamAiCoachChat({
+                model,
+                messages: historyForApi,
+                sessionId: activeSessionId,
+                coachContext,
+                callbacks: {
+                    onSession: (id) => {
+                        activeSessionId = id;
+                        setSessionId(id);
+                        if (chatAnalyticsApprovedRef.current) {
+                            persistChatAnalyticsApproved(id, true);
+                        }
+                    },
+                    onToken: (_chunk, visible) => {
                         setMessages((prev) => {
-                            const withoutStream = prev.filter((m) => !m.streaming);
-                            return [
-                                ...withoutStream,
-                                {
-                                    role: 'assistant',
-                                    content: payload.content,
-                                    actions,
-                                    actionUi,
-                                },
-                            ];
+                            const i = prev.length - 1;
+                            if (i < 0 || !prev[i]?.streaming) return prev;
+                            const next = [...prev];
+                            next[i] = { ...next[i], content: visible };
+                            return next;
                         });
+                    },
+                    onDone: async (payload) => {
+                        try {
+                            activeSessionId = payload.session_id || activeSessionId;
+                            setSessionId(activeSessionId);
+                            const raw = payload.actions?.length
+                                ? payload.actions
+                                : payload.action_data;
+                            const approvedForActions =
+                                chatAnalyticsApprovedRef.current ||
+                                chatAnalyticsApproved ||
+                                getChatAnalyticsApproved(activeSessionId) ||
+                                (await getAnalyticsConsent());
+                            const actions = stripAnalyticsActions(
+                                normalizeActions(raw),
+                                approvedForActions,
+                            );
+                            const actionUi = actions.length ? buildActionUi(actions) : undefined;
 
-                        if (payload.title) {
-                            setSessions((prev) => {
-                                const exists = prev.some((s) => s.id === activeSessionId);
-                                if (exists) {
-                                    return prev.map((s) =>
-                                        s.id === activeSessionId ? { ...s, title: payload.title! } : s,
-                                    );
-                                }
+                            setMessages((prev) => {
+                                const withoutStream = prev.filter((m) => !m.streaming);
                                 return [
-                                    { id: activeSessionId!, title: payload.title! },
-                                    ...prev,
+                                    ...withoutStream,
+                                    {
+                                        role: 'assistant',
+                                        content: payload.content,
+                                        actions,
+                                        actionUi,
+                                    },
                                 ];
                             });
+
+                            if (payload.title) {
+                                setSessions((prev) => {
+                                    const exists = prev.some((s) => s.id === activeSessionId);
+                                    if (exists) {
+                                        return prev.map((s) =>
+                                            s.id === activeSessionId ? { ...s, title: payload.title! } : s,
+                                        );
+                                    }
+                                    return [
+                                        { id: activeSessionId!, title: payload.title! },
+                                        ...prev,
+                                    ];
+                                });
+                            }
+                            void loadSessions();
+                        } catch (e) {
+                            console.error('[AiCoach] onDone failed', e);
+                            setMessages((prev) => prev.filter((m) => !m.streaming));
+                            setErrorState(
+                                e instanceof Error ? e.message : 'Could not apply coach actions.',
+                            );
                         }
-                        void loadSessions();
-                    } catch (e) {
-                        console.error('[AiCoach] onDone failed', e);
+                    },
+                    onError: (msg, code) => {
                         setMessages((prev) => prev.filter((m) => !m.streaming));
-                        setErrorState(
-                            e instanceof Error ? e.message : 'Could not apply coach actions.',
-                        );
-                    }
+                        if (isProSubscriptionError(msg, code)) {
+                            onBack();
+                        } else {
+                            setErrorState(msg || 'AI Coach request failed.');
+                        }
+                    },
                 },
-                onError: (msg, code) => {
-                    setMessages((prev) => prev.filter((m) => !m.streaming));
-                    if (isProSubscriptionError(msg, code)) {
-                        onBack();
-                    } else {
-                        setErrorState(msg || 'AI Coach request failed.');
-                    }
-                },
-            },
-        });
+            });
         } catch (e) {
             console.error('[AiCoach] send failed', e);
             setMessages((prev) => prev.filter((m) => !m.streaming));
@@ -636,6 +748,116 @@ export default function AiCoachPage({
         }
 
         setStreaming(false);
+    };
+
+    const handleSend = async (
+        textOverride?: string,
+        opts?: { continueAfterAnalytics?: string },
+    ) => {
+        const continueQuestion = opts?.continueAfterAnalytics?.trim();
+        const rawText = (continueQuestion ?? textOverride ?? input).trim();
+        if (!rawText || streaming) return;
+
+        const attachment = continueQuestion ? null : pendingAttachment;
+        const userMsg = attachment ? `${rawText}\n\n[Attached image: ${attachment.name}]` : rawText;
+
+        if (!continueQuestion) {
+            setInput('');
+            setPendingAttachment(null);
+        }
+
+        if (continueQuestion) {
+            const base = messages.filter((m) => !m.streaming);
+            const apiUserContent = `The user already asked: "${continueQuestion}". Screen time analytics are approved. Continue your previous answer and fully address their question — do not ask for approval again.`;
+            await sendTurn(apiUserContent, base, { isContinuation: true });
+            return;
+        }
+
+        const base = messages.filter((m) => !m.streaming);
+        await sendTurn(userMsg, [...base, { role: 'user', content: userMsg }]);
+    };
+
+    /** Edit (newUserContent set) or regenerate (newUserContent null) the turn starting at `userIdx`.
+     * Records the previous state as a browsable variant and forgets everything after this turn. */
+    const runTurnVariant = async (userIdx: number, newUserContent: string | null) => {
+        if (streaming || userIdx < 0) return;
+        const current = messages;
+        const userMsg = current[userIdx];
+        if (!userMsg || userMsg.role !== 'user') return;
+
+        const followingNow = current.slice(userIdx + 1).filter((m) => !m.streaming);
+        const baseVariants: MessageVariant[] = userMsg.variants?.length
+            ? userMsg.variants
+            : [{ userContent: userMsg.content, following: followingNow }];
+        const activeIdx = userMsg.activeVariantIndex ?? baseVariants.length - 1;
+        const syncedVariants = baseVariants.map((v, i) =>
+            i === activeIdx ? { userContent: userMsg.content, following: followingNow } : v,
+        );
+
+        const displayUserContent = newUserContent ?? userMsg.content;
+        const nextVariants = [...syncedVariants, { userContent: displayUserContent, following: [] }];
+        const newActiveIdx = nextVariants.length - 1;
+
+        const priorMessages = current.slice(0, userIdx);
+        const updatedUserMsg: CoachMessage = {
+            ...userMsg,
+            content: displayUserContent,
+            variants: nextVariants,
+            activeVariantIndex: newActiveIdx,
+        };
+
+        setExpandedUserIdx(null);
+        setEditingUserIdx(null);
+        setErrorState(null);
+
+        await sendTurn(displayUserContent, [...priorMessages, updatedUserMsg]);
+    };
+
+    /** Browse to the previous/next stored variant of a turn without calling the API. */
+    const browseVariant = (userIdx: number, direction: -1 | 1) => {
+        setMessages((prev) => {
+            const userMsg = prev[userIdx];
+            if (!userMsg?.variants?.length) return prev;
+            const followingNow = prev.slice(userIdx + 1).filter((m) => !m.streaming);
+            const activeIdx = userMsg.activeVariantIndex ?? userMsg.variants.length - 1;
+            const syncedVariants = userMsg.variants.map((v, i) =>
+                i === activeIdx ? { userContent: userMsg.content, following: followingNow } : v,
+            );
+            const nextIdx = Math.min(Math.max(activeIdx + direction, 0), syncedVariants.length - 1);
+            if (nextIdx === activeIdx) return prev;
+            const target = syncedVariants[nextIdx];
+            const newUserMsg: CoachMessage = {
+                ...userMsg,
+                content: target.userContent,
+                variants: syncedVariants,
+                activeVariantIndex: nextIdx,
+            };
+            return [...prev.slice(0, userIdx), newUserMsg, ...target.following];
+        });
+    };
+
+    const copyToClipboard = async (text: string, idx: number) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedIdx(idx);
+            window.setTimeout(() => setCopiedIdx((v) => (v === idx ? null : v)), 1500);
+        } catch (e) {
+            console.warn('[AiCoach] copy failed', e);
+        }
+    };
+
+    const handleAttachFile = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img: LibraryImage = {
+                id: crypto.randomUUID(),
+                url: String(reader.result),
+                name: file.name,
+            };
+            setLibraryImages((prev) => [img, ...prev]);
+            setPendingAttachment(img);
+        };
+        reader.readAsDataURL(file);
     };
 
     continueAfterAnalyticsRef.current = (question: string) => {
@@ -668,6 +890,8 @@ export default function AiCoachPage({
         { label: 'My analytics', text: 'Read my screen time analytics for the last week and suggest one improvement.' },
     ];
 
+    const currentTitle = sessions.find((s) => s.id === sessionId)?.title || (hasConversation ? 'Chat' : 'AI Coach');
+
     return (
         <div className={`${embedded ? 'relative h-full min-h-0' : 'fixed inset-0 z-[200]'} flex bg-[#0a0a0b] text-neutral-100`}>
             {errorState && <ErrorOverlay error={errorState} onClose={() => setErrorState(null)} />}
@@ -681,8 +905,9 @@ export default function AiCoachPage({
                 />
             )}
 
+            {/* Inner AI Coach sidebar — internal scroll only, never resizes the outer workspace/page. */}
             <aside
-                className={`w-[260px] shrink-0 flex flex-col bg-[#111113] border-r border-white/[0.06] ${
+                className={`w-[260px] shrink-0 flex flex-col min-h-0 bg-[#111113] border-r border-white/[0.06] ${
                     embedded
                         ? `absolute inset-y-0 left-0 z-20 transition-transform xl:relative xl:z-auto xl:translate-x-0 ${
                             embeddedSidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -690,6 +915,13 @@ export default function AiCoachPage({
                         : ''
                 }`}
             >
+                <CoachUserHeader
+                    profile={profile}
+                    engineState={engineState}
+                    sessionEmail={session?.user?.email}
+                    onOpenAccount={onOpenAccount}
+                />
+
                 <div className="p-2 flex items-center gap-1 border-b border-white/[0.04]">
                     {!embedded && (
                         <button
@@ -714,82 +946,192 @@ export default function AiCoachPage({
                     </button>
                 </div>
 
-                <div className="p-2">
-                    {showSearch ? (
-                        <input
-                            autoFocus
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onBlur={() => {
-                                if (!searchQuery) setShowSearch(false);
-                            }}
-                            placeholder="Search chats…"
-                            className="w-full px-3 py-2 rounded-lg bg-[#2a2a2a] border border-white/10 text-sm outline-none"
-                        />
-                    ) : (
-                        <button
-                            type="button"
-                            onClick={() => setShowSearch(true)}
-                            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-neutral-400 hover:bg-white/[0.06]"
-                        >
-                            <Search className="w-4 h-4" />
-                            Search chats
-                        </button>
-                    )}
+                <div className="p-2 grid grid-cols-2 gap-1 border-b border-white/[0.04]">
+                    <button
+                        type="button"
+                        onClick={() => setSidebarView('chats')}
+                        className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
+                            sidebarView === 'chats'
+                                ? 'bg-white/[0.1] text-white'
+                                : 'text-neutral-400 hover:bg-white/[0.06] hover:text-white'
+                        }`}
+                    >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Chats
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSidebarView('library')}
+                        className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
+                            sidebarView === 'library'
+                                ? 'bg-white/[0.1] text-white'
+                                : 'text-neutral-400 hover:bg-white/[0.06] hover:text-white'
+                        }`}
+                    >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        Library
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSidebarView('explore')}
+                        className={`col-span-2 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
+                            sidebarView === 'explore'
+                                ? 'bg-white/[0.1] text-white'
+                                : 'text-neutral-400 hover:bg-white/[0.06] hover:text-white'
+                        }`}
+                    >
+                        <Compass className="w-3.5 h-3.5" />
+                        Explore
+                    </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
-                    {filteredSessions.length === 0 ? (
-                        <p className="px-3 py-4 text-xs text-neutral-600">No chats yet</p>
-                    ) : (
-                        filteredSessions.map((s) => (
-                            <div
-                                key={s.id}
-                                className={`group flex items-center gap-0.5 rounded-lg ${
-                                    sessionId === s.id ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'
-                                }`}
-                            >
+                {sidebarView === 'chats' && (
+                    <>
+                        <div className="p-2">
+                            {showSearch ? (
+                                <input
+                                    autoFocus
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onBlur={() => {
+                                        if (!searchQuery) setShowSearch(false);
+                                    }}
+                                    placeholder="Search chats…"
+                                    className="w-full px-3 py-2 rounded-lg bg-[#2a2a2a] border border-white/10 text-sm outline-none"
+                                />
+                            ) : (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setEmbeddedSidebarOpen(false);
-                                        void loadChatHistory(s.id);
-                                    }}
-                                    className="flex-1 text-left px-3 py-2.5 text-sm truncate text-neutral-300 group-hover:text-white"
+                                    onClick={() => setShowSearch(true)}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-neutral-400 hover:bg-white/[0.06]"
                                 >
-                                    {s.title || 'New chat'}
+                                    <Search className="w-4 h-4" />
+                                    Search chats
                                 </button>
-                                <ChatRowMenu
-                                    onRename={() => void renameChat(s.id, s.title)}
-                                    onDelete={() => void deleteChat(s.id)}
-                                />
-                            </div>
-                        ))
-                    )}
-                </div>
+                            )}
+                        </div>
 
-                <CoachUserFooter
-                    profile={profile}
-                    engineState={engineState}
-                    sessionEmail={session?.user?.email}
-                />
+                        <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-0.5">
+                            {filteredSessions.length === 0 ? (
+                                <p className="px-3 py-4 text-xs text-neutral-600">No chats yet</p>
+                            ) : (
+                                filteredSessions.map((s) => (
+                                    <div
+                                        key={s.id}
+                                        className={`group flex items-center gap-0.5 rounded-lg ${
+                                            sessionId === s.id ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'
+                                        }`}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEmbeddedSidebarOpen(false);
+                                                void loadChatHistory(s.id);
+                                            }}
+                                            className="flex-1 text-left px-3 py-2.5 text-sm truncate text-neutral-300 group-hover:text-white"
+                                        >
+                                            {s.title || 'New chat'}
+                                        </button>
+                                        <ChatRowMenu
+                                            onRename={() => void renameChat(s.id, s.title)}
+                                            onDelete={() => void deleteChat(s.id)}
+                                        />
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </>
+                )}
+
+                {sidebarView === 'library' && (
+                    <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
+                                Library
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="text-xs font-medium text-violet-400 hover:text-violet-300"
+                            >
+                                Upload
+                            </button>
+                        </div>
+                        {libraryImages.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center text-center py-10 px-4 rounded-xl border border-dashed border-white/10">
+                                <ImageIcon className="w-8 h-8 text-neutral-600 mb-3" />
+                                <p className="text-sm text-neutral-400">You can upload images</p>
+                                <p className="text-xs text-neutral-600 mt-1">
+                                    Attach screenshots or references from the chat input below.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                                {libraryImages.map((img) => (
+                                    <div
+                                        key={img.id}
+                                        className="aspect-square rounded-lg overflow-hidden border border-white/10 bg-[#1a1a1a]"
+                                        title={img.name}
+                                    >
+                                        <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {sidebarView === 'explore' && (
+                    <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+                        <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
+                            Explore what the coach can do
+                        </p>
+                        {EXPLORE_CAPABILITIES.map((cap) => (
+                            <div
+                                key={cap.title}
+                                className="rounded-xl border border-white/[0.08] bg-[#161618] overflow-hidden"
+                            >
+                                {/* Placeholder infographic slot — see components/aiCoachInfographicPrompts.md */}
+                                <div className="aspect-[16/9] flex flex-col items-center justify-center gap-1.5 border-b border-white/[0.06] bg-gradient-to-br from-violet-500/10 via-fuchsia-500/10 to-transparent">
+                                    <ImageIcon className="w-5 h-5 text-neutral-600" />
+                                    <span className="text-[10px] text-neutral-600">{cap.slot}</span>
+                                </div>
+                                <div className="p-3">
+                                    <p className="text-sm font-medium text-white">{cap.title}</p>
+                                    <p className="text-xs text-neutral-500 mt-1">{cap.description}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </aside>
 
             <main className="flex-1 flex flex-col min-w-0 bg-[#0d0d0d]">
-                {embedded && (
-                    <header className="flex h-10 shrink-0 items-center border-b border-white/[0.05] px-2 xl:hidden">
-                        <button
-                            type="button"
-                            onClick={() => setEmbeddedSidebarOpen(true)}
-                            className="flex h-7 items-center gap-2 rounded-md px-2 text-xs text-neutral-500 hover:bg-white/[0.04] hover:text-neutral-200"
-                        >
-                            <PanelLeft size={14} />
-                            Chats
-                        </button>
-                    </header>
-                )}
+                <header className="shrink-0 flex items-center justify-between gap-2 border-b border-white/[0.05] px-3 sm:px-4 h-12">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        {embedded && (
+                            <button
+                                type="button"
+                                onClick={() => setEmbeddedSidebarOpen(true)}
+                                className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 hover:bg-white/[0.06] hover:text-neutral-200 xl:hidden shrink-0"
+                                aria-label="Open chat history"
+                            >
+                                <PanelLeft size={14} />
+                            </button>
+                        )}
+                        <span className="text-sm font-medium text-white truncate">{currentTitle}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-500 shrink-0">
+                        <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                                streaming ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+                            }`}
+                        />
+                        {streaming ? 'Thinking…' : 'Online'}
+                    </div>
+                </header>
 
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 min-h-0 overflow-y-auto">
                     {!hasConversation ? (
                         <div className="flex flex-col items-center justify-center min-h-full px-6 py-16">
                             <h1 className="text-3xl sm:text-[2rem] font-normal text-neutral-100 text-center leading-snug">
@@ -801,93 +1143,218 @@ export default function AiCoachPage({
                             </p>
                         </div>
                     ) : (
-                        <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 space-y-8">
-                            {messages.map((msg, idx) => (
-                                <div
-                                    key={idx}
-                                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                                >
-                                    <div
-                                        className={`max-w-[88%] text-[15px] leading-relaxed ${
-                                            msg.role === 'user'
-                                                ? 'bg-[#2f2f2f] rounded-[1.25rem] px-4 py-2.5 text-white'
-                                                : 'text-neutral-100'
-                                        }`}
-                                    >
-                                        {msg.role === 'user' ? (
-                                            msg.content
-                                        ) : (
-                                            <>
-                                                <div className="prose prose-invert prose-sm max-w-none prose-p:my-1">
-                                                    {msg.content ? (
-                                                        msg.streaming ? (
-                                                            <p className="whitespace-pre-wrap text-neutral-100 m-0">
-                                                                {msg.content}
-                                                            </p>
-                                                        ) : (
-                                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                                {msg.content}
-                                                            </ReactMarkdown>
-                                                        )
-                                                    ) : msg.streaming ? (
-                                                        <span className="inline-flex gap-1 text-neutral-500">
-                                                            <span className="animate-pulse">●</span>
-                                                            <span className="animate-pulse [animation-delay:150ms]">●</span>
-                                                            <span className="animate-pulse [animation-delay:300ms]">●</span>
-                                                        </span>
-                                                    ) : null}
-                                                </div>
-                                                {msg.actionUi?.some(
-                                                    (i) =>
-                                                        i.status === 'pending' ||
-                                                        i.status === 'running',
-                                                ) ? (
-                                                    <CoachActionConfirmCard
-                                                        items={msg.actionUi}
-                                                        onAllowAll={() =>
-                                                            void applyCoachActionsAt(
-                                                                idx,
-                                                                msg.actionUi!,
-                                                            )
-                                                        }
-                                                        onDenyAll={() =>
-                                                            denyCoachActionsAt(idx)
-                                                        }
-                                                    />
-                                                ) : null}
-                                                {msg.actionUi
-                                                    ?.filter((i) => i.status === 'done')
-                                                    .map((item) => (
-                                                        <CoachActionPreview
-                                                            key={item.id}
-                                                            action={item.action}
+                        <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 space-y-6">
+                            {messages.map((msg, idx) => {
+                                if (msg.role === 'user') {
+                                    const isEditing = editingUserIdx === idx;
+                                    const isExpanded = expandedUserIdx === idx;
+                                    const variantCount = msg.variants?.length ?? 0;
+                                    const variantPos = (msg.activeVariantIndex ?? 0) + 1;
+                                    return (
+                                        <div key={idx} className="flex justify-end">
+                                            <div className="max-w-[88%] flex flex-col items-end min-w-0">
+                                                {isEditing ? (
+                                                    <div className="w-full min-w-[260px] rounded-[1.25rem] border border-white/10 bg-[#1c1c1c] p-3">
+                                                        <textarea
+                                                            autoFocus
+                                                            value={editDraft}
+                                                            onChange={(e) => setEditDraft(e.target.value)}
+                                                            rows={3}
+                                                            className="w-full bg-transparent border-none outline-none resize-none text-[15px] text-white placeholder:text-neutral-500"
                                                         />
-                                                    ))}
-                                                {!msg.actionUi?.length &&
-                                                    msg.actions?.map((act, ai) =>
-                                                        act ? (
-                                                            <CoachActionPreview
-                                                                key={ai}
-                                                                action={act}
-                                                            />
-                                                        ) : null,
-                                                    )}
-                                                {msg.showUpgrade ? (
-                                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                                        <div className="flex justify-end gap-2 mt-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setEditingUserIdx(null)}
+                                                                className="px-3 py-1.5 rounded-lg text-xs text-neutral-400 hover:bg-white/[0.06]"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const next = editDraft.trim();
+                                                                    setEditingUserIdx(null);
+                                                                    if (next && next !== msg.content) {
+                                                                        void runTurnVariant(idx, next);
+                                                                    }
+                                                                }}
+                                                                disabled={!editDraft.trim()}
+                                                                className="px-3 py-1.5 rounded-lg text-xs bg-white text-black font-semibold hover:bg-neutral-200 disabled:opacity-40"
+                                                            >
+                                                                Save &amp; submit
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setExpandedUserIdx((v) => (v === idx ? null : idx))
+                                                        }
+                                                        className="text-left max-w-full bg-[#2f2f2f] rounded-[1.25rem] px-4 py-2.5 text-white text-[15px] leading-relaxed whitespace-pre-wrap break-words hover:bg-[#333333] transition-colors"
+                                                    >
+                                                        {msg.content}
+                                                    </button>
+                                                )}
+
+                                                {isExpanded && !isEditing && (
+                                                    <div className="flex items-center gap-0.5 mt-1.5 px-1">
                                                         <button
                                                             type="button"
-                                                            onClick={onOpenAccount}
-                                                            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-neutral-200 transition-colors"
+                                                            onClick={() => copyToClipboard(msg.content, idx)}
+                                                            className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-white/[0.08]"
+                                                            aria-label="Copy"
                                                         >
-                                                            Upgrade to Pro in Account
+                                                            {copiedIdx === idx ? (
+                                                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                                            ) : (
+                                                                <Copy className="w-3.5 h-3.5" />
+                                                            )}
                                                         </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEditingUserIdx(idx);
+                                                                setEditDraft(msg.content);
+                                                            }}
+                                                            className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-white/[0.08]"
+                                                            aria-label="Edit prompt"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        {variantCount > 1 && (
+                                                            <div className="flex items-center gap-0.5 ml-1 text-xs text-neutral-500">
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={variantPos <= 1}
+                                                                    onClick={() => browseVariant(idx, -1)}
+                                                                    className="p-1 rounded hover:bg-white/[0.08] disabled:opacity-30 disabled:hover:bg-transparent"
+                                                                    aria-label="Previous version"
+                                                                >
+                                                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                                                </button>
+                                                                <span className="tabular-nums">
+                                                                    {variantPos}/{variantCount}
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={variantPos >= variantCount}
+                                                                    onClick={() => browseVariant(idx, 1)}
+                                                                    className="p-1 rounded hover:bg-white/[0.08] disabled:opacity-30 disabled:hover:bg-transparent"
+                                                                    aria-label="Next version"
+                                                                >
+                                                                    <ChevronRight className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div key={idx} className="flex justify-start gap-3">
+                                        <div className="w-7 h-7 rounded-full shrink-0 mt-0.5 flex items-center justify-center bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white">
+                                            <Bot className="w-4 h-4" />
+                                        </div>
+                                        <div className="max-w-[88%] min-w-0 text-[15px] leading-relaxed">
+                                            <div className="prose prose-invert prose-sm max-w-none prose-p:my-1">
+                                                {msg.content ? (
+                                                    msg.streaming ? (
+                                                        <p className="whitespace-pre-wrap text-neutral-100 m-0">
+                                                            {msg.content}
+                                                        </p>
+                                                    ) : (
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                            {msg.content}
+                                                        </ReactMarkdown>
+                                                    )
+                                                ) : msg.streaming ? (
+                                                    <span className="inline-flex gap-1 text-neutral-500">
+                                                        <span className="animate-pulse">●</span>
+                                                        <span className="animate-pulse [animation-delay:150ms]">●</span>
+                                                        <span className="animate-pulse [animation-delay:300ms]">●</span>
+                                                    </span>
                                                 ) : null}
-                                            </>
-                                        )}
+                                            </div>
+                                            {msg.actionUi?.some(
+                                                (i) =>
+                                                    i.status === 'pending' ||
+                                                    i.status === 'running',
+                                            ) ? (
+                                                <CoachActionConfirmCard
+                                                    items={msg.actionUi}
+                                                    onAllowAll={() =>
+                                                        void applyCoachActionsAt(
+                                                            idx,
+                                                            msg.actionUi!,
+                                                        )
+                                                    }
+                                                    onDenyAll={() =>
+                                                        denyCoachActionsAt(idx)
+                                                    }
+                                                />
+                                            ) : null}
+                                            {msg.actionUi
+                                                ?.filter((i) => i.status === 'done')
+                                                .map((item) => (
+                                                    <CoachActionPreview
+                                                        key={item.id}
+                                                        action={item.action}
+                                                    />
+                                                ))}
+                                            {!msg.actionUi?.length &&
+                                                msg.actions?.map((act, ai) =>
+                                                    act ? (
+                                                        <CoachActionPreview
+                                                            key={ai}
+                                                            action={act}
+                                                        />
+                                                    ) : null,
+                                                )}
+                                            {msg.showUpgrade ? (
+                                                <div className="mt-4 pt-4 border-t border-white/10">
+                                                    <button
+                                                        type="button"
+                                                        onClick={onOpenAccount}
+                                                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-neutral-200 transition-colors"
+                                                    >
+                                                        Upgrade to Pro in Account
+                                                    </button>
+                                                </div>
+                                            ) : null}
+                                            {!msg.streaming && msg.content && (
+                                                <div className="flex items-center gap-0.5 mt-2 -ml-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => copyToClipboard(msg.content, idx)}
+                                                        className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-white/[0.08]"
+                                                        aria-label="Copy"
+                                                    >
+                                                        {copiedIdx === idx ? (
+                                                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                                        ) : (
+                                                            <Copy className="w-3.5 h-3.5" />
+                                                        )}
+                                                    </button>
+                                                    <AssistantMenu
+                                                        disabled={streaming}
+                                                        onRegenerate={() =>
+                                                            void runTurnVariant(
+                                                                findUserIndexBefore(messages, idx),
+                                                                null,
+                                                            )
+                                                        }
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             <div ref={messagesEndRef} />
                         </div>
                     )}
@@ -895,14 +1362,49 @@ export default function AiCoachPage({
 
                 <footer className="shrink-0 px-4 sm:px-6 pb-6 pt-3">
                     <div className="max-w-3xl mx-auto">
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleAttachFile(file);
+                                e.target.value = '';
+                            }}
+                        />
+
+                        {pendingAttachment && (
+                            <div className="flex items-center gap-2 mb-2 px-1">
+                                <div className="relative">
+                                    <img
+                                        src={pendingAttachment.url}
+                                        alt={pendingAttachment.name}
+                                        className="w-12 h-12 rounded-lg object-cover border border-white/10"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setPendingAttachment(null)}
+                                        aria-label="Remove attachment"
+                                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-neutral-800 border border-white/20 text-neutral-300 flex items-center justify-center"
+                                    >
+                                        <X className="w-2.5 h-2.5" />
+                                    </button>
+                                </div>
+                                <span className="text-xs text-neutral-500 truncate max-w-[200px]">
+                                    {pendingAttachment.name}
+                                </span>
+                            </div>
+                        )}
+
                         <div className="flex items-end gap-2 rounded-[1.75rem] bg-[#2a2a2a] border border-white/[0.08] px-2 py-2 shadow-lg">
                             <button
                                 type="button"
+                                onClick={() => fileInputRef.current?.click()}
                                 className="p-2.5 rounded-full hover:bg-white/[0.08] text-neutral-400 mb-0.5"
-                                aria-label="New chat"
-                                onClick={() => void startNewChat()}
+                                aria-label="Attach image"
                             >
-                                <Plus className="w-5 h-5" />
+                                <Paperclip className="w-5 h-5" />
                             </button>
                             <textarea
                                 value={input}

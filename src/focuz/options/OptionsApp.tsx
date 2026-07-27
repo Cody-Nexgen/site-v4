@@ -73,7 +73,8 @@ import {
     shouldOpenTabOnWeb,
     writeSidebarCollapsed,
 } from '../lib/workspaceSync';
-import { getPlatform, isWebPlatform } from '../lib/platform';
+import { getPlatform, hydrateWebWorkspaceFromCloud, isWebPlatform } from '../lib/platform';
+import { ChevronRight as IconChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
     fetchMyProfile,
@@ -94,7 +95,6 @@ import {
     PROFILE_AVATAR_LARGE_IMG_CLASS,
     PROFILE_AVATAR_LARGE_WRAP_CLASS,
 } from '../lib/profileAvatar';
-import { ThemeSelector } from '../components/pro-dashboard/ThemeSelector';
 import {
     ProConfettiGate,
     ProFocusToast,
@@ -798,8 +798,6 @@ export const Customization = () => {
                     />
                 </div>
             </GlassCard>
-
-            <ThemeSelector />
 
             <GlassCard className="divide-y divide-[var(--dashboard-border)] px-4">
                 <h3 className="py-3 text-sm font-medium text-[var(--dashboard-text)]">Focus engine</h3>
@@ -2536,8 +2534,11 @@ const OptionsApp = () => {
             }
         }
 
-        // Ensure platform is initialized (no-op in extension; installs shim on web).
+        // Ensure platform is initialized (no-op in extension; installs shim + cloud hydrate on web).
         void getPlatform();
+        if (isWebPlatform()) {
+            void hydrateWebWorkspaceFromCloud();
+        }
 
         if (params.get('coachPrompt') === 'auto_schedule') {
             setCoachInitialPrompt(AUTO_SCHEDULE_COACH_PROMPT);
@@ -2685,30 +2686,45 @@ const OptionsApp = () => {
 
             {/* Main Content */}
             <main className="workspace-main flex flex-col min-w-0 relative overflow-x-hidden">
+                {sidebarCollapsed && (
+                    <>
+                        <div
+                            className="workspace-sidebar-hover-rail"
+                            onMouseEnter={() => {
+                                setSidebarCollapsed(false);
+                                writeSidebarCollapsed(false);
+                            }}
+                            aria-hidden
+                        />
+                        <button
+                            type="button"
+                            className="workspace-sidebar-expand-fab"
+                            aria-label="Expand sidebar"
+                            onClick={() => {
+                                setSidebarCollapsed(false);
+                                writeSidebarCollapsed(false);
+                            }}
+                        >
+                            <IconChevronRight size={16} />
+                        </button>
+                    </>
+                )}
                 {/* Topbar */}
                 <header className="workspace-topbar h-11 shrink-0 px-6 flex items-center justify-between sticky top-0 z-50">
                     <div className="flex items-center gap-2">
-                        {sidebarCollapsed && (
-                            <button
-                                type="button"
-                                onClick={toggleSidebarCollapsed}
-                                className="workspace-sidebar-toggle mr-1"
-                                aria-label="Expand sidebar"
-                            >
-                                <IconMaximize2 size={14} />
-                            </button>
-                        )}
                         <h1 className="text-xs font-medium text-neutral-400">{tabLabel(activeTab)}</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => openWebDashboard()}
-                            className="flex h-7 items-center gap-1.5 rounded-md border border-violet-500/25 bg-violet-500/10 px-2.5 text-[11px] font-medium text-violet-200 transition-colors hover:bg-violet-500/15 hover:text-violet-100"
-                        >
-                            <IconExternalLink size={12} />
-                            Open web dashboard
-                        </button>
+                        {!isWebPlatform() && (
+                            <button
+                                type="button"
+                                onClick={() => openWebDashboard()}
+                                className="flex h-7 items-center gap-1.5 rounded-md border border-violet-500/25 bg-violet-500/10 px-2.5 text-[11px] font-medium text-violet-200 transition-colors hover:bg-violet-500/15 hover:text-violet-100"
+                            >
+                                <IconExternalLink size={12} />
+                                Open web dashboard
+                            </button>
+                        )}
                         {!isPro && (
                             <button
                                 type="button"

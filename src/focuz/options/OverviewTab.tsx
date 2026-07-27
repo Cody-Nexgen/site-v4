@@ -185,12 +185,33 @@ export default function OverviewTab() {
                 ))}
             </div>
 
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-500/15 text-base">
+                        🍅
+                    </span>
+                    <div>
+                        <p className="text-xs font-semibold text-white">Pomodoro</p>
+                        <p className="text-[11px] text-neutral-500">
+                            {pomodoroToday} session{pomodoroToday === 1 ? '' : 's'} completed today
+                        </p>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent('focuznow-navigate-tab', { detail: 'sessions' }))}
+                    className="text-[11px] font-medium text-purple-300 hover:text-purple-200 transition-colors shrink-0"
+                >
+                    Open →
+                </button>
+            </div>
+
             <section className="rounded-2xl border border-white/[0.06] bg-[#0c0c0e] overflow-hidden">
                 <div className="px-6 pt-6 pb-3 flex items-center justify-between gap-3 flex-wrap">
                     <div>
                         <h2 className="text-sm font-semibold text-white">Weekly activity</h2>
                         <p className="text-[11px] text-neutral-500 mt-1">
-                            {isUp ? '↑' : '↓'} {diffPercent}% vs yesterday · {pomodoroToday} sessions today
+                            {isUp ? '↑' : '↓'} {diffPercent}% vs yesterday
                         </p>
                     </div>
                     <div className="flex items-center gap-2">

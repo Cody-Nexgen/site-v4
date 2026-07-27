@@ -34,6 +34,8 @@ export type ChallengeStartResponse = {
     active: boolean;
     persisted: boolean;
     started: boolean;
+    /** True when Supabase (the durable source of truth) confirmed the challenge lifecycle. */
+    cloudPersisted?: boolean;
     reason?: string;
     error?: string;
     progression?: FocusProgressionState;

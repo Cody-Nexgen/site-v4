@@ -1262,42 +1262,14 @@ html[data-theme="pro"].pro-motion .pro-page-enter {
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* Habit check-in — spring spin (was broken by global button transform) */
+/* Habit check-in — non-transform visuals only; scale bounce/press now owned by Framer Motion
+   in HabitCheckInButton so the two animation systems don't fight over `transform`. */
 html[data-theme="pro"] .pro-habit-check-btn {
   transition:
     background-color 0.25s ease,
     box-shadow 0.35s var(--pro-spring-soft, cubic-bezier(0.22, 1.12, 0.36, 1)),
     color 0.2s ease,
-    border-color 0.2s ease !important;
-}
-
-html[data-theme="pro"] .pro-habit-check-btn:not(.is-checked):not(.is-spinning):hover {
-  transform: scale(1.06) !important;
-}
-
-html[data-theme="pro"] .pro-habit-check-btn:not(.is-checked):active {
-  transform: scale(0.9) !important;
-}
-
-html[data-theme="pro"] .pro-habit-check-btn.is-spinning {
-  animation: pro-habit-check-spin 0.58s var(--pro-spring, cubic-bezier(0.34, 1.45, 0.64, 1));
-}
-
-html[data-theme="pro"] .pro-habit-check-btn.is-checked {
-  animation: pro-habit-check-pop 0.72s var(--pro-spring, cubic-bezier(0.34, 1.45, 0.64, 1)) forwards;
-}
-
-@keyframes pro-habit-check-spin {
-  0% { transform: rotate(0deg) scale(1); }
-  45% { transform: rotate(200deg) scale(1.06); }
-  100% { transform: rotate(360deg) scale(1); }
-}
-
-@keyframes pro-habit-check-pop {
-  0% { transform: rotate(0deg) scale(0.7); }
-  55% { transform: rotate(400deg) scale(1.12); }
-  78% { transform: rotate(350deg) scale(0.96); }
-  100% { transform: rotate(360deg) scale(1); }
+    border-color 0.2s ease;
 }
 
 .pro-habit-spinner-ring {
@@ -1311,16 +1283,6 @@ html[data-theme="pro"] .pro-habit-check-btn.is-checked {
 
 @keyframes pro-habit-spinner {
   to { transform: rotate(360deg); }
-}
-
-.pro-check-pop-in {
-  animation: pro-check-pop-in 0.45s var(--pro-spring, cubic-bezier(0.34, 1.45, 0.64, 1));
-}
-
-@keyframes pro-check-pop-in {
-  0% { transform: scale(0) rotate(-40deg); opacity: 0; }
-  65% { transform: scale(1.2) rotate(8deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0); opacity: 1; }
 }
 
 .pro-habit-dot-idle {

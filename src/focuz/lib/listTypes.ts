@@ -1,6 +1,7 @@
 import type { AttachmentRecord } from './attachmentApi';
+import type { LinkPreview } from './linkPreviewApi';
 
-export type ListBlockType = 'text' | 'heading' | 'checklist' | 'code' | 'quote' | 'attachment';
+export type ListBlockType = 'text' | 'heading' | 'checklist' | 'code' | 'quote' | 'attachment' | 'link';
 
 export type ListChecklistItem = {
     id: string;
@@ -15,6 +16,7 @@ export type ListBlock = {
     language?: string;
     items?: ListChecklistItem[];
     attachment?: AttachmentRecord;
+    link?: LinkPreview;
 };
 
 export type ListSchedule = {

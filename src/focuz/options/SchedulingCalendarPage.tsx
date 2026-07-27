@@ -219,13 +219,22 @@ export default function SchedulingCalendarPage({
         return () => window.clearInterval(tick);
     }, []);
 
+    const persistEventsRef = useRef<string>('');
+    const applyingRemoteEventsRef = useRef(false);
+
     const reloadEventsFromStorage = useCallback(() => {
         chrome.storage.local.get([CALENDAR_EVENTS_KEY], (res) => {
             if (!Array.isArray(res[CALENDAR_EVENTS_KEY])) return;
             const loaded = prepareStoredEvents(res[CALENDAR_EVENTS_KEY] as CalendarEvent[]);
+            const serialized = JSON.stringify(loaded);
+            if (serialized === persistEventsRef.current) {
+                setEventsLoaded(true);
+                return;
+            }
+            applyingRemoteEventsRef.current = true;
+            persistEventsRef.current = serialized;
             setEvents(loaded);
             setEventsLoaded(true);
-            chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: loaded });
         });
     }, []);
 
@@ -285,10 +294,16 @@ export default function SchedulingCalendarPage({
                     setSavedLinks(res[LEGACY_LINKS_KEY] as SchedulingLink[]);
                 }
                 if (Array.isArray(res[CALENDAR_EVENTS_KEY])) {
-                    const loaded = prepareStoredEvents(res[CALENDAR_EVENTS_KEY] as CalendarEvent[]);
+                    const raw = res[CALENDAR_EVENTS_KEY] as CalendarEvent[];
+                    const loaded = prepareStoredEvents(raw);
+                    const serialized = JSON.stringify(loaded);
+                    persistEventsRef.current = serialized;
                     setEvents(loaded);
                     setEventsLoaded(true);
-                    chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: loaded });
+                    // Only rewrite storage when migration actually changed event shapes.
+                    if (JSON.stringify(raw) !== serialized) {
+                        chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: loaded });
+                    }
                 } else {
                     setEventsLoaded(true);
                 }
@@ -309,11 +324,26 @@ export default function SchedulingCalendarPage({
     }, []);
 
     useEffect(() => {
+        // Avoid wiping stored links with the initial empty state before load finishes.
+        if (savedLinks.length === 0) {
+            chrome.storage.local.get([SCHEDULING_LINKS_KEY], (res) => {
+                if (Array.isArray(res[SCHEDULING_LINKS_KEY]) && res[SCHEDULING_LINKS_KEY].length > 0) return;
+                chrome.storage.local.set({ [SCHEDULING_LINKS_KEY]: savedLinks });
+            });
+            return;
+        }
         chrome.storage.local.set({ [SCHEDULING_LINKS_KEY]: savedLinks });
     }, [savedLinks]);
 
     useEffect(() => {
         if (!eventsLoaded) return;
+        if (applyingRemoteEventsRef.current) {
+            applyingRemoteEventsRef.current = false;
+            return;
+        }
+        const serialized = JSON.stringify(events);
+        if (serialized === persistEventsRef.current) return;
+        persistEventsRef.current = serialized;
         chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: events });
     }, [events, eventsLoaded]);
 

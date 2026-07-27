@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MeshGradient } from '@paper-design/shaders-react';
 import {
     ArrowLeft,
     Copy,
@@ -36,16 +37,50 @@ import {
     uploadAttachment,
     type AttachmentRecord,
 } from '../lib/attachmentApi';
-import {
-    PROFILE_AVATAR_FALLBACK_CLASS,
-    PROFILE_AVATAR_IMG_CLASS,
-} from '../lib/profileAvatar';
+import { avatarGradientColors, getInitials } from '../lib/avatarInitials';
 
 function formatCountdown(endsAt: string): string {
     const sec = Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 1000));
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** Strip the local " (you)" suffix so avatar seeds/initials stay stable for a given person. */
+function baseNameFor(label: string): string {
+    return label.replace(/\s*\(you\)\s*$/i, '').trim() || label;
+}
+
+function ParticipantAvatar({ seed, avatarUrl, size = 80 }: { seed: string; avatarUrl?: string | null; size?: number }) {
+    const colors = useMemo(() => avatarGradientColors(seed), [seed]);
+    return (
+        <div className="absolute inset-0">
+            <MeshGradient
+                colors={colors}
+                speed={0.22}
+                distortion={0.55}
+                swirl={0.3}
+                style={{ width: '100%', height: '100%' }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                {avatarUrl ? (
+                    <img
+                        src={avatarUrl}
+                        alt=""
+                        className="rounded-full object-cover border-2 border-white/25 shadow-lg"
+                        style={{ width: size, height: size }}
+                    />
+                ) : (
+                    <div
+                        className="rounded-full flex items-center justify-center font-semibold text-white bg-white/10 backdrop-blur-md border-2 border-white/25 shadow-lg"
+                        style={{ width: size, height: size, fontSize: size * 0.32 }}
+                    >
+                        {getInitials(seed)}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 }
 
 function ParticipantTile({
@@ -55,6 +90,9 @@ function ParticipantTile({
     isLocal,
     camOn,
     speakerId,
+    speaking,
+    micOn,
+    mutedByHost,
 }: {
     stream: MediaStream | null;
     label: string;
@@ -62,10 +100,14 @@ function ParticipantTile({
     isLocal?: boolean;
     camOn: boolean;
     speakerId?: string;
+    speaking?: boolean;
+    micOn?: boolean;
+    mutedByHost?: boolean;
 }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
     const hasVideo = camOn && (stream?.getVideoTracks().some((t) => t.enabled) ?? false);
+    const showMutedBadge = mutedByHost || micOn === false;
 
     useEffect(() => {
         const video = videoRef.current;
@@ -88,23 +130,29 @@ function ParticipantTile({
     }, [stream, hasVideo, isLocal, speakerId]);
 
     return (
-        <div className="relative aspect-video rounded-lg overflow-hidden bg-[#121214] border border-white/[0.07]">
+        <div
+            className={`group relative aspect-video rounded-2xl overflow-hidden bg-[#121214] border transition-colors duration-200 ${
+                speaking ? 'border-emerald-400/60 shadow-[0_0_0_3px_rgba(52,211,153,0.14)]' : 'border-white/[0.08] hover:border-white/[0.14]'
+            }`}
+        >
             {!isLocal && <audio ref={audioRef} autoPlay playsInline className="sr-only" />}
             {hasVideo ? (
                 <video ref={videoRef} autoPlay playsInline muted={isLocal} className="w-full h-full object-cover" />
             ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#121214]">
-                    {avatarUrl ? (
-                        <img src={avatarUrl} alt="" className={`${PROFILE_AVATAR_IMG_CLASS} !w-20 !h-20`} />
-                    ) : (
-                        <div className={`${PROFILE_AVATAR_FALLBACK_CLASS} !w-20 !h-20 !text-2xl`}>
-                            {label.charAt(0).toUpperCase()}
-                        </div>
-                    )}
-                </div>
+                <ParticipantAvatar seed={baseNameFor(label)} avatarUrl={avatarUrl} />
             )}
-            <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/55 text-xs font-semibold text-[#dbdee1]">
-                {label}
+            <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate px-2 py-1 rounded-lg bg-black/55 backdrop-blur-sm text-xs font-semibold text-[#dbdee1]">
+                    {label}
+                </span>
+                {showMutedBadge && (
+                    <span
+                        className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-black/55 backdrop-blur-sm text-red-400"
+                        aria-label="Muted"
+                    >
+                        <MicOff size={12} />
+                    </span>
+                )}
             </div>
         </div>
     );
@@ -334,7 +382,7 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                 )}
                 <div className="flex-1 grid lg:grid-cols-2 gap-0 min-h-0 overflow-y-auto lg:overflow-hidden">
                     <div className="flex flex-col justify-center p-8 lg:p-12 border-b lg:border-b-0 lg:border-r border-white/[0.07]">
-                        <div className="relative aspect-video max-h-[420px] rounded-lg overflow-hidden bg-[#121214] border border-white/[0.07]">
+                        <div className="relative aspect-video max-h-[420px] rounded-2xl overflow-hidden bg-[#121214] border border-white/[0.08] shadow-lg shadow-black/20">
                             <video
                                 ref={previewVideoRef}
                                 autoPlay
@@ -343,12 +391,12 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                 className={`w-full h-full object-cover ${rtc.camOn ? '' : 'hidden'}`}
                             />
                             {!rtc.camOn && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                                    <div className={`${PROFILE_AVATAR_FALLBACK_CLASS} !w-24 !h-24 !text-3xl`}>
-                                        {displayName.charAt(0).toUpperCase()}
-                                    </div>
-                                    <p className="text-sm text-[#949ba4]">Camera off</p>
-                                </div>
+                                <>
+                                    <ParticipantAvatar seed={displayName} avatarUrl={engineState.profileAvatar} size={96} />
+                                    <p className="absolute inset-x-0 bottom-14 text-center text-sm font-medium text-white/70">
+                                        Camera off
+                                    </p>
+                                </>
                             )}
                             <div className="absolute bottom-4 left-4 right-4">
                                 <div className="h-1.5 rounded-full bg-black/40 overflow-hidden">
@@ -523,8 +571,8 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
             </header>
 
             <main className="flex-1 min-h-0 flex">
-                <div className="flex-1 p-4 overflow-y-auto">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-w-6xl mx-auto">
+                <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
                         {rtc.participants.map((p) => (
                             <ParticipantTile
                                 key={p.peerId}
@@ -534,6 +582,9 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                 isLocal={p.isLocal}
                                 camOn={p.isLocal ? rtc.camOn : !!p.stream?.getVideoTracks().some((t) => t.enabled)}
                                 speakerId={rtc.selectedSpeakerId}
+                                speaking={p.speaking}
+                                micOn={p.isLocal ? rtc.micOn : undefined}
+                                mutedByHost={p.mutedByHost}
                             />
                         ))}
                     </div>
@@ -541,7 +592,7 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
 
                 {chatOpen && (
                     <aside
-                        className="w-72 border-l border-[#1e1f22] bg-[#1e1f22] flex flex-col shrink-0"
+                        className="w-72 my-3 mr-3 rounded-2xl border border-[#2b2d31] bg-[#18181b] shadow-xl shadow-black/30 flex flex-col shrink-0 overflow-hidden"
                         onDragOver={(event) => {
                             if (event.dataTransfer.types.includes('Files')) event.preventDefault();
                         }}
