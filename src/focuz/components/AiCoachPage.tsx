@@ -79,6 +79,34 @@ type CoachMessage = {
 
 type LibraryImage = { id: string; url: string; name: string; extractedText?: string };
 
+/** Downscale/compress screenshots so OCR edge payloads stay under limits. */
+async function compressImageForOcr(file: File, maxEdge = 1600, quality = 0.82): Promise<string> {
+    const rawUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Could not read image'));
+        reader.readAsDataURL(file);
+    });
+    if (!rawUrl.startsWith('data:image/')) throw new Error('Not an image file');
+
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        bitmap.close();
+        return rawUrl;
+    }
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    const out = canvas.toDataURL('image/jpeg', quality);
+    return out.length < rawUrl.length ? out : rawUrl;
+}
+
 type SidebarView = 'chats' | 'library' | 'explore';
 
 function stripAnalyticsActions(actions: CoachAction[], analyticsApproved: boolean): CoachAction[] {
@@ -879,43 +907,55 @@ export default function AiCoachPage({
     };
 
     const handleAttachFile = (file: File) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const img: LibraryImage = {
-                id: crypto.randomUUID(),
-                url: String(reader.result),
-                name: file.name,
-            };
-            setLibraryImages((prev) => [img, ...prev]);
-            setPendingAttachment(img);
-            void (async () => {
+        void (async () => {
+            try {
+                const dataUrl = await compressImageForOcr(file);
+                const img: LibraryImage = {
+                    id: crypto.randomUUID(),
+                    url: dataUrl,
+                    name: file.name,
+                };
+                setLibraryImages((prev) => [img, ...prev]);
+                setPendingAttachment(img);
                 const token = session?.access_token;
-                if (!token || !img.url.startsWith('data:image/')) return;
+                if (!token) {
+                    setErrorState('Sign in to extract text from images.');
+                    return;
+                }
                 setOcrBusy(true);
                 try {
-                    const { data, error } = await invokeAuthedFunction<{ text?: string; error?: string }>(
+                    const { data, error } = await invokeAuthedFunction<{ text?: string; error?: string; ok?: boolean }>(
                         'extract-image-text',
                         token,
                         { imageDataUrl: img.url },
                     );
-                    if (!error && data?.text) {
+                    if (error || data?.error) {
+                        const msg = error?.message || data?.error || 'Could not read text from image';
+                        setErrorState(msg);
                         setPendingAttachment((prev) =>
-                            prev && prev.id === img.id ? { ...prev, extractedText: data.text } : prev,
+                            prev && prev.id === img.id
+                                ? { ...prev, extractedText: '' }
+                                : prev,
                         );
-                        setLibraryImages((prev) =>
-                            prev.map((item) =>
-                                item.id === img.id ? { ...item, extractedText: data.text } : item,
-                            ),
-                        );
+                        return;
                     }
+                    const text = String(data?.text || '').trim();
+                    setPendingAttachment((prev) =>
+                        prev && prev.id === img.id ? { ...prev, extractedText: text } : prev,
+                    );
+                    setLibraryImages((prev) =>
+                        prev.map((item) => (item.id === img.id ? { ...item, extractedText: text } : item)),
+                    );
                 } catch (e) {
                     console.warn('[AiCoach] OCR failed', e);
+                    setErrorState(e instanceof Error ? e.message : 'Could not read text from image');
                 } finally {
                     setOcrBusy(false);
                 }
-            })();
-        };
-        reader.readAsDataURL(file);
+            } catch (e) {
+                setErrorState(e instanceof Error ? e.message : 'Could not load that image');
+            }
+        })();
     };
 
     continueAfterAnalyticsRef.current = (question: string) => {
@@ -1463,7 +1503,9 @@ export default function AiCoachPage({
                                         ? 'Extracting text…'
                                         : pendingAttachment.extractedText
                                           ? 'Text extracted — it will be sent with your question'
-                                          : pendingAttachment.name}
+                                          : pendingAttachment.extractedText === ''
+                                            ? 'No text found yet — try another image or ask anyway'
+                                            : pendingAttachment.name}
                                 </div>
                             </div>
                         )}

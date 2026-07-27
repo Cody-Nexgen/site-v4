@@ -207,8 +207,13 @@ const EXTENSION_RPC_TYPES = new Set([
     'ADD_BLOCK',
     'REMOVE_BLOCK',
     'REMOVE_BLOCK_SOURCE',
+    'ADD_ALLOWED_SITE',
+    'REMOVE_ALLOWED_SITE',
     'GET_CATEGORY_STATES',
     'UPDATE_ENGINE_SETTINGS',
+    'START_NUCLEAR',
+    'SCHEDULE_ADD',
+    'SCHEDULE_REMOVE',
     'POMODORO_SEGMENT_COMPLETE',
     'EXPORT_LOCAL_STATS',
 ]);
@@ -280,7 +285,12 @@ async function handleMessage(message: PlatformMessage): Promise<unknown> {
                 type === 'ADD_BLOCK' ||
                 type === 'REMOVE_BLOCK' ||
                 type === 'REMOVE_BLOCK_SOURCE' ||
-                type === 'UPDATE_ENGINE_SETTINGS')
+                type === 'ADD_ALLOWED_SITE' ||
+                type === 'REMOVE_ALLOWED_SITE' ||
+                type === 'UPDATE_ENGINE_SETTINGS' ||
+                type === 'START_NUCLEAR' ||
+                type === 'SCHEDULE_ADD' ||
+                type === 'SCHEDULE_REMOVE')
         ) {
             const stateResp = await sendExtensionRpc<{ ok?: boolean; state?: Record<string, unknown> }>({
                 type: 'GET_STATE',

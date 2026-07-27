@@ -1614,9 +1614,38 @@ export const BlocklistTab = () => {
                     </div>
                     <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] p-3">
                         <ShieldCheck size={15} className="mt-0.5 shrink-0 text-sky-400" />
-                        <p className="text-[11px] leading-relaxed text-sky-200/80">
-                            <span className="font-semibold text-sky-300">Allowlist mode</span> disables all sites except those listed here — everything else stays blocked while it's on.
-                        </p>
+                        <div className="min-w-0 flex-1 space-y-2">
+                            <p className="text-[11px] leading-relaxed text-sky-200/80">
+                                <span className="font-semibold text-sky-300">Allowlist mode</span> blocks every site except the ones listed here.
+                            </p>
+                            <label className="flex items-center justify-between gap-3 cursor-pointer">
+                                <span className="text-[11px] text-sky-100/90">
+                                    {engineState.allowlistMode ? 'On — only listed sites work' : 'Off — listed sites are only exempt from your blocklist'}
+                                </span>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={!!engineState.allowlistMode}
+                                    disabled={!(engineState.allowedSites || []).length || nuclearActive}
+                                    onClick={() => {
+                                        const next = !engineState.allowlistMode;
+                                        chrome.runtime.sendMessage(
+                                            { type: 'UPDATE_ENGINE_SETTINGS', settings: { allowlistMode: next } },
+                                            () => fetchEngineState(),
+                                        );
+                                    }}
+                                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
+                                        engineState.allowlistMode ? 'bg-sky-400' : 'bg-white/15'
+                                    }`}
+                                >
+                                    <span
+                                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                                            engineState.allowlistMode ? 'translate-x-4' : ''
+                                        }`}
+                                    />
+                                </button>
+                            </label>
+                        </div>
                     </div>
                     <div className="flex space-x-3 mb-2">
                         <input
