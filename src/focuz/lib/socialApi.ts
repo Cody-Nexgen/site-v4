@@ -20,6 +20,23 @@ export type PendingFriendRequest = {
     avatarUrl: string | null;
 };
 
+function normalizePending(raw: unknown): PendingFriendRequest[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((item) => {
+            const row = item as Record<string, unknown>;
+            const friendshipId = String(row.friendshipId ?? row.friendship_id ?? '');
+            if (!friendshipId) return null;
+            return {
+                friendshipId,
+                username: String(row.username ?? 'user'),
+                displayName: String(row.displayName ?? row.display_name ?? row.username ?? 'FocuzNow user'),
+                avatarUrl: (row.avatarUrl ?? row.avatar_url ?? null) as string | null,
+            };
+        })
+        .filter((item): item is PendingFriendRequest => item != null);
+}
+
 export type LeaderboardEntry = {
     username: string;
     displayName: string;
@@ -93,7 +110,7 @@ export async function listMyFriends(
     return {
         ok: true,
         friends: row.friends ?? [],
-        pending: row.pending ?? [],
+        pending: normalizePending(row.pending),
     };
 }
 

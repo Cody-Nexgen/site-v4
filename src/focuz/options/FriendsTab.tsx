@@ -126,6 +126,8 @@ export default function FriendsTab() {
                         ? 'You are already friends'
                         : code === 'NOT_AUTHENTICATED'
                           ? 'Sign in again to add friends'
+                          : code === 'PROFILE_REQUIRED'
+                            ? 'Set your username in Account before adding friends'
                           : code === 'PENDING_EXISTS' || code.includes('duplicate') || code.includes('unique')
                             ? 'A request is already pending'
                             : code || 'Request failed';
@@ -197,12 +199,24 @@ export default function FriendsTab() {
                 {notice && <p className="text-xs text-emerald-400 mt-2">{notice}</p>}
             </div>
 
-            {pending.length > 0 && (
-                <div className={CARD_CLASS}>
-                    <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-                        <h3 className="text-sm font-semibold text-white">Pending requests</h3>
-                        <span className="text-xs text-neutral-500 tabular-nums">{pending.length}</span>
+            <div className={CARD_CLASS}>
+                <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+                    <h3 className="text-sm font-semibold text-white">Incoming requests</h3>
+                    {pending.length > 0 && (
+                        <span className="rounded-full bg-white text-black text-[10px] font-bold px-1.5 py-0.5 tabular-nums min-w-[1.25rem] text-center">
+                            {pending.length}
+                        </span>
+                    )}
+                </div>
+                {loading ? (
+                    <div className="flex justify-center py-8">
+                        <Loader2 className="animate-spin text-neutral-600" size={18} />
                     </div>
+                ) : pending.length === 0 ? (
+                    <p className="px-4 pb-4 text-xs text-neutral-600">
+                        When someone adds you, Accept / Decline show up here.
+                    </p>
+                ) : (
                     <div className="divide-y divide-white/[0.04]">
                         {pending.map((p) => (
                             <div
@@ -231,8 +245,8 @@ export default function FriendsTab() {
                             </div>
                         ))}
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <div className={CARD_CLASS}>
