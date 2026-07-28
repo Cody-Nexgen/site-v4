@@ -180,6 +180,29 @@ export async function downloadAttachment(
     return { ok: true };
 }
 
+/** Signed URL for inline playback (image / video / audio). */
+export async function getAttachmentPlayUrl(
+    supabase: SupabaseClient,
+    attachment: Pick<AttachmentRecord, 'storagePath'>,
+    expiresIn = 3600,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+    const { data, error } = await supabase.storage
+        .from(ATTACHMENT_BUCKET)
+        .createSignedUrl(attachment.storagePath, expiresIn);
+    if (error || !data?.signedUrl) {
+        return { ok: false, error: error?.message ?? 'Could not open attachment.' };
+    }
+    return { ok: true, url: data.signedUrl };
+}
+
+export function isPlayableAttachmentMime(mimeType: string | undefined | null): 'image' | 'video' | 'audio' | null {
+    const mime = (mimeType || '').toLowerCase();
+    if (mime.startsWith('image/')) return 'image';
+    if (mime.startsWith('video/')) return 'video';
+    if (mime.startsWith('audio/') || mime === 'application/ogg') return 'audio';
+    return null;
+}
+
 export async function deleteAttachment(
     supabase: SupabaseClient,
     attachment: Pick<AttachmentRecord, 'id' | 'storagePath'>,

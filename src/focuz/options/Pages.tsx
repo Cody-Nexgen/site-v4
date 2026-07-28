@@ -4,6 +4,7 @@ import { useAuthStore } from '../lib/store';
 import { dispatchFocusComplete } from '../lib/proDashboard';
 import {
     POMODORO_RUNTIME_KEY,
+    completePomodoroSegmentLocal,
     computeTimeLeft,
     createResetPomodoroRuntime,
     readPomodoroRuntime,
@@ -755,16 +756,38 @@ export const SessionsTab = () => {
             setPomoTimeLeft(left);
             if (left <= 0 && !completing) {
                 completing = true;
-                void chrome.runtime
-                    .sendMessage({ type: 'POMODORO_SEGMENT_COMPLETE' })
-                    .then(() => readPomodoroRuntime().then(applyRuntimeToUi))
-                    .catch(() => {});
+                void (async () => {
+                    let next: PomodoroRuntime | null = null;
+                    try {
+                        const res = (await chrome.runtime.sendMessage({
+                            type: 'POMODORO_SEGMENT_COMPLETE',
+                        })) as { ok?: boolean } | undefined;
+                        next = await readPomodoroRuntime();
+                        // Extension options: background advanced storage.
+                        // Web app: message is a no-op — force local transition if still stuck.
+                        if (!res?.ok || (next?.running && computeTimeLeft(next) <= 0)) {
+                            next = await completePomodoroSegmentLocal(next);
+                        }
+                    } catch {
+                        next = await completePomodoroSegmentLocal();
+                    }
+                    applyRuntimeToUi(next);
+                    if (next?.isBreak && next.running) {
+                        dispatchFocusComplete();
+                        setPomoNotice('Focus complete — break started');
+                        window.setTimeout(() => setPomoNotice(''), 5000);
+                    } else if (next && !next.isBreak && !next.running) {
+                        setPomoNotice('Break over — ready to focus');
+                        window.setTimeout(() => setPomoNotice(''), 5000);
+                    }
+                    fetchEngineState();
+                })();
             }
         }, 1000);
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [pomoRunning, pomoEndAt, applyRuntimeToUi]);
+    }, [pomoRunning, pomoEndAt, applyRuntimeToUi, fetchEngineState]);
 
     const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
     const updatePomodoroSettings = async (focusMin: number, breakMin: number) => {

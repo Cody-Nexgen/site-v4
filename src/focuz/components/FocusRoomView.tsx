@@ -38,10 +38,93 @@ import { FREE_FOCUS_ROOM_MAX_MIN, PRO_FOCUS_ROOM_MAX_MIN, useFocusRoomRtc } from
 import {
     deleteAttachment,
     downloadAttachment,
+    getAttachmentPlayUrl,
+    isPlayableAttachmentMime,
     uploadAttachment,
     type AttachmentRecord,
 } from '../lib/attachmentApi';
 import { avatarGradientColors, getInitials } from '../lib/avatarInitials';
+
+function ChatAttachmentMedia({
+    attachment,
+    canDelete,
+    onDownload,
+    onDelete,
+}: {
+    attachment: AttachmentRecord;
+    canDelete: boolean;
+    onDownload: () => void;
+    onDelete: () => void;
+}) {
+    const kind = isPlayableAttachmentMime(attachment.mimeType);
+    const [url, setUrl] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState('');
+
+    useEffect(() => {
+        if (!kind) return;
+        let cancelled = false;
+        void getAttachmentPlayUrl(supabase, attachment).then((result) => {
+            if (cancelled) return;
+            if (result.ok) setUrl(result.url);
+            else setLoadError(result.error);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [attachment, kind]);
+
+    return (
+        <div className="mt-1 space-y-1.5 rounded-lg border border-white/[0.08] bg-black/20 p-2">
+            {kind === 'image' && url && (
+                <a href={url} target="_blank" rel="noreferrer" className="block">
+                    <img
+                        src={url}
+                        alt={attachment.fileName}
+                        className="max-h-48 w-full rounded-md object-contain bg-black/40"
+                    />
+                </a>
+            )}
+            {kind === 'video' && url && (
+                <video
+                    src={url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="max-h-56 w-full rounded-md bg-black/40"
+                />
+            )}
+            {kind === 'audio' && url && (
+                <audio src={url} controls preload="metadata" className="w-full" />
+            )}
+            {kind && !url && !loadError && (
+                <p className="text-[10px] text-neutral-500">Loading media…</p>
+            )}
+            {loadError && <p className="text-[10px] text-red-400">{loadError}</p>}
+            <div className="flex items-center gap-2">
+                <Paperclip size={13} className="shrink-0 text-neutral-500" />
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs text-neutral-300">{attachment.fileName}</p>
+                    <p className="text-[9px] text-neutral-600">
+                        {(attachment.sizeBytes / 1024).toFixed(1)} KB
+                    </p>
+                </div>
+                <button type="button" onClick={onDownload} aria-label={`Download ${attachment.fileName}`}>
+                    <Download size={13} />
+                </button>
+                {canDelete && (
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        className="text-red-400"
+                        aria-label={`Delete ${attachment.fileName}`}
+                    >
+                        <Trash2 size={13} />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
 
 function formatCountdown(endsAt: string): string {
     const sec = Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 1000));
@@ -123,7 +206,10 @@ function ParticipantTile({
             if (audio) audio.srcObject = null;
             return;
         }
-        if (video) video.srcObject = hasVideo ? stream : null;
+        if (video) {
+            video.srcObject = hasVideo ? stream : null;
+            if (hasVideo) void video.play().catch(() => {});
+        }
         if (audio && !isLocal) {
             audio.srcObject = stream;
             if (speakerId && 'setSinkId' in audio) {
@@ -849,34 +935,16 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                     <span className="font-medium text-neutral-400 text-xs">{m.name}</span>
                                     {m.text && <p className="text-[#dbdee1] break-words">{m.text}</p>}
                                     {m.attachment && (
-                                        <div className="mt-1 flex items-center gap-2 rounded-lg border border-white/[0.08] bg-black/20 p-2">
-                                            <Paperclip size={13} className="shrink-0 text-neutral-500" />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate text-xs text-neutral-300">{m.attachment.fileName}</p>
-                                                <p className="text-[9px] text-neutral-600">
-                                                    {(m.attachment.sizeBytes / 1024).toFixed(1)} KB
-                                                </p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => void downloadAttachment(supabase, m.attachment!).then((result) => {
+                                        <ChatAttachmentMedia
+                                            attachment={m.attachment}
+                                            canDelete={m.attachment.ownerId === session.user.id}
+                                            onDownload={() =>
+                                                void downloadAttachment(supabase, m.attachment!).then((result) => {
                                                     if (!result.ok) setAttachmentError(result.error);
-                                                })}
-                                                aria-label={`Download ${m.attachment.fileName}`}
-                                            >
-                                                <Download size={13} />
-                                            </button>
-                                            {m.attachment.ownerId === session.user.id && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void removeRoomAttachment(m.attachment!)}
-                                                    className="text-red-400"
-                                                    aria-label={`Delete ${m.attachment.fileName}`}
-                                                >
-                                                    <Trash2 size={13} />
-                                                </button>
-                                            )}
-                                        </div>
+                                                })
+                                            }
+                                            onDelete={() => void removeRoomAttachment(m.attachment!)}
+                                        />
                                     )}
                                 </div>
                             ))}

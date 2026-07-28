@@ -144,6 +144,16 @@ const PENDING_PEER_LABEL = 'Guest';
 const ICE_SERVERS: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    // Public TURN fallback so peers behind symmetric NAT can still exchange media.
+    {
+        urls: [
+            'turn:openrelay.metered.ca:80',
+            'turn:openrelay.metered.ca:443',
+            'turn:openrelay.metered.ca:443?transport=tcp',
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+    },
 ];
 
 async function resolveFocusRoomWsUrl(): Promise<string> {
@@ -457,6 +467,8 @@ export function useFocusRoomRtc(
     const localStreamRef = useRef<MediaStream | null>(null);
     const makingOfferRef = useRef<Set<string>>(new Set());
     const politeRef = useRef<Map<string, boolean>>(new Map());
+    const pendingIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+    const disconnectTimersRef = useRef<Map<string, number>>(new Map());
     const analyserRef = useRef<AnalyserNode | null>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const rafRef = useRef<number>(0);
@@ -479,6 +491,12 @@ export function useFocusRoomRtc(
     }, []);
 
     const cleanupPeer = useCallback((remoteId: string) => {
+        const timer = disconnectTimersRef.current.get(remoteId);
+        if (timer) {
+            window.clearTimeout(timer);
+            disconnectTimersRef.current.delete(remoteId);
+        }
+        pendingIceRef.current.delete(remoteId);
         const pc = pcMapRef.current.get(remoteId);
         if (pc) {
             pc.close();
@@ -488,6 +506,18 @@ export function useFocusRoomRtc(
         makingOfferRef.current.delete(remoteId);
         politeRef.current.delete(remoteId);
         setPeers((prev) => prev.filter((p) => p.peerId !== remoteId));
+    }, []);
+
+    const flushPendingIce = useCallback(async (remoteId: string, pc: RTCPeerConnection) => {
+        const queued = pendingIceRef.current.get(remoteId) ?? [];
+        pendingIceRef.current.delete(remoteId);
+        for (const candidate of queued) {
+            try {
+                await pc.addIceCandidate(candidate);
+            } catch {
+                /* late/duplicate candidates */
+            }
+        }
     }, []);
 
     const sendChat = useCallback((text: string, attachment?: AttachmentRecord) => {
@@ -649,6 +679,15 @@ export function useFocusRoomRtc(
                             }
                         }
                     }
+                    ev.track.onunmute = () => {
+                        setPeers((current) =>
+                            current.map((p) =>
+                                p.peerId === remoteId && p.stream
+                                    ? { ...p, stream: new MediaStream(p.stream.getTracks()) }
+                                    : p,
+                            ),
+                        );
+                    };
                     if (hit) {
                         return prev.map((p) =>
                             p.peerId === remoteId ? { ...p, stream: new MediaStream(stream.getTracks()) } : p,
@@ -670,7 +709,53 @@ export function useFocusRoomRtc(
             };
 
             pc.onconnectionstatechange = () => {
-                if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                const state = pc.connectionState;
+                if (state === 'connected' || state === 'connecting') {
+                    const timer = disconnectTimersRef.current.get(remoteId);
+                    if (timer) {
+                        window.clearTimeout(timer);
+                        disconnectTimersRef.current.delete(remoteId);
+                    }
+                    return;
+                }
+                if (state === 'failed') {
+                    try {
+                        pc.restartIce();
+                    } catch {
+                        /* ignore */
+                    }
+                    const existing = disconnectTimersRef.current.get(remoteId);
+                    if (existing) window.clearTimeout(existing);
+                    disconnectTimersRef.current.set(
+                        remoteId,
+                        window.setTimeout(() => {
+                            if (
+                                pc.connectionState === 'failed' ||
+                                pc.connectionState === 'closed'
+                            ) {
+                                cleanupPeer(remoteId);
+                            }
+                        }, 10000),
+                    );
+                    return;
+                }
+                if (state === 'disconnected') {
+                    const existing = disconnectTimersRef.current.get(remoteId);
+                    if (existing) window.clearTimeout(existing);
+                    disconnectTimersRef.current.set(
+                        remoteId,
+                        window.setTimeout(() => {
+                            if (
+                                pc.connectionState === 'disconnected' ||
+                                pc.connectionState === 'failed'
+                            ) {
+                                cleanupPeer(remoteId);
+                            }
+                        }, 8000),
+                    );
+                    return;
+                }
+                if (state === 'closed') {
                     cleanupPeer(remoteId);
                 }
             };
@@ -726,6 +811,7 @@ export function useFocusRoomRtc(
                     const offerCollision = makingOfferRef.current.has(remoteId) || pc.signalingState !== 'stable';
                     if (offerCollision && !polite) return;
                     await pc.setRemoteDescription(payload.sdp);
+                    await flushPendingIce(remoteId, pc);
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
                     busRef.current?.send('signal', {
@@ -736,16 +822,21 @@ export function useFocusRoomRtc(
                     });
                 } else if (payload.type === 'answer' && payload.sdp) {
                     await pc.setRemoteDescription(payload.sdp);
+                    await flushPendingIce(remoteId, pc);
                 } else if (payload.type === 'ice' && payload.candidate) {
                     if (pc.remoteDescription) {
-                        await pc.addIceCandidate(payload.candidate);
+                        await pc.addIceCandidate(payload.candidate).catch(() => {});
+                    } else {
+                        const queued = pendingIceRef.current.get(remoteId) ?? [];
+                        queued.push(payload.candidate);
+                        pendingIceRef.current.set(remoteId, queued);
                     }
                 }
             } catch (err) {
                 console.warn('[FocusRoomRtc] signal', err);
             }
         },
-        [createPeerConnection, peerId],
+        [createPeerConnection, flushPendingIce, peerId],
     );
 
     const startLocalMedia = useCallback(async (opts?: {
