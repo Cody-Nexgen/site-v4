@@ -1,41 +1,48 @@
 /* Focuz Design Language — premium productivity, not AI-dashboard */
 
 :root {
-    --fz-bg: #0a0a0b;
-    --fz-surface: #121214;
-    --fz-surface-raised: #171719;
-    --fz-surface-overlay: #1c1c1f;
-    --fz-border: rgba(255, 255, 255, 0.07);
-    --fz-border-strong: rgba(255, 255, 255, 0.11);
-    --fz-text: #ededee;
-    --fz-text-secondary: #a0a0a6;
-    --fz-text-tertiary: #66666d;
-    --fz-accent: #d7d7db;
-    --fz-accent-muted: rgba(255, 255, 255, 0.08);
-    --fz-accent-warm: #f59e0b;
+    /* Aligned to 21st monochrome dark defaults used by the dashboard shell */
+    --fz-bg: oklch(0 0 0);
+    --fz-surface: oklch(0.14 0 0);
+    --fz-surface-raised: oklch(0.18 0 0);
+    --fz-surface-overlay: oklch(0.23 0 0);
+    --fz-border: oklch(0.26 0 0);
+    --fz-border-strong: oklch(0.32 0 0);
+    --fz-text: oklch(1 0 0);
+    --fz-text-secondary: oklch(0.72 0 0);
+    --fz-text-tertiary: oklch(0.56 0 0);
+    --fz-accent: oklch(1 0 0);
+    --fz-accent-muted: oklch(0.32 0 0);
+    --fz-accent-warm: oklch(0.81 0.17 75.35);
     --fz-success: #34d399;
-    --fz-danger: #f87171;
-    --fz-radius-sm: 5px;
-    --fz-radius-md: 7px;
-    --fz-radius-lg: 8px;
-    --fz-shadow-sm: none;
-    --fz-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.45);
-    --fz-font-display: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --fz-danger: oklch(0.69 0.20 23.91);
+    --fz-radius-sm: 0.375rem;
+    --fz-radius-md: 0.5rem;
+    --fz-radius-lg: 0.5rem;
+    --fz-shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.18);
+    --fz-shadow-md: 0 1px 2px hsl(0 0% 0% / 0.18);
+    --fz-font-display: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+    --fz-chart-1: oklch(0.81 0.17 75.35);
+    --fz-chart-2: oklch(0.58 0.21 260.84);
 }
 
 html[data-dashboard-theme="light"] {
-    --fz-bg: #f7f7f8;
-    --fz-surface: #ffffff;
-    --fz-surface-raised: #ffffff;
-    --fz-surface-overlay: #f1f1f3;
-    --fz-border: rgba(20, 20, 24, 0.09);
-    --fz-border-strong: rgba(20, 20, 24, 0.15);
-    --fz-text: #18181b;
-    --fz-text-secondary: #52525b;
-    --fz-text-tertiary: #71717a;
-    --fz-accent: #27272a;
-    --fz-accent-muted: rgba(20, 20, 24, 0.07);
-    --fz-shadow-md: 0 12px 32px rgba(24, 24, 27, 0.14);
+    --fz-bg: oklch(0.99 0 0);
+    --fz-surface: oklch(1 0 0);
+    --fz-surface-raised: oklch(1 0 0);
+    --fz-surface-overlay: oklch(0.97 0 0);
+    --fz-border: oklch(0.92 0 0);
+    --fz-border-strong: oklch(0.88 0 0);
+    --fz-text: oklch(0 0 0);
+    --fz-text-secondary: oklch(0.44 0 0);
+    --fz-text-tertiary: oklch(0.56 0 0);
+    --fz-accent: oklch(0 0 0);
+    --fz-accent-muted: oklch(0.94 0 0);
+    --fz-accent-warm: oklch(0.81 0.17 75.35);
+    --fz-danger: oklch(0.63 0.19 23.03);
+    --fz-shadow-md: 0 1px 2px hsl(0 0% 0% / 0.18);
+    --fz-chart-1: oklch(0.81 0.17 75.35);
+    --fz-chart-2: oklch(0.55 0.22 264.53);
 }
 
 /* Bridge: OptionsApp uses --dashboard-*; keep them aliased to --fz-* so web + extension stay in sync. */
@@ -60,14 +67,15 @@ html[data-dashboard-theme="light"] .focuz-dashboard {
 .focuz-dashboard .glass-edge-card {
     background: var(--dashboard-surface-raised);
     border: 1px solid var(--dashboard-border);
-    border-radius: 8px;
+    border-radius: var(--fz-radius-lg);
+    box-shadow: var(--fz-shadow-sm);
 }
 
 html[data-dashboard-theme="light"] .focuz-dashboard .surface-card,
 html[data-dashboard-theme="light"] .focuz-dashboard .glass-edge-card {
-    background: #ffffff;
-    border-color: rgba(24, 24, 27, 0.12);
-    box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04), 0 8px 24px rgba(24, 24, 27, 0.06);
+    background: var(--fz-surface);
+    border-color: var(--fz-border);
+    box-shadow: var(--fz-shadow-sm);
 }
 
 /* Remap common dark Tailwind utilities when light mode is active (web host may not load index.css). */
