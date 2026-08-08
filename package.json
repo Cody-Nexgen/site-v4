@@ -1,0 +1,8 @@
+{
+  "name": "focuznow-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix website",
+    "dev:website": "npm run dev --prefix website"
+  }
+}
