@@ -651,6 +651,17 @@ export const SessionsTab = () => {
     const [futureSelfModalOpen, setFutureSelfModalOpen] = useState(false);
 
     useEffect(() => {
+        void chrome.runtime
+            .sendMessage({ type: 'FUTURE_SELF_GET', dashboardOpen: false })
+            .then((response: { state?: { modeEnabled?: boolean } } | undefined) => {
+                if (typeof response?.state?.modeEnabled === 'boolean') {
+                    setFutureSelfEnabled(response.state.modeEnabled);
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    useEffect(() => {
         const revision = runtimeRevisionRef.current;
         const timing = {
             focusMin: defaultPomo.focusMin,
@@ -958,9 +969,15 @@ export const SessionsTab = () => {
                                 onClick={() => {
                                     if (subscriptionTier !== 'pro') {
                                         setFutureSelfModalOpen(true);
-                                    } else {
-                                        setFutureSelfEnabled((enabled) => !enabled);
+                                        return;
                                     }
+                                    setFutureSelfEnabled((enabled) => {
+                                        const next = !enabled;
+                                        void chrome.runtime
+                                            .sendMessage({ type: 'FUTURE_SELF_SET_MODE', enabled: next })
+                                            .catch(() => {});
+                                        return next;
+                                    });
                                 }}
                                 className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${futureSelfEnabled ? 'bg-purple-600' : 'bg-white/10'}`}
                             >

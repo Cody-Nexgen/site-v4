@@ -57,6 +57,8 @@ export type FutureSelfMirror = {
 
 export type FutureSelfState = {
     version: 1;
+    /** User-facing Future Self Mode toggle (Pomodoro). Off = no mirror / blocked overlay. */
+    modeEnabled: boolean;
     activeContract: FutureSelfContract | null;
     contracts: FutureSelfContract[];
     events: FutureSelfEvent[];

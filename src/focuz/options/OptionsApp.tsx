@@ -555,8 +555,8 @@ export const SettingsTab = () => {
     };
 
     return (
-        <div className="mx-auto w-full max-w-[820px] animate-fade-in-up space-y-4">
-            <div className="border-b border-[var(--dashboard-border)] pb-4">
+        <div className="mx-auto w-full max-w-[820px] animate-fade-in-up space-y-4 pb-10">
+            <div className="rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] px-5 py-4">
                 <p className="focuz-section-label mb-1">Settings</p>
                 <h2 className="text-2xl font-semibold tracking-tight text-[var(--dashboard-text)]">Preferences</h2>
                 <p className="mt-1 text-sm text-[var(--dashboard-text-muted)]">Tune how FocuzNow looks, tracks activity, and protects focus time.</p>
@@ -566,7 +566,7 @@ export const SettingsTab = () => {
             <div className="pt-1">
                 <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--dashboard-text-muted)]">Safety controls</p>
             </div>
-            <GlassCard className="p-4">
+            <GlassCard className="border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-4">
                 <div className="flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <h3 className="text-sm font-medium text-[var(--dashboard-text)]">Emergency override</h3>
@@ -591,7 +591,7 @@ export const SettingsTab = () => {
                     </p>
                 )}
             </GlassCard>
-            <GlassCard className="p-4">
+            <GlassCard className="border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-4">
                 <div className="flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <h3 className="text-sm font-medium text-[var(--dashboard-text)]">Unblocking challenge</h3>
@@ -766,7 +766,7 @@ export const Customization = () => {
         <div className="animate-fade-in-up space-y-4">
             <p className="pt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--dashboard-text-muted)]">Appearance & behavior</p>
 
-            <GlassCard className="p-4">
+            <GlassCard className="border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-4">
                 <h3 className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--dashboard-text)]">
                     <IconPalette size={15} className="text-purple-400" />
                     <span>Blocking message</span>
@@ -787,7 +787,7 @@ export const Customization = () => {
                 </div>
             </GlassCard>
 
-            <GlassCard className="divide-y divide-[var(--dashboard-border)] px-4">
+            <GlassCard className="divide-y divide-[var(--dashboard-border)] border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] px-4">
                 <h3 className="py-3 text-sm font-medium text-[var(--dashboard-text)]">Focus engine</h3>
 
                 <div className="flex items-center justify-between gap-6 py-3">
@@ -839,10 +839,10 @@ export const Customization = () => {
                 </div>
             </GlassCard>
 
-            <GlassCard className="p-5 sm:p-6 space-y-4">
+            <GlassCard className="space-y-4 border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-5 sm:p-6">
                 <div>
-                    <h3 className="font-semibold text-white text-base">Smart YouTube Mode</h3>
-                    <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+                    <h3 className="text-base font-semibold text-[var(--dashboard-text)]">Smart YouTube Mode</h3>
+                    <p className="mt-1.5 text-xs leading-relaxed text-[var(--dashboard-text-muted)]">
                         Uses the YouTube Data API to classify videos by official category. Education and Science are always allowed.
                     </p>
                 </div>
@@ -850,7 +850,7 @@ export const Customization = () => {
                 {(() => {
                     const smart = normalizeSmartYouTube(engineState.inAppBlock?.smartYouTube);
                     const patchSmart = async (next: typeof smart) => {
-                        await new Promise<void>((r) =>
+                        const res = await new Promise<{ ok?: boolean; state?: typeof engineState }>((r) =>
                             chrome.runtime.sendMessage(
                                 {
                                     type: 'UPDATE_ENGINE_SETTINGS',
@@ -858,38 +858,43 @@ export const Customization = () => {
                                         inAppBlock: {
                                             ...engineState.inAppBlock,
                                             smartYouTube: next,
-                                            youtubeShorts: next.blockShorts !== false,
                                         },
                                     },
                                 },
-                                () => r(),
+                                (resp) => r(resp || { ok: false }),
                             ),
                         );
-                        fetchEngineState();
+                        if (res?.state) {
+                            useAuthStore.setState({ engineState: { ...engineState, ...res.state } as typeof engineState });
+                        } else {
+                            await fetchEngineState();
+                        }
                     };
 
                     return (
                         <>
-                            <div className="focuz-surface-card p-4 flex items-center justify-between gap-4">
+                            <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] p-4">
                                 <div>
-                                    <span className="font-bold text-white text-sm block">Enable Smart YouTube</span>
-                                    <span className="text-[11px] text-neutral-500">
+                                    <span className="block text-sm font-semibold text-[var(--dashboard-text)]">Enable Smart YouTube</span>
+                                    <span className="text-[11px] text-[var(--dashboard-text-muted)]">
                                         {smart.blockedCategoryIds.length} categories blocked
                                     </span>
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => patchSmart({ ...smart, enabled: !smart.enabled })}
-                                    className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${smart.enabled ? 'bg-sky-500' : 'bg-neutral-800'}`}
+                                    role="switch"
+                                    aria-checked={smart.enabled}
+                                    onClick={() => void patchSmart({ ...smart, enabled: !smart.enabled })}
+                                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${smart.enabled ? 'bg-sky-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                                 >
-                                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${smart.enabled ? 'left-7' : 'left-1'}`} />
+                                    <span className={`pointer-events-none absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${smart.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </button>
                             </div>
                             {smart.enabled && (
                                 <button
                                     type="button"
                                     onClick={() => setShowSmartYtModal(true)}
-                                    className="w-full py-3 rounded-xl text-sm font-bold bg-sky-500/15 text-sky-300 hover:bg-sky-500/25 border border-sky-500/25"
+                                    className="w-full rounded-xl border border-sky-500/25 bg-sky-500/15 py-3 text-sm font-bold text-sky-300 hover:bg-sky-500/25"
                                 >
                                     Configure blocked categories…
                                 </button>
@@ -905,50 +910,57 @@ export const Customization = () => {
                 })()}
             </GlassCard>
 
-            <GlassCard className="p-5 sm:p-6 space-y-4">
+            <GlassCard className="space-y-4 border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-5 sm:p-6">
                 <div>
-                    <h3 className="font-semibold text-white text-base">In-App Distraction Blocking</h3>
-                    <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+                    <h3 className="text-base font-semibold text-[var(--dashboard-text)]">In-App Distraction Blocking</h3>
+                    <p className="mt-1.5 text-xs leading-relaxed text-[var(--dashboard-text-muted)]">
                         Blocks YouTube Shorts only — or use Smart YouTube above for smarter filtering.
                     </p>
                 </div>
 
-                <div className="p-4 sm:p-5 bg-white/5 border border-white/10 rounded-2xl transition-all">
+                <div className="rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] p-4 sm:p-5">
                     <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <IconBrandYoutube size={18} className="text-white shrink-0" />
+                        <div className="flex min-w-0 items-center gap-2">
+                            <IconBrandYoutube size={18} className="shrink-0 text-[var(--dashboard-text)]" />
                             <div className="min-w-0">
-                                <span className="font-bold text-white block">Block YouTube Shorts</span>
-                                <span className="text-[10px] text-neutral-500 mt-0.5 block">
+                                <span className="block font-semibold text-[var(--dashboard-text)]">Block YouTube Shorts</span>
+                                <span className="mt-0.5 block text-[10px] text-[var(--dashboard-text-muted)]">
                                     Redirects /shorts URLs and hides Shorts in your feed
                                 </span>
                             </div>
                         </div>
                         <button
                             type="button"
-                            onClick={async () => {
+                            role="switch"
+                            aria-checked={!!engineState.inAppBlock?.youtubeShorts}
+                            onClick={() => {
                                 const on = !engineState.inAppBlock?.youtubeShorts;
-                                await new Promise<void>((r) =>
-                                    chrome.runtime.sendMessage(
-                                        {
-                                            type: 'UPDATE_ENGINE_SETTINGS',
-                                            settings: {
-                                                inAppBlock: {
-                                                    ...engineState.inAppBlock,
-                                                    youtube: on,
-                                                    youtubeShorts: on,
-                                                },
+                                void chrome.runtime
+                                    .sendMessage({
+                                        type: 'UPDATE_ENGINE_SETTINGS',
+                                        settings: {
+                                            inAppBlock: {
+                                                ...engineState.inAppBlock,
+                                                youtubeShorts: on,
                                             },
                                         },
-                                        () => r(),
-                                    ),
-                                );
-                                fetchEngineState();
+                                    })
+                                    .then((res: { state?: typeof engineState } | undefined) => {
+                                        if (res?.state) {
+                                            useAuthStore.setState({
+                                                engineState: { ...engineState, ...res.state } as typeof engineState,
+                                            });
+                                        } else {
+                                            void fetchEngineState();
+                                        }
+                                    });
                             }}
-                            className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${engineState.inAppBlock?.youtubeShorts ? 'bg-purple-600' : 'bg-neutral-800'}`}
+                            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${engineState.inAppBlock?.youtubeShorts ? 'bg-purple-600' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                         >
-                            <div
-                                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${engineState.inAppBlock?.youtubeShorts ? 'left-7' : 'left-1'}`}
+                            <span
+                                className={`pointer-events-none absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                                    engineState.inAppBlock?.youtubeShorts ? 'translate-x-5' : 'translate-x-0'
+                                }`}
                             />
                         </button>
                     </div>
@@ -2570,8 +2582,21 @@ const OptionsApp = () => {
 
     useEffect(() => {
         if (!session || !isPro || view !== 'app') return;
+        const dismissedKey = 'focuznow-future-self-mirror-dismissed';
+        let dismissedIds: string[] = [];
+        try {
+            dismissedIds = JSON.parse(localStorage.getItem(dismissedKey) || '[]') as string[];
+        } catch {
+            dismissedIds = [];
+        }
         void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_GET', dashboardOpen: true }).then((response) => {
-            setFutureSelfMirror(response?.pendingMirror ?? null);
+            const pending = response?.pendingMirror ?? null;
+            if (pending?.id && dismissedIds.includes(pending.id)) {
+                void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_MIRROR_SHOWN', id: pending.id });
+                setFutureSelfMirror(null);
+                return;
+            }
+            setFutureSelfMirror(pending);
         });
     }, [session, isPro, view]);
 
@@ -2763,7 +2788,18 @@ const OptionsApp = () => {
                 mirror={futureSelfMirror}
                 onClose={() => {
                     if (futureSelfMirror) {
-                        void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_MIRROR_SHOWN', id: futureSelfMirror.id });
+                        try {
+                            const key = 'focuznow-future-self-mirror-dismissed';
+                            const prev = JSON.parse(localStorage.getItem(key) || '[]') as string[];
+                            const next = [...new Set([...prev, futureSelfMirror.id])].slice(-30);
+                            localStorage.setItem(key, JSON.stringify(next));
+                        } catch {
+                            /* ignore */
+                        }
+                        void chrome.runtime.sendMessage({
+                            type: 'FUTURE_SELF_MIRROR_SHOWN',
+                            id: futureSelfMirror.id,
+                        });
                     }
                     setFutureSelfMirror(null);
                 }}
