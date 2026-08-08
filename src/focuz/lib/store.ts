@@ -438,22 +438,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 ...(patch.smartYouTube || {}),
             },
         };
+        // Optimistic — never clobber this with a stale GET_STATE/local mirror.
         set({ engineState: { ...engineState, inAppBlock: nextInApp } });
         return new Promise<boolean>((resolve) => {
             chrome.runtime.sendMessage(
                 { type: 'UPDATE_ENGINE_SETTINGS', settings: { inAppBlock: nextInApp } },
                 (resp) => {
-                    if (resp?.state) {
-                        set({ engineState: resp.state as EngineState });
+                    const remote = resp?.state as EngineState | undefined;
+                    if (remote && typeof remote === 'object') {
+                        set({
+                            engineState: {
+                                ...remote,
+                                inAppBlock: {
+                                    ...remote.inAppBlock,
+                                    ...nextInApp,
+                                    smartYouTube: {
+                                        ...(remote.inAppBlock?.smartYouTube || {}),
+                                        ...nextInApp.smartYouTube,
+                                    },
+                                },
+                            },
+                        });
                         resolve(true);
                         return;
                     }
-                    if (chrome.runtime.lastError || resp?.ok === false) {
-                        // Persist may still have applied — resync instead of hard-reverting.
-                        void get().fetchEngineState().finally(() => resolve(false));
-                        return;
-                    }
-                    resolve(true);
+                    // Keep optimistic UI. Web GET_STATE is local-only and often stale.
+                    resolve(resp?.ok !== false && !chrome.runtime.lastError);
                 },
             );
         });
@@ -468,16 +478,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             chrome.runtime.sendMessage(
                 { type: 'UPDATE_ENGINE_SETTINGS', settings: { [key]: next } },
                 (resp) => {
-                    if (resp?.state) {
-                        set({ engineState: resp.state as EngineState });
+                    const remote = resp?.state as EngineState | undefined;
+                    if (remote && typeof remote === 'object') {
+                        set({ engineState: { ...remote, [key]: next } });
                         resolve(true);
                         return;
                     }
-                    if (chrome.runtime.lastError || !resp?.ok) {
-                        void get().fetchEngineState().finally(() => resolve(false));
-                        return;
-                    }
-                    resolve(true);
+                    resolve(resp?.ok !== false && !chrome.runtime.lastError);
                 },
             );
         });

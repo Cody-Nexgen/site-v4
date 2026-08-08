@@ -268,9 +268,56 @@ export function sendExtensionRpc<T = unknown>(message: PlatformMessage, timeoutM
     });
 }
 
+function applyEngineSettingsPatch(patch: Record<string, unknown>): Record<string, unknown> {
+    const current = getEngineState() as Record<string, unknown>;
+    const next: Record<string, unknown> = { ...current, ...patch, _localMutationAt: Date.now() };
+    if (patch.inAppBlock && typeof patch.inAppBlock === 'object') {
+        const curBlock = (current.inAppBlock || {}) as Record<string, unknown>;
+        const patchBlock = patch.inAppBlock as Record<string, unknown>;
+        const curSmart = (curBlock.smartYouTube || {}) as Record<string, unknown>;
+        const patchSmart = (patchBlock.smartYouTube || {}) as Record<string, unknown>;
+        next.inAppBlock = {
+            ...curBlock,
+            ...patchBlock,
+            smartYouTube: { ...curSmart, ...patchSmart },
+        };
+    }
+    return next;
+}
+
 async function handleMessage(message: PlatformMessage): Promise<unknown> {
     const type = message.type;
     if (!type) return { ok: false };
+
+    // Apply settings locally first so the web UI never depends on a slow/failed extension RPC.
+    if (type === 'UPDATE_ENGINE_SETTINGS') {
+        const patch = (message.settings || message.patch || {}) as Record<string, unknown>;
+        const next = applyEngineSettingsPatch(patch);
+        await storageSet({ blockEngineState: next });
+
+        if (shouldUseExtensionRpc(type) && extensionPresent()) {
+            // Fire-and-forget extension sync for real blocking; keep local state authoritative for UI.
+            void sendExtensionRpc(message).then(async (rpc) => {
+                const resp = rpc as { ok?: boolean; state?: Record<string, unknown> };
+                if (!resp?.ok || !resp.state || typeof resp.state !== 'object') return;
+                const local = getEngineState() as Record<string, unknown>;
+                const localMut = Number(local._localMutationAt) || 0;
+                const remoteMut = Number(resp.state._localMutationAt) || 0;
+                // Don't let a slower extension round-trip roll back a newer local toggle.
+                if (remoteMut > localMut) {
+                    await storageSet({
+                        blockEngineState: {
+                            ...resp.state,
+                            inAppBlock: local.inAppBlock ?? resp.state.inAppBlock,
+                            _localMutationAt: Math.max(localMut, remoteMut),
+                        },
+                    }, { syncCloud: false });
+                }
+            });
+        }
+
+        return { ok: true, state: next };
+    }
 
     if (shouldUseExtensionRpc(type)) {
         const rpc = await sendExtensionRpc(message);
@@ -286,7 +333,6 @@ async function handleMessage(message: PlatformMessage): Promise<unknown> {
                 type === 'REMOVE_BLOCK_SOURCE' ||
                 type === 'ADD_ALLOWED_SITE' ||
                 type === 'REMOVE_ALLOWED_SITE' ||
-                type === 'UPDATE_ENGINE_SETTINGS' ||
                 type === 'START_NUCLEAR' ||
                 type === 'SCHEDULE_ADD' ||
                 type === 'SCHEDULE_REMOVE')
@@ -307,26 +353,26 @@ async function handleMessage(message: PlatformMessage): Promise<unknown> {
     }
 
     if (type === 'GET_STATE' || type === 'GET_ENGINE_STATE') {
-        return { state: getEngineState(), ok: true };
-    }
-
-    if (type === 'UPDATE_ENGINE_SETTINGS') {
-        const patch = (message.settings || message.patch || {}) as Record<string, unknown>;
-        const current = getEngineState() as Record<string, unknown>;
-        const next: Record<string, unknown> = { ...current, ...patch };
-        if (patch.inAppBlock && typeof patch.inAppBlock === 'object') {
-            const curBlock = (current.inAppBlock || {}) as Record<string, unknown>;
-            const patchBlock = patch.inAppBlock as Record<string, unknown>;
-            const curSmart = (curBlock.smartYouTube || {}) as Record<string, unknown>;
-            const patchSmart = (patchBlock.smartYouTube || {}) as Record<string, unknown>;
-            next.inAppBlock = {
-                ...curBlock,
-                ...patchBlock,
-                smartYouTube: { ...curSmart, ...patchSmart },
-            };
+        // Prefer extension when present so refresh matches live blocking state.
+        if (extensionPresent()) {
+            const rpc = await sendExtensionRpc<{ ok?: boolean; state?: Record<string, unknown> }>({ type: 'GET_STATE' });
+            if (rpc?.ok && rpc.state && typeof rpc.state === 'object') {
+                const local = getEngineState() as Record<string, unknown>;
+                const localMut = Number(local._localMutationAt) || 0;
+                const remoteMut = Number(rpc.state._localMutationAt) || 0;
+                const merged = remoteMut >= localMut
+                    ? { ...local, ...rpc.state }
+                    : {
+                        ...rpc.state,
+                        ...local,
+                        // Keep nested blocks from the newer side.
+                        inAppBlock: localMut > remoteMut ? local.inAppBlock : (rpc.state.inAppBlock ?? local.inAppBlock),
+                    };
+                await storageSet({ blockEngineState: merged }, { syncCloud: false });
+                return { state: merged, ok: true };
+            }
         }
-        await storageSet({ blockEngineState: next });
-        return { ok: true, state: next };
+        return { state: getEngineState(), ok: true };
     }
 
     // Default: acknowledge without crashing UI
