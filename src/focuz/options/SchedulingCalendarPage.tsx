@@ -164,6 +164,8 @@ export default function SchedulingCalendarPage({
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [miniCalCollapsed, setMiniCalCollapsed] = useState(false);
     const [schedulingCollapsed, setSchedulingCollapsed] = useState(false);
+    const scheduleLinkBtnRef = useRef<HTMLButtonElement>(null);
+    const [scheduleMenuPos, setScheduleMenuPos] = useState<{ top: number; left: number } | null>(null);
     const [draft, setDraft] = useState<LinkDraft>(() => defaultLinkDraft(displayName));
     const [dirty, setDirty] = useState(false);
     const [pendingPanel, setPendingPanel] = useState<Panel | null>(null);
@@ -202,6 +204,7 @@ export default function SchedulingCalendarPage({
         started: boolean;
         day?: Date;
         dayIndex?: number;
+        clientY?: number;
     }>({ active: false, started: false });
 
     const today = new Date();
@@ -858,6 +861,31 @@ export default function SchedulingCalendarPage({
     const navBack = () => (calView === 'day' ? shiftDay(-1) : commitWeek(-1));
     const navForward = () => (calView === 'day' ? shiftDay(1) : commitWeek(1));
 
+    const openScheduleMenu = () => {
+        const el = scheduleLinkBtnRef.current;
+        if (!el) {
+            setLeftPanel((p) => (p === 'schedule-menu' ? 'none' : 'schedule-menu'));
+            return;
+        }
+        if (leftPanel === 'schedule-menu') {
+            setLeftPanel('none');
+            setScheduleMenuPos(null);
+            return;
+        }
+        const rect = el.getBoundingClientRect();
+        setScheduleMenuPos({
+            top: rect.top,
+            left: Math.min(rect.right + 8, window.innerWidth - 252),
+        });
+        setLeftPanel('schedule-menu');
+    };
+
+    const openSlotAtY = (day: Date, dayIndex: number, clientY: number, durationMin = 30) => {
+        const startMin = grid.minFromClientY(dayIndex, clientY);
+        const snapped = Math.floor(startMin / 15) * 15;
+        openModalFromRange(day, snapped, snapped + durationMin);
+    };
+
     return (
         <div
             className={`focuznow-calendar relative flex overflow-hidden text-white ${
@@ -982,82 +1010,14 @@ export default function SchedulingCalendarPage({
                                 </button>
                                 {!schedulingCollapsed && (
                                     <div className="px-3 pb-3 space-y-2">
-                                        <div className="relative">
-                                            <button
-                                                type="button"
-                                                onClick={() => setLeftPanel((p) => (p === 'schedule-menu' ? 'none' : 'schedule-menu'))}
-                                                className="w-full px-2 py-1.5 text-left text-xs font-medium text-neutral-400 rounded-md hover:bg-white/[0.06] hover:text-white transition-colors"
-                                            >
-                                                + New scheduling link
-                                            </button>
-                                            <AnimatePresence>
-                                                {leftPanel === 'schedule-menu' && (
-                                                    <motion.div
-                                                        key="schedule-link-chooser"
-                                                        role="dialog"
-                                                        aria-modal="true"
-                                                        aria-labelledby="schedule-link-type-title"
-                                                        initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                        exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                                                        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                                                        className="absolute left-0 top-full z-40 mt-1.5 w-[min(240px,calc(100vw-2rem))] rounded-xl border border-white/10 bg-black/50 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-                                                        style={{ WebkitBackdropFilter: 'blur(20px)' }}
-                                                    >
-                                                        <div className="flex items-center justify-between">
-                                                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
-                                                                Scheduling
-                                                            </p>
-                                                            <button
-                                                                type="button"
-                                                                aria-label="Close"
-                                                                onClick={() => setLeftPanel('none')}
-                                                                className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-white/5 hover:text-white"
-                                                            >
-                                                                <X size={14} />
-                                                            </button>
-                                                        </div>
-                                                        <h2 id="schedule-link-type-title" className="mt-1.5 text-sm font-semibold tracking-tight text-white">
-                                                            New link
-                                                        </h2>
-                                                        <div className="mt-2.5 flex flex-col gap-1.5">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    openRight('recurring');
-                                                                    setLeftPanel('none');
-                                                                }}
-                                                                className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.07]"
-                                                            >
-                                                                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 text-neutral-200">
-                                                                    <Link2 size={13} />
-                                                                </span>
-                                                                <span>
-                                                                    <span className="block text-xs font-medium text-white">Recurring</span>
-                                                                    <span className="mt-0.5 block text-[10px] text-neutral-500">Weekly availability</span>
-                                                                </span>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    openRight('oneoff');
-                                                                    setLeftPanel('none');
-                                                                }}
-                                                                className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.07]"
-                                                            >
-                                                                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 text-neutral-200">
-                                                                    <Link2 size={13} />
-                                                                </span>
-                                                                <span>
-                                                                    <span className="block text-xs font-medium text-white">One-off</span>
-                                                                    <span className="mt-0.5 block text-[10px] text-neutral-500">Specific dates only</span>
-                                                                </span>
-                                                            </button>
-                                                        </div>
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
-                                        </div>
+                                        <button
+                                            ref={scheduleLinkBtnRef}
+                                            type="button"
+                                            onClick={openScheduleMenu}
+                                            className="w-full px-2 py-1.5 text-left text-xs font-medium text-neutral-400 rounded-md hover:bg-white/[0.06] hover:text-white transition-colors"
+                                        >
+                                            + New scheduling link
+                                        </button>
                                         {savedLinks.length > 0 && (
                                             <div className="space-y-1 pt-1">
                                                 {savedLinks.map((l) => (
@@ -1198,6 +1158,12 @@ export default function SchedulingCalendarPage({
                                             onClick={() => {
                                                 setWeekStart(startOfWeek(day));
                                                 setMiniMonth(day);
+                                                setDayDate(day);
+                                                setCalView('day');
+                                            }}
+                                            onDoubleClick={() => {
+                                                setWeekStart(startOfWeek(day));
+                                                setMiniMonth(day);
                                                 openModalFromRange(day, 9 * 60, 10 * 60);
                                             }}
                                             className={`min-h-[80px] p-1.5 rounded-lg border cursor-pointer transition-colors ${
@@ -1245,8 +1211,11 @@ export default function SchedulingCalendarPage({
                                     timedEventsForDay={timedEventsForDay}
                                     allDayChipsForDay={allDayChipsForDay}
                                     singleDayMode={addDays(ws, getDay(dayDate))}
-                                    onRightPointerDown={(day, dayIndex) => {
-                                        rightDragRef.current = { active: true, started: false, day, dayIndex };
+                                    onRightPointerDown={(day, dayIndex, clientY) => {
+                                        rightDragRef.current = { active: true, started: false, day, dayIndex, clientY };
+                                    }}
+                                    onEmptyDoubleClick={(day, dayIndex, clientY) => {
+                                        openSlotAtY(day, dayIndex, clientY, 30);
                                     }}
                                     onDeleteEvent={(ev) => deleteEvent(ev)}
                                     onEventPointerDown={(ev, day, dayIndex, startMin, e) => {
@@ -1272,8 +1241,11 @@ export default function SchedulingCalendarPage({
                                     groups={groups}
                                     timedEventsForDay={timedEventsForDay}
                                     allDayChipsForDay={allDayChipsForDay}
-                                    onRightPointerDown={(day, dayIndex) => {
-                                        rightDragRef.current = { active: true, started: false, day, dayIndex };
+                                    onRightPointerDown={(day, dayIndex, clientY) => {
+                                        rightDragRef.current = { active: true, started: false, day, dayIndex, clientY };
+                                    }}
+                                    onEmptyDoubleClick={(day, dayIndex, clientY) => {
+                                        openSlotAtY(day, dayIndex, clientY, 30);
                                     }}
                                     onDeleteEvent={(ev) => deleteEvent(ev)}
                                     onEventPointerDown={(ev, day, dayIndex, startMin, e) => {
@@ -1286,6 +1258,100 @@ export default function SchedulingCalendarPage({
                     )}
                 </div>
             </div>
+
+            <AnimatePresence>
+                {leftPanel === 'schedule-menu' && scheduleMenuPos && (
+                    <motion.div
+                        key="schedule-link-chooser-portal"
+                        className="fixed inset-0 z-[80]"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.12 }}
+                    >
+                        <button
+                            type="button"
+                            aria-label="Close"
+                            className="absolute inset-0 cursor-default"
+                            onClick={() => {
+                                setLeftPanel('none');
+                                setScheduleMenuPos(null);
+                            }}
+                        />
+                        <motion.div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="schedule-link-type-title"
+                            initial={{ opacity: 0, x: -6, scale: 0.98 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: -4, scale: 0.98 }}
+                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            className="absolute w-[240px] rounded-xl border border-white/10 bg-black/50 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                            style={{
+                                top: scheduleMenuPos.top,
+                                left: scheduleMenuPos.left,
+                                WebkitBackdropFilter: 'blur(20px)',
+                            }}
+                        >
+                            <div className="flex items-center justify-between">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                                    Scheduling
+                                </p>
+                                <button
+                                    type="button"
+                                    aria-label="Close"
+                                    onClick={() => {
+                                        setLeftPanel('none');
+                                        setScheduleMenuPos(null);
+                                    }}
+                                    className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-white/5 hover:text-white"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <h2 id="schedule-link-type-title" className="mt-1.5 text-sm font-semibold tracking-tight text-white">
+                                New Link
+                            </h2>
+                            <div className="mt-2.5 flex flex-col gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        openRight('recurring');
+                                        setLeftPanel('none');
+                                        setScheduleMenuPos(null);
+                                    }}
+                                    className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.07]"
+                                >
+                                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 text-neutral-200">
+                                        <Link2 size={13} />
+                                    </span>
+                                    <span>
+                                        <span className="block text-xs font-medium text-white">Recurring</span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">Weekly availability</span>
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        openRight('oneoff');
+                                        setLeftPanel('none');
+                                        setScheduleMenuPos(null);
+                                    }}
+                                    className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.07]"
+                                >
+                                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 text-neutral-200">
+                                        <Link2 size={13} />
+                                    </span>
+                                    <span>
+                                        <span className="block text-xs font-medium text-white">One-off</span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">Specific dates only</span>
+                                    </span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {(rightPanel === 'recurring' || rightPanel === 'oneoff') && (
                 <SchedulingLinkPanel

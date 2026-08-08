@@ -17,7 +17,7 @@ import {
     Play, Pause, RefreshCw, Plus,
     Trash, Check, Ban, Globe, Zap, X,
     AlertTriangle, TrendingDown, Lightbulb,
-    ShieldCheck, Loader2, Sliders, ChevronDown,
+    ShieldCheck, Loader2, ChevronDown,
 } from 'lucide-react';
 import { HabitCheckInButton } from '../components/pro-dashboard/HabitCheckInButton';
 import { IconCalendarStats } from '@tabler/icons-react';
@@ -849,7 +849,7 @@ export const SessionsTab = () => {
         <div className="mx-auto max-w-[980px] animate-fade-in-up space-y-5">
             <div className="text-center">
                 <p className="focuz-section-label">Focus</p>
-                <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--dashboard-text)]">Focus sessions</h1>
+                <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--dashboard-text)]">Pomodoro</h1>
                 <p className="mt-1 text-sm text-[var(--dashboard-text-muted)]">Choose a rhythm, start the clock, and stay with one thing.</p>
             </div>
             {pomoNotice && (
@@ -863,7 +863,7 @@ export const SessionsTab = () => {
                     <span className={`mx-auto mb-5 self-center rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
                         isBreak ? 'bg-emerald-500/10 text-emerald-400' : 'bg-purple-500/10 text-purple-400'
                     }`}>
-                        {isBreak ? 'Recovery break' : pomoRunning ? 'Focus in progress' : 'Ready to focus'}
+                        {isBreak ? 'Recovery Break' : pomoRunning ? 'Focus In Progress' : 'Ready To Focus'}
                     </span>
 
                     <div className="flex w-full items-center justify-center">
@@ -925,7 +925,7 @@ export const SessionsTab = () => {
                             })();
                         }}
                             className={`flex min-w-32 items-center justify-center gap-2 rounded-md px-6 py-2.5 text-sm font-medium transition-colors ${pomoRunning ? 'border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] text-[var(--dashboard-text)] hover:bg-[var(--dashboard-interactive-hover)]' : 'bg-[var(--dashboard-text)] text-[var(--dashboard-bg)] opacity-95 hover:opacity-100'}`}>
-                            {pomoRunning ? <><Pause size={16} /><span>Pause</span></> : <><Play size={16} /><span>Start focus</span></>}
+                            {pomoRunning ? <><Pause size={16} /><span>Pause</span></> : <><Play size={16} /><span>Start Focus</span></>}
                         </button>
                         <button onClick={() => {
                             if (runtime?.futureSelfContractId) {
@@ -962,14 +962,18 @@ export const SessionsTab = () => {
                                         setFutureSelfEnabled((enabled) => !enabled);
                                     }
                                 }}
-                                className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${futureSelfEnabled ? 'bg-purple-600' : 'bg-white/10'}`}
+                                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${futureSelfEnabled ? 'bg-purple-600' : 'bg-white/10'}`}
                             >
-                                <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${futureSelfEnabled ? 'translate-x-1' : '-translate-x-4'}`} />
+                                <span
+                                    className={`pointer-events-none absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                                        futureSelfEnabled ? 'translate-x-5' : 'translate-x-0'
+                                    }`}
+                                />
                             </button>
                         </div>
                     </GlassCard>
                     <GlassCard className="p-4">
-                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Session presets</h2>
+                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Session Presets</h2>
                         <p className="mt-0.5 text-xs text-[var(--dashboard-text-muted)]">Set your focus cadence.</p>
                         <div className="mt-3 space-y-1.5">
                             {sessionPresets.map((preset) => {
@@ -1007,7 +1011,7 @@ export const SessionsTab = () => {
                         </div>
                     </GlassCard>
                     <GlassCard className="p-4">
-                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Custom timing</h2>
+                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Custom Timing</h2>
                         <div className="mt-3 grid grid-cols-2 gap-2">
                             <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--dashboard-text-muted)]">
                                 Focus
@@ -1095,6 +1099,7 @@ export const BlocklistTab = () => {
     const [categoryPending, setCategoryPending] = useState<SafeBlockCategoryKey | null>(null);
     const [resolvingField, setResolvingField] = useState<'block' | 'allowed_site' | null>(null);
     const [bulkActionPending, setBulkActionPending] = useState<string | null>(null);
+    const [platformPending, setPlatformPending] = useState<string | null>(null);
     const [expandedBlockedCategories, setExpandedBlockedCategories] = useState<Partial<Record<SafeBlockCategoryKey, boolean>>>({});
 
     const blocklistCount = Object.keys(engineState.blocklist || {}).filter(
@@ -1280,7 +1285,7 @@ export const BlocklistTab = () => {
                     settings: {
                         inAppBlock: {
                             ...engineState.inAppBlock,
-                            youtube: true, youtubeShorts: true, instagramReels: true, tiktok: true,
+                            youtube: true, youtubeShorts: true, instagram: true, instagramReels: true, tiktok: true,
                         },
                     },
                 });
@@ -1297,7 +1302,7 @@ export const BlocklistTab = () => {
                     settings: {
                         inAppBlock: {
                             ...engineState.inAppBlock,
-                            youtube: false, youtubeShorts: false, instagramReels: false, tiktok: false,
+                            youtube: false, youtubeShorts: false, instagram: false, instagramReels: false, tiktok: false,
                         },
                     },
                 });
@@ -1320,8 +1325,42 @@ export const BlocklistTab = () => {
         }
     };
 
+    const platformKeys = [
+        { label: 'YouTube Shorts', key: 'youtubeShorts' as const, desc: 'Blocks /shorts URLs and Shorts feed' },
+        { label: 'YouTube', key: 'youtube' as const, desc: 'Blocks all of YouTube' },
+        { label: 'Instagram Reels', key: 'instagramReels' as const, desc: 'Blocks Instagram Reels' },
+        { label: 'Instagram', key: 'instagram' as const, desc: 'Blocks Instagram' },
+        { label: 'TikTok', key: 'tiktok' as const, desc: 'Blocks TikTok' },
+    ];
+
+    const togglePlatformBlock = async (key: (typeof platformKeys)[number]['key']) => {
+        if (nuclearActive || platformPending) return;
+        const current = engineState.inAppBlock || {};
+        const nextOn = !current[key];
+        setPlatformPending(key);
+        try {
+            const res = await sendEngineMessage({
+                type: 'UPDATE_ENGINE_SETTINGS',
+                settings: {
+                    inAppBlock: {
+                        ...current,
+                        [key]: nextOn,
+                    },
+                },
+            });
+            if (res.ok === false) {
+                setBlockActionError(res.error || `Could not update ${key}.`);
+                return;
+            }
+            setBlockActionError('');
+            await fetchEngineState();
+        } finally {
+            setPlatformPending(null);
+        }
+    };
+
     return (
-        <div className="mx-auto w-full max-w-[640px] space-y-6 animate-fade-in-up">
+        <div className="mx-auto w-full max-w-[1100px] space-y-4 animate-fade-in-up">
             <ChallengeModal
                 isOpen={challengeState.isOpen}
                 phrase={challengeState.phrase}
@@ -1332,10 +1371,17 @@ export const BlocklistTab = () => {
                     : executeAction(challengeState.type, challengeState.domain, 'remove')}
                 onDisableChallenge={disableChallenge}
             />
-            <div className="mb-2">
-                <p className="focuz-section-label">Focus</p>
-                <h1 className="text-3xl font-semibold text-white tracking-tight">Site Management</h1>
-                <p className="text-sm text-neutral-500 mt-1">Control what gets blocked and what stays reachable.</p>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <p className="focuz-section-label">Focus</p>
+                    <h1 className="text-3xl font-semibold text-white tracking-tight">Site Management</h1>
+                    <p className="text-sm text-neutral-500 mt-1">Control what gets blocked and what stays reachable.</p>
+                </div>
+                <p className="text-[10px] text-neutral-600 max-w-xs text-right">
+                    Tip: hold{' '}
+                    <span className="rounded border border-white/15 bg-white/5 px-1 font-mono text-[10px] text-neutral-400">Alt</span>
+                    {' '}+ Enter for AI site lookup{!isPro ? ' (Pro)' : ''}.
+                </p>
             </div>
             {blockActionError && (
                 <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -1344,166 +1390,149 @@ export const BlocklistTab = () => {
                 </div>
             )}
 
-            <GlassCard className="p-5">
-                <div className="flex items-center gap-2 mb-1">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300">
-                        <Sliders size={16} />
-                    </span>
-                    <h3 className="font-semibold text-white text-sm">Quick Actions</h3>
-                </div>
-                <p className="text-xs text-neutral-500 mb-4">One-tap changes across categories and platform blockers.</p>
-                <div className="grid grid-cols-2 gap-3">
-                    {quickActions.map((action) => {
-                        const Icon = action.icon;
-                        const pending = bulkActionPending === action.id;
-                        return (
-                            <button
-                                key={action.id}
-                                type="button"
-                                disabled={!!bulkActionPending || nuclearActive}
-                                onClick={() => void runQuickAction(action)}
-                                className="flex flex-col items-start gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 text-left transition-colors hover:border-violet-400/40 hover:bg-violet-500/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300">
-                                    {pending ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} />}
-                                </span>
-                                <span className="text-xs font-semibold text-neutral-200">{action.label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-                {nuclearActive && (
-                    <p className="mt-3 text-xs text-amber-400/80">Quick actions are locked during Nuclear Lockdown.</p>
-                )}
-                <p className="mt-3 text-[10px] text-neutral-600">
-                    Tip: on Blocked / Allowed inputs, hold{' '}
-                    <span className="rounded border border-white/15 bg-white/5 px-1 font-mono text-[10px] text-neutral-400">Alt</span>
-                    {' '}+ Enter to resolve a site name with AI{!isPro ? ' (Pro)' : ''}.
-                </p>
-            </GlassCard>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {quickActions.map((action) => {
+                    const Icon = action.icon;
+                    const pending = bulkActionPending === action.id;
+                    return (
+                        <button
+                            key={action.id}
+                            type="button"
+                            disabled={!!bulkActionPending || nuclearActive}
+                            onClick={() => void runQuickAction(action)}
+                            className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-neutral-300">
+                                {pending ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
+                            </span>
+                            <span className="text-[11px] font-semibold text-neutral-200 leading-snug">{action.label}</span>
+                        </button>
+                    );
+                })}
+            </div>
+            {nuclearActive && (
+                <p className="text-xs text-amber-400/80">Quick actions and platform blockers are locked during Nuclear Lockdown.</p>
+            )}
 
-            <p className="focuz-section-label mt-2">Rules</p>
-
-            <GlassCard className="p-5">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                    <div>
-                        <h3 className="font-semibold text-white text-sm">Block by category</h3>
-                        <p className="text-xs text-neutral-500 mt-1">
-                            Turn on a curated group. Shared sites stay blocked until every matching category is removed.
-                        </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <GlassCard className="p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                        <div>
+                            <h3 className="font-semibold text-white text-sm">Block by Category</h3>
+                            <p className="text-[11px] text-neutral-500 mt-0.5">Curated site groups.</p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-neutral-500">
+                            {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).length} on
+                        </span>
                     </div>
-                    <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold text-neutral-500">
-                        {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).length} active
-                    </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {SAFE_BLOCK_CATEGORY_KEYS.map((category) => {
-                        const active = !!engineState.categoriesActive?.[category];
-                        const pending = categoryPending === category;
-                        return (
-                            <button
-                                key={category}
-                                type="button"
-                                role="switch"
-                                aria-checked={active}
-                                disabled={categoryPending !== null || nuclearActive}
-                                onClick={() => void toggleCategory(category)}
-                                className={`flex min-h-20 items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                                    active
-                                        ? 'border-purple-500/40 bg-purple-500/10'
-                                        : 'border-white/[0.08] bg-[#111] hover:border-white/20'
-                                }`}
-                            >
-                                <span>
-                                    <span className={`block text-sm font-semibold ${active ? 'text-purple-200' : 'text-neutral-200'}`}>
-                                        {SAFE_BLOCK_CATEGORY_LABELS[category]}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {SAFE_BLOCK_CATEGORY_KEYS.map((category) => {
+                            const active = !!engineState.categoriesActive?.[category];
+                            const pending = categoryPending === category;
+                            return (
+                                <button
+                                    key={category}
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={active}
+                                    disabled={categoryPending !== null || nuclearActive}
+                                    onClick={() => void toggleCategory(category)}
+                                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                        active
+                                            ? 'border-purple-500/40 bg-purple-500/10'
+                                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20'
+                                    }`}
+                                >
+                                    <span>
+                                        <span className={`block text-sm font-semibold ${active ? 'text-purple-200' : 'text-neutral-200'}`}>
+                                            {SAFE_BLOCK_CATEGORY_LABELS[category]}
+                                        </span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">
+                                            {SAFE_BLOCK_CATEGORIES[category].length} sites
+                                            {pending ? ' · updating' : ''}
+                                        </span>
                                     </span>
-                                    <span className="mt-1 block text-[10px] text-neutral-500">
-                                        {SAFE_BLOCK_CATEGORIES[category].length} sites
+                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${active ? 'bg-purple-500' : 'bg-neutral-700'}`}>
+                                        <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${active ? 'translate-x-4' : 'translate-x-0'}`} />
                                     </span>
-                                </span>
-                                <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${active ? 'bg-purple-500' : 'bg-neutral-700'}`}>
-                                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${active ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                                </span>
-                                {pending && <span className="sr-only">Updating</span>}
-                            </button>
-                        );
-                    })}
-                </div>
-                {nuclearActive && (
-                    <p className="mt-3 text-xs text-amber-400/80">Categories cannot be changed during Nuclear Lockdown.</p>
-                )}
-            </GlassCard>
-
-            {/* Platform quick-blocks */}
-            <GlassCard className="p-5">
-                <h3 className="font-semibold text-white text-sm mb-3">Platform Blockers</h3>
-                <div className="flex flex-wrap gap-3">
-                    {([
-                        { label: 'YouTube Shorts', key: 'youtubeShorts', desc: 'Blocks /shorts URLs and feed' },
-                        { label: 'YouTube', key: 'youtube', desc: 'Blocks all of YouTube' },
-                        { label: 'Instagram Reels', key: 'instagramReels', desc: 'Blocks Reels feed' },
-                        { label: 'TikTok', key: 'tiktok', desc: 'Blocks TikTok' },
-                    ] as { label: string; key: keyof typeof engineState.inAppBlock; desc: string }[]).map(({ label, key, desc }) => {
-                        const on = !!engineState.inAppBlock?.[key];
-                        return (
-                            <button
-                                key={key}
-                                type="button"
-                                disabled={nuclearActive}
-                                onClick={async () => {
-                                    await new Promise<void>(r => chrome.runtime.sendMessage({
-                                        type: 'UPDATE_ENGINE_SETTINGS',
-                                        settings: { inAppBlock: { ...engineState.inAppBlock, [key]: !on } }
-                                    }, () => r()));
-                                    fetchEngineState();
-                                }}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${on ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'}`}
-                                title={desc}
-                            >
-                                <span className={`w-2 h-2 rounded-full ${on ? 'bg-red-500' : 'bg-neutral-600'}`} />
-                                {label}
-                            </button>
-                        );
-                    })}
-                </div>
-                {nuclearActive && (
-                    <p className="mt-3 text-xs text-amber-400/80">Platform blockers cannot be changed during Nuclear Lockdown.</p>
-                )}
-            </GlassCard>
-
-            <p className="focuz-section-label mt-2">Custom Rules</p>
-
-            <div className="grid grid-cols-1 gap-6">
-                <GlassCard className="p-5">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-white text-base">Blocked</h3>
-                        <Ban size={18} className="text-red-400" />
+                                </button>
+                            );
+                        })}
                     </div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-4">
-                        Supports subdomains (sub.site.com) and routes (site.com/path)
+                </GlassCard>
+
+                <GlassCard className="p-4">
+                    <div className="mb-3">
+                        <h3 className="font-semibold text-white text-sm">Platform Blockers</h3>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">In-app distractions on major platforms.</p>
+                    </div>
+                    <div className="space-y-1.5">
+                        {platformKeys.map(({ label, key, desc }) => {
+                            const on = !!engineState.inAppBlock?.[key];
+                            const pending = platformPending === key;
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={on}
+                                    disabled={nuclearActive || !!platformPending}
+                                    title={desc}
+                                    onClick={() => void togglePlatformBlock(key)}
+                                    className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                        on
+                                            ? 'border-red-500/35 bg-red-500/10'
+                                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20'
+                                    }`}
+                                >
+                                    <span>
+                                        <span className={`block text-sm font-semibold ${on ? 'text-red-300' : 'text-neutral-200'}`}>
+                                            {label}
+                                        </span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">
+                                            {pending ? 'Updating…' : desc}
+                                        </span>
+                                    </span>
+                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-red-500' : 'bg-neutral-700'}`}>
+                                        {pending
+                                            ? <Loader2 size={12} className="absolute inset-0 m-auto animate-spin text-white" />
+                                            : <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${on ? 'translate-x-4' : 'translate-x-0'}`} />}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </GlassCard>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <GlassCard className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold text-white text-sm">Blocked</h3>
+                        <Ban size={16} className="text-red-400" />
+                    </div>
+                    <p className="text-[10px] text-neutral-500 mb-3">
+                        Domains, subdomains, or paths (site.com/path)
                     </p>
-                    <div className="flex space-x-3 mb-2">
+                    <div className="flex gap-2 mb-2">
                         <input
                             value={newBlocked}
                             onChange={e => setNewBlocked(e.target.value)}
                             disabled={resolvingField === 'block'}
                             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleAddSite('block', e.altKey); } }}
                             placeholder="site.com or sub.site.com/path"
-                            className="flex-1 min-w-0 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-purple-500 outline-none transition-colors duration-150 text-white disabled:opacity-50"
+                            className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 outline-none transition-colors duration-150 text-white disabled:opacity-50"
                         />
                         <button
+                            type="button"
                             onClick={(e) => void handleAddSite('block', e.altKey)}
                             disabled={resolvingField === 'block'}
-                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 disabled:opacity-60 flex items-center gap-1.5"
+                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 disabled:opacity-60 flex items-center gap-1.5"
                         >
                             {resolvingField === 'block' ? <Loader2 size={13} className="animate-spin" /> : 'Add'}
                         </button>
                     </div>
-                    <p className="mb-4 text-[10px] text-neutral-600">
-                        Hold Alt for AI lookup on a natural-language name{!isPro ? ' · Pro' : ''}
-                    </p>
-                    <div className="max-h-[min(28rem,calc(4*5.25rem))] space-y-2 overflow-y-auto scrollbar-hide">
+                    <div className="max-h-[22rem] space-y-1.5 overflow-y-auto scrollbar-hide">
                         {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).map((category) => {
                             const expanded = !!expandedBlockedCategories[category];
                             const sites = SAFE_BLOCK_CATEGORIES[category];
@@ -1518,7 +1547,7 @@ export const BlocklistTab = () => {
                                             ...prev,
                                             [category]: !prev[category],
                                         }))}
-                                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
                                     >
                                         <span>
                                             <span className="block text-sm font-semibold text-purple-100">
@@ -1598,9 +1627,9 @@ export const BlocklistTab = () => {
                                 if (!sourceItems.length) return null;
 
                                 return (
-                                    <div key={domain} className="rounded-xl border border-white/5 bg-[#111] p-4 transition-colors duration-150 hover:border-white/10">
-                                        <span className="mb-2 block text-sm font-medium text-white">{domain}</span>
-                                        <div className="flex flex-wrap gap-2">
+                                    <div key={domain} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 transition-colors duration-150 hover:border-white/15">
+                                        <span className="mb-1.5 block text-sm font-medium text-white">{domain}</span>
+                                        <div className="flex flex-wrap gap-1.5">
                                             {sourceItems.map((item, index) => (
                                                 <span
                                                     key={`${item.source}-${item.id || index}`}
@@ -1625,25 +1654,25 @@ export const BlocklistTab = () => {
                             })}
                         {!SAFE_BLOCK_CATEGORY_KEYS.some((key) => engineState.categoriesActive?.[key])
                             && Object.values(engineState.blocklist || {}).every((entry) => !(entry.sources || []).some((s: string) => s !== 'category')) && (
-                            <p className="py-8 text-center text-sm text-neutral-600">No sites are currently blocked.</p>
+                            <p className="py-4 text-center text-sm text-neutral-600">No sites are currently blocked.</p>
                         )}
                     </div>
                 </GlassCard>
 
-                <GlassCard className="p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold text-white text-base">Allowed</h3>
-                        <Globe size={18} className="text-emerald-400" />
+                <GlassCard className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold text-white text-sm">Allowed</h3>
+                        <Globe size={16} className="text-emerald-400" />
                     </div>
-                    <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] p-3">
-                        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-sky-400" />
-                        <div className="min-w-0 flex-1 space-y-2">
+                    <div className="mb-3 flex items-start gap-2 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] p-2.5">
+                        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-sky-400" />
+                        <div className="min-w-0 flex-1 space-y-1.5">
                             <p className="text-[11px] leading-relaxed text-sky-200/80">
-                                <span className="font-semibold text-sky-300">Allowlist mode</span> blocks every site except the ones listed here.
+                                <span className="font-semibold text-sky-300">Allowlist Mode</span> blocks every site except the ones listed here.
                             </p>
                             <label className="flex items-center justify-between gap-3 cursor-pointer">
                                 <span className="text-[11px] text-sky-100/90">
-                                    {engineState.allowlistMode ? 'On — only listed sites work' : 'Off — listed sites are only exempt from your blocklist'}
+                                    {engineState.allowlistMode ? 'On — only listed sites work' : 'Off — listed sites are exempt from your blocklist'}
                                 </span>
                                 <button
                                     type="button"
@@ -1670,74 +1699,73 @@ export const BlocklistTab = () => {
                             </label>
                         </div>
                     </div>
-                    <div className="flex space-x-3 mb-2">
+                    <div className="flex gap-2 mb-2">
                         <input
                             value={newAllowed}
                             onChange={e => setNewAllowed(e.target.value)}
                             disabled={resolvingField === 'allowed_site'}
                             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleAddSite('allowed_site', e.altKey); } }}
                             placeholder="trustedsite.com"
-                            className="flex-1 min-w-0 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-emerald-500 outline-none transition-colors duration-150 text-white disabled:opacity-50"
+                            className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-emerald-500 outline-none transition-colors duration-150 text-white disabled:opacity-50"
                         />
                         <button
+                            type="button"
                             onClick={(e) => void handleAddSite('allowed_site', e.altKey)}
                             disabled={resolvingField === 'allowed_site'}
-                            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 disabled:opacity-60 flex items-center gap-1.5"
+                            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 disabled:opacity-60 flex items-center gap-1.5"
                         >
                             {resolvingField === 'allowed_site' ? <Loader2 size={13} className="animate-spin" /> : 'Add'}
                         </button>
                     </div>
-                    <p className="mb-4 text-[10px] text-neutral-600">
-                        Hold Alt for AI lookup on a natural-language name{!isPro ? ' · Pro' : ''}
-                    </p>
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide">
+                    <div className="space-y-1.5 max-h-[22rem] overflow-y-auto scrollbar-hide">
                         {(engineState.allowedSites || []).map((domain: string) => (
-                            <div key={domain} className="flex items-center justify-between p-4 bg-[#111] rounded-xl border border-white/5 group hover:border-white/10 transition-colors duration-150">
-                                <span className="text-sm font-medium text-white">{domain}</span>
+                            <div key={domain} className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-xl border border-white/[0.08] group hover:border-white/15 transition-colors duration-150">
+                                <span className="text-sm font-medium text-white truncate">{domain}</span>
                                 <button
                                     type="button"
                                     onClick={() => triggerAction('allowed_site', domain, 'remove')}
-                                    className="flex-shrink-0 p-2 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-100 sm:opacity-60 sm:group-hover:opacity-100 relative z-10"
+                                    className="flex-shrink-0 p-1.5 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors relative z-10"
                                     aria-label={`Remove ${domain}`}
                                 >
-                                    <X size={16} />
+                                    <X size={15} />
                                 </button>
                             </div>
                         ))}
+                        {(engineState.allowedSites || []).length === 0 && (
+                            <p className="py-4 text-center text-sm text-neutral-600">No allowed sites yet.</p>
+                        )}
                     </div>
                 </GlassCard>
             </div>
 
-            <p className="focuz-section-label mt-2">Focus</p>
-
             {/* Nuclear */}
-            <GlassCard className="p-5 border-red-500/20 bg-red-900/5">
-                <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <Zap size={20} className="text-red-500" />
-                    <h3 className="text-lg font-semibold text-white">Nuclear Lockdown</h3>
+            <GlassCard className="p-4 border-red-500/20 bg-red-900/5">
+                <div className="flex items-center gap-2.5 mb-3 flex-wrap">
+                    <Zap size={18} className="text-red-500" />
+                    <h3 className="text-base font-semibold text-white">Nuclear Lockdown</h3>
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-red-500/70">Irreversible</span>
                 </div>
                 
                 {nuclearActive ? (
-                    <div className="p-6 bg-red-600/15 border border-red-500/40 rounded-2xl text-center">
-                        <span className="text-red-400 font-semibold text-sm">Nuclear lockdown active</span>
+                    <div className="p-4 bg-red-600/15 border border-red-500/40 rounded-xl text-center">
+                        <span className="text-red-400 font-semibold text-sm">Nuclear Lockdown Active</span>
                         <div className="text-3xl font-semibold tabular-nums text-white mt-2">
                             {Math.max(0, Math.ceil((engineState.nuclearState.endTime - Date.now()) / 60000))}m remaining
                         </div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400/60 mt-4">Un-cancellable by design</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400/60 mt-3">Un-cancellable by design</p>
                     </div>
                 ) : (
                     <>
-                        <p className="text-sm text-neutral-400 mb-6 max-w-xl leading-relaxed">
-                            Blocks every site on your blocklist for the chosen duration. Once activated, you cannot unblock sites until the timer expires.
+                        <p className="text-sm text-neutral-400 mb-3 max-w-2xl leading-relaxed">
+                            Locks every site on your blocklist for the chosen duration. You cannot unblock until it ends.
                         </p>
-                        <div className="flex flex-wrap gap-2 mb-4">
+                        <div className="flex flex-wrap items-center gap-2">
                             {[15, 30, 60, 120].map((m) => (
                                 <button
                                     key={m}
                                     type="button"
                                     onClick={() => setNuclearDuration(m)}
-                                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 ${
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 ${
                                         nuclearDuration === m
                                             ? 'bg-white text-black'
                                             : 'bg-white/[0.06] text-neutral-300 hover:bg-white/10'
@@ -1746,16 +1774,13 @@ export const BlocklistTab = () => {
                                     {m}m
                                 </button>
                             ))}
-                        </div>
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                            <div className="flex items-center rounded-xl border border-white/10 bg-[#111] px-4 py-3 w-full sm:w-48 shrink-0">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mr-3">Custom</span>
+                            <div className="flex items-center rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 w-28">
                                 <input
                                     type="number"
                                     min={1}
                                     value={nuclearDuration}
                                     onChange={(e) => setNuclearDuration(parseInt(e.target.value, 10) || 1)}
-                                    className="bg-transparent text-white font-semibold tabular-nums text-base outline-none w-full"
+                                    className="bg-transparent text-white font-semibold tabular-nums text-sm outline-none w-full"
                                 />
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 ml-1">min</span>
                             </div>
@@ -1763,13 +1788,13 @@ export const BlocklistTab = () => {
                                 type="button"
                                 disabled={blocklistCount === 0}
                                 onClick={() => setNukeModalOpen(true)}
-                                className="flex-1 px-8 py-3 rounded-xl text-sm font-semibold transition-colors duration-150 bg-red-500 text-white hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500"
+                                className="ml-auto px-5 py-2 rounded-xl text-sm font-semibold transition-colors duration-150 bg-red-500 text-white hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500"
                             >
-                                Activate lockdown
+                                Activate Lockdown
                             </button>
                         </div>
                         {blocklistCount === 0 && (
-                            <p className="text-xs text-amber-500/80 mt-3">Add sites to your blocklist first.</p>
+                            <p className="text-xs text-amber-500/80 mt-2">Add sites to your blocklist first.</p>
                         )}
                     </>
                 )}
