@@ -449,14 +449,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         set({
                             engineState: {
                                 ...remote,
-                                inAppBlock: {
-                                    ...remote.inAppBlock,
-                                    ...nextInApp,
-                                    smartYouTube: {
-                                        ...(remote.inAppBlock?.smartYouTube || {}),
-                                        ...nextInApp.smartYouTube,
-                                    },
-                                },
+                                inAppBlock: nextInApp,
                             },
                         });
                         resolve(true);
