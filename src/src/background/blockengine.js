@@ -48,6 +48,9 @@ const state = {
         },
     },
     temporaryAllows: [],
+    _localMutationAt: 0,
+    /** When true and allowlist is non-empty: block ALL sites except allowlisted ones. */
+    allowlistMode: false,
     emergencyOverrideSettings: {
         enabled: true,
         maxPerDay: 3,
@@ -153,7 +156,9 @@ export async function saveState() {
         notionConnected: state.notionConnected,
         notionToken: state.notionToken,
         notionDatabaseId: state.notionDatabaseId,
-        notionJournalingEnabled: state.notionJournalingEnabled
+        notionJournalingEnabled: state.notionJournalingEnabled,
+        _localMutationAt: state._localMutationAt || 0,
+        allowlistMode: state.allowlistMode === true,
     };
 
     // Convert Sets to Arrays for storage
@@ -299,6 +304,8 @@ export async function loadState() {
             ...state.emergencyOverrideSettings,
             ...(loaded.emergencyOverrideSettings || {}),
         };
+        state._localMutationAt = Number(loaded._localMutationAt) || 0;
+        state.allowlistMode = loaded.allowlistMode === true;
         state.theme = loaded.theme || state.theme;
         state.customTheme = loaded.customTheme || state.customTheme;
         state.todos = loaded.todos || state.todos;
@@ -389,6 +396,36 @@ function generateId() {
 // WHITELIST / ALLOWED SITES
 // =========================================================
 
+function hostnameOnly(domain) {
+    return String(domain || '').split('/')[0].replace(/^www\./i, '').toLowerCase();
+}
+
+/** True if domain (or a parent/child host) is on the allowlist. */
+function isDomainAllowlisted(domain, allowedSet) {
+    if (!allowedSet || allowedSet.size === 0) return false;
+    const host = hostnameOnly(domain);
+    if (!host) return false;
+    for (const raw of allowedSet) {
+        const allowed = hostnameOnly(raw);
+        if (!allowed) continue;
+        if (host === allowed || host.endsWith('.' + allowed) || allowed.endsWith('.' + host)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function getAllowlistHostnames(allowedSet) {
+    const hosts = new Set();
+    for (const raw of allowedSet || []) {
+        const h = hostnameOnly(raw);
+        if (h) hosts.add(h);
+    }
+    hosts.add('focuznow.com');
+    hosts.add('www.focuznow.com');
+    return Array.from(hosts);
+}
+
 function getNuclearAllowedSites() {
     if (!state.nuclearState.active) return state.allowedSites;
     if (!state.nuclearState.snapshotAllowedSites) {
@@ -402,12 +439,21 @@ export async function addAllowedSite(rawDomain) {
     if (!domain) return;
     console.log(`[BlockEngine] addAllowedSite: ${domain}`);
     state.allowedSites.add(domain);
-    // During nuclear lockdown, keep blocklist intact — allowlist only takes effect after lockdown ends
-    if (!state.nuclearState.active && state.blocklist[domain]) {
-        console.log(`[BlockEngine] Removing ${domain} from blocklist because it was added to allowlist`);
-        delete state.blocklist[domain];
-    } else if (state.nuclearState.active) {
+    state._localMutationAt = Date.now();
+    // Strip matching blocklist entries so allowlist actually unblocks.
+    if (!state.nuclearState.active) {
+        for (const blocked of Object.keys(state.blocklist)) {
+            if (isDomainAllowlisted(blocked, state.allowedSites)) {
+                console.log(`[BlockEngine] Removing ${blocked} from blocklist because it was allowlisted`);
+                delete state.blocklist[blocked];
+            }
+        }
+    } else {
         console.log(`[BlockEngine] Allowlist add deferred during nuclear lockdown: ${domain}`);
+    }
+    // First allowlist entry turns on exclusive mode (matches UI copy).
+    if (state.allowedSites.size === 1) {
+        state.allowlistMode = true;
     }
     applyRules();
     await saveState();
@@ -416,6 +462,10 @@ export async function addAllowedSite(rawDomain) {
 export async function removeAllowedSite(domain) {
     console.log(`[BlockEngine] removeAllowedSite: ${domain}`);
     state.allowedSites.delete(domain);
+    state._localMutationAt = Date.now();
+    if (state.allowedSites.size === 0) {
+        state.allowlistMode = false;
+    }
     applyRules();
     await saveState();
 }
@@ -540,6 +590,7 @@ export async function blockDomainManual(rawDomain) {
         state.allowedSites.delete(domain);
     }
     addSource(domain, "manual");
+    state._localMutationAt = Date.now();
     applyRules();
     await saveState();
     console.log(`[BlockEngine] blockDomainManual finished for: ${domain}`);
@@ -549,6 +600,15 @@ export async function unblockDomainManual(domain) {
     assertCanRemoveBlockSource(domain);
     console.log(`[BlockEngine] unblockDomainManual called for: ${domain}`);
     removeSource(domain, "manual");
+    // Full manual unblock should also clear leftover category membership so the
+    // site does not stay blocked after disappearing from the blocklist UI.
+    const entry = state.blocklist[domain];
+    if (entry) {
+        entry.categoryKeys?.clear();
+        entry.sources.delete('category');
+        if (entry.sources.size === 0) delete state.blocklist[domain];
+    }
+    state._localMutationAt = Date.now();
     applyRules();
     await saveState();
     console.log(`[BlockEngine] unblockDomainManual finished for: ${domain}`);
@@ -597,12 +657,14 @@ export async function enableCategory(categoryName) {
     state.categoriesActive[categoryName] = true;
     console.log(`[BlockEngine] Category enabled in state: ${categoryName}`);
 
-    // Add all domains in this category
+    // Add all domains in this category (skip allowlisted hosts)
     for (const domain of CATEGORIES[categoryName]) {
+        if (isDomainAllowlisted(domain, state.allowedSites)) continue;
         addSource(domain, "category");
         state.blocklist[domain].categoryKeys.add(categoryName);
     }
 
+    state._localMutationAt = Date.now();
     applyRules();
     await saveState();
     console.log(`[BlockEngine] enableCategory finished for: ${categoryName}`);
@@ -633,6 +695,7 @@ export async function disableCategory(categoryName) {
         if (!entry.categoryKeys?.size) removeSource(domain, "category");
     }
 
+    state._localMutationAt = Date.now();
     applyRules();
     await saveState();
     console.log(`[BlockEngine] disableCategory finished for: ${categoryName}`);
@@ -877,6 +940,20 @@ export async function removeBlockSource(rawDomain, source, sourceId = null) {
         throw error;
     }
 
+    // If the user cleared the last explicit (non-category) block, also drop
+    // category membership for this domain — otherwise the row vanishes from
+    // the UI while the site stays blocked by Social/Gaming/etc.
+    const remaining = state.blocklist[domain];
+    if (remaining) {
+        const hasExplicit = [...remaining.sources].some((s) => s !== 'category');
+        if (!hasExplicit && remaining.sources.has('category')) {
+            remaining.categoryKeys?.clear();
+            remaining.sources.delete('category');
+            if (remaining.sources.size === 0) delete state.blocklist[domain];
+        }
+    }
+
+    state._localMutationAt = Date.now();
     applyRules();
     await saveState();
 }
@@ -926,12 +1003,16 @@ export function getTimers(domain = null) {
 }
 
 export async function updateEngineSettings(settings) {
-    const allowedFields = ['activeDays', 'activeHours', 'dailyResetTime', 'redirectMessage', 'requireChallenge', 'trackBackgroundAudio', 'draggableTimer', 'pomodoroWidget', 'focusMode', 'inAppBlock', 'theme', 'customTheme', 'todos', 'dailyFocusTarget', 'profileName', 'profileInitial', 'profileAvatar', 'pomodoroSettings', 'habits', 'scratchpad', 'dailyPlanner', 'savedQuotes', 'googleCalendarConnected', 'googleCalendarToken', 'googleProfile', 'notionConnected', 'notionToken', 'notionDatabaseId', 'notionJournalingEnabled', 'dashboardLayout', 'weeklyGoalHours', 'proDashboardVisuals', 'temporaryAllows', 'emergencyOverrideSettings'];
+                    const allowedFields = ['activeDays', 'activeHours', 'dailyResetTime', 'redirectMessage', 'requireChallenge', 'trackBackgroundAudio', 'draggableTimer', 'pomodoroWidget', 'focusMode', 'allowlistMode', 'inAppBlock', 'theme', 'customTheme', 'todos', 'dailyFocusTarget', 'profileName', 'profileInitial', 'profileAvatar', 'pomodoroSettings', 'habits', 'scratchpad', 'dailyPlanner', 'savedQuotes', 'googleCalendarConnected', 'googleCalendarToken', 'googleProfile', 'notionConnected', 'notionToken', 'notionDatabaseId', 'notionJournalingEnabled', 'dashboardLayout', 'weeklyGoalHours', 'proDashboardVisuals', 'temporaryAllows', 'emergencyOverrideSettings'];
     for (const field of allowedFields) {
         if (settings[field] !== undefined) {
-            state[field] = settings[field];
+            state[field] = field === 'inAppBlock'
+                ? normalizeInAppBlock(settings.inAppBlock)
+                : settings[field];
         }
     }
+    // Bump so cloud hydrate / web GET_STATE can't overwrite with a stale remote snapshot.
+    state._localMutationAt = Date.now();
     await saveState();
     if (settings.notionJournalingEnabled !== undefined) {
         // Force immediate save if journaling toggle changed
@@ -961,6 +1042,8 @@ export async function updateEngineSettings(settings) {
 
 /**
  * Merge cloud workspace state into the local engine (except integration secrets).
+ * Skips blocklist/allowlist overwrite when local mutations are newer than remote
+ * (prevents stale in-flight fetches from re-blocking after an unblock).
  */
 export async function applyCloudWorkspaceState(remote) {
     if (!remote || typeof remote !== 'object') return;
@@ -970,50 +1053,98 @@ export async function applyCloudWorkspaceState(remote) {
     delete settings.notionToken;
     delete settings.googleProfile;
 
+    const remoteMutationAt = Number(settings._localMutationAt) || 0;
+    const localMutationAt = Number(state._localMutationAt) || 0;
+    const preferLocalBlocking = localMutationAt > remoteMutationAt;
+
     if (settings.blocklist && typeof settings.blocklist === 'object') {
-        state.blocklist = {};
-        for (const domain of Object.keys(settings.blocklist)) {
-            const rawEntry = settings.blocklist[domain] || {};
-            const sources = Array.isArray(rawEntry.sources)
-                ? rawEntry.sources
-                : (rawEntry === true || rawEntry?.enabled ? ['manual'] : []);
-            state.blocklist[domain] = {
-                sources: new Set(sources.filter((source) =>
-                    ['manual', 'category', 'schedule', 'timer'].includes(source))),
-                categoryKeys: new Set(
-                    (Array.isArray(rawEntry.categoryKeys) ? rawEntry.categoryKeys : [])
-                        .filter(isSafeBlockCategoryKey),
-                ),
-            };
+        if (preferLocalBlocking) {
+            console.log('[BlockEngine] Skipping remote blocklist — local mutations are newer');
+            delete settings.blocklist;
+        } else {
+            state.blocklist = {};
+            for (const domain of Object.keys(settings.blocklist)) {
+                const rawEntry = settings.blocklist[domain] || {};
+                const sources = Array.isArray(rawEntry.sources)
+                    ? rawEntry.sources
+                    : (rawEntry === true || rawEntry?.enabled ? ['manual'] : []);
+                state.blocklist[domain] = {
+                    sources: new Set(sources.filter((source) =>
+                        ['manual', 'category', 'schedule', 'timer'].includes(source))),
+                    categoryKeys: new Set(
+                        (Array.isArray(rawEntry.categoryKeys) ? rawEntry.categoryKeys : [])
+                            .filter(isSafeBlockCategoryKey),
+                    ),
+                };
+            }
+            delete settings.blocklist;
         }
-        delete settings.blocklist;
     }
 
     if (Array.isArray(settings.allowedSites)) {
-        state.allowedSites = new Set(settings.allowedSites);
-        delete settings.allowedSites;
+        if (preferLocalBlocking) {
+            delete settings.allowedSites;
+        } else {
+            state.allowedSites = new Set(settings.allowedSites);
+            delete settings.allowedSites;
+        }
     }
 
     if (settings.regexBlocklist && typeof settings.regexBlocklist === 'object') {
-        state.regexBlocklist = {};
-        for (const pattern of Object.keys(settings.regexBlocklist)) {
-            const rawEntry = settings.regexBlocklist[pattern] || {};
-            const sources = Array.isArray(rawEntry.sources) ? rawEntry.sources : ['manual'];
-            state.regexBlocklist[pattern] = {
-                sources: new Set(sources),
-            };
+        if (preferLocalBlocking) {
+            delete settings.regexBlocklist;
+        } else {
+            state.regexBlocklist = {};
+            for (const pattern of Object.keys(settings.regexBlocklist)) {
+                const rawEntry = settings.regexBlocklist[pattern] || {};
+                const sources = Array.isArray(rawEntry.sources) ? rawEntry.sources : ['manual'];
+                state.regexBlocklist[pattern] = {
+                    sources: new Set(sources),
+                };
+            }
+            delete settings.regexBlocklist;
         }
-        delete settings.regexBlocklist;
     }
 
     if (settings.schedules && typeof settings.schedules === 'object') {
-        state.schedules = settings.schedules;
+        if (!preferLocalBlocking) {
+            state.schedules = settings.schedules;
+        }
         delete settings.schedules;
     }
 
     if (settings.categoriesActive && typeof settings.categoriesActive === 'object') {
-        state.categoriesActive = { ...state.categoriesActive, ...settings.categoriesActive };
+        if (!preferLocalBlocking) {
+            state.categoriesActive = { ...state.categoriesActive, ...settings.categoriesActive };
+        }
         delete settings.categoriesActive;
+    }
+
+    if (settings._localMutationAt !== undefined) {
+        if (!preferLocalBlocking) {
+            state._localMutationAt = remoteMutationAt;
+        }
+        delete settings._localMutationAt;
+    }
+
+    const EXTRA_STORAGE_SYNC_KEYS = [
+        'focuznow_calendar_events_v1',
+        'focuznow_calendar_groups_v1',
+        'focuznow_scheduling_links_v2',
+        'focuznow_lists_v1',
+        'activeChallenges',
+        'challengeProgress',
+        'completedChallenges',
+    ];
+    const extraStorage = {};
+    for (const key of EXTRA_STORAGE_SYNC_KEYS) {
+        if (settings[key] !== undefined) {
+            extraStorage[key] = settings[key];
+            delete settings[key];
+        }
+    }
+    if (Object.keys(extraStorage).length > 0) {
+        await chrome.storage.local.set(extraStorage);
     }
 
     await updateEngineSettings(settings);
@@ -1060,6 +1191,8 @@ export function getEngineState() {
         inAppBlock: state.inAppBlock,
         temporaryAllows: state.temporaryAllows,
         emergencyOverrideSettings: state.emergencyOverrideSettings,
+        _localMutationAt: state._localMutationAt || 0,
+        allowlistMode: state.allowlistMode === true,
         theme: state.theme,
         customTheme: state.customTheme,
         todos: state.todos,
@@ -1106,10 +1239,33 @@ export function applyRules() {
 
     const isNuclear = state.nuclearState.active;
     const effectiveAllowedSites = isNuclear ? getNuclearAllowedSites() : state.allowedSites;
+    const exclusiveAllowlist =
+        !isNuclear && state.allowlistMode === true && effectiveAllowedSites.size > 0;
 
-    // 1. Domain Blocking
+    // Exclusive allowlist mode: block http(s) navigations except allowlisted hosts.
+    // NOTE: urlFilter "*" is invalid in Chrome DNR. Prefer *://*/*; keep regex as backup id.
+    if (exclusiveAllowlist) {
+        const excluded = getAllowlistHostnames(effectiveAllowedSites);
+        const excludedDomains = excluded.length ? excluded : ["focuznow.com"];
+        rules.push({
+            id: idCounter++,
+            priority: 1,
+            action: {
+                type: "redirect",
+                redirect: { url: chrome.runtime.getURL(`src/options/index.html?view=blocked&url=ALLOWLIST&source=allowlist`) }
+            },
+            condition: {
+                urlFilter: "*://*/*",
+                resourceTypes: ["main_frame"],
+                excludedRequestDomains: excludedDomains,
+            }
+        });
+    }
+
+    // 1. Domain Blocking — always apply blocklist too (even in allowlist mode)
+    // so category/manual blocks still work if the catch-all rule is rejected.
     for (const domain in state.blocklist) {
-        if (effectiveAllowedSites.has(domain)) continue;
+        if (isDomainAllowlisted(domain, effectiveAllowedSites)) continue;
         if (isTemporarilyAllowed(state, domain)) continue;
 
         const sources = state.blocklist[domain].sources;
@@ -1123,8 +1279,6 @@ export function applyRules() {
         } else if (hasExplicit) {
             shouldBlock = true;
         } else if (hasGlobal) {
-            // Manual and Category blocks are now always active if focusMode is on OR if they were explicitly set
-            // The user wants "Focus Sessions" to be the main thing, but manual blocks should probably just WORK.
             shouldBlock = true;
         }
 
@@ -1147,7 +1301,7 @@ export function applyRules() {
 
         rules.push({
             id: idCounter++,
-            priority: 1,
+            priority: exclusiveAllowlist ? 2 : 1,
             action: {
                 type: "redirect",
                 redirect: { url: chrome.runtime.getURL(`src/options/index.html?view=blocked&url=https://${domain}&source=${primarySource}`) }
@@ -1161,6 +1315,7 @@ export function applyRules() {
 
     // 2. Nuclear "Block All"
     if (state.nuclearState.active && state.nuclearState.target === 'all') {
+        const nuclearExcluded = getAllowlistHostnames(effectiveAllowedSites);
         rules.push({
             id: idCounter++,
             priority: 2,
@@ -1169,9 +1324,9 @@ export function applyRules() {
                 redirect: { url: chrome.runtime.getURL(`src/options/index.html?view=blocked&url=LOCKDOWN`) }
             },
             condition: {
-                urlFilter: "*",
+                urlFilter: "*://*/*",
                 resourceTypes: ["main_frame"],
-                excludedInitiatorDomains: effectiveAllowedSites.size > 0 ? Array.from(effectiveAllowedSites) : ["focuznow.com"]
+                excludedRequestDomains: nuclearExcluded.length ? nuclearExcluded : ["focuznow.com"],
             }
         });
     }
@@ -1245,6 +1400,31 @@ export function applyRules() {
                 id: idCounter++,
                 priority: 2,
                 action: { type: 'redirect', redirect: { url: blockedPage('tiktok.com') } },
+                condition: { urlFilter: filter, resourceTypes: ['main_frame'] },
+            });
+        }
+    }
+
+    if (state.inAppBlock?.instagram) {
+        for (const filter of ['||instagram.com', '||www.instagram.com']) {
+            rules.push({
+                id: idCounter++,
+                priority: 2,
+                action: { type: 'redirect', redirect: { url: blockedPage('instagram.com') } },
+                condition: { urlFilter: filter, resourceTypes: ['main_frame'] },
+            });
+        }
+    } else if (state.inAppBlock?.instagramReels) {
+        for (const filter of [
+            '||instagram.com/reels',
+            '||www.instagram.com/reels',
+            '||instagram.com/reel',
+            '||www.instagram.com/reel',
+        ]) {
+            rules.push({
+                id: idCounter++,
+                priority: 3,
+                action: { type: 'redirect', redirect: { url: blockedPage('instagram.com/reels') } },
                 condition: { urlFilter: filter, resourceTypes: ['main_frame'] },
             });
         }

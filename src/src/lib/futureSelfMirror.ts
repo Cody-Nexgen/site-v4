@@ -23,8 +23,17 @@ export function completedMinutesForContract(state: FutureSelfState, contractId: 
 
 export function summarizeActiveContract(state: FutureSelfState): FutureSelfBlockedSummary | null {
     const contract = state.activeContract;
-    if (!contract) return null;
+    if (!contract || state.modeEnabled !== true) return null;
     const today = localDateKey();
+    // After the calendar day ends, stop Future Self blocking until they start again.
+    const engagedToday =
+        localDateKey(contract.startedAt) === today ||
+        eventsForDay(state.events, today).some(
+            (event) =>
+                event.contractId === contract.id &&
+                (event.type === 'focus_started' || event.type === 'focus_completed'),
+        );
+    if (!engagedToday) return null;
     const events = eventsForDay(state.events, today).filter((event) => event.contractId === contract.id);
     const completedMinutes = completedMinutesForContract(state, contract.id, today);
     const remainingMinutes = Math.max(0, contract.plannedMinutesPerDay - completedMinutes);
@@ -77,23 +86,35 @@ export function createDailyMirror(
 }
 
 export function ensureMirrorForPreviousDay(state: FutureSelfState, now = Date.now()): FutureSelfState {
+    if (state.modeEnabled !== true) return state;
     const previous = new Date(now);
     previous.setDate(previous.getDate() - 1);
-    const latestEligible = localDateKey(previous.getTime());
-    const existing = new Set(state.mirrors.map((mirror) => mirror.date));
-    const dates = [...new Set(state.events.map((event) => localDateKey(event.timestamp)))]
-        .filter((date) => date <= latestEligible && !existing.has(date))
-        .sort();
-    const generated = dates
-        .map((date) => createDailyMirror(state, date, now))
-        .filter((mirror): mirror is FutureSelfMirror => mirror !== null);
-    if (!generated.length) return state;
+    const yesterday = localDateKey(previous.getTime());
+    let changed = false;
+    // Auto-dismiss anything older than yesterday so historical mirrors never re-spam on refresh.
+    const mirrors = state.mirrors.map((mirror) => {
+        if (mirror.date < yesterday && !mirror.shownAt) {
+            changed = true;
+            return { ...mirror, shownAt: now };
+        }
+        return mirror;
+    });
+    if (mirrors.some((mirror) => mirror.date === yesterday)) {
+        return changed ? { ...state, mirrors } : state;
+    }
+    const generated = createDailyMirror({ ...state, mirrors }, yesterday, now);
+    if (!generated) return changed ? { ...state, mirrors } : state;
     return {
         ...state,
-        mirrors: [...state.mirrors, ...generated].slice(-FUTURE_SELF_HISTORY_LIMIT),
+        mirrors: [...mirrors, generated].slice(-FUTURE_SELF_HISTORY_LIMIT),
     };
 }
 
 export function nextUnshownMirror(state: FutureSelfState): FutureSelfMirror | null {
-    return state.mirrors.find((mirror) => !mirror.shownAt) ?? null;
+    if (state.modeEnabled !== true) return null;
+    const previous = new Date();
+    previous.setDate(previous.getDate() - 1);
+    const yesterday = localDateKey(previous.getTime());
+    // Only surface yesterday's mirror — never a backlog of old ones.
+    return state.mirrors.find((mirror) => mirror.date === yesterday && !mirror.shownAt) ?? null;
 }

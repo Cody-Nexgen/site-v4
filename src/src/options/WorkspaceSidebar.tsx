@@ -33,6 +33,7 @@ import {
     type DashboardColorMode,
 } from '../lib/themes';
 import { COLLAPSIBLE_NAV, PRIMARY_NAV } from '../lib/workspaceNav';
+import { colorFromString, getInitials } from '../lib/avatarInitials';
 
 type Props = {
     activeTab: string;
@@ -97,7 +98,8 @@ export function WorkspaceSidebar({
     const accountRef = useRef<HTMLDivElement>(null);
     const accountTriggerRef = useRef<HTMLButtonElement>(null);
     const displayName = username?.trim() || email?.split('@')[0] || 'Account';
-    const initial = displayName.charAt(0).toUpperCase();
+    const initials = getInitials(displayName);
+    const avatarColor = colorFromString(displayName);
     const resolvedColorMode = resolveDashboardColorMode(colorMode);
     const nextColorMode = resolvedColorMode === 'dark' ? 'light' : 'dark';
     const colorModeLabel = `Switch to ${nextColorMode} mode`;
@@ -162,8 +164,11 @@ export function WorkspaceSidebar({
                     {avatarUrl ? (
                         <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-[5px] object-cover" />
                     ) : (
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-neutral-700 text-[9px] font-medium text-neutral-100">
-                            {initial}
+                        <span
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[9px] font-medium text-white"
+                            style={{ backgroundColor: avatarColor }}
+                        >
+                            {initials}
                         </span>
                     )}
                     <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-neutral-200">

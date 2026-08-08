@@ -7,7 +7,14 @@ import {
 } from './futureSelfTypes';
 
 export function emptyFutureSelfState(): FutureSelfState {
-    return { version: 1, activeContract: null, contracts: [], events: [], mirrors: [] };
+    return {
+        version: 1,
+        modeEnabled: false,
+        activeContract: null,
+        contracts: [],
+        events: [],
+        mirrors: [],
+    };
 }
 
 export function localDateKey(timestamp = Date.now()): string {
@@ -82,6 +89,7 @@ export function normalizeFutureSelfState(raw: unknown): FutureSelfState {
     const value = raw as Partial<FutureSelfState>;
     return {
         version: 1,
+        modeEnabled: value.modeEnabled === true,
         activeContract: value.activeContract?.status === 'active' ? value.activeContract : null,
         contracts: Array.isArray(value.contracts) ? value.contracts.slice(-FUTURE_SELF_HISTORY_LIMIT) : [],
         events: Array.isArray(value.events) ? value.events.slice(-1000) : [],

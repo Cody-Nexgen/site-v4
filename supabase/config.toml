@@ -19,6 +19,15 @@ verify_jwt = true
 [functions.chat-with-groq]
 verify_jwt = true
 
+[functions.resolve-site-query]
+verify_jwt = true
+
+[functions.link-preview]
+verify_jwt = true
+
+[functions.extract-image-text]
+verify_jwt = true
+
 [functions.create-checkout-session]
 verify_jwt = true
 

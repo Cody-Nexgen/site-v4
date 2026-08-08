@@ -4,6 +4,7 @@ import { useAuthStore } from '../lib/store';
 import { dispatchFocusComplete } from '../lib/proDashboard';
 import {
     POMODORO_RUNTIME_KEY,
+    completePomodoroSegmentLocal,
     computeTimeLeft,
     createResetPomodoroRuntime,
     readPomodoroRuntime,
@@ -16,6 +17,7 @@ import {
     Play, Pause, RefreshCw, Plus,
     Trash, Check, Ban, Globe, Zap, X,
     AlertTriangle, TrendingDown, Lightbulb,
+    ShieldCheck, Loader2, ChevronDown,
 } from 'lucide-react';
 import { HabitCheckInButton } from '../components/pro-dashboard/HabitCheckInButton';
 import { IconCalendarStats } from '@tabler/icons-react';
@@ -37,6 +39,7 @@ import {
 } from '../lib/blockCategories';
 import { FutureSelfContractModal } from '../components/FutureSelfContractModal';
 import type { FutureSelfContract } from '../lib/futureSelfTypes';
+import { invokeAuthedFunction } from '../lib/supabaseFunctions';
 
 export const InboxTab = () => (
     <div className="space-y-6 animate-fade-in-up max-w-[1200px] mx-auto">
@@ -142,9 +145,9 @@ function FocusScoreBarGraph({ points }: { points: { date: string; score: number 
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 vectorEffect="non-scaling-stroke"
-                                initial={{ pathLength: 0, opacity: 0 }}
-                                animate={{ pathLength: 1, opacity: 1 }}
-                                transition={{ duration: 0.65, ease: 'easeOut' }}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ duration: 0.45, ease: 'easeOut' }}
                             />
                         </>
                     )}
@@ -648,6 +651,17 @@ export const SessionsTab = () => {
     const [futureSelfModalOpen, setFutureSelfModalOpen] = useState(false);
 
     useEffect(() => {
+        void chrome.runtime
+            .sendMessage({ type: 'FUTURE_SELF_GET', dashboardOpen: false })
+            .then((response: { state?: { modeEnabled?: boolean } } | undefined) => {
+                if (typeof response?.state?.modeEnabled === 'boolean') {
+                    setFutureSelfEnabled(response.state.modeEnabled);
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    useEffect(() => {
         const revision = runtimeRevisionRef.current;
         const timing = {
             focusMin: defaultPomo.focusMin,
@@ -719,10 +733,15 @@ export const SessionsTab = () => {
 
     useEffect(() => {
         const onMsg = (msg: { type?: string }) => {
-            if (msg.type === 'POMODORO_SEGMENT_DONE') {
+            if (msg.type === 'POMODORO_SEGMENT_DONE' || msg.type === 'POMODORO_AFK_PAUSED') {
                 void readPomodoroRuntime().then((rt) => {
                     applyRuntimeToUi(rt);
                     fetchEngineState();
+                    if (msg.type === 'POMODORO_AFK_PAUSED') {
+                        setPomoNotice('Paused — no movement detected for 5 minutes');
+                        window.setTimeout(() => setPomoNotice(''), 5000);
+                        return;
+                    }
                     if (rt?.isBreak && rt.running) {
                         dispatchFocusComplete();
                         setPomoNotice('Focus complete — break started');
@@ -742,13 +761,44 @@ export const SessionsTab = () => {
             if (timerRef.current) clearInterval(timerRef.current);
             return;
         }
+        let completing = false;
         timerRef.current = window.setInterval(() => {
-            setPomoTimeLeft(Math.max(0, Math.ceil((pomoEndAt - Date.now()) / 1000)));
+            const left = Math.max(0, Math.ceil((pomoEndAt - Date.now()) / 1000));
+            setPomoTimeLeft(left);
+            if (left <= 0 && !completing) {
+                completing = true;
+                void (async () => {
+                    let next: PomodoroRuntime | null = null;
+                    try {
+                        const res = (await chrome.runtime.sendMessage({
+                            type: 'POMODORO_SEGMENT_COMPLETE',
+                        })) as { ok?: boolean } | undefined;
+                        next = await readPomodoroRuntime();
+                        // Extension options: background advanced storage.
+                        // Web app: message is a no-op — force local transition if still stuck.
+                        if (!res?.ok || (next?.running && computeTimeLeft(next) <= 0)) {
+                            next = await completePomodoroSegmentLocal(next);
+                        }
+                    } catch {
+                        next = await completePomodoroSegmentLocal();
+                    }
+                    applyRuntimeToUi(next);
+                    if (next?.isBreak && next.running) {
+                        dispatchFocusComplete();
+                        setPomoNotice('Focus complete — break started');
+                        window.setTimeout(() => setPomoNotice(''), 5000);
+                    } else if (next && !next.isBreak && !next.running) {
+                        setPomoNotice('Break over — ready to focus');
+                        window.setTimeout(() => setPomoNotice(''), 5000);
+                    }
+                    fetchEngineState();
+                })();
+            }
         }, 1000);
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [pomoRunning, pomoEndAt]);
+    }, [pomoRunning, pomoEndAt, applyRuntimeToUi, fetchEngineState]);
 
     const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
     const updatePomodoroSettings = async (focusMin: number, breakMin: number) => {
@@ -810,7 +860,7 @@ export const SessionsTab = () => {
         <div className="mx-auto max-w-[980px] animate-fade-in-up space-y-5">
             <div className="text-center">
                 <p className="focuz-section-label">Focus</p>
-                <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--dashboard-text)]">Focus sessions</h1>
+                <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--dashboard-text)]">Pomodoro</h1>
                 <p className="mt-1 text-sm text-[var(--dashboard-text-muted)]">Choose a rhythm, start the clock, and stay with one thing.</p>
             </div>
             {pomoNotice && (
@@ -821,10 +871,10 @@ export const SessionsTab = () => {
             
             <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
                 <GlassCard className="flex min-h-[500px] w-full flex-col items-center justify-center p-7 sm:p-9">
-                    <span className={`mb-5 rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                    <span className={`mx-auto mb-5 self-center rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
                         isBreak ? 'bg-emerald-500/10 text-emerald-400' : 'bg-purple-500/10 text-purple-400'
                     }`}>
-                        {isBreak ? 'Recovery break' : pomoRunning ? 'Focus in progress' : 'Ready to focus'}
+                        {isBreak ? 'Recovery Break' : pomoRunning ? 'Focus In Progress' : 'Ready To Focus'}
                     </span>
 
                     <div className="flex w-full items-center justify-center">
@@ -886,7 +936,7 @@ export const SessionsTab = () => {
                             })();
                         }}
                             className={`flex min-w-32 items-center justify-center gap-2 rounded-md px-6 py-2.5 text-sm font-medium transition-colors ${pomoRunning ? 'border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] text-[var(--dashboard-text)] hover:bg-[var(--dashboard-interactive-hover)]' : 'bg-[var(--dashboard-text)] text-[var(--dashboard-bg)] opacity-95 hover:opacity-100'}`}>
-                            {pomoRunning ? <><Pause size={16} /><span>Pause</span></> : <><Play size={16} /><span>Start focus</span></>}
+                            {pomoRunning ? <><Pause size={16} /><span>Pause</span></> : <><Play size={16} /><span>Start Focus</span></>}
                         </button>
                         <button onClick={() => {
                             if (runtime?.futureSelfContractId) {
@@ -919,18 +969,28 @@ export const SessionsTab = () => {
                                 onClick={() => {
                                     if (subscriptionTier !== 'pro') {
                                         setFutureSelfModalOpen(true);
-                                    } else {
-                                        setFutureSelfEnabled((enabled) => !enabled);
+                                        return;
                                     }
+                                    setFutureSelfEnabled((enabled) => {
+                                        const next = !enabled;
+                                        void chrome.runtime
+                                            .sendMessage({ type: 'FUTURE_SELF_SET_MODE', enabled: next })
+                                            .catch(() => {});
+                                        return next;
+                                    });
                                 }}
-                                className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${futureSelfEnabled ? 'bg-purple-600' : 'bg-white/10'}`}
+                                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${futureSelfEnabled ? 'bg-purple-600' : 'bg-white/10'}`}
                             >
-                                <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${futureSelfEnabled ? 'translate-x-1' : '-translate-x-4'}`} />
+                                <span
+                                    className={`pointer-events-none absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                                        futureSelfEnabled ? 'translate-x-5' : 'translate-x-0'
+                                    }`}
+                                />
                             </button>
                         </div>
                     </GlassCard>
                     <GlassCard className="p-4">
-                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Session presets</h2>
+                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Session Presets</h2>
                         <p className="mt-0.5 text-xs text-[var(--dashboard-text-muted)]">Set your focus cadence.</p>
                         <div className="mt-3 space-y-1.5">
                             {sessionPresets.map((preset) => {
@@ -968,7 +1028,7 @@ export const SessionsTab = () => {
                         </div>
                     </GlassCard>
                     <GlassCard className="p-4">
-                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Custom timing</h2>
+                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Custom Timing</h2>
                         <div className="mt-3 grid grid-cols-2 gap-2">
                             <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--dashboard-text-muted)]">
                                 Focus
@@ -1010,8 +1070,34 @@ export const SessionsTab = () => {
     );
 };
 
+function looksLikeDomainOrUrl(value: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    if (/^https?:\/\//i.test(trimmed)) return true;
+    return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d+)?(\/\S*)?$/i.test(trimmed);
+}
+
+async function resolveSiteViaAI(
+    query: string,
+    accessToken: string,
+): Promise<{ domain: string; url: string } | null> {
+    try {
+        const { data, error } = await invokeAuthedFunction<{ domain?: string; url?: string; error?: string }>(
+            'resolve-site-query',
+            accessToken,
+            { query },
+        );
+        if (error || !data || data.error || !data.domain) return null;
+        return { domain: data.domain, url: data.url || `https://${data.domain}` };
+    } catch {
+        return null;
+    }
+}
+
 export const BlocklistTab = () => {
-    const { engineState, fetchEngineState } = useAuthStore();
+    const { engineState, fetchEngineState, session, subscriptionTier } = useAuthStore();
+    const isPro = subscriptionTier === 'pro';
+    const nuclearActive = !!engineState.nuclearState?.active;
 
     useEffect(() => {
         if (!engineState.focusMode) {
@@ -1028,6 +1114,10 @@ export const BlocklistTab = () => {
     const [nukeModalOpen, setNukeModalOpen] = useState(false);
     const [blockActionError, setBlockActionError] = useState('');
     const [categoryPending, setCategoryPending] = useState<SafeBlockCategoryKey | null>(null);
+    const [resolvingField, setResolvingField] = useState<'block' | 'allowed_site' | null>(null);
+    const [bulkActionPending, setBulkActionPending] = useState<string | null>(null);
+    const [platformPending, setPlatformPending] = useState<string | null>(null);
+    const [expandedBlockedCategories, setExpandedBlockedCategories] = useState<Partial<Record<SafeBlockCategoryKey, boolean>>>({});
 
     const blocklistCount = Object.keys(engineState.blocklist || {}).filter(
         (d) => engineState.blocklist[d],
@@ -1140,8 +1230,154 @@ export const BlocklistTab = () => {
         setCategoryPending(null);
     };
 
+    const handleAddSite = async (kind: 'block' | 'allowed_site', altKey: boolean) => {
+        const rawValue = kind === 'block' ? newBlocked : newAllowed;
+        const value = rawValue.trim();
+        if (!value || resolvingField) return;
+
+        if (altKey && !looksLikeDomainOrUrl(value)) {
+            if (!isPro) {
+                setBlockActionError('AI site lookup is a Pro feature — upgrade to resolve natural-language site names.');
+                return;
+            }
+            if (!session?.access_token) {
+                setBlockActionError('Sign in again to use the AI site resolver.');
+                return;
+            }
+            setBlockActionError('');
+            setResolvingField(kind);
+            const resolved = await resolveSiteViaAI(value, session.access_token);
+            setResolvingField(null);
+            if (!resolved) {
+                setBlockActionError(`Could not find a site for "${value}". Try typing the domain directly.`);
+                return;
+            }
+            await triggerAction(kind, resolved.domain, 'add');
+            if (kind === 'block') setNewBlocked(''); else setNewAllowed('');
+            return;
+        }
+
+        await triggerAction(kind, value, 'add');
+        if (kind === 'block') setNewBlocked(''); else setNewAllowed('');
+    };
+
+    const sendEngineMessage = <T extends { ok?: boolean; error?: string } = { ok?: boolean; error?: string }>(
+        message: Record<string, unknown>,
+    ) => new Promise<T>((resolve) =>
+        chrome.runtime.sendMessage(message, (resp) => resolve((resp || { ok: false, error: chrome.runtime.lastError?.message }) as T)),
+    );
+
+    const quickActions: { id: string; label: string; icon: typeof Check; run: () => Promise<void> }[] = [
+        {
+            id: 'enable-categories',
+            label: 'Enable all categories',
+            icon: Check,
+            run: async () => {
+                for (const key of SAFE_BLOCK_CATEGORY_KEYS) {
+                    if (engineState.categoriesActive?.[key]) continue;
+                    const res = await sendEngineMessage({ type: 'CATEGORY_TOGGLE', category: key, enabled: true });
+                    if (res.ok === false) throw new Error(res.error || `Could not enable ${SAFE_BLOCK_CATEGORY_LABELS[key]}`);
+                }
+            },
+        },
+        {
+            id: 'disable-categories',
+            label: 'Disable all categories',
+            icon: X,
+            run: async () => {
+                for (const key of SAFE_BLOCK_CATEGORY_KEYS) {
+                    if (!engineState.categoriesActive?.[key]) continue;
+                    const res = await sendEngineMessage({ type: 'CATEGORY_TOGGLE', category: key, enabled: false });
+                    if (res.ok === false) throw new Error(res.error || `Could not disable ${SAFE_BLOCK_CATEGORY_LABELS[key]}`);
+                }
+            },
+        },
+        {
+            id: 'block-platforms',
+            label: 'Block all platforms',
+            icon: Ban,
+            run: async () => {
+                const res = await sendEngineMessage({
+                    type: 'UPDATE_ENGINE_SETTINGS',
+                    settings: {
+                        inAppBlock: {
+                            ...engineState.inAppBlock,
+                            youtube: true, youtubeShorts: true, instagram: true, instagramReels: true, tiktok: true,
+                        },
+                    },
+                });
+                if (res.ok === false) throw new Error(res.error || 'Could not block platforms');
+            },
+        },
+        {
+            id: 'unblock-platforms',
+            label: 'Unblock all platforms',
+            icon: Globe,
+            run: async () => {
+                const res = await sendEngineMessage({
+                    type: 'UPDATE_ENGINE_SETTINGS',
+                    settings: {
+                        inAppBlock: {
+                            ...engineState.inAppBlock,
+                            youtube: false, youtubeShorts: false, instagram: false, instagramReels: false, tiktok: false,
+                        },
+                    },
+                });
+                if (res.ok === false) throw new Error(res.error || 'Could not unblock platforms');
+            },
+        },
+    ];
+
+    const runQuickAction = async (action: { id: string; run: () => Promise<void> }) => {
+        if (bulkActionPending || nuclearActive) return;
+        setBulkActionPending(action.id);
+        try {
+            await action.run();
+            setBlockActionError('');
+        } catch (err) {
+            setBlockActionError(err instanceof Error ? err.message : 'Could not complete that quick action.');
+        } finally {
+            await fetchEngineState();
+            setBulkActionPending(null);
+        }
+    };
+
+    const platformKeys = [
+        { label: 'YouTube Shorts', key: 'youtubeShorts' as const, desc: 'Blocks /shorts URLs and Shorts feed' },
+        { label: 'YouTube', key: 'youtube' as const, desc: 'Blocks all of YouTube' },
+        { label: 'Instagram Reels', key: 'instagramReels' as const, desc: 'Blocks Instagram Reels' },
+        { label: 'Instagram', key: 'instagram' as const, desc: 'Blocks Instagram' },
+        { label: 'TikTok', key: 'tiktok' as const, desc: 'Blocks TikTok' },
+    ];
+
+    const togglePlatformBlock = async (key: (typeof platformKeys)[number]['key']) => {
+        if (nuclearActive || platformPending) return;
+        const current = engineState.inAppBlock || {};
+        const nextOn = !current[key];
+        setPlatformPending(key);
+        try {
+            const res = await sendEngineMessage({
+                type: 'UPDATE_ENGINE_SETTINGS',
+                settings: {
+                    inAppBlock: {
+                        ...current,
+                        [key]: nextOn,
+                    },
+                },
+            });
+            if (res.ok === false) {
+                setBlockActionError(res.error || `Could not update ${key}.`);
+                return;
+            }
+            setBlockActionError('');
+            await fetchEngineState();
+        } finally {
+            setPlatformPending(null);
+        }
+    };
+
     return (
-        <div className="space-y-6 animate-fade-in-up w-full">
+        <div className="mx-auto w-full max-w-[1100px] space-y-4 animate-fade-in-up">
             <ChallengeModal
                 isOpen={challengeState.isOpen}
                 phrase={challengeState.phrase}
@@ -1152,10 +1388,17 @@ export const BlocklistTab = () => {
                     : executeAction(challengeState.type, challengeState.domain, 'remove')}
                 onDisableChallenge={disableChallenge}
             />
-            <div className="mb-2">
-                <p className="focuz-section-label">Focus</p>
-                <h1 className="text-3xl font-semibold text-white tracking-tight">Site Management</h1>
-                <p className="text-sm text-neutral-500 mt-1">Control what gets blocked and what stays reachable.</p>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <p className="focuz-section-label">Focus</p>
+                    <h1 className="text-3xl font-semibold text-white tracking-tight">Site Management</h1>
+                    <p className="text-sm text-neutral-500 mt-1">Control what gets blocked and what stays reachable.</p>
+                </div>
+                <p className="text-[10px] text-neutral-600 max-w-xs text-right">
+                    Tip: hold{' '}
+                    <span className="rounded border border-white/15 bg-white/5 px-1 font-mono text-[10px] text-neutral-400">Alt</span>
+                    {' '}+ Enter for AI site lookup{!isPro ? ' (Pro)' : ''}.
+                </p>
             </div>
             {blockActionError && (
                 <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -1164,127 +1407,215 @@ export const BlocklistTab = () => {
                 </div>
             )}
 
-            <GlassCard className="p-5">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                    <div>
-                        <h3 className="font-semibold text-white text-sm">Block by category</h3>
-                        <p className="text-xs text-neutral-500 mt-1">
-                            Turn on a curated group. Shared sites stay blocked until every matching category is removed.
-                        </p>
-                    </div>
-                    <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold text-neutral-500">
-                        {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).length} active
-                    </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                    {SAFE_BLOCK_CATEGORY_KEYS.map((category) => {
-                        const active = !!engineState.categoriesActive?.[category];
-                        const pending = categoryPending === category;
-                        return (
-                            <button
-                                key={category}
-                                type="button"
-                                role="switch"
-                                aria-checked={active}
-                                disabled={categoryPending !== null || engineState.nuclearState?.active}
-                                onClick={() => void toggleCategory(category)}
-                                className={`flex min-h-20 items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                                    active
-                                        ? 'border-purple-500/40 bg-purple-500/10'
-                                        : 'border-white/[0.08] bg-[#111] hover:border-white/20'
-                                }`}
-                            >
-                                <span>
-                                    <span className={`block text-sm font-semibold ${active ? 'text-purple-200' : 'text-neutral-200'}`}>
-                                        {SAFE_BLOCK_CATEGORY_LABELS[category]}
-                                    </span>
-                                    <span className="mt-1 block text-[10px] text-neutral-500">
-                                        {SAFE_BLOCK_CATEGORIES[category].length} sites
-                                    </span>
-                                </span>
-                                <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${active ? 'bg-purple-500' : 'bg-neutral-700'}`}>
-                                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${active ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                                </span>
-                                {pending && <span className="sr-only">Updating</span>}
-                            </button>
-                        );
-                    })}
-                </div>
-                {engineState.nuclearState?.active && (
-                    <p className="mt-3 text-xs text-amber-400/80">Categories cannot be changed during Nuclear Lockdown.</p>
-                )}
-            </GlassCard>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {quickActions.map((action) => {
+                    const Icon = action.icon;
+                    const pending = bulkActionPending === action.id;
+                    return (
+                        <button
+                            key={action.id}
+                            type="button"
+                            disabled={!!bulkActionPending || nuclearActive}
+                            onClick={() => void runQuickAction(action)}
+                            className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-neutral-300">
+                                {pending ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
+                            </span>
+                            <span className="text-[11px] font-semibold text-neutral-200 leading-snug">{action.label}</span>
+                        </button>
+                    );
+                })}
+            </div>
+            {nuclearActive && (
+                <p className="text-xs text-amber-400/80">Quick actions and platform blockers are locked during Nuclear Lockdown.</p>
+            )}
 
-            {/* Platform quick-blocks */}
-            <GlassCard className="p-5">
-                <h3 className="font-semibold text-white text-sm mb-3">Platform Blockers</h3>
-                <div className="flex flex-wrap gap-3">
-                    {([
-                        { label: 'YouTube Shorts', key: 'youtubeShorts', desc: 'Blocks /shorts URLs and feed' },
-                        { label: 'YouTube', key: 'youtube', desc: 'Blocks all of YouTube' },
-                        { label: 'Instagram Reels', key: 'instagramReels', desc: 'Blocks Reels feed' },
-                        { label: 'TikTok', key: 'tiktok', desc: 'Blocks TikTok' },
-                    ] as { label: string; key: keyof typeof engineState.inAppBlock; desc: string }[]).map(({ label, key, desc }) => {
-                        const on = !!engineState.inAppBlock?.[key];
-                        return (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={async () => {
-                                    await new Promise<void>(r => chrome.runtime.sendMessage({
-                                        type: 'UPDATE_ENGINE_SETTINGS',
-                                        settings: { inAppBlock: { ...engineState.inAppBlock, [key]: !on } }
-                                    }, () => r()));
-                                    fetchEngineState();
-                                }}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-semibold transition-colors duration-150 ${on ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'}`}
-                                title={desc}
-                            >
-                                <span className={`w-2 h-2 rounded-full ${on ? 'bg-red-500' : 'bg-neutral-600'}`} />
-                                {label}
-                            </button>
-                        );
-                    })}
-                </div>
-            </GlassCard>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <GlassCard className="p-5">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-white text-base">Blocked List</h3>
-                        <Ban size={18} className="text-red-400" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <GlassCard className="p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                        <div>
+                            <h3 className="font-semibold text-white text-sm">Block by Category</h3>
+                            <p className="text-[11px] text-neutral-500 mt-0.5">Curated site groups.</p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-neutral-500">
+                            {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).length} on
+                        </span>
                     </div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-4">
-                        Supports subdomains (sub.site.com) and routes (site.com/path)
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {SAFE_BLOCK_CATEGORY_KEYS.map((category) => {
+                            const active = !!engineState.categoriesActive?.[category];
+                            const pending = categoryPending === category;
+                            return (
+                                <button
+                                    key={category}
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={active}
+                                    disabled={categoryPending !== null || nuclearActive}
+                                    onClick={() => void toggleCategory(category)}
+                                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                        active
+                                            ? 'border-purple-500/40 bg-purple-500/10'
+                                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20'
+                                    }`}
+                                >
+                                    <span>
+                                        <span className={`block text-sm font-semibold ${active ? 'text-purple-200' : 'text-neutral-200'}`}>
+                                            {SAFE_BLOCK_CATEGORY_LABELS[category]}
+                                        </span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">
+                                            {SAFE_BLOCK_CATEGORIES[category].length} sites
+                                            {pending ? ' · updating' : ''}
+                                        </span>
+                                    </span>
+                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${active ? 'bg-purple-500' : 'bg-neutral-700'}`}>
+                                        <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${active ? 'translate-x-4' : 'translate-x-0'}`} />
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </GlassCard>
+
+                <GlassCard className="p-4">
+                    <div className="mb-3">
+                        <h3 className="font-semibold text-white text-sm">Platform Blockers</h3>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">In-app distractions on major platforms.</p>
+                    </div>
+                    <div className="space-y-1.5">
+                        {platformKeys.map(({ label, key, desc }) => {
+                            const on = !!engineState.inAppBlock?.[key];
+                            const pending = platformPending === key;
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={on}
+                                    disabled={nuclearActive || !!platformPending}
+                                    title={desc}
+                                    onClick={() => void togglePlatformBlock(key)}
+                                    className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                        on
+                                            ? 'border-red-500/35 bg-red-500/10'
+                                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20'
+                                    }`}
+                                >
+                                    <span>
+                                        <span className={`block text-sm font-semibold ${on ? 'text-red-300' : 'text-neutral-200'}`}>
+                                            {label}
+                                        </span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">
+                                            {pending ? 'Updating…' : desc}
+                                        </span>
+                                    </span>
+                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-red-500' : 'bg-neutral-700'}`}>
+                                        {pending
+                                            ? <Loader2 size={12} className="absolute inset-0 m-auto animate-spin text-white" />
+                                            : <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${on ? 'translate-x-4' : 'translate-x-0'}`} />}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </GlassCard>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <GlassCard className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold text-white text-sm">Blocked</h3>
+                        <Ban size={16} className="text-red-400" />
+                    </div>
+                    <p className="text-[10px] text-neutral-500 mb-3">
+                        Domains, subdomains, or paths (site.com/path)
                     </p>
-                    <div className="flex space-x-3 mb-6">
+                    <div className="flex gap-2 mb-2">
                         <input
                             value={newBlocked}
                             onChange={e => setNewBlocked(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') { triggerAction('block', newBlocked, 'add'); setNewBlocked(''); } }}
+                            disabled={resolvingField === 'block'}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleAddSite('block', e.altKey); } }}
                             placeholder="site.com or sub.site.com/path"
-                            className="flex-1 min-w-0 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-purple-500 outline-none transition-colors duration-150 text-white"
+                            className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 outline-none transition-colors duration-150 text-white disabled:opacity-50"
                         />
                         <button
-                            onClick={() => { triggerAction('block', newBlocked, 'add'); setNewBlocked(''); }}
-                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150"
-                        >Add</button>
+                            type="button"
+                            onClick={(e) => void handleAddSite('block', e.altKey)}
+                            disabled={resolvingField === 'block'}
+                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 disabled:opacity-60 flex items-center gap-1.5"
+                        >
+                            {resolvingField === 'block' ? <Loader2 size={13} className="animate-spin" /> : 'Add'}
+                        </button>
                     </div>
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide">
+                    <div className="max-h-[22rem] space-y-1.5 overflow-y-auto scrollbar-hide">
+                        {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).map((category) => {
+                            const expanded = !!expandedBlockedCategories[category];
+                            const sites = SAFE_BLOCK_CATEGORIES[category];
+                            return (
+                                <div
+                                    key={`cat-${category}`}
+                                    className="overflow-hidden rounded-xl border border-purple-500/25 bg-purple-500/[0.07]"
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedBlockedCategories((prev) => ({
+                                            ...prev,
+                                            [category]: !prev[category],
+                                        }))}
+                                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+                                    >
+                                        <span>
+                                            <span className="block text-sm font-semibold text-purple-100">
+                                                {SAFE_BLOCK_CATEGORY_LABELS[category]}
+                                            </span>
+                                            <span className="mt-0.5 block text-[10px] text-purple-200/60">
+                                                Category · {sites.length} sites
+                                            </span>
+                                        </span>
+                                        <span className="flex items-center gap-2">
+                                            {!nuclearActive && (
+                                                <span
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        void toggleCategory(category);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            void toggleCategory(category);
+                                                        }
+                                                    }}
+                                                    className="rounded-md px-2 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-500/15"
+                                                >
+                                                    Remove
+                                                </span>
+                                            )}
+                                            <ChevronDown
+                                                size={14}
+                                                className={`text-purple-300/70 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                                            />
+                                        </span>
+                                    </button>
+                                    {expanded && (
+                                        <div className="max-h-40 space-y-1 overflow-y-auto border-t border-purple-500/20 px-4 py-2.5">
+                                            {sites.map((domain) => (
+                                                <p key={domain} className="truncate text-[11px] text-neutral-400">{domain}</p>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                         {Object.entries(engineState.blocklist || {})
-                            .filter(([, entry]) => entry.sources?.length > 0)
+                            .filter(([, entry]) => (entry.sources || []).some((s: string) => s !== 'category'))
                             .map(([domain, entry]) => {
-                                const sourceItems: { source: string; id?: string; label: string }[] = entry.sources.flatMap((source) => {
-                                    if (source === 'category') {
-                                        return (entry.categoryKeys || [])
-                                            .filter((key): key is SafeBlockCategoryKey =>
-                                                SAFE_BLOCK_CATEGORY_KEYS.includes(key as SafeBlockCategoryKey))
-                                            .map((category) => ({
-                                                source,
-                                                id: category,
-                                                label: SAFE_BLOCK_CATEGORY_LABELS[category],
-                                            }));
-                                    }
+                                const sourceItems: { source: string; id?: string; label: string }[] = entry.sources.flatMap((source: string) => {
+                                    if (source === 'category') return [];
                                     if (source === 'timer') {
                                         const timers = engineState.timers?.[domain] || [];
                                         return timers.length
@@ -1310,100 +1641,148 @@ export const BlocklistTab = () => {
                                         label: source === 'manual' ? 'Manual' : source,
                                     }];
                                 });
+                                if (!sourceItems.length) return null;
 
                                 return (
-                                    <div key={domain} className="p-4 bg-[#111] rounded-xl border border-white/5 hover:border-white/10 transition-colors duration-150">
-                                        <span className="block text-sm font-medium text-white mb-2">{domain}</span>
-                                        <div className="flex flex-wrap gap-2">
+                                    <div key={domain} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 transition-colors duration-150 hover:border-white/15">
+                                        <span className="mb-1.5 block text-sm font-medium text-white">{domain}</span>
+                                        <div className="flex flex-wrap gap-1.5">
                                             {sourceItems.map((item, index) => (
                                                 <span
                                                     key={`${item.source}-${item.id || index}`}
-                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] py-1 pl-2.5 pr-1 text-[10px] font-semibold text-neutral-400"
+                                                    className={`inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] py-1 text-[10px] font-semibold text-neutral-400 ${nuclearActive ? 'px-2.5' : 'pl-2.5 pr-1'}`}
                                                 >
                                                     {item.label}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => triggerSourceRemoval(domain, item.source, item.id)}
-                                                        className="rounded-md p-1 text-neutral-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                                                        aria-label={`Remove ${item.label.toLowerCase()} block for ${domain}`}
-                                                    >
-                                                        <X size={12} />
-                                                    </button>
+                                                    {!nuclearActive && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => triggerSourceRemoval(domain, item.source, item.id)}
+                                                            className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                                                            aria-label={`Remove ${item.label.toLowerCase()} block for ${domain}`}
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
                                                 </span>
                                             ))}
                                         </div>
                                     </div>
                                 );
                             })}
-                        {Object.values(engineState.blocklist || {}).every((entry) => !entry.sources?.length) && (
-                            <p className="py-8 text-center text-sm text-neutral-600">No sites are currently blocked.</p>
+                        {!SAFE_BLOCK_CATEGORY_KEYS.some((key) => engineState.categoriesActive?.[key])
+                            && Object.values(engineState.blocklist || {}).every((entry) => !(entry.sources || []).some((s: string) => s !== 'category')) && (
+                            <p className="py-4 text-center text-sm text-neutral-600">No sites are currently blocked.</p>
                         )}
                     </div>
                 </GlassCard>
 
-                <GlassCard className="p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold text-white text-base">Allowed (Whitelist)</h3>
-                        <Globe size={18} className="text-emerald-400" />
+                <GlassCard className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold text-white text-sm">Allowed</h3>
+                        <Globe size={16} className="text-emerald-400" />
                     </div>
-                    <div className="flex space-x-3 mb-6">
+                    <div className="mb-3 flex items-start gap-2 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] p-2.5">
+                        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-sky-400" />
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                            <p className="text-[11px] leading-relaxed text-sky-200/80">
+                                <span className="font-semibold text-sky-300">Allowlist Mode</span> blocks every site except the ones listed here.
+                            </p>
+                            <label className="flex items-center justify-between gap-3 cursor-pointer">
+                                <span className="text-[11px] text-sky-100/90">
+                                    {engineState.allowlistMode ? 'On — only listed sites work' : 'Off — listed sites are exempt from your blocklist'}
+                                </span>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={!!engineState.allowlistMode}
+                                    disabled={!(engineState.allowedSites || []).length || nuclearActive}
+                                    onClick={() => {
+                                        const next = !engineState.allowlistMode;
+                                        chrome.runtime.sendMessage(
+                                            { type: 'UPDATE_ENGINE_SETTINGS', settings: { allowlistMode: next } },
+                                            () => fetchEngineState(),
+                                        );
+                                    }}
+                                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
+                                        engineState.allowlistMode ? 'bg-sky-400' : 'bg-white/15'
+                                    }`}
+                                >
+                                    <span
+                                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                                            engineState.allowlistMode ? 'translate-x-4' : ''
+                                        }`}
+                                    />
+                                </button>
+                            </label>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 mb-2">
                         <input
                             value={newAllowed}
                             onChange={e => setNewAllowed(e.target.value)}
+                            disabled={resolvingField === 'allowed_site'}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleAddSite('allowed_site', e.altKey); } }}
                             placeholder="trustedsite.com"
-                            className="flex-1 min-w-0 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-emerald-500 outline-none transition-colors duration-150 text-white"
+                            className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-emerald-500 outline-none transition-colors duration-150 text-white disabled:opacity-50"
                         />
                         <button
-                            onClick={() => { triggerAction('allowed_site', newAllowed, 'add'); setNewAllowed(''); }}
-                            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150"
-                        >Add</button>
+                            type="button"
+                            onClick={(e) => void handleAddSite('allowed_site', e.altKey)}
+                            disabled={resolvingField === 'allowed_site'}
+                            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 disabled:opacity-60 flex items-center gap-1.5"
+                        >
+                            {resolvingField === 'allowed_site' ? <Loader2 size={13} className="animate-spin" /> : 'Add'}
+                        </button>
                     </div>
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide">
+                    <div className="space-y-1.5 max-h-[22rem] overflow-y-auto scrollbar-hide">
                         {(engineState.allowedSites || []).map((domain: string) => (
-                            <div key={domain} className="flex items-center justify-between p-4 bg-[#111] rounded-xl border border-white/5 group hover:border-white/10 transition-colors duration-150">
-                                <span className="text-sm font-medium text-white">{domain}</span>
+                            <div key={domain} className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-xl border border-white/[0.08] group hover:border-white/15 transition-colors duration-150">
+                                <span className="text-sm font-medium text-white truncate">{domain}</span>
                                 <button
                                     type="button"
                                     onClick={() => triggerAction('allowed_site', domain, 'remove')}
-                                    className="flex-shrink-0 p-2 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-100 sm:opacity-60 sm:group-hover:opacity-100 relative z-10"
+                                    className="flex-shrink-0 p-1.5 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors relative z-10"
                                     aria-label={`Remove ${domain}`}
                                 >
-                                    <X size={16} />
+                                    <X size={15} />
                                 </button>
                             </div>
                         ))}
+                        {(engineState.allowedSites || []).length === 0 && (
+                            <p className="py-4 text-center text-sm text-neutral-600">No allowed sites yet.</p>
+                        )}
                     </div>
                 </GlassCard>
             </div>
-            
+
             {/* Nuclear */}
-            <GlassCard className="p-5 border-red-500/20 bg-red-900/5">
-                <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <Zap size={20} className="text-red-500" />
-                    <h3 className="text-lg font-semibold text-white">Nuclear Lockdown</h3>
+            <GlassCard className="p-4 border-red-500/20 bg-red-900/5">
+                <div className="flex items-center gap-2.5 mb-3 flex-wrap">
+                    <Zap size={18} className="text-red-500" />
+                    <h3 className="text-base font-semibold text-white">Nuclear Lockdown</h3>
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-red-500/70">Irreversible</span>
                 </div>
                 
-                {engineState.nuclearState?.active ? (
-                    <div className="p-6 bg-red-600/15 border border-red-500/40 rounded-2xl text-center">
-                        <span className="text-red-400 font-semibold text-sm">Nuclear lockdown active</span>
+                {nuclearActive ? (
+                    <div className="p-4 bg-red-600/15 border border-red-500/40 rounded-xl text-center">
+                        <span className="text-red-400 font-semibold text-sm">Nuclear Lockdown Active</span>
                         <div className="text-3xl font-semibold tabular-nums text-white mt-2">
                             {Math.max(0, Math.ceil((engineState.nuclearState.endTime - Date.now()) / 60000))}m remaining
                         </div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400/60 mt-4">Un-cancellable by design</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400/60 mt-3">Un-cancellable by design</p>
                     </div>
                 ) : (
                     <>
-                        <p className="text-sm text-neutral-400 mb-6 max-w-xl leading-relaxed">
-                            Blocks every site on your blocklist for the chosen duration. Once activated, you cannot unblock sites until the timer expires.
+                        <p className="text-sm text-neutral-400 mb-3 max-w-2xl leading-relaxed">
+                            Locks every site on your blocklist for the chosen duration. You cannot unblock until it ends.
                         </p>
-                        <div className="flex flex-wrap gap-2 mb-4">
+                        <div className="flex flex-wrap items-center gap-2">
                             {[15, 30, 60, 120].map((m) => (
                                 <button
                                     key={m}
                                     type="button"
                                     onClick={() => setNuclearDuration(m)}
-                                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 ${
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 ${
                                         nuclearDuration === m
                                             ? 'bg-white text-black'
                                             : 'bg-white/[0.06] text-neutral-300 hover:bg-white/10'
@@ -1412,16 +1791,13 @@ export const BlocklistTab = () => {
                                     {m}m
                                 </button>
                             ))}
-                        </div>
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                            <div className="flex items-center rounded-xl border border-white/10 bg-[#111] px-4 py-3 w-full sm:w-48 shrink-0">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mr-3">Custom</span>
+                            <div className="flex items-center rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 w-28">
                                 <input
                                     type="number"
                                     min={1}
                                     value={nuclearDuration}
                                     onChange={(e) => setNuclearDuration(parseInt(e.target.value, 10) || 1)}
-                                    className="bg-transparent text-white font-semibold tabular-nums text-base outline-none w-full"
+                                    className="bg-transparent text-white font-semibold tabular-nums text-sm outline-none w-full"
                                 />
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 ml-1">min</span>
                             </div>
@@ -1429,13 +1805,13 @@ export const BlocklistTab = () => {
                                 type="button"
                                 disabled={blocklistCount === 0}
                                 onClick={() => setNukeModalOpen(true)}
-                                className="flex-1 px-8 py-3 rounded-xl text-sm font-semibold transition-colors duration-150 bg-red-500 text-white hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500"
+                                className="ml-auto px-5 py-2 rounded-xl text-sm font-semibold transition-colors duration-150 bg-red-500 text-white hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500"
                             >
-                                Activate lockdown
+                                Activate Lockdown
                             </button>
                         </div>
                         {blocklistCount === 0 && (
-                            <p className="text-xs text-amber-500/80 mt-3">Add sites to your blocklist first.</p>
+                            <p className="text-xs text-amber-500/80 mt-2">Add sites to your blocklist first.</p>
                         )}
                     </>
                 )}
@@ -1525,7 +1901,7 @@ export const StatisticsTab = () => {
         .slice(0, 8);
 
     const formatTime = (ms: number) => {
-        const capped = capDayScreenMs(ms || 0);
+        const capped = capDayScreenMs(ms || 0, { date: activeData.date });
         const mins = Math.round(capped / 60000);
         if (mins < 60) return `${mins}m`;
         return `${Math.min(24, mins / 60).toFixed(1)}h`;
@@ -1534,7 +1910,7 @@ export const StatisticsTab = () => {
     const colors = ['#a855f7', '#3b82f6', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#6366f1'];
 
     const sitesTotalMs = sitesArr.reduce((sum, [, time]) => sum + (time as number), 0);
-    const dayTotalMs = capDayScreenMs(Math.max(activeData.total || 0, sitesTotalMs));
+    const dayTotalMs = capDayScreenMs(Math.max(activeData.total || 0, sitesTotalMs), { date: activeData.date });
     const totalMs = Math.max(dayTotalMs, 1);
     let cumPct = 0;
     const slices = sitesArr.map(([site, time]: any, i) => {
@@ -1574,15 +1950,10 @@ export const StatisticsTab = () => {
     const barW = Math.max(20, (plotW - barGap * (chartData.length - 1)) / Math.max(1, chartData.length));
     const getActivityPointX = (index: number) => padX + (index * plotW / Math.max(1, chartData.length - 1));
     const getActivityY = (total: number) => padTop + plotH - ((total || 0) / maxTime) * plotH;
-    const activityLinePath = chartData.reduce((path: string, day, index: number) => {
-        const x = getActivityPointX(index);
-        const y = getActivityY(day.total);
-        if (index === 0) return `M ${x} ${y}`;
-        const previousX = getActivityPointX(index - 1);
-        const previousY = getActivityY(chartData[index - 1].total);
-        const controlX = (previousX + x) / 2;
-        return `${path} C ${controlX} ${previousY}, ${controlX} ${y}, ${x} ${y}`;
-    }, '');
+    // Straight segments — avoid cubic/pathLength clipping that stopped mid-week.
+    const activityLinePath = chartData
+        .map((day, index: number) => `${index === 0 ? 'M' : 'L'} ${getActivityPointX(index)} ${getActivityY(day.total)}`)
+        .join(' ');
 
     return (
         <div className="space-y-6 animate-fade-in-up w-full">
@@ -1674,16 +2045,13 @@ export const StatisticsTab = () => {
                                 );
                             })}
 
-                            {activityChartMode === 'line' && chartData.length > 0 && (
+                            {activityChartMode === 'line' && activityLinePath && (
                                 <>
-                                    <motion.path
+                                    <path
                                         d={`${activityLinePath} L ${getActivityPointX(chartData.length - 1)} ${padTop + plotH} L ${getActivityPointX(0)} ${padTop + plotH} Z`}
                                         fill="url(#weekly-activity-area)"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        transition={{ duration: 0.4 }}
                                     />
-                                    <motion.path
+                                    <path
                                         d={activityLinePath}
                                         fill="none"
                                         stroke="#d4d4d4"
@@ -1691,9 +2059,7 @@ export const StatisticsTab = () => {
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
                                         vectorEffect="non-scaling-stroke"
-                                        initial={{ pathLength: 0, opacity: 0 }}
-                                        animate={{ pathLength: 1, opacity: 1 }}
-                                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                                        style={{ strokeDasharray: 'none' }}
                                     />
                                 </>
                             )}

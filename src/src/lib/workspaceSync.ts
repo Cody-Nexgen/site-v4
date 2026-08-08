@@ -35,6 +35,16 @@ export const SYNCABLE_WORKSPACE_KEYS = [
     'dashboardLayout',
     'proDashboardVisuals',
     'notionJournalingEnabled',
+    '_localMutationAt',
+    'allowlistMode',
+    // Cloud-managed dashboard data (not live blocking/history stats)
+    'focuznow_calendar_events_v1',
+    'focuznow_calendar_groups_v1',
+    'focuznow_scheduling_links_v2',
+    'focuznow_lists_v1',
+    'activeChallenges',
+    'challengeProgress',
+    'completedChallenges',
 ] as const;
 
 export type SyncableWorkspaceKey = (typeof SYNCABLE_WORKSPACE_KEYS)[number];
@@ -47,15 +57,27 @@ export function pickSyncableWorkspaceState(state: Record<string, unknown>) {
     return payload;
 }
 
-export const WEB_DASHBOARD_URL = 'https://dashboard.focuznow.com';
+/** Primary web app (management UI). */
+export const WEB_DASHBOARD_URL = 'https://focuznow.com/app';
 export const WEB_APP_FALLBACK_URL = 'https://focuznow.com/app';
 export const WEB_CALENDAR_URL = 'https://focuznow.com/calendar';
 export const WEB_APP_ORIGIN = 'https://focuznow.com';
 export const SETUP_STORAGE_KEY = 'focuznow-setup-v1';
 export const SIDEBAR_COLLAPSED_KEY = 'focuznow-sidebar-collapsed-v1';
 
-/** Tabs managed on the web app — extension opens these in a new browser tab. */
+/**
+ * Tabs that stay in the extension helper (blocking / live session tools).
+ * Everything else opens on the web dashboard when running inside Chrome.
+ */
+export const EXTENSION_HELPER_TABS = new Set([
+    'blocklist',
+    'sessions',
+    'statistics',
+]);
+
+/** @deprecated use EXTENSION_HELPER_TABS — kept for OptionsApp imports */
 export const WEB_MANAGEMENT_TABS = new Set([
+    'overview',
     'calendar',
     'lists',
     'habits',
@@ -64,13 +86,36 @@ export const WEB_MANAGEMENT_TABS = new Set([
     'shop',
     'account',
     'settings',
+    'progress',
+    'achievements',
+    'forest',
+    'ai_patterns',
+    'patterns',
+    'focus_rooms',
+    'ai_coach',
+    'support',
 ]);
+
+export function isExtensionHelperTab(tab: string): boolean {
+    return EXTENSION_HELPER_TABS.has(tab);
+}
+
+export function shouldOpenTabOnWeb(tab: string): boolean {
+    try {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
+            return !isExtensionHelperTab(tab);
+        }
+    } catch {
+        /* web */
+    }
+    return false;
+}
 
 export function webDashboardUrl(path = '/'): string {
     try {
-        return new URL(path, WEB_DASHBOARD_URL).href;
+        return new URL(path, WEB_APP_ORIGIN).href;
     } catch {
-        return `${WEB_DASHBOARD_URL}${path.startsWith('/') ? path : `/${path}`}`;
+        return `${WEB_APP_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
     }
 }
 
@@ -80,7 +125,16 @@ export function webAppTabUrl(tab?: string): string {
 }
 
 export function openWebDashboard(tab?: string): void {
-    chrome.tabs.create({ url: webAppTabUrl(tab) });
+    const url = webAppTabUrl(tab);
+    try {
+        if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+            chrome.tabs.create({ url });
+            return;
+        }
+    } catch {
+        /* fall through */
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 export function isSetupComplete(): boolean {
@@ -97,7 +151,11 @@ export function markSetupComplete(): void {
     } catch {
         /* ignore */
     }
-    void chrome.storage.local.set({ setupCompleted: true });
+    try {
+        void chrome.storage.local.set({ setupCompleted: true });
+    } catch {
+        /* ignore */
+    }
 }
 
 export function readSidebarCollapsed(): boolean {

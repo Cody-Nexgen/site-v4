@@ -24,16 +24,18 @@ export default function OverviewTab() {
 
     const statsLen = last7DaysStats?.length || 0;
     const endIdx = statsLen - 1 - offsetWeeks * 7;
-    const todayTotal = capDayScreenMs(endIdx >= 0 ? (last7DaysStats[endIdx]?.total || 0) : 0);
-    const yesterdayTotal = capDayScreenMs(endIdx > 0 ? (last7DaysStats[endIdx - 1]?.total || 0) : 0);
+    const todayDateStr = endIdx >= 0 ? last7DaysStats[endIdx]?.date : new Date().toDateString();
+    const yesterdayDateStr = endIdx > 0 ? last7DaysStats[endIdx - 1]?.date : undefined;
+    const todayTotal = capDayScreenMs(endIdx >= 0 ? (last7DaysStats[endIdx]?.total || 0) : 0, { date: todayDateStr });
+    const yesterdayTotal = capDayScreenMs(endIdx > 0 ? (last7DaysStats[endIdx - 1]?.total || 0) : 0, { date: yesterdayDateStr });
     const blockedCount = engineState.blockedToday || 0;
 
     const diff = todayTotal - yesterdayTotal;
     const diffPercent = yesterdayTotal === 0 ? 0 : Math.round((Math.abs(diff) / yesterdayTotal) * 100);
     const isUp = diff > 0;
 
-    const formatTime = (ms: number) => {
-        const capped = capDayScreenMs(ms);
+    const formatTime = (ms: number, dateStr?: string) => {
+        const capped = capDayScreenMs(ms, { date: dateStr });
         const mins = Math.round(capped / 60000);
         if (mins < 60) return `${mins}m`;
         return `${Math.min(24, mins / 60).toFixed(1)}h`;
@@ -185,12 +187,33 @@ export default function OverviewTab() {
                 ))}
             </div>
 
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-500/15 text-base">
+                        🍅
+                    </span>
+                    <div>
+                        <p className="text-xs font-semibold text-white">Pomodoro</p>
+                        <p className="text-[11px] text-neutral-500">
+                            {pomodoroToday} session{pomodoroToday === 1 ? '' : 's'} completed today
+                        </p>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent('focuznow-navigate-tab', { detail: 'sessions' }))}
+                    className="text-[11px] font-medium text-purple-300 hover:text-purple-200 transition-colors shrink-0"
+                >
+                    Open →
+                </button>
+            </div>
+
             <section className="rounded-2xl border border-white/[0.06] bg-[#0c0c0e] overflow-hidden">
                 <div className="px-6 pt-6 pb-3 flex items-center justify-between gap-3 flex-wrap">
                     <div>
                         <h2 className="text-sm font-semibold text-white">Weekly activity</h2>
                         <p className="text-[11px] text-neutral-500 mt-1">
-                            {isUp ? '↑' : '↓'} {diffPercent}% vs yesterday · {pomodoroToday} sessions today
+                            {isUp ? '↑' : '↓'} {diffPercent}% vs yesterday
                         </p>
                     </div>
                     <div className="flex items-center gap-2">

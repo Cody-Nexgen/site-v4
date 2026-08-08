@@ -1,4 +1,5 @@
 import type { SchedulingLink } from '../lib/schedulingTypes';
+import { getInitials } from '../lib/avatarInitials';
 
 export function hostProfileFromLink(link: SchedulingLink) {
     return {
@@ -29,7 +30,7 @@ export default function HostProfile({ link, size = 'md' }: Props) {
                 <div
                     className={`${avatarClass} bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center font-black shadow-lg shadow-violet-900/30`}
                 >
-                    {displayName.charAt(0).toUpperCase()}
+                    {getInitials(displayName)}
                 </div>
             )}
             <div>

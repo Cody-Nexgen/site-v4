@@ -32,7 +32,7 @@ export default function ForestStatsModal({ open, onClose, display, fmtClean }: P
                             exit={{ opacity: 0, y: 8, scale: 0.98 }}
                         >
                             <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
-                                <h2 className="text-lg font-bold text-white">Forest stats</h2>
+                                <h2 className="text-lg font-bold text-white">Forest Stats</h2>
                                 <button type="button" onClick={onClose} className="p-2 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5">
                                     <X size={18} />
                                 </button>

@@ -217,6 +217,8 @@ export interface EngineState {
     redirectMessage: string;
     requireChallenge: boolean;
     focusMode: boolean;
+    /** When true with a non-empty allowlist, block all sites except allowlisted ones. */
+    allowlistMode?: boolean;
     blockedToday: number;
     trackBackgroundAudio: boolean;
     draggableTimer: boolean;
@@ -281,6 +283,7 @@ interface AuthState {
     engineState: EngineState;
     setEngineState: (state: EngineState) => void;
     patchEngineState: (patch: Partial<EngineState>) => void;
+    patchInAppBlock: (patch: Partial<EngineState['inAppBlock']>) => Promise<boolean>;
     toggleEngineBool: (key: 'draggableTimer' | 'pomodoroWidget' | 'trackBackgroundAudio' | 'requireChallenge') => Promise<boolean>;
     fetchEngineState: () => Promise<void>;
 
@@ -374,6 +377,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         redirectMessage: 'This site is blocked by FocuzNow. Stay focused!',
         requireChallenge: false,
         focusMode: true,
+        allowlistMode: false,
         blockedToday: 0,
         trackBackgroundAudio: false,
         draggableTimer: false,
@@ -414,6 +418,50 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ engineState: { ...engineState, ...patch } });
     },
 
+    patchInAppBlock: async (patch) => {
+        const { engineState } = get();
+        const prev = engineState.inAppBlock;
+        const nextInApp: EngineState['inAppBlock'] = {
+            youtube: prev?.youtube ?? false,
+            youtubeShorts: prev?.youtubeShorts ?? false,
+            instagram: prev?.instagram ?? false,
+            instagramReels: prev?.instagramReels ?? false,
+            tiktok: prev?.tiktok ?? false,
+            filters: Array.isArray(patch.filters) ? patch.filters : (prev?.filters || []),
+            ...patch,
+            smartYouTube: {
+                enabled: false,
+                blockShorts: true,
+                blockedCategoryIds: [],
+                useDataApi: true,
+                ...(prev?.smartYouTube || {}),
+                ...(patch.smartYouTube || {}),
+            },
+        };
+        // Optimistic — never clobber this with a stale GET_STATE/local mirror.
+        set({ engineState: { ...engineState, inAppBlock: nextInApp } });
+        return new Promise<boolean>((resolve) => {
+            chrome.runtime.sendMessage(
+                { type: 'UPDATE_ENGINE_SETTINGS', settings: { inAppBlock: nextInApp } },
+                (resp) => {
+                    const remote = resp?.state as EngineState | undefined;
+                    if (remote && typeof remote === 'object') {
+                        set({
+                            engineState: {
+                                ...remote,
+                                inAppBlock: nextInApp,
+                            },
+                        });
+                        resolve(true);
+                        return;
+                    }
+                    // Keep optimistic UI. Web GET_STATE is local-only and often stale.
+                    resolve(resp?.ok !== false && !chrome.runtime.lastError);
+                },
+            );
+        });
+    },
+
     toggleEngineBool: async (key) => {
         const { engineState } = get();
         const prev = !!(engineState[key] ?? false);
@@ -423,12 +471,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             chrome.runtime.sendMessage(
                 { type: 'UPDATE_ENGINE_SETTINGS', settings: { [key]: next } },
                 (resp) => {
-                    if (chrome.runtime.lastError || !resp?.ok) {
-                        set({ engineState: { ...engineState, [key]: prev } });
-                        resolve(false);
+                    const remote = resp?.state as EngineState | undefined;
+                    if (remote && typeof remote === 'object') {
+                        set({ engineState: { ...remote, [key]: next } });
+                        resolve(true);
                         return;
                     }
-                    resolve(true);
+                    resolve(resp?.ok !== false && !chrome.runtime.lastError);
                 },
             );
         });
@@ -685,7 +734,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             const rawTotal = Object.values(dayData).reduce((a: number, b: any) => a + (b as number), 0);
             stats.push({
                 date: ds,
-                total: capDayScreenMs(rawTotal as number),
+                total: capDayScreenMs(rawTotal as number, { date: ds }),
                 sites: dayData as Record<string, number>,
             });
         });

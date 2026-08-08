@@ -70,10 +70,11 @@ import {
     markSetupComplete,
     openWebDashboard,
     readSidebarCollapsed,
-    WEB_MANAGEMENT_TABS,
-    webAppTabUrl,
+    shouldOpenTabOnWeb,
     writeSidebarCollapsed,
 } from '../lib/workspaceSync';
+import { getPlatform, hydrateWebWorkspaceFromCloud, isWebPlatform } from '../lib/platform';
+import { ChevronRight as IconChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
     fetchMyProfile,
@@ -94,7 +95,6 @@ import {
     PROFILE_AVATAR_LARGE_IMG_CLASS,
     PROFILE_AVATAR_LARGE_WRAP_CLASS,
 } from '../lib/profileAvatar';
-import { ThemeSelector } from '../components/pro-dashboard/ThemeSelector';
 import {
     ProConfettiGate,
     ProFocusToast,
@@ -142,15 +142,10 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
     const getY = (pct: number) => paddingTop + chartHeight - (pct * chartHeight / 100);
     const getPointX = (i: number) => paddingX + (i * chartWidth / Math.max(1, stats.length - 1));
     const getPointY = (ms: number) => paddingTop + chartHeight - ((ms || 0) / maxTotal) * chartHeight;
-    const linePath = stats.reduce((path, day, i) => {
-        const x = getPointX(i);
-        const y = getPointY(day.total);
-        if (i === 0) return `M ${x} ${y}`;
-        const previousX = getPointX(i - 1);
-        const previousY = getPointY(stats[i - 1].total);
-        const controlX = (previousX + x) / 2;
-        return `${path} C ${controlX} ${previousY}, ${controlX} ${y}, ${x} ${y}`;
-    }, '');
+    // Straight segments only — cubic/pathLength animations were clipping the stroke mid-chart.
+    const linePath = stats
+        .map((day, i) => `${i === 0 ? 'M' : 'L'} ${getPointX(i)} ${getPointY(day.total)}`)
+        .join(' ');
 
     const formatTime = (ms: number) => {
         const mins = Math.round((ms || 0) / 60000);
@@ -200,18 +195,13 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                     </g>
                 ))}
 
-                {chartMode === 'line' && (
+                {chartMode === 'line' && linePath && (
                     <>
-                        <motion.path
-                            key={`area-${linePath}`}
+                        <path
                             d={`${linePath} L ${getPointX(stats.length - 1)} ${paddingTop + chartHeight} L ${getPointX(0)} ${paddingTop + chartHeight} Z`}
                             fill={`url(#lineFill-${uid})`}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.45 }}
                         />
-                        <motion.path
-                            key={linePath}
+                        <path
                             d={linePath}
                             fill="none"
                             stroke="#d4d4d4"
@@ -219,9 +209,7 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             vectorEffect="non-scaling-stroke"
-                            initial={{ pathLength: 0, opacity: 0 }}
-                            animate={{ pathLength: 1, opacity: 1 }}
-                            transition={{ duration: 0.65, ease: 'easeOut' }}
+                            style={{ strokeDasharray: 'none' }}
                         />
                     </>
                 )}
@@ -567,8 +555,8 @@ export const SettingsTab = () => {
     };
 
     return (
-        <div className="mx-auto w-full max-w-[820px] animate-fade-in-up space-y-4">
-            <div className="border-b border-[var(--dashboard-border)] pb-4">
+        <div className="mx-auto w-full max-w-[820px] animate-fade-in-up space-y-4 pb-10">
+            <div className="rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] px-5 py-4">
                 <p className="focuz-section-label mb-1">Settings</p>
                 <h2 className="text-2xl font-semibold tracking-tight text-[var(--dashboard-text)]">Preferences</h2>
                 <p className="mt-1 text-sm text-[var(--dashboard-text-muted)]">Tune how FocuzNow looks, tracks activity, and protects focus time.</p>
@@ -578,7 +566,7 @@ export const SettingsTab = () => {
             <div className="pt-1">
                 <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--dashboard-text-muted)]">Safety controls</p>
             </div>
-            <GlassCard className="p-4">
+            <GlassCard className="border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-4">
                 <div className="flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <h3 className="text-sm font-medium text-[var(--dashboard-text)]">Emergency override</h3>
@@ -603,7 +591,7 @@ export const SettingsTab = () => {
                     </p>
                 )}
             </GlassCard>
-            <GlassCard className="p-4">
+            <GlassCard className="border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-4">
                 <div className="flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <h3 className="text-sm font-medium text-[var(--dashboard-text)]">Unblocking challenge</h3>
@@ -631,7 +619,7 @@ export const SettingsTab = () => {
 };
 
 export const Customization = () => {
-    const { engineState, toggleEngineBool, fetchEngineState } = useAuthStore();
+    const { engineState, toggleEngineBool, fetchEngineState, patchInAppBlock } = useAuthStore();
 
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [showSmartYtModal, setShowSmartYtModal] = useState(false);
@@ -778,7 +766,7 @@ export const Customization = () => {
         <div className="animate-fade-in-up space-y-4">
             <p className="pt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--dashboard-text-muted)]">Appearance & behavior</p>
 
-            <GlassCard className="p-4">
+            <GlassCard className="border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-4">
                 <h3 className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--dashboard-text)]">
                     <IconPalette size={15} className="text-purple-400" />
                     <span>Blocking message</span>
@@ -799,9 +787,7 @@ export const Customization = () => {
                 </div>
             </GlassCard>
 
-            <ThemeSelector />
-
-            <GlassCard className="divide-y divide-[var(--dashboard-border)] px-4">
+            <GlassCard className="divide-y divide-[var(--dashboard-border)] border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] px-4">
                 <h3 className="py-3 text-sm font-medium text-[var(--dashboard-text)]">Focus engine</h3>
 
                 <div className="flex items-center justify-between gap-6 py-3">
@@ -853,10 +839,10 @@ export const Customization = () => {
                 </div>
             </GlassCard>
 
-            <GlassCard className="p-5 sm:p-6 space-y-4">
+            <GlassCard className="space-y-4 border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-5 sm:p-6">
                 <div>
-                    <h3 className="font-semibold text-white text-base">Smart YouTube Mode</h3>
-                    <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+                    <h3 className="text-base font-semibold text-[var(--dashboard-text)]">Smart YouTube Mode</h3>
+                    <p className="mt-1.5 text-xs leading-relaxed text-[var(--dashboard-text-muted)]">
                         Uses the YouTube Data API to classify videos by official category. Education and Science are always allowed.
                     </p>
                 </div>
@@ -864,46 +850,33 @@ export const Customization = () => {
                 {(() => {
                     const smart = normalizeSmartYouTube(engineState.inAppBlock?.smartYouTube);
                     const patchSmart = async (next: typeof smart) => {
-                        await new Promise<void>((r) =>
-                            chrome.runtime.sendMessage(
-                                {
-                                    type: 'UPDATE_ENGINE_SETTINGS',
-                                    settings: {
-                                        inAppBlock: {
-                                            ...engineState.inAppBlock,
-                                            smartYouTube: next,
-                                            youtubeShorts: next.blockShorts !== false,
-                                        },
-                                    },
-                                },
-                                () => r(),
-                            ),
-                        );
-                        fetchEngineState();
+                        await patchInAppBlock({ smartYouTube: next });
                     };
 
                     return (
                         <>
-                            <div className="focuz-surface-card p-4 flex items-center justify-between gap-4">
+                            <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] p-4">
                                 <div>
-                                    <span className="font-bold text-white text-sm block">Enable Smart YouTube</span>
-                                    <span className="text-[11px] text-neutral-500">
+                                    <span className="block text-sm font-semibold text-[var(--dashboard-text)]">Enable Smart YouTube</span>
+                                    <span className="text-[11px] text-[var(--dashboard-text-muted)]">
                                         {smart.blockedCategoryIds.length} categories blocked
                                     </span>
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => patchSmart({ ...smart, enabled: !smart.enabled })}
-                                    className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${smart.enabled ? 'bg-sky-500' : 'bg-neutral-800'}`}
+                                    role="switch"
+                                    aria-checked={smart.enabled}
+                                    onClick={() => void patchSmart({ ...smart, enabled: !smart.enabled })}
+                                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${smart.enabled ? 'bg-sky-500' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                                 >
-                                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${smart.enabled ? 'left-7' : 'left-1'}`} />
+                                    <span className={`pointer-events-none absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${smart.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </button>
                             </div>
                             {smart.enabled && (
                                 <button
                                     type="button"
                                     onClick={() => setShowSmartYtModal(true)}
-                                    className="w-full py-3 rounded-xl text-sm font-bold bg-sky-500/15 text-sky-300 hover:bg-sky-500/25 border border-sky-500/25"
+                                    className="w-full rounded-xl border border-sky-500/25 bg-sky-500/15 py-3 text-sm font-bold text-sky-300 hover:bg-sky-500/25"
                                 >
                                     Configure blocked categories…
                                 </button>
@@ -919,50 +892,40 @@ export const Customization = () => {
                 })()}
             </GlassCard>
 
-            <GlassCard className="p-5 sm:p-6 space-y-4">
+            <GlassCard className="space-y-4 border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)] p-5 sm:p-6">
                 <div>
-                    <h3 className="font-semibold text-white text-base">In-App Distraction Blocking</h3>
-                    <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+                    <h3 className="text-base font-semibold text-[var(--dashboard-text)]">In-App Distraction Blocking</h3>
+                    <p className="mt-1.5 text-xs leading-relaxed text-[var(--dashboard-text-muted)]">
                         Blocks YouTube Shorts only — or use Smart YouTube above for smarter filtering.
                     </p>
                 </div>
 
-                <div className="p-4 sm:p-5 bg-white/5 border border-white/10 rounded-2xl transition-all">
+                <div className="rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] p-4 sm:p-5">
                     <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <IconBrandYoutube size={18} className="text-white shrink-0" />
+                        <div className="flex min-w-0 items-center gap-2">
+                            <IconBrandYoutube size={18} className="shrink-0 text-[var(--dashboard-text)]" />
                             <div className="min-w-0">
-                                <span className="font-bold text-white block">Block YouTube Shorts</span>
-                                <span className="text-[10px] text-neutral-500 mt-0.5 block">
+                                <span className="block font-semibold text-[var(--dashboard-text)]">Block YouTube Shorts</span>
+                                <span className="mt-0.5 block text-[10px] text-[var(--dashboard-text-muted)]">
                                     Redirects /shorts URLs and hides Shorts in your feed
                                 </span>
                             </div>
                         </div>
                         <button
                             type="button"
-                            onClick={async () => {
-                                const on = !engineState.inAppBlock?.youtubeShorts;
-                                await new Promise<void>((r) =>
-                                    chrome.runtime.sendMessage(
-                                        {
-                                            type: 'UPDATE_ENGINE_SETTINGS',
-                                            settings: {
-                                                inAppBlock: {
-                                                    ...engineState.inAppBlock,
-                                                    youtube: on,
-                                                    youtubeShorts: on,
-                                                },
-                                            },
-                                        },
-                                        () => r(),
-                                    ),
-                                );
-                                fetchEngineState();
+                            role="switch"
+                            aria-checked={!!engineState.inAppBlock?.youtubeShorts}
+                            onClick={() => {
+                                void patchInAppBlock({
+                                    youtubeShorts: !engineState.inAppBlock?.youtubeShorts,
+                                });
                             }}
-                            className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${engineState.inAppBlock?.youtubeShorts ? 'bg-purple-600' : 'bg-neutral-800'}`}
+                            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${engineState.inAppBlock?.youtubeShorts ? 'bg-purple-600' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                         >
-                            <div
-                                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${engineState.inAppBlock?.youtubeShorts ? 'left-7' : 'left-1'}`}
+                            <span
+                                className={`pointer-events-none absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                                    engineState.inAppBlock?.youtubeShorts ? 'translate-x-5' : 'translate-x-0'
+                                }`}
                             />
                         </button>
                     </div>
@@ -1661,7 +1624,7 @@ const AccountSettings = () => {
         setPublicProfileEnabled(next);
         await sendProgressionMessage({ type: 'SET_PUBLIC_PROFILE', enabled: next });
         await refreshProgression();
-        if (next) await syncPublicProfile(true);
+        await syncPublicProfile(next);
     };
 
     useEffect(() => {
@@ -2431,8 +2394,9 @@ const OptionsApp = () => {
 
     const navigateTab = (tab: string) => {
         const resolved = resolveTabId(tab);
-        if (WEB_MANAGEMENT_TABS.has(resolved)) {
-            chrome.tabs.create({ url: webAppTabUrl(resolved) });
+        // Extension helper: open full dashboard on the web for management tabs.
+        if (!isWebPlatform() && shouldOpenTabOnWeb(resolved)) {
+            openWebDashboard(resolved);
             return;
         }
         setActiveTab(resolved);
@@ -2441,9 +2405,13 @@ const OptionsApp = () => {
         window.history.replaceState({}, '', url.pathname + url.search);
     };
 
+    const sidebarExpandLockUntilRef = useRef(0);
     const toggleSidebarCollapsed = () => {
         setSidebarCollapsed((prev) => {
             const next = !prev;
+            // After collapsing, ignore the hover rail briefly so the cursor
+            // still sitting on the left edge doesn't bounce it open again.
+            if (next) sidebarExpandLockUntilRef.current = Date.now() + 800;
             writeSidebarCollapsed(next);
             return next;
         });
@@ -2475,8 +2443,8 @@ const OptionsApp = () => {
         const tab = new URLSearchParams(window.location.search).get('tab');
         if (!tab) return;
         const resolved = resolveTabId(tab);
-        if (WEB_MANAGEMENT_TABS.has(resolved)) {
-            chrome.tabs.create({ url: webAppTabUrl(resolved) });
+        if (!isWebPlatform() && shouldOpenTabOnWeb(resolved)) {
+            openWebDashboard(resolved);
             return;
         }
         setActiveTab(resolved);
@@ -2528,11 +2496,17 @@ const OptionsApp = () => {
         const tab = params.get('tab');
         if (tab) {
             const resolved = resolveTabId(tab);
-            if (WEB_MANAGEMENT_TABS.has(resolved)) {
-                chrome.tabs.create({ url: webAppTabUrl(resolved) });
+            if (!isWebPlatform() && shouldOpenTabOnWeb(resolved)) {
+                openWebDashboard(resolved);
             } else {
                 setActiveTab(resolved);
             }
+        }
+
+        // Ensure platform is initialized (no-op in extension; installs shim + cloud hydrate on web).
+        void getPlatform();
+        if (isWebPlatform()) {
+            void hydrateWebWorkspaceFromCloud();
         }
 
         if (params.get('coachPrompt') === 'auto_schedule') {
@@ -2573,8 +2547,21 @@ const OptionsApp = () => {
 
     useEffect(() => {
         if (!session || !isPro || view !== 'app') return;
+        const dismissedKey = 'focuznow-future-self-mirror-dismissed';
+        let dismissedIds: string[] = [];
+        try {
+            dismissedIds = JSON.parse(localStorage.getItem(dismissedKey) || '[]') as string[];
+        } catch {
+            dismissedIds = [];
+        }
         void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_GET', dashboardOpen: true }).then((response) => {
-            setFutureSelfMirror(response?.pendingMirror ?? null);
+            const pending = response?.pendingMirror ?? null;
+            if (pending?.id && dismissedIds.includes(pending.id)) {
+                void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_MIRROR_SHOWN', id: pending.id });
+                setFutureSelfMirror(null);
+                return;
+            }
+            setFutureSelfMirror(pending);
         });
     }, [session, isPro, view]);
 
@@ -2680,31 +2667,55 @@ const OptionsApp = () => {
             />
 
             {/* Main Content */}
-            <main className="workspace-main flex flex-col min-w-0 relative overflow-x-hidden">
+            <main className="workspace-main flex flex-col min-w-0 relative overflow-hidden">
+                {sidebarCollapsed && (
+                    <>
+                        <div
+                            className="workspace-sidebar-hover-rail"
+                            onMouseEnter={() => {
+                                window.clearTimeout((window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover);
+                                (window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover = window.setTimeout(() => {
+                                    if (Date.now() < sidebarExpandLockUntilRef.current) return;
+                                    setSidebarCollapsed(false);
+                                    writeSidebarCollapsed(false);
+                                }, 550);
+                            }}
+                            onMouseLeave={() => {
+                                window.clearTimeout((window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover);
+                            }}
+                            aria-hidden
+                        />
+                        <button
+                            type="button"
+                            className="workspace-sidebar-expand-fab"
+                            aria-label="Expand sidebar"
+                            onClick={() => {
+                                window.clearTimeout((window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover);
+                                sidebarExpandLockUntilRef.current = 0;
+                                setSidebarCollapsed(false);
+                                writeSidebarCollapsed(false);
+                            }}
+                        >
+                            <IconChevronRight size={16} />
+                        </button>
+                    </>
+                )}
                 {/* Topbar */}
                 <header className="workspace-topbar h-11 shrink-0 px-6 flex items-center justify-between sticky top-0 z-50">
                     <div className="flex items-center gap-2">
-                        {sidebarCollapsed && (
-                            <button
-                                type="button"
-                                onClick={toggleSidebarCollapsed}
-                                className="workspace-sidebar-toggle mr-1"
-                                aria-label="Expand sidebar"
-                            >
-                                <IconMaximize2 size={14} />
-                            </button>
-                        )}
                         <h1 className="text-xs font-medium text-neutral-400">{tabLabel(activeTab)}</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => openWebDashboard()}
-                            className="flex h-7 items-center gap-1.5 rounded-md border border-violet-500/25 bg-violet-500/10 px-2.5 text-[11px] font-medium text-violet-200 transition-colors hover:bg-violet-500/15 hover:text-violet-100"
-                        >
-                            <IconExternalLink size={12} />
-                            Open web dashboard
-                        </button>
+                        {!isWebPlatform() && (
+                            <button
+                                type="button"
+                                onClick={() => openWebDashboard()}
+                                className="flex h-7 items-center gap-1.5 rounded-md border border-violet-500/25 bg-violet-500/10 px-2.5 text-[11px] font-medium text-violet-200 transition-colors hover:bg-violet-500/15 hover:text-violet-100"
+                            >
+                                <IconExternalLink size={12} />
+                                Open web dashboard
+                            </button>
+                        )}
                         {!isPro && (
                             <button
                                 type="button"
@@ -2742,7 +2753,18 @@ const OptionsApp = () => {
                 mirror={futureSelfMirror}
                 onClose={() => {
                     if (futureSelfMirror) {
-                        void chrome.runtime.sendMessage({ type: 'FUTURE_SELF_MIRROR_SHOWN', id: futureSelfMirror.id });
+                        try {
+                            const key = 'focuznow-future-self-mirror-dismissed';
+                            const prev = JSON.parse(localStorage.getItem(key) || '[]') as string[];
+                            const next = [...new Set([...prev, futureSelfMirror.id])].slice(-30);
+                            localStorage.setItem(key, JSON.stringify(next));
+                        } catch {
+                            /* ignore */
+                        }
+                        void chrome.runtime.sendMessage({
+                            type: 'FUTURE_SELF_MIRROR_SHOWN',
+                            id: futureSelfMirror.id,
+                        });
                     }
                     setFutureSelfMirror(null);
                 }}

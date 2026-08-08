@@ -1,4 +1,9 @@
 /** In-page command palette (shadow DOM). Works on http(s) pages via content script + chrome.commands. */
+import { installWebExtensionBridge } from './webBridge';
+
+// Install early so the web dashboard RPC works even if the site-specific
+// content script is stale or failed to load.
+installWebExtensionBridge();
 
 const ICONS = {
     search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`,

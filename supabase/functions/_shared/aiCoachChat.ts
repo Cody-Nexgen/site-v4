@@ -87,7 +87,13 @@ action_type and data:
 - calendar_add_events — data.events: [{title, date (yyyy-MM-dd), startHour, startMin, durationMin, color?}] adds focus blocks
 
 Category blocks: gaming, social, streaming, news → 8–15 well-known domains.
-You may emit MULTIPLE FOCUZNOW_ACTION lines. Never fake results.`;
+You may emit MULTIPLE FOCUZNOW_ACTION lines. Never fake results.
+
+Images: users may attach screenshots. The client OCR's them and appends a block like:
+[User attached an image: filename.png]
+[Image text]
+…extracted characters…
+Treat that block as what is visible in the image. Answer using the extracted text. Never say you cannot see images, that you are text-based only, or ask the user to describe the image when [User attached an image] or [Image text] is present — read the OCR block instead.`;
 
 export function buildCoachSystemPrompt(context?: Record<string, unknown>): string {
     if (!context) return COACH_SYSTEM_PROMPT;

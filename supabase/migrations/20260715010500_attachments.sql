@@ -69,14 +69,8 @@ create table if not exists public.attachments (
     room_id uuid references public.focus_rooms (id) on delete cascade,
     storage_path text not null unique,
     file_name text not null check (char_length(file_name) between 1 and 255),
-    mime_type text not null check (
-        mime_type in (
-            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-            'application/pdf', 'text/plain', 'text/markdown', 'text/csv',
-            'application/json', 'text/javascript', 'application/javascript',
-            'text/typescript', 'text/jsx', 'text/tsx', 'text/css'
-        )
-    ),
+    -- Any file type is allowed; just guard against an empty/garbage value.
+    mime_type text not null check (char_length(mime_type) between 1 and 255),
     size_bytes bigint not null check (size_bytes > 0 and size_bytes <= 10485760),
     extracted_text text check (extracted_text is null or octet_length(extracted_text) <= 400000),
     created_at timestamptz not null default now(),
@@ -127,18 +121,14 @@ for delete
 to authenticated
 using (owner_id = (select auth.uid()));
 
+-- allowed_mime_types = null means the bucket accepts any file type.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
     'attachments',
     'attachments',
     false,
     10485760,
-    array[
-        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-        'application/pdf', 'text/plain', 'text/markdown', 'text/csv',
-        'application/json', 'text/javascript', 'application/javascript',
-        'text/typescript', 'text/jsx', 'text/tsx', 'text/css'
-    ]
+    null
 )
 on conflict (id) do update
 set public = false,

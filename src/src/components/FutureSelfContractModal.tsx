@@ -60,22 +60,43 @@ export function FutureSelfContractModal({
     const submit = async () => {
         setSaving(true);
         setError('');
-        const response = await chrome.runtime.sendMessage({
-            type: 'FUTURE_SELF_START',
-            contract: {
-                mission,
-                overarchingGoal: goal,
-                futureTargetDate: targetDate,
-                plannedMinutesPerDay: plannedMinutes,
-                destination: { ...(destination || {}), url },
-            },
-        });
-        setSaving(false);
-        if (!response?.ok) {
-            setError(response?.error || 'Could not create the contract.');
+        if (!url.trim()) {
+            setSaving(false);
+            setError('Enter a work destination URL (e.g. docs.google.com).');
             return;
         }
-        onStarted(response.contract);
+        if (mission.trim().length < 3 || goal.trim().length < 3 || !targetDate) {
+            setSaving(false);
+            setError('Fill in mission, goal, and a future target date.');
+            return;
+        }
+        let response: { ok?: boolean; error?: string; needsExtension?: boolean; contract?: FutureSelfContract } | undefined;
+        try {
+            response = await chrome.runtime.sendMessage({
+                type: 'FUTURE_SELF_START',
+                contract: {
+                    mission,
+                    overarchingGoal: goal,
+                    futureTargetDate: targetDate,
+                    plannedMinutesPerDay: plannedMinutes,
+                    destination: { ...(destination || {}), url: url.trim() },
+                },
+            });
+        } catch (err) {
+            setSaving(false);
+            setError(err instanceof Error ? err.message : 'Could not reach the extension background.');
+            return;
+        }
+        setSaving(false);
+        if (!response?.ok) {
+            if (response?.needsExtension) {
+                setError('Future Self Mode needs the FocuzNow extension open to create a contract.');
+                return;
+            }
+            setError(response?.error || chrome.runtime.lastError?.message || 'Could not create the contract.');
+            return;
+        }
+        onStarted(response.contract!);
     };
 
     return (

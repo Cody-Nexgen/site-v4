@@ -3,25 +3,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export const ATTACHMENT_BUCKET = 'attachments';
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
-export const SAFE_ATTACHMENT_MIME_TYPES = [
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'application/pdf',
-    'text/plain',
-    'text/markdown',
-    'text/csv',
-    'application/json',
-    'text/javascript',
-    'application/javascript',
-    'text/typescript',
-    'text/jsx',
-    'text/tsx',
-    'text/css',
-] as const;
-
-const SAFE_MIME_SET = new Set<string>(SAFE_ATTACHMENT_MIME_TYPES);
 const TEXT_EXTENSIONS = new Set([
     'txt', 'md', 'markdown', 'csv', 'json', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
     'css', 'html', 'htm', 'xml', 'py', 'rb', 'go', 'rs', 'java', 'kt', 'swift',
@@ -85,15 +66,19 @@ export function isTextAttachment(file: Pick<File, 'name' | 'type'>): boolean {
         TEXT_EXTENSIONS.has(fileExtension(file.name));
 }
 
+/**
+ * Any file type is allowed — we just normalize what the browser gives us so uploads
+ * always carry a usable mime type, falling back to extension sniffing or a generic
+ * binary type when the browser can't identify the file.
+ */
 export function normalizedAttachmentMime(file: Pick<File, 'name' | 'type'>): string {
-    if (SAFE_MIME_SET.has(file.type)) return file.type;
-    return TEXT_EXTENSIONS.has(fileExtension(file.name)) ? 'text/plain' : file.type;
+    if (file.type) return file.type;
+    return TEXT_EXTENSIONS.has(fileExtension(file.name)) ? 'text/plain' : 'application/octet-stream';
 }
 
 export function validateAttachment(file: Pick<File, 'name' | 'type' | 'size'>): string | null {
     if (file.size === 0) return 'Empty files cannot be attached.';
     if (file.size > MAX_ATTACHMENT_BYTES) return 'Attachments must be 10MB or smaller.';
-    if (!SAFE_MIME_SET.has(normalizedAttachmentMime(file))) return 'This file type is not supported.';
     return null;
 }
 
@@ -193,6 +178,29 @@ export async function downloadAttachment(
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     return { ok: true };
+}
+
+/** Signed URL for inline playback (image / video / audio). */
+export async function getAttachmentPlayUrl(
+    supabase: SupabaseClient,
+    attachment: Pick<AttachmentRecord, 'storagePath'>,
+    expiresIn = 3600,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+    const { data, error } = await supabase.storage
+        .from(ATTACHMENT_BUCKET)
+        .createSignedUrl(attachment.storagePath, expiresIn);
+    if (error || !data?.signedUrl) {
+        return { ok: false, error: error?.message ?? 'Could not open attachment.' };
+    }
+    return { ok: true, url: data.signedUrl };
+}
+
+export function isPlayableAttachmentMime(mimeType: string | undefined | null): 'image' | 'video' | 'audio' | null {
+    const mime = (mimeType || '').toLowerCase();
+    if (mime.startsWith('image/')) return 'image';
+    if (mime.startsWith('video/')) return 'video';
+    if (mime.startsWith('audio/') || mime === 'application/ogg') return 'audio';
+    return null;
 }
 
 export async function deleteAttachment(

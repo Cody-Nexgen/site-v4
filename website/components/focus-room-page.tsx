@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Copy, DoorOpen, Download, Loader2, MessageSquare, Mic, MicOff, MoreVertical,
+  Check, ChevronUp, Copy, DoorOpen, Download, Loader2, MessageSquare, Mic, MicOff, MoreVertical,
   Paperclip, Shield, Trash2, Users, Video, VideoOff, X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
-  deleteAttachment, downloadAttachment, uploadRoomAttachment, type AttachmentRecord,
+  deleteAttachment, downloadAttachment, getAttachmentPlayUrl, isPlayableAttachmentMime,
+  uploadRoomAttachment, type AttachmentRecord,
 } from "@/lib/attachmentApi";
 import { useWebsiteFocusRoomRtc, type RoomDevicePrefs, type RoomPeer } from "@/lib/focusRoomRtc";
 
@@ -19,6 +20,59 @@ type FocusRoom = {
   participantCount: number;
   members: { username: string; displayName: string; avatarUrl: string | null }[];
 };
+
+function ChatAttachmentMedia({
+  attachment,
+  canDelete,
+  onDownload,
+  onDelete,
+}: {
+  attachment: AttachmentRecord;
+  canDelete: boolean;
+  onDownload: () => void;
+  onDelete: () => void;
+}) {
+  const kind = isPlayableAttachmentMime(attachment.mimeType);
+  const [url, setUrl] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    if (!kind) return;
+    let cancelled = false;
+    void getAttachmentPlayUrl(attachment).then((result) => {
+      if (cancelled) return;
+      if (result.ok) setUrl(result.url);
+      else setLoadError(result.error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [attachment, kind]);
+
+  return (
+    <div className="mt-1 space-y-1.5 rounded-lg border border-white/10 bg-black/20 p-2">
+      {kind === "image" && url && (
+        <a href={url} target="_blank" rel="noreferrer" className="block">
+          <img src={url} alt={attachment.fileName} className="max-h-48 w-full rounded-md object-contain bg-black/40" />
+        </a>
+      )}
+      {kind === "video" && url && (
+        <video src={url} controls playsInline preload="metadata" className="max-h-56 w-full rounded-md bg-black/40" />
+      )}
+      {kind === "audio" && url && <audio src={url} controls preload="metadata" className="w-full" />}
+      {kind && !url && !loadError && <p className="text-[10px] text-neutral-500">Loading media…</p>}
+      {loadError && <p className="text-[10px] text-red-400">{loadError}</p>}
+      <div className="flex items-center gap-2">
+        <Paperclip size={13} className="text-neutral-500" />
+        <span className="min-w-0 flex-1 truncate text-xs">{attachment.fileName}</span>
+        <button type="button" onClick={onDownload}><Download size={13} /></button>
+        {canDelete && (
+          <button type="button" className="text-red-400" onClick={onDelete}><Trash2 size={13} /></button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function formatCountdown(endsAt: string) {
   const seconds = Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 1000));
@@ -32,6 +86,91 @@ async function getRoom(roomId: string) {
   return result?.ok && result.room
     ? { ok: true as const, room: result.room }
     : { ok: false as const, error: result?.error ?? "ROOM_NOT_FOUND" };
+}
+
+function DeviceToggleButton({
+  active,
+  onToggle,
+  icon,
+  offIcon,
+  label,
+  menuTitle,
+  sections,
+  open,
+  onOpenChange,
+}: {
+  active: boolean;
+  onToggle: () => void;
+  icon: ReactNode;
+  offIcon: ReactNode;
+  label: string;
+  menuTitle: string;
+  sections: { heading: string; devices: MediaDeviceInfo[]; selectedId: string; onSelect: (id: string) => void; emptyLabel: string }[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) onOpenChange(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open, onOpenChange]);
+
+  return (
+    <div ref={rootRef} className="relative flex items-stretch">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={label}
+        className={`flex h-12 w-12 items-center justify-center rounded-l-full ${active ? "bg-white/10 hover:bg-white/15" : "bg-red-500/20 text-red-400"}`}
+      >
+        {active ? icon : offIcon}
+      </button>
+      <button
+        type="button"
+        aria-label={`${menuTitle} options`}
+        aria-expanded={open}
+        onClick={() => onOpenChange(!open)}
+        className={`flex h-12 w-5 items-center justify-center rounded-r-full border-l border-black/30 ${active ? "bg-white/10 hover:bg-white/15" : "bg-red-500/20 text-red-400"}`}
+      >
+        <ChevronUp size={12} className={`transition-transform ${open ? "" : "rotate-180"}`} />
+      </button>
+      {open && (
+        <div className="absolute bottom-[calc(100%+10px)] left-1/2 z-50 max-h-72 w-64 -translate-x-1/2 overflow-y-auto rounded-xl border border-white/10 bg-[#111214]/95 py-1.5 shadow-2xl backdrop-blur-xl">
+          <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500">{menuTitle}</p>
+          {sections.map((section) => (
+            <div key={section.heading} className="mb-1">
+              <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-600">{section.heading}</p>
+              {section.devices.length === 0 ? (
+                <p className="px-3 py-1.5 text-xs text-neutral-600">{section.emptyLabel}</p>
+              ) : (
+                section.devices.map((device) => {
+                  const selected = device.deviceId === section.selectedId || (!section.selectedId && section.devices[0]?.deviceId === device.deviceId);
+                  return (
+                    <button
+                      key={device.deviceId}
+                      type="button"
+                      onClick={() => {
+                        section.onSelect(device.deviceId);
+                        onOpenChange(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-neutral-200 hover:bg-white/[0.06]"
+                    >
+                      <span className="w-4 shrink-0 text-emerald-400">{selected ? <Check size={12} /> : null}</span>
+                      <span className="truncate">{device.label || section.heading}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ParticipantTile({ peer, speakerId }: { peer: RoomPeer; speakerId: string }) {
@@ -83,6 +222,8 @@ export default function FocusRoomPage({ roomId }: { roomId: string }) {
   const [copied, setCopied] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [hostOpen, setHostOpen] = useState(false);
+  const [micMenuOpen, setMicMenuOpen] = useState(false);
+  const [camMenuOpen, setCamMenuOpen] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
   const [uploading, setUploading] = useState(false);
   const [isPro, setIsPro] = useState(false);
@@ -195,36 +336,43 @@ export default function FocusRoomPage({ roomId }: { roomId: string }) {
 
   if (!inRoom) {
     return (
-      <div className="min-h-screen bg-[#0a0a0b] text-white lg:h-screen lg:overflow-hidden">
-        <div className="grid min-h-screen lg:grid-cols-2">
+      <div className="relative min-h-screen overflow-hidden bg-[#070708] text-white lg:h-screen">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-80"
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 50% at 20% 20%, rgba(88,101,242,0.14), transparent 55%), radial-gradient(ellipse 60% 40% at 85% 70%, rgba(16,185,129,0.08), transparent 50%)",
+          }}
+        />
+        <div className="relative z-10 grid min-h-screen lg:grid-cols-2">
           <section className="flex items-center border-b border-white/10 p-6 lg:border-b-0 lg:border-r lg:p-12">
             <div className="mx-auto w-full max-w-2xl">
-              <div className="relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-[#121214]">
+              <div className="relative aspect-video overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_-20px_rgba(0,0,0,0.7)] backdrop-blur-xl">
                 <video ref={previewRef} autoPlay muted playsInline className={`h-full w-full object-cover ${rtc.camOn ? "" : "hidden"}`} />
                 {!rtc.camOn && <div className="absolute inset-0 flex items-center justify-center text-neutral-500">Camera off</div>}
               </div>
               <div className="mt-3 flex gap-2">
-                <button onClick={rtc.toggleMic} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/10 p-3 text-sm">
+                <button onClick={rtc.toggleMic} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.06] p-3 text-sm backdrop-blur-md">
                   {rtc.micOn ? <Mic size={16} /> : <MicOff size={16} />} Microphone
                 </button>
-                <button onClick={() => void rtc.toggleCam()} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/10 p-3 text-sm">
+                <button onClick={() => void rtc.toggleCam()} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.06] p-3 text-sm backdrop-blur-md">
                   {rtc.camOn ? <Video size={16} /> : <VideoOff size={16} />} Camera
                 </button>
               </div>
             </div>
           </section>
           <section className="flex items-center p-6 lg:p-12">
-            <div className="mx-auto w-full max-w-lg">
-              <p className="text-xs font-bold uppercase tracking-widest text-emerald-400">Waiting lobby</p>
-              <h1 className="mt-2 text-3xl font-bold">{room.title}</h1>
+            <div className="mx-auto w-full max-w-lg rounded-3xl border border-white/[0.1] bg-white/[0.04] p-6 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.65)] backdrop-blur-2xl sm:p-8">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-400/90">Waiting lobby</p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight">{room.title}</h1>
               <p className="mt-2 text-sm text-neutral-400">Choose your devices before joining · {countdown} remaining</p>
               <div className="mt-8 space-y-4">
                 {([
-                  ["Camera", prefs.cameraId, rtc.videoInputs, "cameraId"],
-                  ["Microphone", prefs.micId, rtc.audioInputs, "micId"],
-                  ["Speaker", prefs.speakerId, rtc.audioOutputs, "speakerId"],
+                  ["Camera", prefs.cameraId || rtc.selectedCameraId, rtc.videoInputs, "cameraId"],
+                  ["Microphone", prefs.micId || rtc.selectedMicId, rtc.audioInputs, "micId"],
+                  ["Speaker", prefs.speakerId || rtc.selectedSpeakerId, rtc.audioOutputs, "speakerId"],
                 ] as const).map(([label, value, devices, key]) => (
-                  <label key={label} className="block text-xs text-neutral-400">
+                  <label key={label} className="block rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-xs text-neutral-400">
                     {label}
                     <select
                       value={value}
@@ -233,8 +381,9 @@ export default function FocusRoomPage({ roomId }: { roomId: string }) {
                         setPrefs((current) => ({ ...current, [key]: id }));
                         if (key === "cameraId") void rtc.selectCamera(id);
                         if (key === "micId") void rtc.selectMic(id);
+                        if (key === "speakerId") rtc.selectSpeaker(id);
                       }}
-                      className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#171719] p-3 text-sm text-white"
+                      className="mt-1.5 w-full bg-transparent p-1 text-sm text-white outline-none"
                     >
                       <option value="">Default {label.toLowerCase()}</option>
                       {devices.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label || label}</option>)}
@@ -275,7 +424,7 @@ export default function FocusRoomPage({ roomId }: { roomId: string }) {
       <main className="flex min-h-0 flex-1">
         <div className="flex-1 overflow-y-auto p-3 sm:p-5">
           <div className="mx-auto grid max-w-6xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {rtc.participants.map((peer) => <ParticipantTile key={peer.peerId} peer={peer} speakerId={prefs.speakerId} />)}
+            {rtc.participants.map((peer) => <ParticipantTile key={peer.peerId} peer={peer} speakerId={prefs.speakerId || rtc.selectedSpeakerId} />)}
           </div>
         </div>
         {chatOpen && (
@@ -291,12 +440,14 @@ export default function FocusRoomPage({ roomId }: { roomId: string }) {
                   <p className="text-[11px] font-semibold text-neutral-500">{message.name}</p>
                   {message.text && <p className="break-words text-neutral-200">{message.text}</p>}
                   {message.attachment && (
-                    <div className="mt-1 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2">
-                      <Paperclip size={13} className="text-neutral-500" />
-                      <span className="min-w-0 flex-1 truncate text-xs">{message.attachment.fileName}</span>
-                      <button onClick={() => void downloadAttachment(message.attachment!).then((result) => { if (!result.ok) setError(result.error); })}><Download size={13} /></button>
-                      {message.attachment.ownerId === session.user.id && <button className="text-red-400" onClick={() => void removeAttachment(message.attachment!)}><Trash2 size={13} /></button>}
-                    </div>
+                    <ChatAttachmentMedia
+                      attachment={message.attachment}
+                      canDelete={message.attachment.ownerId === session.user.id}
+                      onDownload={() => void downloadAttachment(message.attachment!).then((result) => {
+                        if (!result.ok) setError(result.error);
+                      })}
+                      onDelete={() => void removeAttachment(message.attachment!)}
+                    />
                   )}
                 </div>
               ))}
@@ -313,8 +464,51 @@ export default function FocusRoomPage({ roomId }: { roomId: string }) {
         )}
       </main>
       <footer className="relative flex h-[72px] shrink-0 items-center justify-center gap-2 border-t border-white/10 bg-[#171719] px-3">
-        <button onClick={rtc.toggleMic} className={`rounded-full p-4 ${rtc.micOn ? "bg-white/10" : "bg-red-500/20 text-red-400"}`}>{rtc.micOn ? <Mic size={19} /> : <MicOff size={19} />}</button>
-        <button onClick={() => void rtc.toggleCam()} className={`rounded-full p-4 ${rtc.camOn ? "bg-white/10" : "bg-red-500/20 text-red-400"}`}>{rtc.camOn ? <Video size={19} /> : <VideoOff size={19} />}</button>
+        <DeviceToggleButton
+          active={rtc.micOn}
+          onToggle={rtc.toggleMic}
+          icon={<Mic size={19} />}
+          offIcon={<MicOff size={19} />}
+          label={rtc.micOn ? "Mute microphone" : "Unmute microphone"}
+          menuTitle="Audio devices"
+          open={micMenuOpen}
+          onOpenChange={(open) => { setMicMenuOpen(open); if (open) setCamMenuOpen(false); }}
+          sections={[
+            {
+              heading: "Microphone",
+              devices: rtc.audioInputs,
+              selectedId: rtc.selectedMicId,
+              onSelect: (id) => { setPrefs((p) => ({ ...p, micId: id })); void rtc.selectMic(id); },
+              emptyLabel: "No microphones found",
+            },
+            {
+              heading: "Speaker",
+              devices: rtc.audioOutputs,
+              selectedId: rtc.selectedSpeakerId,
+              onSelect: (id) => { setPrefs((p) => ({ ...p, speakerId: id })); rtc.selectSpeaker(id); },
+              emptyLabel: "No speakers found",
+            },
+          ]}
+        />
+        <DeviceToggleButton
+          active={rtc.camOn}
+          onToggle={() => void rtc.toggleCam()}
+          icon={<Video size={19} />}
+          offIcon={<VideoOff size={19} />}
+          label={rtc.camOn ? "Turn off camera" : "Turn on camera"}
+          menuTitle="Video devices"
+          open={camMenuOpen}
+          onOpenChange={(open) => { setCamMenuOpen(open); if (open) setMicMenuOpen(false); }}
+          sections={[
+            {
+              heading: "Camera",
+              devices: rtc.videoInputs,
+              selectedId: rtc.selectedCameraId,
+              onSelect: (id) => { setPrefs((p) => ({ ...p, cameraId: id })); void rtc.selectCamera(id); },
+              emptyLabel: "No cameras found",
+            },
+          ]}
+        />
         <button onClick={() => setChatOpen((open) => !open)} className="rounded-full bg-white/10 p-4"><MessageSquare size={19} /></button>
         {isHost && (
           <div className="relative">

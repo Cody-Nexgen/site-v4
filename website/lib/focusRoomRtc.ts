@@ -44,6 +44,15 @@ export type RoomDevicePrefs = {
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  {
+    urls: [
+      "turn:openrelay.metered.ca:80",
+      "turn:openrelay.metered.ca:443",
+      "turn:openrelay.metered.ca:443?transport=tcp",
+    ],
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
 
 function peerId() {
@@ -69,6 +78,8 @@ export function useWebsiteFocusRoomRtc({
   const channelRef = useRef<RealtimeChannel | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const pcs = useRef(new Map<string, RTCPeerConnection>());
+  const pendingIce = useRef(new Map<string, RTCIceCandidateInit[]>());
+  const disconnectTimers = useRef(new Map<string, number>());
   const names = useRef(new Map<string, { name: string; avatarUrl?: string | null }>());
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [peers, setPeers] = useState<RoomPeer[]>([]);
@@ -134,10 +145,28 @@ export function useWebsiteFocusRoomRtc({
   }, [enabled, startMedia]);
 
   const removePeer = useCallback((remoteId: string) => {
+    const timer = disconnectTimers.current.get(remoteId);
+    if (timer) {
+      window.clearTimeout(timer);
+      disconnectTimers.current.delete(remoteId);
+    }
+    pendingIce.current.delete(remoteId);
     pcs.current.get(remoteId)?.close();
     pcs.current.delete(remoteId);
     names.current.delete(remoteId);
     setPeers((current) => current.filter((peer) => peer.peerId !== remoteId));
+  }, []);
+
+  const flushPendingIce = useCallback(async (remoteId: string, pc: RTCPeerConnection) => {
+    const queued = pendingIce.current.get(remoteId) ?? [];
+    pendingIce.current.delete(remoteId);
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch {
+        /* ignore */
+      }
+    }
   }, []);
 
   const createPeer = useCallback((remoteId: string, channel: RealtimeChannel) => {
@@ -160,13 +189,20 @@ export function useWebsiteFocusRoomRtc({
     };
     pc.ontrack = (event) => {
       const stream = event.streams[0] ?? new MediaStream([event.track]);
+      if (event.streams[0]) {
+        for (const track of event.streams[0].getTracks()) {
+          if (!stream.getTracks().some((t) => t.id === track.id)) stream.addTrack(track);
+        }
+      } else if (!stream.getTracks().some((t) => t.id === event.track.id)) {
+        stream.addTrack(event.track);
+      }
       const identity = names.current.get(remoteId);
       setPeers((current) => {
         const next = {
           peerId: remoteId,
           displayName: identity?.name ?? remoteId.slice(0, 8),
           avatarUrl: identity?.avatarUrl,
-          stream,
+          stream: new MediaStream(stream.getTracks()),
         };
         return current.some((peer) => peer.peerId === remoteId)
           ? current.map((peer) => peer.peerId === remoteId ? { ...peer, ...next } : peer)
@@ -174,7 +210,47 @@ export function useWebsiteFocusRoomRtc({
       });
     };
     pc.onconnectionstatechange = () => {
-      if (["failed", "closed"].includes(pc.connectionState)) removePeer(remoteId);
+      const state = pc.connectionState;
+      if (state === "connected" || state === "connecting") {
+        const timer = disconnectTimers.current.get(remoteId);
+        if (timer) {
+          window.clearTimeout(timer);
+          disconnectTimers.current.delete(remoteId);
+        }
+        return;
+      }
+      if (state === "failed") {
+        try {
+          pc.restartIce();
+        } catch {
+          /* ignore */
+        }
+        const existingTimer = disconnectTimers.current.get(remoteId);
+        if (existingTimer) window.clearTimeout(existingTimer);
+        disconnectTimers.current.set(
+          remoteId,
+          window.setTimeout(() => {
+            if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+              removePeer(remoteId);
+            }
+          }, 10000),
+        );
+        return;
+      }
+      if (state === "disconnected") {
+        const existingTimer = disconnectTimers.current.get(remoteId);
+        if (existingTimer) window.clearTimeout(existingTimer);
+        disconnectTimers.current.set(
+          remoteId,
+          window.setTimeout(() => {
+            if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+              removePeer(remoteId);
+            }
+          }, 8000),
+        );
+        return;
+      }
+      if (state === "closed") removePeer(remoteId);
     };
     pc.ondatachannel = () => {};
     pcs.current.set(remoteId, pc);
@@ -259,6 +335,7 @@ export function useWebsiteFocusRoomRtc({
               if (signal.type === "offer" && signal.sdp) {
                 if (pc.signalingState !== "stable") await pc.setLocalDescription({ type: "rollback" });
                 await pc.setRemoteDescription(signal.sdp);
+                await flushPendingIce(signal.from, pc);
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
                 await channel.send({
@@ -268,8 +345,15 @@ export function useWebsiteFocusRoomRtc({
                 });
               } else if (signal.type === "answer" && signal.sdp) {
                 await pc.setRemoteDescription(signal.sdp);
-              } else if (signal.type === "ice" && signal.candidate && pc.remoteDescription) {
-                await pc.addIceCandidate(signal.candidate);
+                await flushPendingIce(signal.from, pc);
+              } else if (signal.type === "ice" && signal.candidate) {
+                if (pc.remoteDescription) {
+                  await pc.addIceCandidate(signal.candidate).catch(() => {});
+                } else {
+                  const queued = pendingIce.current.get(signal.from) ?? [];
+                  queued.push(signal.candidate);
+                  pendingIce.current.set(signal.from, queued);
+                }
               }
             } catch (reason) {
               console.warn("[WebsiteFocusRoomRtc] signal", reason);

@@ -364,7 +364,7 @@ export const ForestTab = () => {
                         ×
                     </button>
                     <p className="text-sm text-neutral-300 leading-relaxed pr-8">
-                        <span className="font-bold text-white">How your forest grows:</span> every completed
+                        <span className="font-bold text-white">How Your Forest Grows:</span> every completed
                         focus session plants a tree. Trees grow on their own while you stay clean — no blocked
                         sites, no Shorts, no doom-scrolling. Slip-ups never destroy anything; they just slow
                         growth for a little while. Click an empty tile to choose where your next tree goes.
@@ -523,7 +523,7 @@ export const ForestTab = () => {
                             >
                                 <div className="text-center bg-black/45 backdrop-blur-sm border border-white/10 rounded-2xl px-8 py-6 max-w-sm">
                                     <Sprout size={28} className="text-emerald-400 mx-auto mb-3" />
-                                    <p className="text-white font-bold text-sm">Your forest is waiting</p>
+                                    <p className="text-white font-bold text-sm">Your Forest Is Waiting</p>
                                     <p className="text-neutral-400 text-xs mt-1.5 leading-relaxed">
                                         Complete a Pomodoro or Deep Work session to plant your first tree.
                                         It will keep growing as long as you stay focused.
@@ -575,7 +575,7 @@ export const ForestTab = () => {
                                     className="text-center max-w-md px-8 py-10 rounded-2xl border border-emerald-500/30 bg-[#0d1410]/90"
                                 >
                                     <Trees size={48} className="text-emerald-400 mx-auto mb-4" />
-                                    <h3 className="text-2xl font-semibold text-white mb-2">Welcome to your forest</h3>
+                                    <h3 className="text-2xl font-semibold text-white mb-2">Welcome to Your Forest</h3>
                                     <p className="text-sm text-neutral-400 leading-relaxed mb-6">
                                         Every focus session plants a tree. Pan and scroll to explore an endless meadow — your progress grows with you.
                                     </p>
@@ -587,7 +587,7 @@ export const ForestTab = () => {
                                         }}
                                         className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-colors duration-150"
                                     >
-                                        Enter forest
+                                        Enter Forest
                                     </button>
                                 </motion.div>
                             </motion.div>
@@ -595,7 +595,7 @@ export const ForestTab = () => {
                     </AnimatePresence>
 
                     <div className="absolute bottom-3 left-4 text-[10px] text-white/25 pointer-events-none">
-                        drag to pan · scroll to zoom · click a tile to choose the next planting spot
+                        Drag to pan · Scroll to zoom · Click a tile to choose the next planting spot
                     </div>
                 </div>
             </GlassCard>

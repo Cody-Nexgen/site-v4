@@ -6,15 +6,16 @@ import {
     CalendarPlus,
     Check,
     CheckSquare,
-    ChevronDown,
     Code2,
     Download,
     FileText,
+    Film,
     GripVertical,
     Heading2,
     Image,
-    ListPlus,
+    Link as LinkIcon,
     Loader2,
+    Music,
     Paperclip,
     Plus,
     Quote,
@@ -24,7 +25,6 @@ import {
     UploadCloud,
     X,
 } from 'lucide-react';
-import DeepWorkPlanner from '../components/DeepWorkPlanner';
 import { streamAiCoachChat } from '../lib/aiCoachApi';
 import {
     deleteAttachment,
@@ -33,6 +33,7 @@ import {
     type AttachmentRecord,
 } from '../lib/attachmentApi';
 import { expandRecurringEvent } from '../lib/calendarRecurrence';
+import { fetchLinkPreview, type LinkPreview } from '../lib/linkPreviewApi';
 import {
     createBlankList,
     createListPreset,
@@ -143,6 +144,7 @@ const BLOCK_OPTIONS: { type: ListBlockType; label: string; icon: typeof Type }[]
     { type: 'checklist', label: 'Checklist', icon: CheckSquare },
     { type: 'code', label: 'Code', icon: Code2 },
     { type: 'quote', label: 'Quote', icon: Quote },
+    { type: 'link', label: 'Link', icon: LinkIcon },
 ];
 
 function parseGeneratedContent(content: string): ListBlock[] {
@@ -215,8 +217,6 @@ export default function ListsTab() {
     const [activeId, setActiveId] = useState('');
     const [loaded, setLoaded] = useState(false);
     const [presetsLoaded, setPresetsLoaded] = useState(false);
-    const [showPlanner, setShowPlanner] = useState(false);
-    const [plannerHeight, setPlannerHeight] = useState(0);
     const [showPresetModal, setShowPresetModal] = useState(false);
     const [managingPresets, setManagingPresets] = useState(false);
     const [presetSourceId, setPresetSourceId] = useState('');
@@ -231,8 +231,6 @@ export default function ListsTab() {
     const [draggingFiles, setDraggingFiles] = useState(false);
     const dragDepth = useRef(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const plannerSectionRef = useRef<HTMLDivElement>(null);
-    const plannerContentRef = useRef<HTMLDivElement>(null);
     const active = lists.find((list) => list.id === activeId) ?? lists[0];
     const isPro = subscriptionTier === 'pro';
 
@@ -267,26 +265,6 @@ export default function ListsTab() {
         if (!presetsLoaded) return;
         chrome.storage.local.set({ [LIST_PRESETS_KEY]: presets });
     }, [presets, presetsLoaded]);
-
-    useEffect(() => {
-        const content = plannerContentRef.current;
-        if (!content) return;
-        const updateHeight = () => setPlannerHeight(content.getBoundingClientRect().height);
-        updateHeight();
-        const observer = new ResizeObserver(updateHeight);
-        observer.observe(content);
-        return () => observer.disconnect();
-    }, []);
-
-    useEffect(() => {
-        if (!showPlanner) return;
-        const frame = window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(() => {
-                plannerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
-        });
-        return () => window.cancelAnimationFrame(frame);
-    }, [showPlanner]);
 
     const updateActive = (updater: (list: SavedList) => SavedList) => {
         if (!active) return;
@@ -510,7 +488,7 @@ Return only markdown using level-two headings (##), checklist items, short text,
                             <h2 className="mt-5 text-xl font-semibold text-white">
                                 {isPro ? 'Drop files into this list' : 'Attachments are a Pro feature'}
                             </h2>
-                            <p className="mt-2 text-sm text-neutral-400">Private storage · Safe file types · Up to 10MB each</p>
+                            <p className="mt-2 text-sm text-neutral-400">Private storage · Any file type · Up to 10MB each</p>
                             <div className="mt-6 flex items-center justify-center gap-3 text-xs text-neutral-500">
                                 <span className="rounded-lg bg-white/[0.05] px-3 py-2">Drop</span>
                                 <span>→</span>
@@ -551,15 +529,6 @@ Return only markdown using level-two headings (##), checklist items, short text,
                         </button>
                     ))}
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setShowPlanner((value) => !value)}
-                    className="m-2 flex h-8 items-center gap-2 rounded border border-white/[0.07] px-2 text-xs text-neutral-400 hover:bg-white/[0.04]"
-                >
-                    <ListPlus size={13} />
-                    Deep work planner
-                    <ChevronDown size={12} className={`ml-auto transition-transform ${showPlanner ? 'rotate-180' : ''}`} />
-                </button>
             </aside>
 
             <main className="min-w-0 flex-1 overflow-y-auto">
@@ -594,19 +563,6 @@ Return only markdown using level-two headings (##), checklist items, short text,
                             <Trash2 size={13} />
                             Delete list
                         </button>
-                    </div>
-
-                    <div
-                        ref={plannerSectionRef}
-                        aria-hidden={!showPlanner}
-                        className={`overflow-hidden transition-[height,opacity,margin] duration-300 ease-out ${
-                            showPlanner ? 'mb-8 opacity-100' : 'pointer-events-none mb-0 opacity-0'
-                        }`}
-                        style={{ height: showPlanner ? plannerHeight : 0 }}
-                    >
-                        <div ref={plannerContentRef}>
-                                <DeepWorkPlanner />
-                        </div>
                     </div>
 
                     <div className="space-y-2">
@@ -972,6 +928,8 @@ function BlockEditor({
             <div className="min-w-0 flex-1">
                 {block.type === 'attachment' && block.attachment ? (
                     <AttachmentBlock attachment={block.attachment} onDelete={onDelete} onError={onError} />
+                ) : block.type === 'link' ? (
+                    <LinkBlockEditor block={block} onChange={onChange} onError={onError} />
                 ) : block.type === 'checklist' ? (
                     <div className="space-y-1">
                         {(block.items ?? []).map((item) => (
@@ -1065,9 +1023,13 @@ function AttachmentBlock({
 }) {
     const [previewUrl, setPreviewUrl] = useState('');
     const isImage = attachment.mimeType.startsWith('image/');
+    const isVideo = attachment.mimeType.startsWith('video/');
+    const isAudio = attachment.mimeType.startsWith('audio/');
+    const needsPreviewUrl = isImage || isVideo || isAudio;
+    const FileTypeIcon = isImage ? Image : isVideo ? Film : isAudio ? Music : FileText;
 
     useEffect(() => {
-        if (!isImage) return;
+        if (!needsPreviewUrl) return;
         let active = true;
         void supabase.storage
             .from('attachments')
@@ -1078,16 +1040,24 @@ function AttachmentBlock({
         return () => {
             active = false;
         };
-    }, [attachment.storagePath, isImage]);
+    }, [attachment.storagePath, needsPreviewUrl]);
 
     return (
         <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-[#0d0d0f]">
-            {previewUrl && (
+            {isImage && previewUrl && (
                 <img src={previewUrl} alt="" className="max-h-56 w-full bg-black/20 object-contain" />
+            )}
+            {isVideo && previewUrl && (
+                <video src={previewUrl} controls preload="metadata" className="max-h-72 w-full bg-black" />
+            )}
+            {isAudio && previewUrl && (
+                <div className="p-3 pb-0">
+                    <audio src={previewUrl} controls preload="metadata" className="w-full" />
+                </div>
             )}
             <div className="flex items-center gap-3 p-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-400">
-                    {isImage ? <Image size={17} /> : <FileText size={17} />}
+                    <FileTypeIcon size={17} />
                 </div>
                 <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-neutral-200">{attachment.fileName}</p>
@@ -1123,6 +1093,109 @@ function AttachmentBlock({
                 </button>
             </div>
         </div>
+    );
+}
+
+function LinkBlockEditor({
+    block,
+    onChange,
+    onError,
+}: {
+    block: ListBlock;
+    onChange: (block: ListBlock) => void;
+    onError: (message: string) => void;
+}) {
+    const [draftUrl, setDraftUrl] = useState(block.content || '');
+    const [loading, setLoading] = useState(false);
+
+    const confirmUrl = async () => {
+        const raw = draftUrl.trim();
+        if (!raw || loading) return;
+        setLoading(true);
+        try {
+            const preview = await fetchLinkPreview(raw);
+            onChange({ ...block, content: preview.url, link: preview });
+        } catch {
+            onError('Could not preview that link.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (block.link) {
+        return <LinkEmbedCard preview={block.link} />;
+    }
+
+    return (
+        <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-[#0d0d0f] p-2">
+            <LinkIcon size={14} className="shrink-0 text-neutral-500" />
+            <input
+                value={draftUrl}
+                onChange={(event) => setDraftUrl(event.target.value)}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void confirmUrl();
+                    }
+                }}
+                placeholder="Paste a link and press Enter…"
+                className="min-w-0 flex-1 bg-transparent text-sm text-neutral-300 outline-none placeholder:text-neutral-700"
+                autoFocus
+            />
+            <button
+                type="button"
+                disabled={!draftUrl.trim() || loading}
+                onClick={() => void confirmUrl()}
+                className="flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-[11px] font-medium text-neutral-400 hover:bg-white/[0.06] hover:text-neutral-200 disabled:opacity-40"
+            >
+                {loading ? <Loader2 size={12} className="animate-spin" /> : null}
+                {loading ? 'Loading…' : 'Preview'}
+            </button>
+        </div>
+    );
+}
+
+function LinkEmbedCard({ preview }: { preview: LinkPreview }) {
+    return (
+        <a
+            href={preview.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex gap-3 rounded-lg border border-white/[0.08] bg-[#0d0d0f] p-3 transition-colors hover:border-white/[0.16] hover:bg-[#131315]"
+        >
+            {preview.image ? (
+                <img
+                    src={preview.image}
+                    alt=""
+                    className="h-16 w-16 shrink-0 rounded-md bg-white/[0.05] object-cover"
+                    onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                    }}
+                />
+            ) : (
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-white/[0.05]">
+                    {preview.favicon ? (
+                        <img src={preview.favicon} alt="" className="h-7 w-7" />
+                    ) : (
+                        <LinkIcon size={18} className="text-neutral-500" />
+                    )}
+                </div>
+            )}
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                    {preview.favicon && (
+                        <img src={preview.favicon} alt="" className="h-3.5 w-3.5 shrink-0 rounded-sm" />
+                    )}
+                    <span className="truncate text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                        {preview.siteName}
+                    </span>
+                </div>
+                <p className="mt-1 truncate text-sm font-medium text-neutral-200">{preview.title}</p>
+                {preview.description && (
+                    <p className="mt-0.5 line-clamp-2 text-xs text-neutral-500">{preview.description}</p>
+                )}
+            </div>
+        </a>
     );
 }
 

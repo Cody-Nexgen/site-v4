@@ -1,0 +1,12 @@
+# Caddy — TLS termination for focus-room signaling
+# Install: https://caddyserver.com/docs/install
+# Place at /etc/caddy/Caddyfile (or import into your existing one)
+#
+# DNS required first:
+#   signal.focuznow.com  A  170.205.37.149
+#
+# Then: sudo systemctl reload caddy
+
+signal.focuznow.com {
+	reverse_proxy 127.0.0.1:8080
+}

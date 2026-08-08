@@ -3,11 +3,30 @@
 // Tracks screen time and imports history (MV3 Safe)
 // ===============================================
 
+/** Cap a single flush segment so laptop sleep / SW wake can't credit hours of idle. */
+const MAX_SEGMENT_MS = 2 * 60 * 1000;
+const MAX_DAY_MS = 24 * 60 * 60 * 1000;
+
 let activeTabId = null;
 let activeTabStartTime = Date.now();
 let audibleTabs = {}; // tabId -> timestamp
 let screenTimeData = {}; // domain -> ms
 let todayStr = new Date().toDateString();
+
+function msSinceLocalMidnight(now = Date.now()) {
+    const d = new Date(now);
+    const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    return Math.max(0, now - midnight);
+}
+
+function maxAllowedDayMs(now = Date.now()) {
+    return Math.min(MAX_DAY_MS, msSinceLocalMidnight(now));
+}
+
+function clampSegment(duration) {
+    if (!Number.isFinite(duration) || duration <= 0) return 0;
+    return Math.min(duration, MAX_SEGMENT_MS);
+}
 
 // Load today's data from storage on startup
 chrome.storage.local.get([`screenTime_${todayStr}`], (result) => {
@@ -21,9 +40,10 @@ function isValidUrl(url) {
 }
 
 async function addDuration(domain, duration) {
+    duration = clampSegment(duration);
     if (duration <= 0) return;
-    const nowStr = new Date().toDateString();
-    const MAX_DAY_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const nowStr = new Date(now).toDateString();
 
     if (nowStr !== todayStr) {
         todayStr = nowStr;
@@ -32,14 +52,41 @@ async function addDuration(domain, duration) {
 
     domain = domain.replace(/^www\./i, '').toLowerCase();
 
+    const dayCap = maxAllowedDayMs(now);
     const dayTotal = Object.values(screenTimeData).reduce((a, b) => a + b, 0);
-    if (dayTotal >= MAX_DAY_MS) return;
+    if (dayTotal >= dayCap) return;
 
-    duration = Math.min(duration, MAX_DAY_MS - dayTotal);
+    duration = Math.min(duration, dayCap - dayTotal);
     if (duration <= 0) return;
 
     screenTimeData[domain] = (screenTimeData[domain] || 0) + duration;
     await chrome.storage.local.set({ [`screenTime_${todayStr}`]: screenTimeData });
+}
+
+/** Drop absurd already-stored totals for today (e.g. 24h from a sleep-gap flush). */
+async function repairTodayIfInflated() {
+    const now = Date.now();
+    const dayStr = new Date(now).toDateString();
+    const key = `screenTime_${dayStr}`;
+    const dayCap = maxAllowedDayMs(now);
+    const result = await chrome.storage.local.get([key]);
+    const data = result[key];
+    if (!data || typeof data !== 'object') return;
+
+    const total = Object.values(data).reduce((a, b) => a + (Number(b) || 0), 0);
+    if (total <= dayCap) {
+        if (dayStr === todayStr) screenTimeData = data;
+        return;
+    }
+
+    const scale = dayCap / total;
+    const repaired = {};
+    for (const [domain, ms] of Object.entries(data)) {
+        repaired[domain] = Math.max(0, Math.round((Number(ms) || 0) * scale));
+    }
+    await chrome.storage.local.set({ [key]: repaired });
+    if (dayStr === todayStr) screenTimeData = repaired;
+    console.warn(`[Analytics] Clamped inflated today total ${total}ms → ${dayCap}ms`);
 }
 
 async function flushActivity() {
@@ -51,8 +98,13 @@ async function flushActivity() {
             const tab = await chrome.tabs.get(activeTabId);
             if (isValidUrl(tab?.url)) {
                 const domain = new URL(tab.url).hostname;
-                const duration = now - activeTabStartTime;
-                await addDuration(domain, duration);
+                const rawGap = now - activeTabStartTime;
+                // Sleep / SW death: don't credit the whole gap — just reset the clock.
+                if (rawGap > MAX_SEGMENT_MS * 2) {
+                    activeTabStartTime = now;
+                } else {
+                    await addDuration(domain, rawGap);
+                }
             }
         } catch (e) {
             // Tab might have been closed
@@ -73,9 +125,13 @@ async function flushActivity() {
                     const t = await chrome.tabs.get(tabId);
                     if (t?.audible && isValidUrl(t?.url)) {
                         const domain = new URL(t.url).hostname;
-                        const duration = now - audibleTabs[tabId];
-                        await addDuration(domain, duration);
-                        audibleTabs[tabId] = now; // reset start time
+                        const rawGap = now - audibleTabs[tabId];
+                        if (rawGap > MAX_SEGMENT_MS * 2) {
+                            audibleTabs[tabId] = now;
+                        } else {
+                            await addDuration(domain, rawGap);
+                            audibleTabs[tabId] = now;
+                        }
                     } else {
                         delete audibleTabs[tabId];
                     }
@@ -89,12 +145,19 @@ async function flushActivity() {
 }
 
 export async function initAnalytics() {
-    // 0. Recover State on SW Wake-up
+    await repairTodayIfInflated();
+
+    // 0. Recover State on SW Wake-up — never inherit a multi-hour start time.
     const sessionVars = await chrome.storage.session.get(['activeTabId', 'activeTabStartTime', 'audibleTabs']);
+    const now = Date.now();
 
     if (sessionVars.activeTabId && sessionVars.activeTabStartTime) {
         activeTabId = sessionVars.activeTabId;
-        activeTabStartTime = sessionVars.activeTabStartTime;
+        const recoveredStart = Number(sessionVars.activeTabStartTime) || now;
+        activeTabStartTime = (now - recoveredStart) > MAX_SEGMENT_MS ? now : recoveredStart;
+        if (activeTabStartTime === now) {
+            await chrome.storage.session.set({ activeTabStartTime });
+        }
     } else {
         chrome.tabs.query({ active: true, lastFocusedWindow: true }, async (tabs) => {
             if (tabs[0]) {
@@ -106,12 +169,17 @@ export async function initAnalytics() {
     }
 
     if (sessionVars.audibleTabs) {
-        audibleTabs = sessionVars.audibleTabs;
+        audibleTabs = {};
+        for (const [id, start] of Object.entries(sessionVars.audibleTabs)) {
+            const s = Number(start) || now;
+            audibleTabs[id] = (now - s) > MAX_SEGMENT_MS ? now : s;
+        }
+        await chrome.storage.session.set({ audibleTabs });
     } else {
         chrome.tabs.query({ audible: true }, async (tabs) => {
-            const now = Date.now();
+            const t = Date.now();
             for (const tab of tabs) {
-                if (!audibleTabs[tab.id]) audibleTabs[tab.id] = now;
+                if (!audibleTabs[tab.id]) audibleTabs[tab.id] = t;
             }
             await chrome.storage.session.set({ audibleTabs });
         });
@@ -137,12 +205,12 @@ export async function initAnalytics() {
                 }
             } else {
                 if (audibleTabs[tabId]) {
-                    const now = Date.now();
+                    const tNow = Date.now();
                     try {
                         const t = await chrome.tabs.get(tabId);
                         if (isValidUrl(t?.url) && tabId !== activeTabId) {
                             const domain = new URL(t.url).hostname;
-                            const duration = now - audibleTabs[tabId];
+                            const duration = tNow - audibleTabs[tabId];
                             await addDuration(domain, duration);
                         }
                     } catch (e) { }
@@ -255,6 +323,9 @@ async function importBrowsingHistory() {
         dailyStats[dateStr][current.domain] = (dailyStats[dateStr][current.domain] || 0) + duration;
     }
 
+    const todayCap = maxAllowedDayMs();
+    const todayKey = new Date().toDateString();
+
     // Save all to storage — use MAX of existing vs computed to prevent stacking on re-import
     for (const date in dailyStats) {
         const key = `screenTime_${date}`;
@@ -264,6 +335,16 @@ async function importBrowsingHistory() {
         for (const domain in dailyStats[date]) {
             // Use the LARGER of the two values, not additive, to prevent duplication
             existing[domain] = Math.max(existing[domain] || 0, dailyStats[date][domain]);
+        }
+
+        // Cap day totals (today uses elapsed-since-midnight)
+        const dayCap = date === todayKey ? todayCap : MAX_DAY_MS;
+        let total = Object.values(existing).reduce((a, b) => a + (Number(b) || 0), 0);
+        if (total > dayCap && total > 0) {
+            const scale = dayCap / total;
+            for (const domain of Object.keys(existing)) {
+                existing[domain] = Math.max(0, Math.round((Number(existing[domain]) || 0) * scale));
+            }
         }
 
         await chrome.storage.local.set({ [key]: existing });

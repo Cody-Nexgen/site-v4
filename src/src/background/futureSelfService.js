@@ -65,16 +65,23 @@ export async function getFutureSelfState({ dashboardOpen = false } = {}) {
 }
 
 export async function startFutureSelfContract(input) {
-    const tier = await chrome.storage.local.get('subscriptionTier');
-    if (tier.subscriptionTier !== 'pro') {
+    const stored = await chrome.storage.local.get(['subscriptionTier', 'subscriptionDetails']);
+    const isPro = stored.subscriptionTier === 'pro'
+        || stored.subscriptionDetails?.status === 'active'
+        || stored.subscriptionDetails?.status === 'trialing';
+    if (!isPro) {
         return { ok: false, code: 'PRO_REQUIRED', error: 'Future Self Mode is a Pro feature.' };
+    }
+    const rawUrl = String(input.destination?.url || '').trim();
+    if (!rawUrl) {
+        return { ok: false, error: 'Enter a work destination URL (e.g. docs.google.com).' };
     }
     let destination;
     try {
-        destination = normalizeDestination(input.destination?.url || '', input.destination?.title || '');
+        destination = normalizeDestination(rawUrl, input.destination?.title || '');
         if (input.destination?.faviconUrl) destination.faviconUrl = input.destination.faviconUrl;
     } catch (error) {
-        return { ok: false, error: error.message };
+        return { ok: false, error: error.message || 'Enter a valid work destination URL.' };
     }
     const candidate = { ...input, destination, plannedMinutesPerDay: Number(input.plannedMinutesPerDay) };
     const error = validateContractInput(candidate);
@@ -89,6 +96,7 @@ export async function startFutureSelfContract(input) {
             : [...state.contracts, contract];
         return {
             ...state,
+            modeEnabled: true,
             activeContract: contract,
             contracts: contracts.slice(-90),
             events: appendFutureSelfEvent(state, {
@@ -144,10 +152,23 @@ export async function markFutureSelfMirrorShown(id) {
     await mutate((state) => ({
         ...state,
         mirrors: state.mirrors.map((mirror) =>
-            mirror.id === id ? { ...mirror, shownAt: mirror.shownAt || Date.now() } : mirror,
+            mirror.id === id || !mirror.shownAt
+                ? { ...mirror, shownAt: mirror.shownAt || Date.now() }
+                : mirror,
         ),
     }));
     return { ok: true };
+}
+
+export async function setFutureSelfModeEnabled(enabled) {
+    const next = enabled === true;
+    await mutate((state) => ({
+        ...state,
+        modeEnabled: next,
+        // Turning mode off clears overnight blocking immediately.
+        activeContract: next ? state.activeContract : null,
+    }));
+    return { ok: true, modeEnabled: next, ...(await getFutureSelfState()) };
 }
 
 export async function initFutureSelfService() {

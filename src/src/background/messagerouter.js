@@ -37,6 +37,7 @@ import {
     equipShopItem,
     setPublicProfileEnabled,
     setChallengeFocusScore,
+    hydrateChallengesFromCloud,
 } from '../lib/progressionService';
 import { loadProgressionState } from '../lib/focusProgression';
 import { classifyYouTubeViaApi } from './youtubeClassify.js';
@@ -46,6 +47,7 @@ import {
     getFutureSelfState,
     markFutureSelfMirrorShown,
     recordFutureSelfEvent,
+    setFutureSelfModeEnabled,
     startFutureSelfContract,
 } from './futureSelfService.js';
 
@@ -160,7 +162,17 @@ const SYNCABLE_KEYS = [
     'emergencyOverrideSettings', 'weeklyGoalHours', 'theme', 'customTheme', 'todos',
     'dailyFocusTarget', 'profileName', 'profileInitial', 'profileAvatar', 'pomodoroSettings',
     'habits', 'scratchpad', 'dailyPlanner', 'savedQuotes', 'dashboardLayout',
-    'proDashboardVisuals', 'notionJournalingEnabled',
+    'proDashboardVisuals', 'notionJournalingEnabled', '_localMutationAt', 'allowlistMode',
+];
+
+const EXTRA_STORAGE_SYNC_KEYS = [
+    'focuznow_calendar_events_v1',
+    'focuznow_calendar_groups_v1',
+    'focuznow_scheduling_links_v2',
+    'focuznow_lists_v1',
+    'activeChallenges',
+    'challengeProgress',
+    'completedChallenges',
 ];
 
 function pickSyncableState(state) {
@@ -176,6 +188,10 @@ async function syncSettingsToSupabase() {
     try {
         const state = getEngineState();
         const payload = pickSyncableState(state);
+        const extra = await chrome.storage.local.get(EXTRA_STORAGE_SYNC_KEYS);
+        for (const key of EXTRA_STORAGE_SYNC_KEYS) {
+            if (extra?.[key] !== undefined) payload[key] = extra[key];
+        }
         const { error } = await supabase.rpc('upsert_my_workspace_state', { p_state: payload });
         if (error) {
             console.error('[MessageRouter] upsert_my_workspace_state failed:', error);
@@ -190,6 +206,8 @@ async function syncSettingsToSupabase() {
 async function fetchSettingsFromSupabase() {
     if (!currentSession?.user) return;
     try {
+        const localBefore = getEngineState();
+        const localMutationAt = Number(localBefore?._localMutationAt) || 0;
         const { data, error } = await supabase.rpc('get_my_workspace_state');
         if (error) {
             console.error('[MessageRouter] get_my_workspace_state failed:', error);
@@ -198,6 +216,13 @@ async function fetchSettingsFromSupabase() {
         const row = Array.isArray(data) ? data[0] : data;
         const remote = row?.state;
         if (!remote || typeof remote !== 'object') {
+            await syncSettingsToSupabase();
+            return;
+        }
+        const remoteMutationAt = Number(remote._localMutationAt) || 0;
+        // Stale / in-flight cloud read lost a race with a local unblock/block.
+        if (localMutationAt > remoteMutationAt) {
+            console.log('[MessageRouter] Local workspace newer than cloud — pushing local');
             await syncSettingsToSupabase();
             return;
         }
@@ -262,6 +287,7 @@ async function handleSessionSync(session) {
     try {
         await syncNuclearWithSupabase();
         await fetchSettingsFromSupabase();
+        await hydrateChallengesFromCloud();
     } catch (e) {
         console.error('[MessageRouter] Critical failure during nuclear/settings sync:', e);
     }
@@ -404,6 +430,23 @@ export function initMessageRouter() {
                         break;
                     }
 
+                    case "EXPORT_LOCAL_STATS": {
+                        const all = await chrome.storage.local.get(null);
+                        const screenTime = {};
+                        for (const [key, value] of Object.entries(all)) {
+                            if (key.startsWith('screenTime_')) screenTime[key] = value;
+                        }
+                        const engine = getEngineState();
+                        sendResponse({
+                            ok: true,
+                            screenTime,
+                            pomodoroSettings: engine.pomodoroSettings || null,
+                            pomodoroRuntime: all.pomodoroRuntimeV1 || null,
+                            blockedToday: engine.blockedToday || 0,
+                        });
+                        break;
+                    }
+
                     case "FUTURE_SELF_ACTIVE_TAB": {
                         sendResponse({ ok: true, destination: await getCurrentWorkDestination() });
                         break;
@@ -453,12 +496,18 @@ export function initMessageRouter() {
                         break;
                     }
 
+                    case "FUTURE_SELF_SET_MODE": {
+                        sendResponse(await setFutureSelfModeEnabled(!!msg.enabled));
+                        break;
+                    }
+
                     case "UPDATE_ENGINE_SETTINGS":
                         await updateEngineSettings(msg.settings);
+                        // Respond immediately — cloud sync must not block UI toggles (was ~30s).
+                        sendResponse({ ok: true, state: getEngineState() });
                         if (currentSession?.user) {
-                            await syncSettingsToSupabase();
+                            void syncSettingsToSupabase();
                         }
-                        sendResponse({ ok: true });
                         break;
 
                     case "GET_STATE":
@@ -571,6 +620,7 @@ export function initMessageRouter() {
                                     started: result.started,
                                     active: result.active,
                                     persisted: result.persisted,
+                                    cloudPersisted: result.cloudPersisted,
                                     reason: result.reason,
                                     progression: result.state,
                                 });

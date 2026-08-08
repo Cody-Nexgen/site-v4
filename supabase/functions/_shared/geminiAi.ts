@@ -1,8 +1,12 @@
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
+export type GeminiPart =
+    | { text: string }
+    | { inlineData: { mimeType: string; data: string } };
+
 export type GeminiContent = {
     role: 'user' | 'model';
-    parts: { text: string }[];
+    parts: GeminiPart[];
 };
 
 function getGeminiApiKey(): string {

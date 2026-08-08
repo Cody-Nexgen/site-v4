@@ -1,7 +1,8 @@
 // Content script to listen for session sync from web app
-console.log('[Content Script] FocuzNow content script loaded on:', window.location.href);
-document.documentElement.setAttribute('data-focuznow-extension', 'true');
+import { installWebExtensionBridge } from './webBridge';
 
+console.log('[Content Script] FocuzNow content script loaded on:', window.location.href);
+installWebExtensionBridge();
 
 // Listen for messages from the web app
 window.addEventListener("message", (event) => {
@@ -63,17 +64,7 @@ window.addEventListener("message", (event) => {
         }
         return;
     }
-    // Check for Ping from Web App
-    if (event.data.type === 'FOCUZNOW_WEB_PING') {
-        console.log('[Content Script] Received Ping from Web App. Sending Pong...');
-        window.postMessage({ type: 'FOCUZNOW_EXTENSION_PONG' }, '*');
-        return;
-    }
 });
-
-// Notify web app that extension is ready
-console.log('[Content Script] Sending FOCUZNOW_EXTENSION_READY message...');
-window.postMessage({ type: 'FOCUZNOW_EXTENSION_READY' }, '*');
 
 // Check for payment success page
 if (window.location.pathname === '/payment_success') {
@@ -86,7 +77,3 @@ if (window.location.pathname === '/payment_success') {
         });
     }
 }
-console.log('[Content Script] Extension ready!');
-
-// Command palette runs via commandPalette.ts on <all_urls> (skipped on focuznow.com)
-

@@ -22,6 +22,7 @@ type Props = {
     timedEventsForDay: (day: Date) => CalendarEvent[];
     allDayChipsForDay: (day: Date) => Chip[];
     onRightPointerDown: (day: Date, dayIndex: number, clientY: number) => void;
+    onEmptyDoubleClick?: (day: Date, dayIndex: number, clientY: number) => void;
     onDeleteEvent: (ev: CalendarEvent) => void;
     singleDayMode?: Date;
     onEventPointerDown?: (
@@ -47,6 +48,7 @@ export default function CalendarWeekStrip({
     timedEventsForDay,
     allDayChipsForDay,
     onRightPointerDown,
+    onEmptyDoubleClick,
     onDeleteEvent,
     singleDayMode,
     onEventPointerDown,
@@ -213,9 +215,19 @@ export default function CalendarWeekStrip({
                                     interactive
                                         ? (e) => {
                                               if (e.button !== 0 && e.button !== 2) return;
-                                              e.preventDefault();
+                                              // Don't preventDefault on left click — that kills double-click create.
+                                              if (e.button === 2) e.preventDefault();
                                               e.stopPropagation();
                                               onRightPointerDown(day, dayIndex, e.clientY);
+                                          }
+                                        : undefined
+                                }
+                                onDoubleClick={
+                                    interactive && onEmptyDoubleClick
+                                        ? (e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              onEmptyDoubleClick(day, dayIndex, e.clientY);
                                           }
                                         : undefined
                                 }

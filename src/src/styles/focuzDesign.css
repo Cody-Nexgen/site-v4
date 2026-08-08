@@ -38,6 +38,81 @@ html[data-dashboard-theme="light"] {
     --fz-shadow-md: 0 12px 32px rgba(24, 24, 27, 0.14);
 }
 
+/* Bridge: OptionsApp uses --dashboard-*; keep them aliased to --fz-* so web + extension stay in sync. */
+.focuz-dashboard {
+    --dashboard-bg: var(--fz-bg);
+    --dashboard-surface: var(--fz-surface);
+    --dashboard-surface-raised: var(--fz-surface-raised);
+    --dashboard-interactive: var(--fz-accent-muted);
+    --dashboard-interactive-hover: rgba(255, 255, 255, 0.075);
+    --dashboard-border: var(--fz-border);
+    --dashboard-text: var(--fz-text);
+    --dashboard-text-secondary: var(--fz-text-secondary);
+    --dashboard-text-muted: var(--fz-text-tertiary);
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard {
+    --dashboard-interactive: rgba(24, 24, 27, 0.045);
+    --dashboard-interactive-hover: rgba(24, 24, 27, 0.075);
+}
+
+.focuz-dashboard .surface-card,
+.focuz-dashboard .glass-edge-card {
+    background: var(--dashboard-surface-raised);
+    border: 1px solid var(--dashboard-border);
+    border-radius: 8px;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .surface-card,
+html[data-dashboard-theme="light"] .focuz-dashboard .glass-edge-card {
+    background: #ffffff;
+    border-color: rgba(24, 24, 27, 0.12);
+    box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04), 0 8px 24px rgba(24, 24, 27, 0.06);
+}
+
+/* Remap common dark Tailwind utilities when light mode is active (web host may not load index.css). */
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+    .text-white,
+    .text-neutral-50,
+    .text-neutral-100,
+    .text-neutral-200,
+    .text-neutral-300,
+    .text-zinc-100,
+    .text-zinc-200,
+    .text-zinc-300
+) {
+    color: var(--dashboard-text) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+    .text-neutral-400,
+    .text-neutral-500,
+    .text-zinc-400,
+    .text-zinc-500
+) {
+    color: var(--dashboard-text-secondary) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+    .text-neutral-600,
+    .text-neutral-700,
+    .text-neutral-800,
+    .text-zinc-600,
+    .text-zinc-700
+) {
+    color: var(--dashboard-text-muted) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="border-white/"] {
+    border-color: var(--dashboard-border) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#0"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#1"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#2"] {
+    background-color: var(--dashboard-surface) !important;
+}
+
 .focuznow-calendar {
     --cal-bg: #181819;
     --cal-surface: #202021;
@@ -199,9 +274,9 @@ html[data-dashboard-theme="light"] .focuz-modal-overlay {
 }
 
 .focuz-dashboard-shell.focuz-dashboard--sidebar-collapsed {
-    grid-template-columns: 0 minmax(0, 1fr);
-    gap: 0;
-    padding-left: 0.75rem;
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: 0.75rem;
+    padding-left: 0.5rem;
     padding-right: 0.75rem;
 }
 
@@ -218,36 +293,76 @@ html[data-dashboard-theme="light"] .focuz-modal-overlay {
         0 1px 0 rgba(255, 255, 255, 0.04) inset,
         0 24px 48px -24px rgba(0, 0, 0, 0.65);
     transition:
-        transform 0.3s ease,
-        width 0.3s ease,
-        min-width 0.3s ease,
-        opacity 0.3s ease,
-        margin 0.3s ease;
+        transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+        width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+        min-width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 0.2s ease,
+        margin 0.28s ease;
     overflow: hidden;
 }
 
 .workspace-sidebar--collapsed {
-    transform: translateX(calc(-100% - 0.75rem));
+    transform: translateX(calc(-100% - 0.5rem));
     width: 0;
     min-width: 0;
     opacity: 0;
     pointer-events: none;
-    margin-right: -0.75rem;
+    margin-right: 0;
+}
+
+.workspace-sidebar-hover-rail {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    z-index: 80;
+}
+
+.workspace-sidebar-expand-fab {
+    position: fixed;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 90;
+    display: flex;
+    height: 36px;
+    width: 28px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(18, 18, 22, 0.92);
+    color: rgba(212, 212, 216, 0.9);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.workspace-sidebar-expand-fab:hover {
+    background: rgba(28, 28, 34, 0.98);
+    color: #fff;
+    transform: translateY(-50%) translateX(2px);
 }
 
 .workspace-main {
-    min-height: calc(100vh - 1.5rem);
+    height: calc(100vh - 1.5rem);
+    max-height: calc(100vh - 1.5rem);
+    min-height: 0;
+    overflow: hidden;
     border-radius: 1rem;
     border: 1px solid rgba(255, 255, 255, 0.06);
     background: rgba(10, 10, 11, 0.88);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    transition: margin 0.3s ease, max-width 0.3s ease;
+    transition: margin 0.3s ease;
+    width: 100%;
+    max-width: none;
 }
 
 .focuz-dashboard--sidebar-collapsed .workspace-main {
-    max-width: min(960px, 100%);
-    margin-inline: auto;
+    max-width: none;
+    margin-inline: 0;
     width: 100%;
 }
 
@@ -270,22 +385,9 @@ html[data-dashboard-theme="light"] .focuz-modal-overlay {
     color: rgba(229, 229, 229, 1);
 }
 
-/* Setup onboarding */
+/* Setup onboarding — modern SaaS / 1Password-style */
 .focuz-setup {
-    font-family: var(--fz-font-display);
-}
-
-.setup-split-card,
-.setup-glass-card {
-    backdrop-filter: blur(24px) saturate(150%);
-    -webkit-backdrop-filter: blur(24px) saturate(150%);
-}
-
-.setup-glass-card {
-    background: rgba(12, 12, 14, 0.82);
-    box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.05) inset,
-        0 32px 80px -24px rgba(0, 0, 0, 0.85);
+    font-family: var(--fz-font-display), ui-sans-serif, system-ui, sans-serif;
 }
 
 html[data-dashboard-theme="light"] .workspace-sidebar {

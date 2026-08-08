@@ -12,7 +12,7 @@ import {
     startOfWeek,
 } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Link2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Link2, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 
 type CalendarView = 'day' | 'week' | 'month';
 import { useAuthStore } from '../lib/store';
@@ -164,6 +164,8 @@ export default function SchedulingCalendarPage({
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [miniCalCollapsed, setMiniCalCollapsed] = useState(false);
     const [schedulingCollapsed, setSchedulingCollapsed] = useState(false);
+    const scheduleLinkBtnRef = useRef<HTMLButtonElement>(null);
+    const [scheduleMenuPos, setScheduleMenuPos] = useState<{ top: number; left: number } | null>(null);
     const [draft, setDraft] = useState<LinkDraft>(() => defaultLinkDraft(displayName));
     const [dirty, setDirty] = useState(false);
     const [pendingPanel, setPendingPanel] = useState<Panel | null>(null);
@@ -202,6 +204,7 @@ export default function SchedulingCalendarPage({
         started: boolean;
         day?: Date;
         dayIndex?: number;
+        clientY?: number;
     }>({ active: false, started: false });
 
     const today = new Date();
@@ -219,13 +222,22 @@ export default function SchedulingCalendarPage({
         return () => window.clearInterval(tick);
     }, []);
 
+    const persistEventsRef = useRef<string>('');
+    const applyingRemoteEventsRef = useRef(false);
+
     const reloadEventsFromStorage = useCallback(() => {
         chrome.storage.local.get([CALENDAR_EVENTS_KEY], (res) => {
             if (!Array.isArray(res[CALENDAR_EVENTS_KEY])) return;
             const loaded = prepareStoredEvents(res[CALENDAR_EVENTS_KEY] as CalendarEvent[]);
+            const serialized = JSON.stringify(loaded);
+            if (serialized === persistEventsRef.current) {
+                setEventsLoaded(true);
+                return;
+            }
+            applyingRemoteEventsRef.current = true;
+            persistEventsRef.current = serialized;
             setEvents(loaded);
             setEventsLoaded(true);
-            chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: loaded });
         });
     }, []);
 
@@ -285,10 +297,16 @@ export default function SchedulingCalendarPage({
                     setSavedLinks(res[LEGACY_LINKS_KEY] as SchedulingLink[]);
                 }
                 if (Array.isArray(res[CALENDAR_EVENTS_KEY])) {
-                    const loaded = prepareStoredEvents(res[CALENDAR_EVENTS_KEY] as CalendarEvent[]);
+                    const raw = res[CALENDAR_EVENTS_KEY] as CalendarEvent[];
+                    const loaded = prepareStoredEvents(raw);
+                    const serialized = JSON.stringify(loaded);
+                    persistEventsRef.current = serialized;
                     setEvents(loaded);
                     setEventsLoaded(true);
-                    chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: loaded });
+                    // Only rewrite storage when migration actually changed event shapes.
+                    if (JSON.stringify(raw) !== serialized) {
+                        chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: loaded });
+                    }
                 } else {
                     setEventsLoaded(true);
                 }
@@ -309,11 +327,26 @@ export default function SchedulingCalendarPage({
     }, []);
 
     useEffect(() => {
+        // Avoid wiping stored links with the initial empty state before load finishes.
+        if (savedLinks.length === 0) {
+            chrome.storage.local.get([SCHEDULING_LINKS_KEY], (res) => {
+                if (Array.isArray(res[SCHEDULING_LINKS_KEY]) && res[SCHEDULING_LINKS_KEY].length > 0) return;
+                chrome.storage.local.set({ [SCHEDULING_LINKS_KEY]: savedLinks });
+            });
+            return;
+        }
         chrome.storage.local.set({ [SCHEDULING_LINKS_KEY]: savedLinks });
     }, [savedLinks]);
 
     useEffect(() => {
         if (!eventsLoaded) return;
+        if (applyingRemoteEventsRef.current) {
+            applyingRemoteEventsRef.current = false;
+            return;
+        }
+        const serialized = JSON.stringify(events);
+        if (serialized === persistEventsRef.current) return;
+        persistEventsRef.current = serialized;
         chrome.storage.local.set({ [CALENDAR_EVENTS_KEY]: events });
     }, [events, eventsLoaded]);
 
@@ -828,9 +861,34 @@ export default function SchedulingCalendarPage({
     const navBack = () => (calView === 'day' ? shiftDay(-1) : commitWeek(-1));
     const navForward = () => (calView === 'day' ? shiftDay(1) : commitWeek(1));
 
+    const openScheduleMenu = () => {
+        const el = scheduleLinkBtnRef.current;
+        if (!el) {
+            setLeftPanel((p) => (p === 'schedule-menu' ? 'none' : 'schedule-menu'));
+            return;
+        }
+        if (leftPanel === 'schedule-menu') {
+            setLeftPanel('none');
+            setScheduleMenuPos(null);
+            return;
+        }
+        const rect = el.getBoundingClientRect();
+        setScheduleMenuPos({
+            top: rect.top,
+            left: Math.min(rect.right + 8, window.innerWidth - 252),
+        });
+        setLeftPanel('schedule-menu');
+    };
+
+    const openSlotAtY = (day: Date, dayIndex: number, clientY: number, durationMin = 30) => {
+        const startMin = grid.minFromClientY(dayIndex, clientY);
+        const snapped = Math.floor(startMin / 15) * 15;
+        openModalFromRange(day, snapped, snapped + durationMin);
+    };
+
     return (
         <div
-            className={`focuznow-calendar flex overflow-hidden text-white ${
+            className={`focuznow-calendar relative flex overflow-hidden text-white ${
                 fullscreen ? 'h-full w-full' : 'h-[calc(100vh-8rem)] min-h-[640px] rounded-[20px] border shadow-xl'
             }`}
             style={{
@@ -953,8 +1011,9 @@ export default function SchedulingCalendarPage({
                                 {!schedulingCollapsed && (
                                     <div className="px-3 pb-3 space-y-2">
                                         <button
+                                            ref={scheduleLinkBtnRef}
                                             type="button"
-                                            onClick={() => setLeftPanel((p) => (p === 'schedule-menu' ? 'none' : 'schedule-menu'))}
+                                            onClick={openScheduleMenu}
                                             className="w-full px-2 py-1.5 text-left text-xs font-medium text-neutral-400 rounded-md hover:bg-white/[0.06] hover:text-white transition-colors"
                                         >
                                             + New scheduling link
@@ -994,71 +1053,6 @@ export default function SchedulingCalendarPage({
                     </>
                 )}
             </aside>
-
-            <AnimatePresence>
-                {leftPanel === 'schedule-menu' && (
-                    <motion.div
-                        className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                    >
-                        <button
-                            type="button"
-                            aria-label="Close"
-                            className="absolute inset-0 bg-black/55 backdrop-blur-md"
-                            onClick={() => setLeftPanel('none')}
-                        />
-                        <motion.div
-                            role="dialog"
-                            aria-modal="true"
-                            aria-labelledby="schedule-link-type-title"
-                            initial={{ opacity: 0, scale: 0.96, y: 12 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.96, y: 8 }}
-                            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                            className="relative z-10 w-full max-w-md rounded-2xl border border-white/12 bg-[rgba(22,24,32,0.72)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
-                        >
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Scheduling</p>
-                            <h2 id="schedule-link-type-title" className="mt-1 text-xl font-semibold tracking-tight text-white">
-                                New scheduling link
-                            </h2>
-                            <p className="mt-1 text-sm text-neutral-400">
-                                Choose a recurring weekly link or a one-off date-based link.
-                            </p>
-                            <div className="mt-5 grid gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => openRight('recurring')}
-                                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left transition-colors hover:bg-white/[0.08]"
-                                >
-                                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
-                                        <Link2 size={16} />
-                                    </span>
-                                    <span>
-                                        <span className="block text-sm font-medium text-white">Recurring link</span>
-                                        <span className="block text-xs text-neutral-500">Weekly availability that repeats</span>
-                                    </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => openRight('oneoff')}
-                                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left transition-colors hover:bg-white/[0.08]"
-                                >
-                                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
-                                        <Link2 size={16} />
-                                    </span>
-                                    <span>
-                                        <span className="block text-sm font-medium text-white">One-off link</span>
-                                        <span className="block text-xs text-neutral-500">Specific dates only</span>
-                                    </span>
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             <AnimatePresence>
                 {openGroup && (
@@ -1164,6 +1158,12 @@ export default function SchedulingCalendarPage({
                                             onClick={() => {
                                                 setWeekStart(startOfWeek(day));
                                                 setMiniMonth(day);
+                                                setDayDate(day);
+                                                setCalView('day');
+                                            }}
+                                            onDoubleClick={() => {
+                                                setWeekStart(startOfWeek(day));
+                                                setMiniMonth(day);
                                                 openModalFromRange(day, 9 * 60, 10 * 60);
                                             }}
                                             className={`min-h-[80px] p-1.5 rounded-lg border cursor-pointer transition-colors ${
@@ -1211,8 +1211,11 @@ export default function SchedulingCalendarPage({
                                     timedEventsForDay={timedEventsForDay}
                                     allDayChipsForDay={allDayChipsForDay}
                                     singleDayMode={addDays(ws, getDay(dayDate))}
-                                    onRightPointerDown={(day, dayIndex) => {
-                                        rightDragRef.current = { active: true, started: false, day, dayIndex };
+                                    onRightPointerDown={(day, dayIndex, clientY) => {
+                                        rightDragRef.current = { active: true, started: false, day, dayIndex, clientY };
+                                    }}
+                                    onEmptyDoubleClick={(day, dayIndex, clientY) => {
+                                        openSlotAtY(day, dayIndex, clientY, 30);
                                     }}
                                     onDeleteEvent={(ev) => deleteEvent(ev)}
                                     onEventPointerDown={(ev, day, dayIndex, startMin, e) => {
@@ -1238,8 +1241,11 @@ export default function SchedulingCalendarPage({
                                     groups={groups}
                                     timedEventsForDay={timedEventsForDay}
                                     allDayChipsForDay={allDayChipsForDay}
-                                    onRightPointerDown={(day, dayIndex) => {
-                                        rightDragRef.current = { active: true, started: false, day, dayIndex };
+                                    onRightPointerDown={(day, dayIndex, clientY) => {
+                                        rightDragRef.current = { active: true, started: false, day, dayIndex, clientY };
+                                    }}
+                                    onEmptyDoubleClick={(day, dayIndex, clientY) => {
+                                        openSlotAtY(day, dayIndex, clientY, 30);
                                     }}
                                     onDeleteEvent={(ev) => deleteEvent(ev)}
                                     onEventPointerDown={(ev, day, dayIndex, startMin, e) => {
@@ -1252,6 +1258,100 @@ export default function SchedulingCalendarPage({
                     )}
                 </div>
             </div>
+
+            <AnimatePresence>
+                {leftPanel === 'schedule-menu' && scheduleMenuPos && (
+                    <motion.div
+                        key="schedule-link-chooser-portal"
+                        className="fixed inset-0 z-[80]"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.12 }}
+                    >
+                        <button
+                            type="button"
+                            aria-label="Close"
+                            className="absolute inset-0 cursor-default"
+                            onClick={() => {
+                                setLeftPanel('none');
+                                setScheduleMenuPos(null);
+                            }}
+                        />
+                        <motion.div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="schedule-link-type-title"
+                            initial={{ opacity: 0, x: -6, scale: 0.98 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: -4, scale: 0.98 }}
+                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            className="absolute w-[240px] rounded-xl border border-white/10 bg-black/50 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                            style={{
+                                top: scheduleMenuPos.top,
+                                left: scheduleMenuPos.left,
+                                WebkitBackdropFilter: 'blur(20px)',
+                            }}
+                        >
+                            <div className="flex items-center justify-between">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                                    Scheduling
+                                </p>
+                                <button
+                                    type="button"
+                                    aria-label="Close"
+                                    onClick={() => {
+                                        setLeftPanel('none');
+                                        setScheduleMenuPos(null);
+                                    }}
+                                    className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-white/5 hover:text-white"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <h2 id="schedule-link-type-title" className="mt-1.5 text-sm font-semibold tracking-tight text-white">
+                                New Link
+                            </h2>
+                            <div className="mt-2.5 flex flex-col gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        openRight('recurring');
+                                        setLeftPanel('none');
+                                        setScheduleMenuPos(null);
+                                    }}
+                                    className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.07]"
+                                >
+                                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 text-neutral-200">
+                                        <Link2 size={13} />
+                                    </span>
+                                    <span>
+                                        <span className="block text-xs font-medium text-white">Recurring</span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">Weekly availability</span>
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        openRight('oneoff');
+                                        setLeftPanel('none');
+                                        setScheduleMenuPos(null);
+                                    }}
+                                    className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.07]"
+                                >
+                                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 text-neutral-200">
+                                        <Link2 size={13} />
+                                    </span>
+                                    <span>
+                                        <span className="block text-xs font-medium text-white">One-off</span>
+                                        <span className="mt-0.5 block text-[10px] text-neutral-500">Specific dates only</span>
+                                    </span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {(rightPanel === 'recurring' || rightPanel === 'oneoff') && (
                 <SchedulingLinkPanel

@@ -263,7 +263,7 @@ export default function ForestWorld3D({ onBack, onOpenStats }: Props) {
                     onClick={onBack}
                     className="pointer-events-auto flex items-center gap-2 px-3 py-2 rounded-xl bg-black/50 backdrop-blur-md border border-white/10 text-white text-sm font-semibold"
                 >
-                    <ArrowLeft size={16} /> Exit forest
+                    <ArrowLeft size={16} /> Exit Forest
                 </button>
                 <button
                     type="button"
@@ -298,7 +298,7 @@ export default function ForestWorld3D({ onBack, onOpenStats }: Props) {
                                 An infinite 3D world that grows with every focus session.
                             </p>
                             <button type="button" onClick={dismissSplash} className="focuz-btn-primary px-8 py-3 text-base">
-                                Enter the forest
+                                Enter The Forest
                             </button>
                         </motion.div>
                     </motion.div>

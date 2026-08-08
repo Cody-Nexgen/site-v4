@@ -2,7 +2,10 @@ import { supabase } from "@/lib/supabase";
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const SAFE_MIME_TYPES = new Set([
-  "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "video/mp4", "video/webm", "video/quicktime",
+  "audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4", "application/ogg",
+  "application/pdf",
   "text/plain", "text/markdown", "text/csv", "application/json",
   "text/javascript", "application/javascript", "text/typescript", "text/jsx",
   "text/tsx", "text/css",
@@ -99,6 +102,24 @@ export async function downloadAttachment(attachment: AttachmentRecord) {
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   return { ok: true as const };
+}
+
+export async function getAttachmentPlayUrl(attachment: Pick<AttachmentRecord, "storagePath">, expiresIn = 3600) {
+  const { data, error } = await supabase.storage
+    .from("attachments")
+    .createSignedUrl(attachment.storagePath, expiresIn);
+  if (error || !data?.signedUrl) {
+    return { ok: false as const, error: error?.message ?? "Could not open attachment." };
+  }
+  return { ok: true as const, url: data.signedUrl };
+}
+
+export function isPlayableAttachmentMime(mimeType: string | undefined | null): "image" | "video" | "audio" | null {
+  const mime = (mimeType || "").toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/") || mime === "application/ogg") return "audio";
+  return null;
 }
 
 export async function deleteAttachment(attachment: AttachmentRecord) {
