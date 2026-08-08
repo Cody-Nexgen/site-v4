@@ -6,5 +6,12 @@ html,
 body,
 #root {
   min-height: 100%;
-  background-color: #0b0c0f;
+  background-color: var(--fz-bg, #0b0c0f);
+}
+
+html[data-dashboard-theme="light"],
+html[data-dashboard-theme="light"] body,
+html[data-dashboard-theme="light"] #root {
+  background-color: var(--fz-bg, #f7f7f8);
+  color: var(--fz-text, #18181b);
 }

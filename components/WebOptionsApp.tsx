@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { installWebChromeShim, hydrateWebWorkspaceFromCloud } from '@/src/focuz/lib/platform';
+import { initializeDashboardColorMode } from '@/src/focuz/lib/themes';
 import '@/src/focuz/styles/focuzDesign.css';
 import '@/src/focuz-web.css';
 
@@ -22,6 +23,7 @@ export default function WebOptionsApp({ onLogout }: Props) {
     const boot = async () => {
       try {
         installWebChromeShim();
+        await initializeDashboardColorMode();
         await hydrateWebWorkspaceFromCloud();
         const mod = await import('@/src/focuz/options/OptionsApp');
         if (!cancelled) setOptionsApp(() => mod.default);

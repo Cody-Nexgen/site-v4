@@ -283,6 +283,7 @@ interface AuthState {
     engineState: EngineState;
     setEngineState: (state: EngineState) => void;
     patchEngineState: (patch: Partial<EngineState>) => void;
+    patchInAppBlock: (patch: Partial<EngineState['inAppBlock']>) => Promise<boolean>;
     toggleEngineBool: (key: 'draggableTimer' | 'pomodoroWidget' | 'trackBackgroundAudio' | 'requireChallenge') => Promise<boolean>;
     fetchEngineState: () => Promise<void>;
 
@@ -417,6 +418,47 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ engineState: { ...engineState, ...patch } });
     },
 
+    patchInAppBlock: async (patch) => {
+        const { engineState } = get();
+        const prev = engineState.inAppBlock;
+        const nextInApp: EngineState['inAppBlock'] = {
+            youtube: prev?.youtube ?? false,
+            youtubeShorts: prev?.youtubeShorts ?? false,
+            instagram: prev?.instagram ?? false,
+            instagramReels: prev?.instagramReels ?? false,
+            tiktok: prev?.tiktok ?? false,
+            filters: Array.isArray(patch.filters) ? patch.filters : (prev?.filters || []),
+            ...patch,
+            smartYouTube: {
+                enabled: false,
+                blockShorts: true,
+                blockedCategoryIds: [],
+                useDataApi: true,
+                ...(prev?.smartYouTube || {}),
+                ...(patch.smartYouTube || {}),
+            },
+        };
+        set({ engineState: { ...engineState, inAppBlock: nextInApp } });
+        return new Promise<boolean>((resolve) => {
+            chrome.runtime.sendMessage(
+                { type: 'UPDATE_ENGINE_SETTINGS', settings: { inAppBlock: nextInApp } },
+                (resp) => {
+                    if (resp?.state) {
+                        set({ engineState: resp.state as EngineState });
+                        resolve(true);
+                        return;
+                    }
+                    if (chrome.runtime.lastError || resp?.ok === false) {
+                        // Persist may still have applied — resync instead of hard-reverting.
+                        void get().fetchEngineState().finally(() => resolve(false));
+                        return;
+                    }
+                    resolve(true);
+                },
+            );
+        });
+    },
+
     toggleEngineBool: async (key) => {
         const { engineState } = get();
         const prev = !!(engineState[key] ?? false);
@@ -426,9 +468,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             chrome.runtime.sendMessage(
                 { type: 'UPDATE_ENGINE_SETTINGS', settings: { [key]: next } },
                 (resp) => {
+                    if (resp?.state) {
+                        set({ engineState: resp.state as EngineState });
+                        resolve(true);
+                        return;
+                    }
                     if (chrome.runtime.lastError || !resp?.ok) {
-                        set({ engineState: { ...engineState, [key]: prev } });
-                        resolve(false);
+                        void get().fetchEngineState().finally(() => resolve(false));
                         return;
                     }
                     resolve(true);

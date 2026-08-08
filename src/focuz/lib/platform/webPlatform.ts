@@ -312,7 +312,19 @@ async function handleMessage(message: PlatformMessage): Promise<unknown> {
 
     if (type === 'UPDATE_ENGINE_SETTINGS') {
         const patch = (message.settings || message.patch || {}) as Record<string, unknown>;
-        const next = { ...getEngineState(), ...patch };
+        const current = getEngineState() as Record<string, unknown>;
+        const next: Record<string, unknown> = { ...current, ...patch };
+        if (patch.inAppBlock && typeof patch.inAppBlock === 'object') {
+            const curBlock = (current.inAppBlock || {}) as Record<string, unknown>;
+            const patchBlock = patch.inAppBlock as Record<string, unknown>;
+            const curSmart = (curBlock.smartYouTube || {}) as Record<string, unknown>;
+            const patchSmart = (patchBlock.smartYouTube || {}) as Record<string, unknown>;
+            next.inAppBlock = {
+                ...curBlock,
+                ...patchBlock,
+                smartYouTube: { ...curSmart, ...patchSmart },
+            };
+        }
         await storageSet({ blockEngineState: next });
         return { ok: true, state: next };
     }

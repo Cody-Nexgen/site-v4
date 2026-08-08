@@ -619,7 +619,7 @@ export const SettingsTab = () => {
 };
 
 export const Customization = () => {
-    const { engineState, toggleEngineBool, fetchEngineState } = useAuthStore();
+    const { engineState, toggleEngineBool, fetchEngineState, patchInAppBlock } = useAuthStore();
 
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [showSmartYtModal, setShowSmartYtModal] = useState(false);
@@ -850,25 +850,7 @@ export const Customization = () => {
                 {(() => {
                     const smart = normalizeSmartYouTube(engineState.inAppBlock?.smartYouTube);
                     const patchSmart = async (next: typeof smart) => {
-                        const res = await new Promise<{ ok?: boolean; state?: typeof engineState }>((r) =>
-                            chrome.runtime.sendMessage(
-                                {
-                                    type: 'UPDATE_ENGINE_SETTINGS',
-                                    settings: {
-                                        inAppBlock: {
-                                            ...engineState.inAppBlock,
-                                            smartYouTube: next,
-                                        },
-                                    },
-                                },
-                                (resp) => r(resp || { ok: false }),
-                            ),
-                        );
-                        if (res?.state) {
-                            useAuthStore.setState({ engineState: { ...engineState, ...res.state } as typeof engineState });
-                        } else {
-                            await fetchEngineState();
-                        }
+                        await patchInAppBlock({ smartYouTube: next });
                     };
 
                     return (
@@ -934,26 +916,9 @@ export const Customization = () => {
                             role="switch"
                             aria-checked={!!engineState.inAppBlock?.youtubeShorts}
                             onClick={() => {
-                                const on = !engineState.inAppBlock?.youtubeShorts;
-                                void chrome.runtime
-                                    .sendMessage({
-                                        type: 'UPDATE_ENGINE_SETTINGS',
-                                        settings: {
-                                            inAppBlock: {
-                                                ...engineState.inAppBlock,
-                                                youtubeShorts: on,
-                                            },
-                                        },
-                                    })
-                                    .then((res: { state?: typeof engineState } | undefined) => {
-                                        if (res?.state) {
-                                            useAuthStore.setState({
-                                                engineState: { ...engineState, ...res.state } as typeof engineState,
-                                            });
-                                        } else {
-                                            void fetchEngineState();
-                                        }
-                                    });
+                                void patchInAppBlock({
+                                    youtubeShorts: !engineState.inAppBlock?.youtubeShorts,
+                                });
                             }}
                             className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${engineState.inAppBlock?.youtubeShorts ? 'bg-purple-600' : 'bg-[var(--dashboard-interactive-hover)]'}`}
                         >

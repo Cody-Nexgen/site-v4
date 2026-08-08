@@ -5,8 +5,21 @@ body,
   min-height: 100%;
 }
 
+html[data-dashboard-theme="light"],
+html[data-dashboard-theme="light"] body,
+html[data-dashboard-theme="light"] #root {
+  background-color: var(--fz-bg, #f7f7f8);
+  color: var(--fz-text, #18181b);
+}
+
 body.focuz-dashboard,
 .focuz-dashboard {
-  background: #0a0a0a;
-  color: #fafafa;
+  background: var(--dashboard-bg, var(--fz-bg, #0a0a0a));
+  color: var(--dashboard-text, var(--fz-text, #fafafa));
+}
+
+html[data-dashboard-theme="light"] body.focuz-dashboard,
+html[data-dashboard-theme="light"] .focuz-dashboard {
+  background: var(--dashboard-bg, var(--fz-bg, #f7f7f8));
+  color: var(--dashboard-text, var(--fz-text, #18181b));
 }

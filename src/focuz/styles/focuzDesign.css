@@ -38,6 +38,81 @@ html[data-dashboard-theme="light"] {
     --fz-shadow-md: 0 12px 32px rgba(24, 24, 27, 0.14);
 }
 
+/* Bridge: OptionsApp uses --dashboard-*; keep them aliased to --fz-* so web + extension stay in sync. */
+.focuz-dashboard {
+    --dashboard-bg: var(--fz-bg);
+    --dashboard-surface: var(--fz-surface);
+    --dashboard-surface-raised: var(--fz-surface-raised);
+    --dashboard-interactive: var(--fz-accent-muted);
+    --dashboard-interactive-hover: rgba(255, 255, 255, 0.075);
+    --dashboard-border: var(--fz-border);
+    --dashboard-text: var(--fz-text);
+    --dashboard-text-secondary: var(--fz-text-secondary);
+    --dashboard-text-muted: var(--fz-text-tertiary);
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard {
+    --dashboard-interactive: rgba(24, 24, 27, 0.045);
+    --dashboard-interactive-hover: rgba(24, 24, 27, 0.075);
+}
+
+.focuz-dashboard .surface-card,
+.focuz-dashboard .glass-edge-card {
+    background: var(--dashboard-surface-raised);
+    border: 1px solid var(--dashboard-border);
+    border-radius: 8px;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard .surface-card,
+html[data-dashboard-theme="light"] .focuz-dashboard .glass-edge-card {
+    background: #ffffff;
+    border-color: rgba(24, 24, 27, 0.12);
+    box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04), 0 8px 24px rgba(24, 24, 27, 0.06);
+}
+
+/* Remap common dark Tailwind utilities when light mode is active (web host may not load index.css). */
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+    .text-white,
+    .text-neutral-50,
+    .text-neutral-100,
+    .text-neutral-200,
+    .text-neutral-300,
+    .text-zinc-100,
+    .text-zinc-200,
+    .text-zinc-300
+) {
+    color: var(--dashboard-text) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+    .text-neutral-400,
+    .text-neutral-500,
+    .text-zinc-400,
+    .text-zinc-500
+) {
+    color: var(--dashboard-text-secondary) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard :where(
+    .text-neutral-600,
+    .text-neutral-700,
+    .text-neutral-800,
+    .text-zinc-600,
+    .text-zinc-700
+) {
+    color: var(--dashboard-text-muted) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="border-white/"] {
+    border-color: var(--dashboard-border) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#0"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#1"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#2"] {
+    background-color: var(--dashboard-surface) !important;
+}
+
 .focuznow-calendar {
     --cal-bg: #181819;
     --cal-surface: #202021;
