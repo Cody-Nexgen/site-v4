@@ -875,7 +875,12 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                     )}
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     <span className="font-semibold text-white truncate">{room.title}</span>
-                    <span className="text-xs text-[#949ba4]">{room.participantCount} in room</span>
+                    <span className="text-xs text-[#949ba4]">
+                        {rtc.participants.length} connected
+                        {room.participantCount !== rtc.participants.length
+                            ? ` · ${room.participantCount} joined`
+                            : ' in room'}
+                    </span>
                     {rtc.roomLocked && <Shield size={14} className="text-amber-400" aria-label="Room locked" />}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
@@ -925,12 +930,19 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                         ))}
                     </div>
                     {rtc.participants.length <= 1 && (
-                        <p className="mt-6 text-center text-sm text-[#949ba4]">
-                            Waiting for others to connect…
-                            {rtc.rtcError ? (
-                                <span className="block mt-1 text-amber-400">{rtc.rtcError}</span>
+                        <div className="mt-6 mx-auto max-w-md text-center space-y-2">
+                            <p className="text-sm text-[#949ba4]">Waiting for others to connect…</p>
+                            {room.participantCount > 1 ? (
+                                <p className="text-xs text-amber-200/90 leading-relaxed">
+                                    Someone joined the room but isn&apos;t on the call yet. They must open the same
+                                    invite link while signed in — and use a <strong>different account</strong> than yours
+                                    (two tabs with one login won&apos;t show two people).
+                                </p>
                             ) : null}
-                        </p>
+                            {rtc.rtcError ? (
+                                <p className="text-xs text-amber-400">{rtc.rtcError}</p>
+                            ) : null}
+                        </div>
                     )}
                 </div>
 

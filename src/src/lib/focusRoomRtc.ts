@@ -410,7 +410,14 @@ function connectRealtimeSignaling(
                 handlers.onSignal(payload as SignalPayload);
             })
             .on('broadcast', { event: 'join' }, ({ payload }) => {
-                handlers.onJoin(payload as { peerId?: string; name?: string; avatarUrl?: string | null });
+                handlers.onJoin(
+                    payload as {
+                        peerId?: string;
+                        name?: string;
+                        avatarUrl?: string | null;
+                        accountUserId?: string | null;
+                    },
+                );
             })
             .on('broadcast', { event: 'leave' }, ({ payload }) => {
                 handlers.onLeave(payload as { peerId?: string });
@@ -961,6 +968,7 @@ export function useFocusRoomRtc(
         if (!enabled || !roomId) return;
 
         let cancelled = false;
+        let announceTimer = 0;
 
         const connect = async () => {
             // Read cam from ref — do NOT put camOn in deps or toggling camera tears down the room.
@@ -975,13 +983,15 @@ export function useFocusRoomRtc(
                     const remoteId = join?.peerId;
                     const name = join?.name;
                     if (!remoteId || remoteId === peerId) return;
-                    // Same logged-in account cannot occupy two peer slots.
+                    // Same account in two tabs — don't kick (leaves a ghost "2 in room"); just ignore.
                     if (
                         accountUserId &&
                         join.accountUserId &&
                         join.accountUserId === accountUserId
                     ) {
-                        busRef.current?.send('kick', { from: peerId, to: remoteId });
+                        setRtcError(
+                            'This account is already in the room from another tab. Use a second account to test with two people.',
+                        );
                         return;
                     }
                     if (roomLockedRef.current && !isHost) return;
@@ -994,20 +1004,26 @@ export function useFocusRoomRtc(
                             stream: null,
                         }];
                     });
+                    // Deterministic offerer: only the lexicographically smaller peerId offers.
+                    // Prevents glare when both sides see each other's join at once.
+                    if (peerId > remoteId) return;
                     const pc = createPeerConnection(remoteId, true);
                     void (async () => {
                         makingOfferRef.current.add(remoteId);
-                        const offer = await pc.createOffer();
-                        await pc.setLocalDescription(offer);
-                        busRef.current?.send('signal', {
-                            from: peerId,
-                            to: remoteId,
-                            type: 'offer',
-                            sdp: offer,
-                            name: displayName,
-                            avatarUrl,
-                        });
-                        makingOfferRef.current.delete(remoteId);
+                        try {
+                            const offer = await pc.createOffer();
+                            await pc.setLocalDescription(offer);
+                            busRef.current?.send('signal', {
+                                from: peerId,
+                                to: remoteId,
+                                type: 'offer',
+                                sdp: offer,
+                                name: displayName,
+                                avatarUrl,
+                            });
+                        } finally {
+                            makingOfferRef.current.delete(remoteId);
+                        }
                     })();
                 },
                 onLeave: (payload) => {
@@ -1106,12 +1122,25 @@ export function useFocusRoomRtc(
                     setRtcError('Could not connect to room signaling');
                 }
             }
+
+            // Re-announce so late joiners / missed broadcasts still discover each other.
+            const announce = () => {
+                busRef.current?.send('join', {
+                    peerId,
+                    name: displayName,
+                    avatarUrl,
+                    accountUserId,
+                });
+            };
+            announce();
+            announceTimer = window.setInterval(announce, 3500);
         };
 
         void connect();
 
         return () => {
             cancelled = true;
+            if (announceTimer) window.clearInterval(announceTimer);
             cancelAnimationFrame(rafRef.current);
             void audioCtxRef.current?.close();
             busRef.current?.close();

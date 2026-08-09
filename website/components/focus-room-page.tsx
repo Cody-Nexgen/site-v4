@@ -237,7 +237,13 @@ export default function FocusRoomPage({ roomId }: { roomId: string }) {
   const isHost = Boolean(room?.hostId && room.hostId === session?.user?.id);
 
   const rtc = useWebsiteFocusRoomRtc({
-    roomId, displayName, avatarUrl, enabled: inRoom, isHost, prefs,
+    roomId,
+    displayName,
+    avatarUrl,
+    enabled: inRoom,
+    isHost,
+    prefs,
+    accountUserId: session?.user?.id ?? null,
   });
 
   const pollRoom = useCallback(async () => {
