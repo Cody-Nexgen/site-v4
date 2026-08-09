@@ -417,13 +417,23 @@ export default function FocusRoomPage({ roomId }: { roomId: string }) {
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
         <div className="min-w-0">
           <h1 className="truncate font-semibold">{room.title}</h1>
-          <p className="text-[10px] text-neutral-500">{room.participantCount} in room</p>
+          <p className="text-[10px] text-neutral-500">
+            {rtc.participants.length} connected
+            {room.participantCount !== rtc.participants.length
+              ? ` · ${room.participantCount} joined`
+              : " in room"}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {rtc.roomLocked && <Shield size={15} className="text-amber-400" />}
           <span className="font-semibold tabular-nums">{countdown}</span>
-          <button onClick={() => void navigator.clipboard.writeText(`https://focuznow.com/room/${roomId}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })} className="flex items-center gap-1 text-xs text-neutral-400">
-            <Copy size={13} /> {copied ? "Copied" : "Invite"}
+          <button
+            title="Both people must open this exact room link"
+            onClick={() => void navigator.clipboard.writeText(`https://focuznow.com/room/${roomId}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
+            className="flex flex-col items-end gap-0.5 text-xs text-neutral-400"
+          >
+            <span className="flex items-center gap-1"><Copy size={13} /> {copied ? "Copied" : "Invite"}</span>
+            <span className="max-w-[180px] truncate font-mono text-[10px] text-neutral-500">{roomId}</span>
           </button>
         </div>
       </header>
@@ -432,6 +442,13 @@ export default function FocusRoomPage({ roomId }: { roomId: string }) {
           <div className="mx-auto grid max-w-6xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {rtc.participants.map((peer) => <ParticipantTile key={peer.peerId} peer={peer} speakerId={prefs.speakerId || rtc.selectedSpeakerId} />)}
           </div>
+          {rtc.participants.length <= 1 && (
+            <div className="mx-auto mt-6 max-w-lg space-y-2 px-4 text-center">
+              <p className="text-sm text-neutral-400">Waiting for others to connect…</p>
+              <p className="break-all font-mono text-xs text-white/90">Room: {roomId}</p>
+              {rtc.error ? <p className="text-xs text-amber-400">{rtc.error}</p> : null}
+            </div>
+          )}
         </div>
         {chatOpen && (
           <aside

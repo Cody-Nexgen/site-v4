@@ -492,7 +492,9 @@ export function useFocusRoomRtc(
     const [previewReady, setPreviewReady] = useState(false);
     const [permissionState, setPermissionState] = useState<'pending' | 'granted' | 'denied'>('pending');
 
-    const [peerId] = useState(randomPeerId);
+    // Stable per-account peer id so refreshes/reconnects don't look like a new person.
+    const fallbackPeerId = useRef(randomPeerId()).current;
+    const peerId = accountUserId ? `u_${accountUserId}` : fallbackPeerId;
     const busRef = useRef<SignalingBus | null>(null);
     const pcMapRef = useRef<Map<string, RTCPeerConnection>>(new Map());
     const dcMapRef = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -514,6 +516,16 @@ export function useFocusRoomRtc(
     const rafRef = useRef<number>(0);
     const prefsRef = useRef(joinPrefs);
     const roomLockedRef = useRef(false);
+    const peerIdRef = useRef(peerId);
+    const displayNameRef = useRef(displayName);
+    const avatarUrlRef = useRef(avatarUrl);
+    const accountUserIdRef = useRef(accountUserId);
+    const isHostRef = useRef(isHost);
+    const handleSignalRef = useRef<(payload: SignalPayload) => void>(() => {});
+    const createPeerConnectionRef = useRef<(remoteId: string, initiator: boolean) => RTCPeerConnection>(
+        () => new RTCPeerConnection(),
+    );
+    const cleanupPeerRef = useRef<(remoteId: string) => void>(() => {});
 
     useEffect(() => {
         prefsRef.current = joinPrefs;
@@ -522,6 +534,14 @@ export function useFocusRoomRtc(
     useEffect(() => {
         roomLockedRef.current = roomLocked;
     }, [roomLocked]);
+
+    useEffect(() => {
+        peerIdRef.current = peerId;
+        displayNameRef.current = displayName;
+        avatarUrlRef.current = avatarUrl;
+        accountUserIdRef.current = accountUserId;
+        isHostRef.current = isHost;
+    }, [peerId, displayName, avatarUrl, accountUserId, isHost]);
 
     const refreshDevices = useCallback(async () => {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -744,8 +764,10 @@ export function useFocusRoomRtc(
                 });
             };
 
+            // Only the offerer renegotiates; the answerer waits for the next remote offer.
             pc.onnegotiationneeded = () => {
-                if (initiator) void renegotiate(remoteId);
+                if (!initiator || makingOfferRef.current.has(remoteId)) return;
+                void renegotiate(remoteId);
             };
 
             pc.onconnectionstatechange = () => {
@@ -888,6 +910,14 @@ export function useFocusRoomRtc(
         [createPeerConnection, flushPendingIce, peerId],
     );
 
+    useEffect(() => {
+        handleSignalRef.current = (payload) => {
+            void handleSignal(payload);
+        };
+        createPeerConnectionRef.current = createPeerConnection;
+        cleanupPeerRef.current = cleanupPeer;
+    }, [handleSignal, createPeerConnection, cleanupPeer]);
+
     const startLocalMedia = useCallback(async (opts?: {
         micId?: string;
         cameraId?: string;
@@ -1003,32 +1033,29 @@ export function useFocusRoomRtc(
 
         let cancelled = false;
         let announceTimer = 0;
+        const localPeerId = peerId;
 
         const connect = async () => {
-            // Read cam from ref — do NOT put camOn in deps or toggling camera tears down the room.
-            await startLocalMediaRef.current({ withVideo: camOnRef.current });
-            if (cancelled) return;
+            // Never block signaling on mic/camera permission — that caused "2 joined · 1 connected".
+            void startLocalMediaRef.current({ withVideo: camOnRef.current });
 
             const handlers: SignalingHandlers = {
                 onSignal: (payload) => {
-                    void handleSignal(payload);
+                    handleSignalRef.current(payload);
                 },
                 onJoin: (join) => {
                     const remoteId = join?.peerId;
                     const name = join?.name;
-                    if (!remoteId || remoteId === peerId) return;
-                    // Same account in two tabs — don't kick (leaves a ghost "2 in room"); just ignore.
-                    if (
-                        accountUserId &&
-                        join.accountUserId &&
-                        join.accountUserId === accountUserId
-                    ) {
+                    const myId = peerIdRef.current;
+                    if (!remoteId || remoteId === myId) return;
+                    const myAccount = accountUserIdRef.current;
+                    if (myAccount && join.accountUserId && join.accountUserId === myAccount) {
                         setRtcError(
                             'This account is already in the room from another tab. Use a second account to test with two people.',
                         );
                         return;
                     }
-                    if (roomLockedRef.current && !isHost) return;
+                    if (roomLockedRef.current && !isHostRef.current) return;
                     setPeers((prev) => {
                         if (prev.some((p) => p.peerId === remoteId)) return prev;
                         return [...prev, {
@@ -1038,23 +1065,24 @@ export function useFocusRoomRtc(
                             stream: null,
                         }];
                     });
-                    // Current WS server only notifies EXISTING peers about joins. Always offer
-                    // when we learn about someone; polite peer (larger id) rolls back on glare.
+                    // Exactly one side offers (lexicographically smaller peer id) to avoid glare.
+                    const shouldOffer = myId < remoteId;
+                    politeRef.current.set(remoteId, !shouldOffer);
                     if (pcMapRef.current.has(remoteId)) return;
-                    const pc = createPeerConnection(remoteId, true);
-                    politeRef.current.set(remoteId, peerId > remoteId);
+                    const pc = createPeerConnectionRef.current(remoteId, shouldOffer);
+                    if (!shouldOffer) return;
                     void (async () => {
                         makingOfferRef.current.add(remoteId);
                         try {
                             const offer = await pc.createOffer();
                             await pc.setLocalDescription(offer);
                             busRef.current?.send('signal', {
-                                from: peerId,
+                                from: myId,
                                 to: remoteId,
                                 type: 'offer',
                                 sdp: offer,
-                                name: displayName,
-                                avatarUrl,
+                                name: displayNameRef.current,
+                                avatarUrl: avatarUrlRef.current,
                             });
                         } finally {
                             makingOfferRef.current.delete(remoteId);
@@ -1063,7 +1091,7 @@ export function useFocusRoomRtc(
                 },
                 onLeave: (payload) => {
                     const remoteId = payload?.peerId;
-                    if (remoteId) cleanupPeer(remoteId);
+                    if (remoteId) cleanupPeerRef.current(remoteId);
                 },
                 onChat: (msg) => {
                     if (msg?.text || msg?.attachment) {
@@ -1079,7 +1107,7 @@ export function useFocusRoomRtc(
                     }
                 },
                 onKick: (payload) => {
-                    if (payload.to === peerId) {
+                    if (payload.to === peerIdRef.current) {
                         setRtcError('Removed from room by host');
                         busRef.current?.close();
                         busRef.current = null;
@@ -1087,22 +1115,24 @@ export function useFocusRoomRtc(
                 },
             };
 
-            // Realtime + WS in parallel. Realtime used to be awaited first and could hang
-            // forever on SUBSCRIBED — that blocked WS and left "2 joined · 1 connected".
             let wsBus: SignalingBus | null = null;
             let rtBus: SignalingBus | null = null;
 
             const preferred = await resolveFocusRoomWsUrl();
             if (cancelled) return;
 
+            const name = displayNameRef.current;
+            const avatar = avatarUrlRef.current;
+            const account = accountUserIdRef.current;
+
             const rtPromise = connectRealtimeSignaling(
                 supabase,
                 roomId,
-                peerId,
-                displayName,
-                avatarUrl,
+                localPeerId,
+                name,
+                avatar,
                 handlers,
-                accountUserId,
+                account,
             ).then((result) => result.bus);
 
             const wsPromise = (async (): Promise<SignalingBus | null> => {
@@ -1113,11 +1143,11 @@ export function useFocusRoomRtc(
                         const bus = await connectWsSignaling(
                             wsUrl,
                             roomId,
-                            peerId,
-                            displayName,
-                            avatarUrl,
+                            localPeerId,
+                            name,
+                            avatar,
                             handlers,
-                            accountUserId,
+                            account,
                         );
                         try {
                             localStorage.setItem(FOCUS_ROOM_WS_URL_KEY, DEFAULT_FOCUS_ROOM_WS_URL);
@@ -1182,13 +1212,12 @@ export function useFocusRoomRtc(
 
             setRtcError('');
 
-            // Re-announce so late joiners / missed broadcasts still discover each other.
             const announce = () => {
                 busRef.current?.send('join', {
-                    peerId,
-                    name: displayName,
-                    avatarUrl,
-                    accountUserId,
+                    peerId: peerIdRef.current,
+                    name: displayNameRef.current,
+                    avatarUrl: avatarUrlRef.current,
+                    accountUserId: accountUserIdRef.current,
                 });
             };
             announce();
@@ -1200,8 +1229,6 @@ export function useFocusRoomRtc(
         return () => {
             cancelled = true;
             if (announceTimer) window.clearInterval(announceTimer);
-            cancelAnimationFrame(rafRef.current);
-            void audioCtxRef.current?.close();
             busRef.current?.close();
             busRef.current = null;
             pcMapRef.current.forEach((pc) => pc.close());
@@ -1209,16 +1236,14 @@ export function useFocusRoomRtc(
             dcMapRef.current.clear();
             makingOfferRef.current.clear();
             politeRef.current.clear();
-            if (enabled) {
-                localStreamRef.current?.getTracks().forEach((t) => t.stop());
-                localStreamRef.current = null;
-                setLocalStream(null);
-            }
+            pendingIceRef.current.clear();
+            disconnectTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+            disconnectTimersRef.current.clear();
             setPeers([]);
             setChat([]);
         };
-        // camOn / startLocalMedia intentionally omitted — camera toggles must not reconnect signaling.
-    }, [enabled, roomId, supabase, displayName, avatarUrl, accountUserId, handleSignal, createPeerConnection, cleanupPeer, isHost, peerId]);
+        // Identity/profile updates use refs + announce — do not tear down the call.
+    }, [enabled, roomId, supabase, peerId]);
 
     const toggleMic = () => {
         const stream = localStreamRef.current;
