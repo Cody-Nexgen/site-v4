@@ -145,15 +145,22 @@ function baseNameFor(label: string): string {
 function ParticipantAvatar({ seed, avatarUrl, size = 80 }: { seed: string; avatarUrl?: string | null; size?: number }) {
     const colors = useMemo(() => avatarGradientColors(seed), [seed]);
     return (
-        <div className="absolute inset-0">
-            <MeshGradient
-                colors={colors}
-                speed={0.22}
-                distortion={0.55}
-                swirl={0.3}
-                style={{ width: '100%', height: '100%' }}
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+        <div
+            className="absolute inset-0"
+            style={{
+                background: `linear-gradient(145deg, ${colors[0]}, ${colors[1] ?? colors[0]}, ${colors[2] ?? colors[0]})`,
+            }}
+        >
+            <div className="absolute inset-0 opacity-90">
+                <MeshGradient
+                    colors={colors}
+                    speed={0.22}
+                    distortion={0.55}
+                    swirl={0.3}
+                    style={{ width: '100%', height: '100%' }}
+                />
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center bg-black/15">
                 {avatarUrl ? (
                     <img
                         src={avatarUrl}
@@ -895,7 +902,7 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
 
             <main className="flex-1 min-h-0 flex">
                 <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
                         {rtc.participants.map((p) => (
                             <ParticipantTile
                                 key={p.peerId}
@@ -917,6 +924,14 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                             />
                         ))}
                     </div>
+                    {rtc.participants.length <= 1 && (
+                        <p className="mt-6 text-center text-sm text-[#949ba4]">
+                            Waiting for others to connect…
+                            {rtc.rtcError ? (
+                                <span className="block mt-1 text-amber-400">{rtc.rtcError}</span>
+                            ) : null}
+                        </p>
+                    )}
                 </div>
 
                 {chatOpen && (

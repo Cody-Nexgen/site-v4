@@ -467,6 +467,14 @@ export function useFocusRoomRtc(
     const localStreamRef = useRef<MediaStream | null>(null);
     const makingOfferRef = useRef<Set<string>>(new Set());
     const politeRef = useRef<Map<string, boolean>>(new Map());
+    const camOnRef = useRef(camOn);
+    camOnRef.current = camOn;
+    const startLocalMediaRef = useRef<(opts?: {
+        micId?: string;
+        cameraId?: string;
+        withVideo?: boolean;
+        previewOnly?: boolean;
+    }) => Promise<void>>(async () => {});
     const pendingIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
     const disconnectTimersRef = useRef<Map<string, number>>(new Map());
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -929,6 +937,8 @@ export function useFocusRoomRtc(
         }
     }, [camOn, micOn, refreshDevices, renegotiate, selectedCameraId, selectedMicId]);
 
+    startLocalMediaRef.current = startLocalMedia;
+
     // Release camera/microphone whenever the consuming view unmounts.
     useEffect(() => {
         return () => {
@@ -943,9 +953,9 @@ export function useFocusRoomRtc(
 
     useEffect(() => {
         if (!enabled && !roomId) {
-            void startLocalMedia({ previewOnly: true, withVideo: camOn });
+            void startLocalMediaRef.current({ previewOnly: true, withVideo: camOnRef.current });
         }
-    }, [enabled, roomId, startLocalMedia, camOn]);
+    }, [enabled, roomId]);
 
     useEffect(() => {
         if (!enabled || !roomId) return;
@@ -953,7 +963,8 @@ export function useFocusRoomRtc(
         let cancelled = false;
 
         const connect = async () => {
-            await startLocalMedia({ withVideo: camOn });
+            // Read cam from ref — do NOT put camOn in deps or toggling camera tears down the room.
+            await startLocalMediaRef.current({ withVideo: camOnRef.current });
             if (cancelled) return;
 
             const handlers: SignalingHandlers = {
@@ -1118,7 +1129,8 @@ export function useFocusRoomRtc(
             setPeers([]);
             setChat([]);
         };
-    }, [enabled, roomId, supabase, displayName, avatarUrl, accountUserId, handleSignal, createPeerConnection, cleanupPeer, startLocalMedia, camOn, isHost, peerId]);
+        // camOn / startLocalMedia intentionally omitted — camera toggles must not reconnect signaling.
+    }, [enabled, roomId, supabase, displayName, avatarUrl, accountUserId, handleSignal, createPeerConnection, cleanupPeer, isHost, peerId]);
 
     const toggleMic = () => {
         const stream = localStreamRef.current;
@@ -1133,8 +1145,9 @@ export function useFocusRoomRtc(
 
     const toggleCam = async () => {
         const next = !camOn;
+        camOnRef.current = next;
         setCamOn(next);
-        await startLocalMedia({ withVideo: next });
+        await startLocalMediaRef.current({ withVideo: next });
     };
 
     const selectMic = async (deviceId: string) => {
@@ -1151,17 +1164,16 @@ export function useFocusRoomRtc(
         await startLocalMedia({ cameraId: deviceId, withVideo: true, previewOnly: !enabled });
     };
 
+    // Always show a local tile — even before getUserMedia resolves — so the room never goes blank.
     const allParticipants: RtcPeer[] = [
-        ...(localStream
-            ? [{
-                peerId,
-                displayName: `${displayName} (you)`,
-                avatarUrl,
-                stream: localStream,
-                isLocal: true,
-                speaking: micOn && micLevel > 0.12,
-            }]
-            : []),
+        {
+            peerId,
+            displayName: `${displayName} (you)`,
+            avatarUrl,
+            stream: localStream,
+            isLocal: true,
+            speaking: micOn && micLevel > 0.12,
+        },
         ...peers.map((p) => ({ ...p, speaking: false })),
     ];
 
