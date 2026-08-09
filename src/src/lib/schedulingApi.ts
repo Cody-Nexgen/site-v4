@@ -83,14 +83,16 @@ export async function upsertSchedulingLink(
     supabase: SupabaseClient,
     userId: string,
     link: SchedulingLink,
+    opts?: { soft?: boolean },
 ): Promise<{ ok: boolean; error?: string; linkId?: string }> {
+    const soft = opts?.soft === true;
     const auth = await ensureSupabaseSession(supabase);
     if (!auth.ok || !auth.userId) {
-        await signOutOnAuthError(auth.error ?? 'NOT_AUTHENTICATED');
+        if (!soft) await signOutOnAuthError(auth.error ?? 'NOT_AUTHENTICATED');
         return { ok: false, error: 'NOT_AUTHENTICATED' };
     }
     if (auth.userId !== userId) {
-        await signOutOnAuthError('Session user mismatch');
+        if (!soft) await signOutOnAuthError('Session user mismatch');
         return { ok: false, error: 'NOT_AUTHENTICATED' };
     }
 
@@ -104,7 +106,7 @@ export async function upsertSchedulingLink(
     if (error) {
         const msg = error.message || '';
         if (msg.includes('NOT_AUTHENTICATED') || msg.includes('42501')) {
-            await signOutOnAuthError(msg);
+            if (!soft) await signOutOnAuthError(msg);
             return { ok: false, error: 'NOT_AUTHENTICATED' };
         }
         return { ok: false, error: error.message };
@@ -125,7 +127,7 @@ export async function upsertSchedulingLink(
             };
         }
         if (result.error === 'NOT_AUTHENTICATED') {
-            await signOutOnAuthError('NOT_AUTHENTICATED');
+            if (!soft) await signOutOnAuthError('NOT_AUTHENTICATED');
             return { ok: false, error: 'NOT_AUTHENTICATED' };
         }
         return { ok: false, error: result.error || 'Sync failed' };
@@ -277,5 +279,6 @@ export async function syncAllSchedulingLinks(
     userId: string,
     links: SchedulingLink[],
 ): Promise<void> {
-    await Promise.all(links.map((link) => upsertSchedulingLink(supabase, userId, link)));
+    // Background sync must not hard-sign-out (web /app calendar open).
+    await Promise.all(links.map((link) => upsertSchedulingLink(supabase, userId, link, { soft: true })));
 }

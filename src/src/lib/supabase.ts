@@ -1,5 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { loadSupabaseConfig, resolveSupabaseConfig, type SupabaseConfig } from './supabaseConfig';
+
+declare global {
+    interface Window {
+        __FOCUZ_SITE_SUPABASE__?: SupabaseClient;
+    }
+}
 
 const chromeStorageAdapter = {
     getItem: (_key: string): Promise<string | null> => {
@@ -27,9 +33,33 @@ let activeConfig: SupabaseConfig = resolveSupabaseConfig(
     null,
 );
 
+function isExtensionRuntime(): boolean {
+    try {
+        return typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
+    } catch {
+        return false;
+    }
+}
+
 function createSupabaseClient(cfg: SupabaseConfig) {
     const url = cfg.isConfigured ? cfg.url : 'https://invalid.supabase.local';
     const key = cfg.isConfigured ? cfg.anonKey : 'not-configured';
+
+    // Web host: prefer the site's single client so /app shares the marketing login session.
+    if (typeof window !== 'undefined' && window.__FOCUZ_SITE_SUPABASE__) {
+        return window.__FOCUZ_SITE_SUPABASE__;
+    }
+
+    if (!isExtensionRuntime()) {
+        return createClient(url, key, {
+            auth: {
+                autoRefreshToken: cfg.isConfigured,
+                persistSession: cfg.isConfigured,
+                detectSessionInUrl: true,
+            },
+        });
+    }
+
     return createClient(url, key, {
         auth: {
             storage: chromeStorageAdapter,
@@ -52,6 +82,11 @@ export function isSupabaseConfigured(): boolean {
 
 /** Call once at startup to apply chrome.storage.local overrides (optional). */
 export async function initSupabaseFromStorage(): Promise<SupabaseConfig> {
+    if (typeof window !== 'undefined' && window.__FOCUZ_SITE_SUPABASE__) {
+        supabase = window.__FOCUZ_SITE_SUPABASE__;
+        return activeConfig;
+    }
+
     const loaded = await loadSupabaseConfig();
     if (
         loaded.isConfigured &&
@@ -63,4 +98,12 @@ export async function initSupabaseFromStorage(): Promise<SupabaseConfig> {
         activeConfig = loaded;
     }
     return activeConfig;
+}
+
+/** Bind the website Supabase client before OptionsApp modules initialize. */
+export function bindSiteSupabaseClient(client: SupabaseClient) {
+    if (typeof window !== 'undefined') {
+        window.__FOCUZ_SITE_SUPABASE__ = client;
+    }
+    supabase = client;
 }

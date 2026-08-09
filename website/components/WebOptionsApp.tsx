@@ -1,11 +1,5 @@
 import { useEffect, useState, type ComponentType } from 'react';
-import {
-  installWebChromeShim,
-  hydrateWebWorkspaceFromCloud,
-} from '@focuz/lib/platform';
-import { initializeDashboardColorMode } from '@focuz/lib/themes';
-import '@focuz/styles/focuzDesign.css';
-import '@focuz/index.css';
+import { supabase as siteSupabase } from '@/lib/supabase';
 import '@/focuz-web.css';
 
 type Props = {
@@ -14,8 +8,8 @@ type Props = {
 
 /**
  * Full extension OptionsApp on the web via chrome.* shim.
- * OptionsApp is loaded dynamically AFTER the shim — store.ts registers
- * chrome.storage/runtime listeners at module scope.
+ * Site Supabase is bound on window BEFORE any focuz modules load, so Calendar
+ * and RPCs share the marketing login session (no dual GoTrueClient).
  */
 export default function WebOptionsApp({ onLogout }: Props) {
   const [OptionsApp, setOptionsApp] = useState<ComponentType | null>(null);
@@ -26,8 +20,25 @@ export default function WebOptionsApp({ onLogout }: Props) {
 
     const boot = async () => {
       try {
+        // Must happen before the first import of @focuz/lib/supabase.
+        window.__FOCUZ_SITE_SUPABASE__ = siteSupabase as never;
+
+        const { installWebChromeShim, hydrateWebWorkspaceFromCloud } = await import(
+          '@focuz/lib/platform'
+        );
+        const { bindSiteSupabaseClient } = await import('@focuz/lib/supabase');
+        const { initializeDashboardColorMode } = await import('@focuz/lib/themes');
+
         installWebChromeShim();
+        bindSiteSupabaseClient(siteSupabase as never);
         await initializeDashboardColorMode();
+
+        // CSS only after focuz modules can resolve
+        await Promise.all([
+          import('@focuz/styles/focuzDesign.css'),
+          import('@focuz/index.css'),
+        ]);
+
         await hydrateWebWorkspaceFromCloud();
         const mod = await import('@focuz/options/OptionsApp');
         if (!cancelled) setOptionsApp(() => mod.default);

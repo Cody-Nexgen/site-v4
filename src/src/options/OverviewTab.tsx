@@ -239,8 +239,8 @@ export default function OverviewTab() {
                 </button>
             </SurfaceCard>
 
-            <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-3">
-                <SurfaceCard className="overflow-hidden">
+            <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-3 xl:items-stretch">
+                <SurfaceCard className="overflow-hidden min-h-[320px]">
                     <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3 flex-wrap">
                         <div>
                             <h2 className="text-sm font-semibold text-foreground">Weekly activity</h2>
@@ -287,7 +287,7 @@ export default function OverviewTab() {
                     deltaLabel={`${isUp ? '+' : '−'}${diffPercent}%`}
                     points={sparkPoints}
                     formatPointValue={(ms) => formatTime(ms)}
-                    className="min-h-full"
+                    className="min-h-[320px] xl:min-h-full"
                 />
             </div>
 

@@ -22,11 +22,7 @@ import {
     syncAllSchedulingLinks,
 } from '../lib/schedulingApi';
 import { supabase } from '../lib/supabase';
-import {
-    fetchMyProfile,
-    suggestUsername,
-    syncProfileWithAvailableUsername,
-} from '../lib/profileApi';
+import { fetchMyProfileQuiet } from '../lib/profileApi';
 import {
     bookingUrl,
     CALENDAR_EVENTS_KEY,
@@ -118,24 +114,8 @@ export default function SchedulingCalendarPage({
                 : null;
 
         void (async () => {
-            let profile = await fetchMyProfile(supabase, tokens);
-            if (cancelled) return;
-            if (!profile && tokens) {
-                await syncProfileWithAvailableUsername(
-                    supabase,
-                    session.user.id,
-                    {
-                        preferredUsername: suggestUsername(session.user.email),
-                        displayName:
-                            engineState.profileName?.trim() ||
-                            session.user.user_metadata?.full_name ||
-                            suggestUsername(session.user.email),
-                        profileAvatar: engineState.profileAvatar,
-                    },
-                    tokens,
-                );
-                profile = await fetchMyProfile(supabase, tokens);
-            }
+            // Quiet fetch only — never upsert/sign-out just for opening Calendar.
+            const profile = await fetchMyProfileQuiet(supabase, tokens);
             if (cancelled || !profile) return;
             setHostProfile({
                 displayName: profile.displayName,
@@ -145,15 +125,7 @@ export default function SchedulingCalendarPage({
         return () => {
             cancelled = true;
         };
-    }, [
-        session?.user?.id,
-        session?.user?.email,
-        session?.user?.user_metadata?.full_name,
-        session?.access_token,
-        session?.refresh_token,
-        engineState.profileName,
-        engineState.profileAvatar,
-    ]);
+    }, [session?.user?.id, session?.access_token, session?.refresh_token]);
 
     const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
     const [dayDate, setDayDate] = useState(() => new Date());
