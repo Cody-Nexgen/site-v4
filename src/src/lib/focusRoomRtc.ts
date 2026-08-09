@@ -386,10 +386,23 @@ function connectRealtimeSignaling(
     handlers: SignalingHandlers,
     accountUserId?: string | null,
 ): Promise<{ bus: SignalingBus; channel: RealtimeChannel }> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+        let settled = false;
         const channel = supabase.channel(`focus-room:${roomId}`, {
             config: { broadcast: { self: false } },
         });
+
+        const fail = (reason: string) => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeoutId);
+            void supabase.removeChannel(channel);
+            reject(new Error(reason));
+        };
+
+        const timeoutId = window.setTimeout(() => {
+            fail('Focus room Realtime signaling timed out');
+        }, 6000);
 
         const bus: SignalingBus = {
             send: (event, payload) => {
@@ -436,10 +449,17 @@ function connectRealtimeSignaling(
             .on('broadcast', { event: 'kick' }, ({ payload }) => {
                 handlers.onKick(payload as { to?: string });
             })
-            .subscribe(async (status) => {
+            .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
+                    if (settled) return;
+                    settled = true;
+                    window.clearTimeout(timeoutId);
                     bus.send('join', { peerId, name: displayName, avatarUrl, accountUserId });
                     resolve({ bus, channel });
+                    return;
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                    fail(`Focus room Realtime signaling ${status}`);
                 }
             });
     });
@@ -1067,35 +1087,28 @@ export function useFocusRoomRtc(
                 },
             };
 
-            // Always use Supabase Realtime (shared) + best-effort WS. Sending on both means
-            // two clients still meet even if one path is flaky or one-way.
+            // Realtime + WS in parallel. Realtime used to be awaited first and could hang
+            // forever on SUBSCRIBED — that blocked WS and left "2 joined · 1 connected".
             let wsBus: SignalingBus | null = null;
             let rtBus: SignalingBus | null = null;
 
-            try {
-                const { bus } = await connectRealtimeSignaling(
-                    supabase,
-                    roomId,
-                    peerId,
-                    displayName,
-                    avatarUrl,
-                    handlers,
-                    accountUserId,
-                );
-                if (cancelled) {
-                    bus.close();
-                    return;
-                }
-                rtBus = bus;
-            } catch (fallbackErr) {
-                console.warn('[FocusRoomRtc] Realtime signaling failed', fallbackErr);
-            }
-
             const preferred = await resolveFocusRoomWsUrl();
-            if (!cancelled) {
+            if (cancelled) return;
+
+            const rtPromise = connectRealtimeSignaling(
+                supabase,
+                roomId,
+                peerId,
+                displayName,
+                avatarUrl,
+                handlers,
+                accountUserId,
+            ).then((result) => result.bus);
+
+            const wsPromise = (async (): Promise<SignalingBus | null> => {
                 const urls = signalingUrlAlternates(preferred);
                 for (const wsUrl of urls) {
-                    if (cancelled || wsBus) break;
+                    if (cancelled) return null;
                     try {
                         const bus = await connectWsSignaling(
                             wsUrl,
@@ -1106,20 +1119,33 @@ export function useFocusRoomRtc(
                             handlers,
                             accountUserId,
                         );
-                        if (cancelled) {
-                            bus.close();
-                            break;
-                        }
-                        wsBus = bus;
                         try {
                             localStorage.setItem(FOCUS_ROOM_WS_URL_KEY, DEFAULT_FOCUS_ROOM_WS_URL);
                         } catch {
                             /* ignore */
                         }
+                        return bus;
                     } catch (err) {
                         console.warn('[FocusRoomRtc] WS connect failed for', wsUrl, err);
                     }
                 }
+                return null;
+            })();
+
+            const [rtSettled, wsSettled] = await Promise.allSettled([rtPromise, wsPromise]);
+            if (cancelled) {
+                if (rtSettled.status === 'fulfilled') rtSettled.value.close();
+                if (wsSettled.status === 'fulfilled' && wsSettled.value) wsSettled.value.close();
+                return;
+            }
+
+            if (rtSettled.status === 'fulfilled') {
+                rtBus = rtSettled.value;
+            } else {
+                console.warn('[FocusRoomRtc] Realtime signaling failed', rtSettled.reason);
+            }
+            if (wsSettled.status === 'fulfilled') {
+                wsBus = wsSettled.value;
             }
 
             if (!rtBus && !wsBus) {
