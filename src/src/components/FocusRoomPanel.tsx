@@ -24,6 +24,10 @@ import {
 } from '../lib/socialApi';
 import { FREE_FOCUS_ROOM_MAX_MIN, PRO_FOCUS_ROOM_MAX_MIN, useFocusRoomRtc } from '../lib/focusRoomRtc';
 import {
+    FocusRoomDurationModal,
+    FocusRoomDurationTrigger,
+} from './FocusRoomDurationModal';
+import {
     PROFILE_AVATAR_FALLBACK_CLASS,
     PROFILE_AVATAR_IMG_CLASS,
 } from '../lib/profileAvatar';
@@ -86,6 +90,7 @@ export default function FocusRoomPanel() {
     const [room, setRoom] = useState<FocusRoom | null>(null);
     const [title, setTitle] = useState('Focus Room');
     const [durationMin, setDurationMin] = useState(FREE_FOCUS_ROOM_MAX_MIN);
+    const [durationModalOpen, setDurationModalOpen] = useState(false);
     const [joinInput, setJoinInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -347,16 +352,10 @@ export default function FocusRoomPanel() {
                         className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-sky-500/50"
                         placeholder="Room title"
                     />
-                    <input
-                        type="number"
-                        min={5}
-                        max={maxDurationMin}
+                    <FocusRoomDurationTrigger
                         value={durationMin}
-                        onChange={(e) => {
-                            const next = Number(e.target.value) || FREE_FOCUS_ROOM_MAX_MIN;
-                            setDurationMin(Math.min(Math.max(5, next), maxDurationMin));
-                        }}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-sky-500/50"
+                        onClick={() => setDurationModalOpen(true)}
+                        className="bg-black/40"
                     />
                     {!isPro && (
                         <p className="text-[10px] text-amber-300/90 leading-relaxed">
@@ -374,6 +373,18 @@ export default function FocusRoomPanel() {
                     >
                         {loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Start room'}
                     </button>
+                    <FocusRoomDurationModal
+                        open={durationModalOpen}
+                        value={durationMin}
+                        maxMinutes={maxDurationMin}
+                        isPro={isPro}
+                        onClose={() => setDurationModalOpen(false)}
+                        onConfirm={(minutes) => {
+                            setDurationMin(minutes);
+                            setDurationModalOpen(false);
+                        }}
+                        onUpgrade={() => void upgradeToPro()}
+                    />
                 </div>
 
                 <div className="space-y-2">

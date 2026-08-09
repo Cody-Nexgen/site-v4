@@ -541,16 +541,265 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 /* Onboarding, auth, extension popup — shared polish */
 .focuz-shell,
 .focuz-popup {
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: Geist, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
+.focuz-popup {
+  background: #050505;
+  padding: 0;
+  color: #fafafa;
+}
+
+.focuz-popup-shell {
+  position: relative;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, #101012 0%, #080809 100%);
+  padding: 1.1rem 1.15rem 1rem;
+}
+
+.focuz-popup-atmosphere {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 55% at 12% -10%, rgba(255, 255, 255, 0.08), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 95% 105%, rgba(251, 191, 36, 0.07), transparent 50%),
+    linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.35) 100%);
+  animation: focuz-popup-breathe 7s ease-in-out infinite alternate;
+}
+
+@keyframes focuz-popup-breathe {
+  from { opacity: 0.85; }
+  to { opacity: 1; }
+}
+
+.focuz-popup-mark {
+  border-radius: 11px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 8px 20px -10px rgba(0, 0, 0, 0.8);
+}
+
+.focuz-popup-wordmark {
+  letter-spacing: -0.03em;
+}
+
+.focuz-popup-hero {
+  letter-spacing: -0.035em;
+}
+
+.focuz-popup-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.85rem;
+  background: #f5f5f5;
+  color: #0a0a0a;
+  padding: 0.78rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.focuz-popup-cta:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.focuz-popup-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d4d4d4;
+  padding: 0.7rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 550;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.focuz-popup-ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.focuz-popup-focus {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.05rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 0%, rgba(255, 255, 255, 0.07), transparent 60%),
+    rgba(255, 255, 255, 0.025);
+  min-height: 8.5rem;
+  padding: 1.1rem 0.75rem;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.focuz-popup-focus:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.focuz-popup-focus-icon {
+  display: flex;
+  height: 3rem;
+  width: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  animation: focuz-popup-pulse 2.8s ease-in-out infinite;
+}
+
+.focuz-popup-focus-icon-live {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.35);
+}
+
+.focuz-popup-focus-icon-danger {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.35);
+  animation: none;
+}
+
+@keyframes focuz-popup-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
 .focuz-popup-stat {
-  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  border-radius: 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 0.875rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 0.65rem 0.35rem 0.7rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.focuz-popup-stat-value {
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: #f5f5f5;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.focuz-popup-stat-label {
+  font-size: 9.5px;
+  font-weight: 550;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #737373;
+}
+
+.focuz-popup-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #d4d4d4;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.focuz-popup-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.focuz-popup-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.28rem 0.55rem;
+  font-size: 10px;
+  font-weight: 650;
+  color: #e5e5e5;
+}
+
+.focuz-popup-pill-live {
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(16, 185, 129, 0.12);
+  color: #a7f3d0;
+}
+
+.focuz-popup-pill-danger {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+}
+
+.focuz-popup-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #34d399;
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55);
+  animation: focuz-popup-live 1.6s ease-out infinite;
+}
+
+@keyframes focuz-popup-live {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+.focuz-duration-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.12));
+  outline: none;
+}
+
+.focuz-duration-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #0a0a0a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.focuz-duration-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #0a0a0a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
 }
 
 .focuz-preview-frame {

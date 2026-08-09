@@ -36,6 +36,10 @@ import {
 } from '../lib/socialApi';
 import { FREE_FOCUS_ROOM_MAX_MIN, PRO_FOCUS_ROOM_MAX_MIN, useFocusRoomRtc } from '../lib/focusRoomRtc';
 import {
+    FocusRoomDurationModal,
+    FocusRoomDurationTrigger,
+} from './FocusRoomDurationModal';
+import {
     deleteAttachment,
     downloadAttachment,
     getAttachmentPlayUrl,
@@ -358,6 +362,7 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
     const [room, setRoom] = useState<FocusRoom | null>(null);
     const [title, setTitle] = useState('Focus Room');
     const [durationMin, setDurationMin] = useState(FREE_FOCUS_ROOM_MAX_MIN);
+    const [durationModalOpen, setDurationModalOpen] = useState(false);
     const [joinInput, setJoinInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -758,28 +763,16 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                         placeholder="Room name"
                                         className="w-full bg-[#121214]/80 border border-white/[0.08] rounded-xl px-4 py-3 text-white outline-none focus:border-[#5865f2]/70"
                                     />
-                                    <div className="mt-3 flex items-end gap-3">
-                                        <label className="flex-1">
-                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#949ba4]">
-                                                Duration (min)
-                                            </span>
-                                            <input
-                                                type="number"
-                                                min={5}
-                                                max={maxDurationMin}
-                                                value={durationMin}
-                                                onChange={(e) => {
-                                                    const next = Number(e.target.value) || FREE_FOCUS_ROOM_MAX_MIN;
-                                                    setDurationMin(Math.min(Math.max(5, next), maxDurationMin));
-                                                }}
-                                                className="mt-1.5 w-full bg-[#121214]/80 border border-white/[0.08] rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#5865f2]/70"
-                                            />
-                                        </label>
+                                    <div className="mt-3 space-y-3">
+                                        <FocusRoomDurationTrigger
+                                            value={durationMin}
+                                            onClick={() => setDurationModalOpen(true)}
+                                        />
                                         <button
                                             type="button"
                                             disabled={loading}
                                             onClick={() => void handleCreate()}
-                                            className="shrink-0 px-5 py-3 rounded-xl bg-neutral-100 hover:bg-white font-semibold text-neutral-950 disabled:opacity-50 flex items-center gap-2"
+                                            className="w-full px-5 py-3 rounded-xl bg-neutral-100 hover:bg-white font-semibold text-neutral-950 disabled:opacity-50 flex items-center justify-center gap-2"
                                         >
                                             {loading ? <Loader2 className="animate-spin" size={16} /> : null}
                                             Create room
@@ -847,6 +840,19 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                         </div>
                     </div>
                 </div>
+
+                <FocusRoomDurationModal
+                    open={durationModalOpen}
+                    value={durationMin}
+                    maxMinutes={maxDurationMin}
+                    isPro={isPro}
+                    onClose={() => setDurationModalOpen(false)}
+                    onConfirm={(minutes) => {
+                        setDurationMin(minutes);
+                        setDurationModalOpen(false);
+                    }}
+                    onUpgrade={() => void upgradeToPro()}
+                />
             </div>
         );
     }
