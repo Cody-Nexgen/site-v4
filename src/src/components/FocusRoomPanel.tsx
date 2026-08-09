@@ -110,12 +110,6 @@ export default function FocusRoomPanel() {
 
     const rtc = useFocusRoomRtc(supabase, roomId, displayName, !!(room && roomId), false);
 
-    const loadStoredRoom = useCallback(async () => {
-        const stored = await chrome.storage.local.get(FOCUS_ROOM_STORAGE_KEY);
-        const id = stored[FOCUS_ROOM_STORAGE_KEY] as string | undefined;
-        if (id) setRoomId(id);
-    }, []);
-
     const pollRoom = useCallback(async (id: string) => {
         const res = await getFocusRoom(supabase, id);
         if (res.ok && res.room) {
@@ -128,9 +122,13 @@ export default function FocusRoomPanel() {
         }
     }, []);
 
+    // Do not auto-enter a stored room — that stranded people in different calls.
     useEffect(() => {
-        void loadStoredRoom();
-    }, [loadStoredRoom]);
+        void chrome.storage.local.get(FOCUS_ROOM_STORAGE_KEY).then((stored) => {
+            const id = stored[FOCUS_ROOM_STORAGE_KEY] as string | undefined;
+            if (id) setJoinInput(id);
+        });
+    }, []);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);

@@ -371,6 +371,7 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
     const [durationMin, setDurationMin] = useState(FREE_FOCUS_ROOM_MAX_MIN);
     const [durationModalOpen, setDurationModalOpen] = useState(false);
     const [joinInput, setJoinInput] = useState('');
+    const [pendingRejoinId, setPendingRejoinId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [countdown, setCountdown] = useState('');
@@ -467,14 +468,35 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
         }
     }, []);
 
+    // Never silently auto-enter a stored room — that put two people in *different* rooms.
     useEffect(() => {
-        void chrome.storage.local.get(FOCUS_ROOM_STORAGE_KEY).then((r) => {
-            const id = r[FOCUS_ROOM_STORAGE_KEY] as string | undefined;
-            if (id) {
-                setRoomId(id);
-                setInRoom(true);
+        let cancelled = false;
+        void (async () => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const fromQuery = (params.get('room') || params.get('focusRoom') || '').trim();
+                if (fromQuery) {
+                    setJoinInput(fromQuery);
+                    return;
+                }
+            } catch {
+                /* ignore */
             }
-        });
+            const r = await chrome.storage.local.get(FOCUS_ROOM_STORAGE_KEY);
+            if (cancelled) return;
+            const id = (r[FOCUS_ROOM_STORAGE_KEY] as string | undefined)?.trim();
+            if (!id) return;
+            const check = await getFocusRoom(supabase, id);
+            if (cancelled) return;
+            if (!check.ok) {
+                await chrome.storage.local.remove(FOCUS_ROOM_STORAGE_KEY);
+                return;
+            }
+            setPendingRejoinId(id);
+        })();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     useEffect(() => {
@@ -754,6 +776,40 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                             </p>
 
                             <div className="mt-7 space-y-5">
+                                {pendingRejoinId ? (
+                                    <section className="rounded-2xl border border-sky-400/25 bg-sky-400/10 p-4 sm:p-5">
+                                        <p className="text-sm font-semibold text-white">Previous room found</p>
+                                        <p className="mt-1 text-[11px] font-mono text-sky-100/90 break-all">{pendingRejoinId}</p>
+                                        <p className="mt-2 text-xs text-[#b5bac1] leading-relaxed">
+                                            Only rejoin if your friend is in <strong>this</strong> room. Otherwise join
+                                            their code below — don&apos;t create a second room.
+                                        </p>
+                                        <div className="mt-3 flex gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={loading}
+                                                onClick={() => {
+                                                    setJoinInput(pendingRejoinId);
+                                                    void handleJoinRoom(pendingRejoinId);
+                                                    setPendingRejoinId(null);
+                                                }}
+                                                className="flex-1 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-neutral-950"
+                                            >
+                                                Rejoin
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    void chrome.storage.local.remove(FOCUS_ROOM_STORAGE_KEY);
+                                                    setPendingRejoinId(null);
+                                                }}
+                                                className="rounded-xl border border-white/15 px-4 py-2.5 text-sm font-semibold text-neutral-300"
+                                            >
+                                                Dismiss
+                                            </button>
+                                        </div>
+                                    </section>
+                                ) : null}
                                 <section className="rounded-2xl border border-white/[0.08] bg-black/20 p-4 sm:p-5">
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="w-8 h-8 rounded-lg bg-white/[0.08] flex items-center justify-center">
@@ -884,10 +940,23 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                     {rtc.roomLocked && <Shield size={14} className="text-amber-400" aria-label="Room locked" />}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                    <div className="hidden sm:flex flex-col items-end mr-1">
-                        <span className="text-[10px] uppercase tracking-wider text-[#949ba4]">Room code</span>
-                        <span className="text-xs font-mono text-white">{roomId}</span>
-                    </div>
+                    <button
+                        type="button"
+                        title="Both people must have this exact room code"
+                        onClick={() => {
+                            if (!roomId) return;
+                            void navigator.clipboard.writeText(roomId).then(() => {
+                                setCopied(true);
+                                window.setTimeout(() => setCopied(false), 2000);
+                            });
+                        }}
+                        className="hidden sm:flex flex-col items-end mr-1 rounded-lg px-2 py-1 hover:bg-white/[0.04] text-left"
+                    >
+                        <span className="text-[10px] uppercase tracking-wider text-[#949ba4]">
+                            Room code {copied ? '· copied' : '(must match)'}
+                        </span>
+                        <span className="text-[11px] font-mono text-white max-w-[220px] truncate">{roomId}</span>
+                    </button>
                     <span className="text-lg font-semibold text-neutral-300 tabular-nums">{countdown}</span>
                     <button
                         type="button"
@@ -930,15 +999,16 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                         ))}
                     </div>
                     {rtc.participants.length <= 1 && (
-                        <div className="mt-6 mx-auto max-w-md text-center space-y-2">
+                        <div className="mt-6 mx-auto max-w-lg text-center space-y-2 px-4">
                             <p className="text-sm text-[#949ba4]">Waiting for others to connect…</p>
-                            {room.participantCount > 1 ? (
-                                <p className="text-xs text-amber-200/90 leading-relaxed">
-                                    Someone joined the room but isn&apos;t on the call yet. They must open the same
-                                    invite link while signed in — and use a <strong>different account</strong> than yours
-                                    (two tabs with one login won&apos;t show two people).
-                                </p>
-                            ) : null}
+                            <p className="text-xs font-mono text-white/90 break-all">
+                                Your room code: <span className="text-white">{roomId}</span>
+                            </p>
+                            <p className="text-xs text-amber-200/90 leading-relaxed">
+                                Both accounts must show <strong>this exact same room code</strong>. If the other person
+                                created their own room, they&apos;re in a different call — have them click Leave, then
+                                Join with this code (or open your invite link).
+                            </p>
                             {rtc.rtcError ? (
                                 <p className="text-xs text-amber-400">{rtc.rtcError}</p>
                             ) : null}

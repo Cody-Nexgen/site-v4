@@ -410,14 +410,19 @@ function connectRealtimeSignaling(
                 handlers.onSignal(payload as SignalPayload);
             })
             .on('broadcast', { event: 'join' }, ({ payload }) => {
-                handlers.onJoin(
-                    payload as {
-                        peerId?: string;
-                        name?: string;
-                        avatarUrl?: string | null;
-                        accountUserId?: string | null;
-                    },
-                );
+                const p = payload as {
+                    peerId?: string;
+                    from?: string;
+                    name?: string;
+                    avatarUrl?: string | null;
+                    accountUserId?: string | null;
+                };
+                handlers.onJoin({
+                    peerId: p.peerId || p.from,
+                    name: p.name,
+                    avatarUrl: p.avatarUrl,
+                    accountUserId: p.accountUserId,
+                });
             })
             .on('broadcast', { event: 'leave' }, ({ payload }) => {
                 handlers.onLeave(payload as { peerId?: string });
@@ -1062,18 +1067,35 @@ export function useFocusRoomRtc(
                 },
             };
 
-            const preferred = await resolveFocusRoomWsUrl();
-            if (cancelled) return;
+            // Always use Supabase Realtime (shared) + best-effort WS. Sending on both means
+            // two clients still meet even if one path is flaky or one-way.
+            let wsBus: SignalingBus | null = null;
+            let rtBus: SignalingBus | null = null;
 
-            let connected = false;
-            const urls = signalingUrlAlternates(preferred);
-            // Two full passes before Realtime — recovers from brief VPS/Caddy blips.
-            for (let attempt = 0; attempt < 2 && !connected && !cancelled; attempt += 1) {
-                if (attempt > 0) {
-                    await new Promise((r) => window.setTimeout(r, 700 * attempt));
+            try {
+                const { bus } = await connectRealtimeSignaling(
+                    supabase,
+                    roomId,
+                    peerId,
+                    displayName,
+                    avatarUrl,
+                    handlers,
+                    accountUserId,
+                );
+                if (cancelled) {
+                    bus.close();
+                    return;
                 }
+                rtBus = bus;
+            } catch (fallbackErr) {
+                console.warn('[FocusRoomRtc] Realtime signaling failed', fallbackErr);
+            }
+
+            const preferred = await resolveFocusRoomWsUrl();
+            if (!cancelled) {
+                const urls = signalingUrlAlternates(preferred);
                 for (const wsUrl of urls) {
-                    if (cancelled || connected) break;
+                    if (cancelled || wsBus) break;
                     try {
                         const bus = await connectWsSignaling(
                             wsUrl,
@@ -1086,21 +1108,11 @@ export function useFocusRoomRtc(
                         );
                         if (cancelled) {
                             bus.close();
-                            return;
+                            break;
                         }
-                        busRef.current = bus;
-                        connected = true;
+                        wsBus = bus;
                         try {
                             localStorage.setItem(FOCUS_ROOM_WS_URL_KEY, DEFAULT_FOCUS_ROOM_WS_URL);
-                        } catch {
-                            /* ignore */
-                        }
-                        try {
-                            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-                                void chrome.storage.local.set({
-                                    [FOCUS_ROOM_WS_URL_KEY]: DEFAULT_FOCUS_ROOM_WS_URL,
-                                });
-                            }
                         } catch {
                             /* ignore */
                         }
@@ -1110,28 +1122,39 @@ export function useFocusRoomRtc(
                 }
             }
 
-            if (!connected) {
-                console.warn('[FocusRoomRtc] WS signaling failed after retries, falling back to Realtime');
-                try {
-                    const { bus } = await connectRealtimeSignaling(
-                        supabase,
-                        roomId,
-                        peerId,
-                        displayName,
-                        avatarUrl,
-                        handlers,
-                        accountUserId,
-                    );
-                    if (cancelled) {
-                        bus.close();
-                        return;
-                    }
-                    busRef.current = bus;
-                } catch (fallbackErr) {
-                    console.warn('[FocusRoomRtc] signaling connect failed', fallbackErr);
-                    setRtcError('Could not connect to room signaling');
-                }
+            if (!rtBus && !wsBus) {
+                setRtcError('Could not connect to room signaling');
+                return;
             }
+
+            busRef.current = {
+                send: (event, payload) => {
+                    try {
+                        rtBus?.send(event, payload);
+                    } catch {
+                        /* ignore */
+                    }
+                    try {
+                        wsBus?.send(event, payload);
+                    } catch {
+                        /* ignore */
+                    }
+                },
+                close: () => {
+                    try {
+                        rtBus?.close();
+                    } catch {
+                        /* ignore */
+                    }
+                    try {
+                        wsBus?.close();
+                    } catch {
+                        /* ignore */
+                    }
+                },
+            };
+
+            setRtcError('');
 
             // Re-announce so late joiners / missed broadcasts still discover each other.
             const announce = () => {
@@ -1143,7 +1166,7 @@ export function useFocusRoomRtc(
                 });
             };
             announce();
-            announceTimer = window.setInterval(announce, 3500);
+            announceTimer = window.setInterval(announce, 2500);
         };
 
         void connect();
