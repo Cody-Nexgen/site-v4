@@ -190,6 +190,22 @@ async function processSegmentComplete() {
                 lastCompletedSegmentId: completedSegmentId,
             };
             await updateEngineSettings({ pomodoroSettings: updated });
+            // Persist daily focus minutes for dashboard focus graph.
+            try {
+                const focusKey = `focusTime_${today}`;
+                const stored = await chrome.storage.local.get(focusKey);
+                let prev = Number(stored[focusKey]);
+                if (!Number.isFinite(prev) || stored[focusKey] == null) {
+                    const priorSessions =
+                        settings.lastDate === today ? settings.sessionsCompleted || 0 : 0;
+                    prev = priorSessions * (settings.focusMin || focusMin) * 60 * 1000;
+                }
+                await chrome.storage.local.set({
+                    [focusKey]: prev + focusMin * 60 * 1000,
+                });
+            } catch (e) {
+                console.warn('[Pomodoro] focusTime persist failed', e);
+            }
             await plantTreeFromSession().catch((e) => console.warn('[Forest] plant failed', e));
             await import('../lib/socialHeartbeat.js')
                 .then(({ sendSocialHeartbeat }) =>

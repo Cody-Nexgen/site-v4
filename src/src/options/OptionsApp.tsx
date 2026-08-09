@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../lib/store';
 import {
@@ -116,36 +116,74 @@ export const GlassCard = ({ children, className = "", onClick, style }: { childr
 );
 
 
-export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { date: string; total: number; sites: Record<string, number> }[]; onSelectDay: (day: any) => void }) => {
+export const ActivityGraph = ({
+    stats: statsProp,
+    onSelectDay,
+}: {
+    stats?: { date: string; total: number; sites: Record<string, number>; focusMs?: number }[];
+    onSelectDay: (day: {
+        date: string;
+        total: number;
+        sites: Record<string, number>;
+        focusMs?: number;
+    }) => void;
+}) => {
     const { last7DaysStats } = useAuthStore();
+    const wrapRef = useRef<HTMLDivElement>(null);
+    const [size, setSize] = useState({ width: 640, height: 220 });
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
     const [chartMode, setChartMode] = useState<'bar' | 'line'>('line');
     const uid = React.useId().replace(/:/g, '');
 
+    useLayoutEffect(() => {
+        const el = wrapRef.current;
+        if (!el) return;
+        const update = () => {
+            const rect = el.getBoundingClientRect();
+            setSize({
+                width: Math.max(Math.floor(rect.width), 240),
+                height: Math.max(Math.floor(rect.height), 160),
+            });
+        };
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
     const source = statsProp ?? last7DaysStats;
     const sliced = source.slice(-7);
-    const stats = sliced.length ? sliced : Array.from({ length: 7 }, () => ({ date: '', total: 0, sites: {} }));
+    const stats = sliced.length
+        ? sliced
+        : Array.from({ length: 7 }, () => ({ date: '', total: 0, sites: {} as Record<string, number> }));
     const maxTotal = Math.max(...stats.map((s) => s.total || 0), 60 * 60 * 1000);
-    const width = 800;
-    const height = 200;
-    const paddingX = 36;
-    const paddingTop = 28;
-    const paddingBottom = 16;
-    const chartWidth = width - paddingX * 2;
-    const chartHeight = height - paddingTop - paddingBottom;
-    const barGap = 12;
-    const barWidth = Math.max(28, (chartWidth - barGap * (stats.length - 1)) / Math.max(1, stats.length));
+    const { width, height } = size;
+    const paddingX = 44;
+    const paddingTop = 32;
+    const paddingBottom = 12;
+    const chartWidth = Math.max(width - paddingX * 2, 1);
+    const chartHeight = Math.max(height - paddingTop - paddingBottom, 1);
+    const barGap = 14;
+    const barWidth = Math.max(
+        36,
+        (chartWidth - barGap * (stats.length - 1)) / Math.max(1, stats.length),
+    );
+    const slotWidth = chartWidth / Math.max(stats.length, 1);
 
     const getBarX = (i: number) => paddingX + i * (barWidth + barGap);
-    const getBarHeight = (ms: number) => Math.max(ms > 0 ? 4 : 0, ((ms || 0) / maxTotal) * chartHeight);
+    const getBarHeight = (ms: number) => Math.max(ms > 0 ? 6 : 0, ((ms || 0) / maxTotal) * chartHeight);
     const getBarY = (ms: number) => paddingTop + chartHeight - getBarHeight(ms);
-    const getY = (pct: number) => paddingTop + chartHeight - (pct * chartHeight / 100);
-    const getPointX = (i: number) => paddingX + (i * chartWidth / Math.max(1, stats.length - 1));
+    const getY = (pct: number) => paddingTop + chartHeight - (pct * chartHeight) / 100;
+    const getPointX = (i: number) => paddingX + (i * chartWidth) / Math.max(1, stats.length - 1);
     const getPointY = (ms: number) => paddingTop + chartHeight - ((ms || 0) / maxTotal) * chartHeight;
-    // Straight segments only — cubic/pathLength animations were clipping the stroke mid-chart.
-    const linePath = stats
-        .map((day, i) => `${i === 0 ? 'M' : 'L'} ${getPointX(i)} ${getPointY(day.total)}`)
-        .join(' ');
+    const linePath = useMemo(
+        () =>
+            stats
+                .map((day, i) => `${i === 0 ? 'M' : 'L'} ${getPointX(i)} ${getPointY(day.total)}`)
+                .join(' '),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [stats, width, height, maxTotal],
+    );
 
     const formatTime = (ms: number) => {
         const mins = Math.round((ms || 0) / 60000);
@@ -154,7 +192,7 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
     };
 
     return (
-        <div className="w-full h-full min-h-[12rem] relative overflow-visible">
+        <div ref={wrapRef} className="relative h-full min-h-[12rem] w-full overflow-visible">
             <div
                 className="activity-chart-controls absolute right-1 top-0 z-20 flex rounded-lg border border-white/[0.08] bg-black/50 p-0.5 shadow-sm backdrop-blur"
                 role="group"
@@ -167,14 +205,16 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                         onClick={() => setChartMode(mode)}
                         aria-pressed={chartMode === mode}
                         className={`rounded-md px-2 py-1 text-[10px] font-semibold capitalize transition-colors ${
-                            chartMode === mode ? 'bg-white/[0.12] text-white' : 'text-neutral-500 hover:text-neutral-300'
+                            chartMode === mode
+                                ? 'bg-white/[0.12] text-white'
+                                : 'text-neutral-500 hover:text-neutral-300'
                         }`}
                     >
                         {mode}
                     </button>
                 ))}
             </div>
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
+            <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="absolute inset-0 h-full w-full overflow-visible">
                 <defs>
                     <linearGradient id={`barGradient-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" stopColor="#c084fc" />
@@ -188,8 +228,15 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
 
                 {[0, 50, 100].map((v) => (
                     <g key={v}>
-                        <line x1={paddingX} y1={getY(v)} x2={width - paddingX} y2={getY(v)} stroke="white" strokeOpacity="0.04" />
-                        <text x={4} y={getY(v) + 4} className="text-[9px] fill-neutral-600 font-medium">
+                        <line
+                            x1={paddingX}
+                            y1={getY(v)}
+                            x2={width - paddingX}
+                            y2={getY(v)}
+                            stroke="white"
+                            strokeOpacity="0.04"
+                        />
+                        <text x={6} y={getY(v) + 4} className="fill-neutral-600 font-medium" style={{ fontSize: 10 }}>
                             {v === 0 ? '0' : v === 50 ? formatTime(maxTotal / 2) : formatTime(maxTotal)}
                         </text>
                     </g>
@@ -205,11 +252,9 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                             d={linePath}
                             fill="none"
                             stroke="#d4d4d4"
-                            strokeWidth="3"
+                            strokeWidth="2.5"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            vectorEffect="non-scaling-stroke"
-                            style={{ strokeDasharray: 'none' }}
                         />
                     </>
                 )}
@@ -221,16 +266,18 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                     const active = hoveredIndex === i;
                     const pointX = getPointX(i);
                     const pointY = getPointY(day.total);
+                    const hitX = chartMode === 'bar' ? x : pointX - slotWidth / 2;
+                    const hitW = chartMode === 'bar' ? barWidth : Math.max(slotWidth, 48);
                     return (
                         <g
-                            key={i}
+                            key={`${day.date || i}`}
                             className="cursor-pointer"
                             onMouseEnter={() => setHoveredIndex(i)}
                             onMouseLeave={() => setHoveredIndex(null)}
                             onClick={() => onSelectDay(day)}
                             role="button"
                             tabIndex={0}
-                            aria-label={`${day.date || `Day ${i + 1}`}: ${formatTime(day.total)}`}
+                            aria-label={`${day.date || `Day ${i + 1}`}: ${formatTime(day.total)}. Click for details.`}
                             onFocus={() => setHoveredIndex(i)}
                             onBlur={() => setHoveredIndex(null)}
                             onKeyDown={(event) => {
@@ -240,13 +287,7 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                                 }
                             }}
                         >
-                            <rect
-                                x={chartMode === 'bar' ? x : pointX - Math.max(22, chartWidth / stats.length / 2)}
-                                y={paddingTop}
-                                width={chartMode === 'bar' ? barWidth : Math.max(44, chartWidth / stats.length)}
-                                height={chartHeight}
-                                fill="transparent"
-                            />
+                            <rect x={hitX} y={paddingTop} width={hitW} height={chartHeight} fill="transparent" />
                             {chartMode === 'bar' ? (
                                 <motion.rect
                                     x={x}
@@ -260,37 +301,34 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                                 />
                             ) : (
                                 <>
-                                    <circle
-                                        cx={pointX}
-                                        cy={pointY}
-                                        r={active ? 6 : 4}
-                                        fill="#0a0a0a"
-                                        stroke={active ? '#fff' : '#a3a3a3'}
-                                        strokeWidth="2"
-                                        vectorEffect="non-scaling-stroke"
-                                        className="transition-all duration-150"
-                                    />
                                     {active && (
                                         <line
                                             x1={pointX}
-                                            y1={pointY}
+                                            y1={paddingTop}
                                             x2={pointX}
                                             y2={paddingTop + chartHeight}
                                             stroke="white"
-                                            strokeOpacity="0.12"
+                                            strokeOpacity="0.14"
                                             strokeDasharray="3 4"
-                                            vectorEffect="non-scaling-stroke"
                                         />
                                     )}
+                                    <circle
+                                        cx={pointX}
+                                        cy={pointY}
+                                        r={active ? 9 : 7}
+                                        fill="#0a0a0a"
+                                        stroke={active ? '#fff' : '#d4d4d4'}
+                                        strokeWidth={active ? 2.5 : 2}
+                                    />
                                 </>
                             )}
-                            {day.total > 0 && (
+                            {(active || chartMode === 'bar') && day.total > 0 && (
                                 <text
                                     x={chartMode === 'bar' ? x + barWidth / 2 : pointX}
-                                    y={Math.max(14, (chartMode === 'bar' ? y : pointY) - 8)}
+                                    y={Math.max(14, (chartMode === 'bar' ? y : pointY) - 12)}
                                     textAnchor="middle"
-                                    className="fill-neutral-300 font-semibold"
-                                    style={{ fontSize: 11, opacity: chartMode === 'bar' || active ? 1 : 0 }}
+                                    className="fill-neutral-200 font-semibold"
+                                    style={{ fontSize: 11 }}
                                 >
                                     {formatTime(day.total)}
                                 </text>
@@ -299,6 +337,9 @@ export const ActivityGraph = ({ stats: statsProp, onSelectDay }: { stats?: { dat
                     );
                 })}
             </svg>
+            <p className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 text-[10px] text-neutral-600">
+                Click a day for site breakdown
+            </p>
         </div>
     );
 };

@@ -433,13 +433,16 @@ export function initMessageRouter() {
                     case "EXPORT_LOCAL_STATS": {
                         const all = await chrome.storage.local.get(null);
                         const screenTime = {};
+                        const focusTime = {};
                         for (const [key, value] of Object.entries(all)) {
                             if (key.startsWith('screenTime_')) screenTime[key] = value;
+                            if (key.startsWith('focusTime_')) focusTime[key] = value;
                         }
                         const engine = getEngineState();
                         sendResponse({
                             ok: true,
                             screenTime,
+                            focusTime,
                             pomodoroSettings: engine.pomodoroSettings || null,
                             pomodoroRuntime: all.pomodoroRuntimeV1 || null,
                             blockedToday: engine.blockedToday || 0,

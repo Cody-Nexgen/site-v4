@@ -158,11 +158,21 @@ export default function OverviewTab() {
 
     const doneTasks = planner.filter((p: { done: boolean }) => p.done).length;
 
+    const focusMin = engineState.pomodoroSettings?.focusMin || 25;
+    const todayFocusMs =
+        (endIdx >= 0 ? last7DaysStats[endIdx]?.focusMs : 0) ||
+        pomodoroToday * focusMin * 60 * 1000;
+    const yesterdayFocusMs = endIdx > 0 ? last7DaysStats[endIdx - 1]?.focusMs || 0 : 0;
+    const focusDiff = todayFocusMs - yesterdayFocusMs;
+    const focusDiffPercent =
+        yesterdayFocusMs === 0 ? 0 : Math.round((Math.abs(focusDiff) / yesterdayFocusMs) * 100);
+    const focusIsUp = focusDiff > 0;
+
     const sparkPoints = useMemo(
         () =>
             weekStats.map((s) => ({
                 label: new Date(s.date).toLocaleDateString('en-US', { weekday: 'short' }),
-                value: capDayScreenMs(s.total || 0, { date: s.date }),
+                value: s.focusMs || 0,
             })),
         [weekStats],
     );
@@ -281,10 +291,10 @@ export default function OverviewTab() {
                 </SurfaceCard>
 
                 <SparkMetricCard
-                    title="Screen time trend"
-                    value={formatTime(todayTotal)}
-                    caption="Hover days for relative load"
-                    deltaLabel={`${isUp ? '+' : '−'}${diffPercent}%`}
+                    title="Focus time"
+                    value={formatTime(todayFocusMs)}
+                    caption="Pomodoro focus minutes this week"
+                    deltaLabel={`${focusIsUp ? '+' : '−'}${focusDiffPercent}%`}
                     points={sparkPoints}
                     formatPointValue={(ms) => formatTime(ms)}
                     className="min-h-[320px] xl:min-h-full"
@@ -400,7 +410,7 @@ export default function OverviewTab() {
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="absolute inset-0 z-40 flex items-start justify-center rounded-[var(--radius)] bg-background/70 backdrop-blur-md p-4 pt-12 overflow-y-auto"
+                    className="fixed inset-0 z-[100] flex items-start justify-center bg-background/70 backdrop-blur-md p-4 pt-16 sm:pt-24 overflow-y-auto"
                     onClick={() => setSelectedDay(null)}
                 >
                     <motion.div
@@ -415,7 +425,12 @@ export default function OverviewTab() {
                                     {new Date(selectedDay.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                                 </p>
                                 <p className="text-3xl font-semibold text-foreground mt-1 tabular-nums">{formatTime(selectedDay.total)}</p>
-                                <p className="text-[11px] text-muted-foreground mt-0.5">total screen time</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    total screen time
+                                    {selectedDay.focusMs
+                                        ? ` · ${formatTime(selectedDay.focusMs)} focus`
+                                        : ''}
+                                </p>
                             </div>
                             <button
                                 type="button"

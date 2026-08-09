@@ -1,5 +1,5 @@
 import { useEffect, useState, type ComponentType } from 'react';
-import { supabase as siteSupabase } from '@/lib/supabase';
+import { supabase as siteSupabase, supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
 import '@/focuz-web.css';
 
 type Props = {
@@ -30,7 +30,10 @@ export default function WebOptionsApp({ onLogout }: Props) {
         const { initializeDashboardColorMode } = await import('@focuz/lib/themes');
 
         installWebChromeShim();
-        bindSiteSupabaseClient(siteSupabase as never);
+        bindSiteSupabaseClient(siteSupabase as never, {
+          url: supabaseUrl,
+          anonKey: supabaseAnonKey,
+        });
         await initializeDashboardColorMode();
 
         // CSS only after focuz modules can resolve

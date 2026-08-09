@@ -341,7 +341,7 @@ interface AuthState {
     refreshStats: () => Promise<void>;
 
     // Stats
-    last7DaysStats: { date: string, total: number, sites: Record<string, number> }[];
+    last7DaysStats: { date: string; total: number; sites: Record<string, number>; focusMs?: number }[];
     offsetWeeks: number;
     setOffsetWeeks: (offset: number) => void;
 
@@ -726,16 +726,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             const ds = d.toDateString();
             days.push(ds);
             keysToFetch.push(`screenTime_${ds}`);
+            keysToFetch.push(`focusTime_${ds}`);
         }
 
         const historyResult = await chrome.storage.local.get(keysToFetch);
+        const pomo = get().engineState?.pomodoroSettings;
         days.forEach((ds) => {
             const dayData = historyResult[`screenTime_${ds}`] || {};
             const rawTotal = Object.values(dayData).reduce((a: number, b: any) => a + (b as number), 0);
+            let focusMs = Number(historyResult[`focusTime_${ds}`] || 0);
+            if (!Number.isFinite(focusMs)) focusMs = 0;
+            // Fallback for days before focusTime_* persistence existed.
+            if (
+                focusMs <= 0 &&
+                pomo?.lastDate === ds &&
+                (pomo.sessionsCompleted || 0) > 0
+            ) {
+                focusMs = (pomo.sessionsCompleted || 0) * (pomo.focusMin || 25) * 60 * 1000;
+            }
             stats.push({
                 date: ds,
                 total: capDayScreenMs(rawTotal as number, { date: ds }),
                 sites: dayData as Record<string, number>,
+                focusMs,
             });
         });
 
@@ -1009,8 +1022,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Listen for real-time analytics updates
         chrome.storage.onChanged.addListener((changes, namespace) => {
             if (namespace === 'local') {
-                const isScreenTimeUpdate = Object.keys(changes).some(k => k.startsWith('screenTime_'));
-                if (isScreenTimeUpdate) {
+                const isStatsUpdate = Object.keys(changes).some(
+                    (k) => k.startsWith('screenTime_') || k.startsWith('focusTime_'),
+                );
+                if (isStatsUpdate) {
                     void get().refreshStats();
                 }
                 if (changes.habits || changes.engineState) {

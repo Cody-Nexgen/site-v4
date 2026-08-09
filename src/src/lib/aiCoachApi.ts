@@ -81,7 +81,22 @@ export async function streamAiCoachChat(opts: {
     callbacks: StreamCoachCallbacks;
 }): Promise<void> {
     const cfg = getSupabaseConfig();
-    if (!cfg.isConfigured) {
+    const siteUrl =
+        cfg.url ||
+        (typeof window !== 'undefined'
+            ? (window.__FOCUZ_SITE_SUPABASE__ as { supabaseUrl?: string } | undefined)?.supabaseUrl
+            : '') ||
+        (supabase as { supabaseUrl?: string }).supabaseUrl ||
+        '';
+    const siteKey =
+        cfg.anonKey ||
+        (typeof window !== 'undefined'
+            ? (window.__FOCUZ_SITE_SUPABASE__ as { supabaseKey?: string } | undefined)?.supabaseKey
+            : '') ||
+        (supabase as { supabaseKey?: string }).supabaseKey ||
+        '';
+
+    if (!siteUrl || !siteKey) {
         opts.callbacks.onError?.('Supabase is not configured');
         return;
     }
@@ -93,13 +108,13 @@ export async function streamAiCoachChat(opts: {
         return;
     }
 
-    const url = `${cfg.url.replace(/\/$/, '')}/functions/v1/ai-coach-chat`;
+    const url = `${siteUrl.replace(/\/$/, '')}/functions/v1/ai-coach-chat`;
 
     const res = await fetch(url, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
-            apikey: cfg.anonKey,
+            apikey: siteKey,
             'Content-Type': 'application/json',
             Accept: 'text/event-stream',
         },

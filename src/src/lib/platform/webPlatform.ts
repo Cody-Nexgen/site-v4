@@ -577,6 +577,9 @@ export async function hydrateWebStatsFromExtension(): Promise<boolean> {
                     if (data.screenTime && typeof data.screenTime === 'object') {
                         Object.assign(patch, data.screenTime);
                     }
+                    if (data.focusTime && typeof data.focusTime === 'object') {
+                        Object.assign(patch, data.focusTime);
+                    }
                     if (data.pomodoroRuntime) patch.pomodoroRuntimeV1 = data.pomodoroRuntime;
                     if (data.pomodoroSettings) {
                         const existing = getEngineState();
