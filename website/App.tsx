@@ -25,7 +25,7 @@ import {
 } from "@/lib/extension-utils";
 import ExtensionHandoffScreen from "@/components/extension-handoff-screen";
 import { isBillingReturnQuery } from "@/lib/billing-urls";
-import DashboardPage from "@/components/dashboard-page";
+import WebOptionsApp from "@/components/WebOptionsApp";
 import CalendarPage from "@/components/calendar-page";
 import ManageSubscriptionPage from "@/components/manage-subscription";
 import BlockedPage from "@/components/blocked-page";
@@ -433,12 +433,10 @@ function FocuzNowApp() {
   // ---------------------------------------------------------------------------
   if (currentView === "dashboard" && session) {
     return (
-      <DashboardPage
-        session={session}
+      <WebOptionsApp
         onLogout={() => {
           supabase.auth.signOut().then(() => goLanding());
         }}
-        onOpenCalendar={goCalendar}
       />
     );
   }

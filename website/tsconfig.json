@@ -11,7 +11,8 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "chrome"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
@@ -21,6 +22,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@focuz/*": [
+        "../src/src/*"
       ]
     },
     "allowImportingTsExtensions": true,
