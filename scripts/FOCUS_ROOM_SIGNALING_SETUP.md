@@ -56,3 +56,14 @@ curl -I https://signal.focuznow.com
 ```
 
 The app defaults to `wss://signal.focuznow.com`. After DNS + Caddy are live, the website should almost never hit Realtime.
+
+## Deploy server update (peer sync)
+
+Newer `focus-room-signaling-server.mjs` tells **new joiners** about peers already in the room
+(old builds only notified existing peers → late joiners could sit alone forever).
+
+```bash
+# from your machine (with SSH access to the VPS):
+scp scripts/focus-room-signaling-server.mjs focuznow:/opt/focuz-signaling/focus-room-signaling-server.mjs
+ssh focuznow 'systemctl restart focuz-signaling && systemctl is-active focuz-signaling'
+```

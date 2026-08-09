@@ -823,8 +823,17 @@ export function useFocusRoomRtc(
 
             try {
                 if (payload.type === 'offer' && payload.sdp) {
-                    const offerCollision = makingOfferRef.current.has(remoteId) || pc.signalingState !== 'stable';
-                    if (offerCollision && !polite) return;
+                    const offerCollision =
+                        makingOfferRef.current.has(remoteId) || pc.signalingState !== 'stable';
+                    if (offerCollision) {
+                        // Perfect negotiation: impolite keeps its offer; polite rolls back.
+                        if (!polite) return;
+                        try {
+                            await pc.setLocalDescription({ type: 'rollback' });
+                        } catch {
+                            /* some browsers omit rollback — fall through */
+                        }
+                    }
                     await pc.setRemoteDescription(payload.sdp);
                     await flushPendingIce(remoteId, pc);
                     const answer = await pc.createAnswer();
@@ -1004,10 +1013,11 @@ export function useFocusRoomRtc(
                             stream: null,
                         }];
                     });
-                    // Deterministic offerer: only the lexicographically smaller peerId offers.
-                    // Prevents glare when both sides see each other's join at once.
-                    if (peerId > remoteId) return;
+                    // Current WS server only notifies EXISTING peers about joins. Always offer
+                    // when we learn about someone; polite peer (larger id) rolls back on glare.
+                    if (pcMapRef.current.has(remoteId)) return;
                     const pc = createPeerConnection(remoteId, true);
+                    politeRef.current.set(remoteId, peerId > remoteId);
                     void (async () => {
                         makingOfferRef.current.add(remoteId);
                         try {
