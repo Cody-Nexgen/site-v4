@@ -163,31 +163,40 @@ function senderForKind(pc: RTCPeerConnection, kind: 'audio' | 'video'): RTCRtpSe
     return transceiver?.sender ?? null;
 }
 
+function liveTrack(stream: MediaStream | null, kind: 'audio' | 'video'): MediaStreamTrack | null {
+    return stream?.getTracks().find((track) => track.kind === kind && track.readyState === 'live') ?? null;
+}
+
+function isLiveStream(stream: MediaStream | null): stream is MediaStream {
+    return !!stream?.getTracks().some((track) => track.readyState === 'live');
+}
+
 async function attachLocalTracks(pc: RTCPeerConnection, stream: MediaStream | null) {
     if (!stream) return;
-    const audio = stream.getAudioTracks()[0] ?? null;
-    const video = stream.getVideoTracks()[0] ?? null;
+    const audio = liveTrack(stream, 'audio');
+    const video = liveTrack(stream, 'video');
     const audioSender = senderForKind(pc, 'audio');
     const videoSender = senderForKind(pc, 'video');
     if (audioSender) await audioSender.replaceTrack(audio);
     else if (audio) pc.addTrack(audio, stream);
+    // Always drive the video sender — null clears send when camera is off.
     if (videoSender) await videoSender.replaceTrack(video);
     else if (video) pc.addTrack(video, stream);
 }
 
 function waitForLocalStream(
     getStream: () => MediaStream | null,
-    timeoutMs = 2000,
+    timeoutMs = 2500,
 ): Promise<MediaStream | null> {
     const existing = getStream();
-    if (existing) return Promise.resolve(existing);
+    if (isLiveStream(existing)) return Promise.resolve(existing);
     return new Promise((resolve) => {
         const started = Date.now();
         const timer = window.setInterval(() => {
             const stream = getStream();
-            if (stream || Date.now() - started >= timeoutMs) {
+            if (isLiveStream(stream) || Date.now() - started >= timeoutMs) {
                 window.clearInterval(timer);
-                resolve(stream);
+                resolve(isLiveStream(stream) ? stream : null);
             }
         }, 100);
     });
@@ -743,7 +752,16 @@ export function useFocusRoomRtc(
             // instead of adding a brand-new transceiver (which often never reaches the peer).
             pc.addTransceiver('audio', { direction: 'sendrecv' });
             pc.addTransceiver('video', { direction: 'sendrecv' });
-            void attachLocalTracks(pc, localStreamRef.current);
+            // Attach synchronously when tracks are already live (host lobby camera → create room).
+            const existing = localStreamRef.current;
+            if (isLiveStream(existing)) {
+                const audio = liveTrack(existing, 'audio');
+                const video = liveTrack(existing, 'video');
+                const audioSender = senderForKind(pc, 'audio');
+                const videoSender = senderForKind(pc, 'video');
+                if (audioSender && audio) void audioSender.replaceTrack(audio);
+                if (videoSender) void videoSender.replaceTrack(video);
+            }
 
             if (initiator) {
                 const dc = pc.createDataChannel('focuz-chat');
@@ -922,6 +940,10 @@ export function useFocusRoomRtc(
                             /* some browsers omit rollback — fall through */
                         }
                     }
+                    // Host who already had camera on must attach BEFORE answering, or the
+                    // remote never receives frames (replaceTrack after answer is flaky).
+                    const local = await waitForLocalStream(() => localStreamRef.current, 2500);
+                    if (local) await attachLocalTracks(pc, local);
                     await pc.setRemoteDescription(payload.sdp);
                     await flushPendingIce(remoteId, pc);
                     const answer = await pc.createAnswer();
@@ -966,35 +988,19 @@ export function useFocusRoomRtc(
         previewOnly?: boolean;
     }) => {
         const prefs = prefsRef.current;
-        try {
-            localStreamRef.current?.getTracks().forEach((t) => t.stop());
-            const audioConstraints: MediaTrackConstraints = {
-                deviceId: (opts?.micId || selectedMicId)
-                    ? { exact: opts?.micId || selectedMicId }
-                    : undefined,
-                noiseSuppression: prefs?.noiseSuppression ?? true,
-                echoCancellation: prefs?.echoCancellation ?? true,
-                autoGainControl: prefs?.autoGainControl ?? true,
-            };
-            const videoWanted = opts?.withVideo ?? camOn;
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: audioConstraints,
-                video: videoWanted
-                    ? {
-                          deviceId: (opts?.cameraId || selectedCameraId)
-                              ? { exact: opts?.cameraId || selectedCameraId }
-                              : undefined,
-                          width: { ideal: 1280 },
-                          height: { ideal: 720 },
-                      }
-                    : false,
-            });
-            localStreamRef.current = stream;
-            setLocalStream(stream);
-            setPermissionState('granted');
-            setPreviewReady(true);
-            setRtcError('');
+        const videoWanted = opts?.withVideo ?? camOn;
+        const deviceMic = opts?.micId || selectedMicId;
+        const deviceCam = opts?.cameraId || selectedCameraId;
 
+        const pushTracksToPeers = async (stream: MediaStream) => {
+            if (opts?.previewOnly) return;
+            for (const [remoteId, pc] of pcMapRef.current.entries()) {
+                await attachLocalTracks(pc, stream);
+                void renegotiate(remoteId);
+            }
+        };
+
+        const wireAnalyser = async (stream: MediaStream) => {
             if (audioCtxRef.current?.state !== 'closed') {
                 void audioCtxRef.current?.close();
             }
@@ -1013,22 +1019,67 @@ export function useFocusRoomRtc(
                 analyserRef.current.getByteFrequencyData(buf);
                 const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
                 const next = micOn ? Math.min(1, avg / 90) : 0;
-                // Quantize so we don't re-render the whole tree at 60fps.
                 setMicLevel((prev) => (Math.abs(prev - next) > 0.05 || (next === 0 && prev !== 0) ? next : prev));
                 rafRef.current = requestAnimationFrame(loop);
             };
             cancelAnimationFrame(rafRef.current);
             rafRef.current = requestAnimationFrame(loop);
+        };
 
-            await refreshDevices();
+        try {
+            const current = localStreamRef.current;
+            const liveAudio = liveTrack(current, 'audio');
+            const liveVideo = liveTrack(current, 'video');
 
-            if (!opts?.previewOnly) {
-                for (const [remoteId, pc] of pcMapRef.current.entries()) {
-                    await attachLocalTracks(pc, stream);
-                    // Either side may need to re-offer after camera/mic changes.
-                    void renegotiate(remoteId);
+            // Reuse lobby/preview tracks when joining a room so the host's already-on
+            // camera is not stopped mid-handshake (that left peers with a black tile).
+            const canReuseAudio = !!liveAudio && !deviceMic;
+            const canReuseVideo = videoWanted ? !!liveVideo && !deviceCam : !liveVideo;
+            if (current && canReuseAudio && (videoWanted ? canReuseVideo : true)) {
+                if (!videoWanted && liveVideo) {
+                    liveVideo.stop();
+                    current.removeTrack(liveVideo);
                 }
+                localStreamRef.current = current;
+                setLocalStream(current);
+                setPermissionState('granted');
+                setPreviewReady(true);
+                setRtcError('');
+                await wireAnalyser(current);
+                await refreshDevices();
+                await pushTracksToPeers(current);
+                return;
             }
+
+            // Clear ref before stop so waiters never attach ended tracks.
+            localStreamRef.current = null;
+            current?.getTracks().forEach((t) => t.stop());
+
+            const audioConstraints: MediaTrackConstraints = {
+                deviceId: deviceMic ? { exact: deviceMic } : undefined,
+                noiseSuppression: prefs?.noiseSuppression ?? true,
+                echoCancellation: prefs?.echoCancellation ?? true,
+                autoGainControl: prefs?.autoGainControl ?? true,
+            };
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: audioConstraints,
+                video: videoWanted
+                    ? {
+                          deviceId: deviceCam ? { exact: deviceCam } : undefined,
+                          width: { ideal: 1280 },
+                          height: { ideal: 720 },
+                      }
+                    : false,
+            });
+            localStreamRef.current = stream;
+            setLocalStream(stream);
+            setPermissionState('granted');
+            setPreviewReady(true);
+            setRtcError('');
+
+            await wireAnalyser(stream);
+            await refreshDevices();
+            await pushTracksToPeers(stream);
         } catch {
             setPermissionState('denied');
             setRtcError('Microphone/camera permission denied');
