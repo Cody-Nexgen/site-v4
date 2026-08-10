@@ -753,10 +753,10 @@ export function useFocusRoomRtc(
             pc.addTransceiver('audio', { direction: 'sendrecv' });
             pc.addTransceiver('video', { direction: 'sendrecv' });
             // Attach synchronously when tracks are already live (host lobby camera → create room).
-            const existing = localStreamRef.current;
-            if (isLiveStream(existing)) {
-                const audio = liveTrack(existing, 'audio');
-                const video = liveTrack(existing, 'video');
+            const localMedia = localStreamRef.current;
+            if (isLiveStream(localMedia)) {
+                const audio = liveTrack(localMedia, 'audio');
+                const video = liveTrack(localMedia, 'video');
                 const audioSender = senderForKind(pc, 'audio');
                 const videoSender = senderForKind(pc, 'video');
                 if (audioSender && audio) void audioSender.replaceTrack(audio);
