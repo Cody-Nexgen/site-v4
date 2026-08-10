@@ -156,6 +156,43 @@ const ICE_SERVERS: RTCIceServer[] = [
     },
 ];
 
+function senderForKind(pc: RTCPeerConnection, kind: 'audio' | 'video'): RTCRtpSender | null {
+    const byLiveTrack = pc.getSenders().find((sender) => sender.track?.kind === kind);
+    if (byLiveTrack) return byLiveTrack;
+    const transceiver = pc.getTransceivers().find((entry) => entry.receiver.track?.kind === kind);
+    return transceiver?.sender ?? null;
+}
+
+async function attachLocalTracks(pc: RTCPeerConnection, stream: MediaStream | null) {
+    if (!stream) return;
+    const audio = stream.getAudioTracks()[0] ?? null;
+    const video = stream.getVideoTracks()[0] ?? null;
+    const audioSender = senderForKind(pc, 'audio');
+    const videoSender = senderForKind(pc, 'video');
+    if (audioSender) await audioSender.replaceTrack(audio);
+    else if (audio) pc.addTrack(audio, stream);
+    if (videoSender) await videoSender.replaceTrack(video);
+    else if (video) pc.addTrack(video, stream);
+}
+
+function waitForLocalStream(
+    getStream: () => MediaStream | null,
+    timeoutMs = 2000,
+): Promise<MediaStream | null> {
+    const existing = getStream();
+    if (existing) return Promise.resolve(existing);
+    return new Promise((resolve) => {
+        const started = Date.now();
+        const timer = window.setInterval(() => {
+            const stream = getStream();
+            if (stream || Date.now() - started >= timeoutMs) {
+                window.clearInterval(timer);
+                resolve(stream);
+            }
+        }, 100);
+    });
+}
+
 async function resolveFocusRoomWsUrl(): Promise<string> {
     const candidates: string[] = [];
 
@@ -702,10 +739,11 @@ export function useFocusRoomRtc(
             politeRef.current.set(remoteId, !initiator);
 
             const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-            const stream = localStreamRef.current;
-            if (stream) {
-                stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-            }
+            // Always reserve A/V m-lines so turning the camera on later can replaceTrack
+            // instead of adding a brand-new transceiver (which often never reaches the peer).
+            pc.addTransceiver('audio', { direction: 'sendrecv' });
+            pc.addTransceiver('video', { direction: 'sendrecv' });
+            void attachLocalTracks(pc, localStreamRef.current);
 
             if (initiator) {
                 const dc = pc.createDataChannel('focuz-chat');
@@ -739,7 +777,7 @@ export function useFocusRoomRtc(
                             }
                         }
                     }
-                    ev.track.onunmute = () => {
+                    const bumpStream = () => {
                         setPeers((current) =>
                             current.map((p) =>
                                 p.peerId === remoteId && p.stream
@@ -748,6 +786,9 @@ export function useFocusRoomRtc(
                             ),
                         );
                     };
+                    ev.track.onunmute = bumpStream;
+                    ev.track.onmute = bumpStream;
+                    ev.track.onended = bumpStream;
                     if (hit) {
                         return prev.map((p) =>
                             p.peerId === remoteId ? { ...p, stream: new MediaStream(stream.getTracks()) } : p,
@@ -983,21 +1024,8 @@ export function useFocusRoomRtc(
 
             if (!opts?.previewOnly) {
                 for (const [remoteId, pc] of pcMapRef.current.entries()) {
-                    const audioTrack = stream.getAudioTracks()[0] ?? null;
-                    const videoTrack = stream.getVideoTracks()[0] ?? null;
-
-                    const audioSender = pc.getSenders().find((s) => s.track?.kind === 'audio');
-                    if (audioSender) void audioSender.replaceTrack(audioTrack);
-                    else if (audioTrack) pc.addTrack(audioTrack, stream);
-
-                    const videoSender = pc.getSenders().find((s) => s.track?.kind === 'video');
-                    if (videoSender) {
-                        // null clears remote video so tiles fall back to the mesh avatar
-                        void videoSender.replaceTrack(videoTrack);
-                    } else if (videoTrack) {
-                        pc.addTrack(videoTrack, stream);
-                    }
-
+                    await attachLocalTracks(pc, stream);
+                    // Either side may need to re-offer after camera/mic changes.
                     void renegotiate(remoteId);
                 }
             }
@@ -1072,6 +1100,9 @@ export function useFocusRoomRtc(
                     const pc = createPeerConnectionRef.current(remoteId, shouldOffer);
                     if (!shouldOffer) return;
                     void (async () => {
+                        // Prefer including mic/cam in the first offer so the remote actually gets video.
+                        const local = await waitForLocalStream(() => localStreamRef.current, 2500);
+                        if (local) await attachLocalTracks(pc, local);
                         makingOfferRef.current.add(remoteId);
                         try {
                             const offer = await pc.createOffer();

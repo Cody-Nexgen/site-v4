@@ -204,9 +204,12 @@ function ParticipantTile({
 }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
+    // Remote tracks often arrive muted (black frames) until RTP starts — treat those as "no video".
     const hasVideo =
         camOn &&
-        (stream?.getVideoTracks().some((t) => t.enabled && t.readyState === 'live') ?? false);
+        (stream?.getVideoTracks().some(
+            (t) => t.enabled && t.readyState === 'live' && (isLocal || !t.muted),
+        ) ?? false);
     const showMutedBadge = mutedByHost || micOn === false;
 
     useEffect(() => {
@@ -988,7 +991,10 @@ export default function FocusRoomView({ onBack, embedded = false }: Props) {
                                     p.isLocal
                                         ? rtc.camOn
                                         : !!p.stream?.getVideoTracks().some(
-                                              (t) => t.enabled && t.readyState === 'live',
+                                              (t) =>
+                                                  t.enabled &&
+                                                  t.readyState === 'live' &&
+                                                  !t.muted,
                                           )
                                 }
                                 speakerId={rtc.selectedSpeakerId}

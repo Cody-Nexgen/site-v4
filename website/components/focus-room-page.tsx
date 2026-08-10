@@ -176,9 +176,18 @@ function DeviceToggleButton({
 function ParticipantTile({ peer, speakerId }: { peer: RoomPeer; speakerId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const hasVideo = peer.stream?.getVideoTracks().some((track) => track.enabled) ?? false;
+  const hasVideo =
+    peer.stream?.getVideoTracks().some(
+      (track) =>
+        track.enabled &&
+        track.readyState === "live" &&
+        (peer.isLocal || !track.muted),
+    ) ?? false;
   useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = hasVideo ? peer.stream : null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = hasVideo ? peer.stream : null;
+      if (hasVideo) void videoRef.current.play().catch(() => {});
+    }
     if (!peer.isLocal && audioRef.current) {
       audioRef.current.srcObject = peer.stream;
       if (speakerId && "setSinkId" in audioRef.current) {
