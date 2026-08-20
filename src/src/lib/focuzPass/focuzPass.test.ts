@@ -18,6 +18,7 @@ import {
     assertNoPlaintextSecrets,
 } from './vaultCore';
 import { PRIMARY_NAV } from '../workspaceNav';
+import { isExtensionHelperTab, shouldOpenTabOnWeb } from '../workspaceSync';
 
 test('FocuzPass crypto round-trips AES-256-GCM plaintext', async () => {
     const salt = randomBytes(16);
@@ -176,6 +177,12 @@ test('FocuzPass vault locks after absolute maximum unlock window', async () => {
 test('FocuzPass navigation keeps tab under Dashboard', () => {
     assert.deepEqual(PRIMARY_NAV.map((tab) => tab.id), ['overview', 'focuzpass']);
     assert.equal(PRIMARY_NAV[1]?.label, 'FocuzPass');
+});
+
+test('FocuzPass stays in the extension instead of opening /app', () => {
+    // Membership in EXTENSION_HELPER_TABS is what OptionsApp checks via shouldOpenTabOnWeb.
+    assert.equal(isExtensionHelperTab('focuzpass'), true);
+    assert.equal(shouldOpenTabOnWeb('focuzpass'), false);
 });
 
 test('FocuzPass website companion contract is local-first', () => {

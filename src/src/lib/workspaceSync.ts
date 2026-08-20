@@ -66,13 +66,15 @@ export const SETUP_STORAGE_KEY = 'focuznow-setup-v1';
 export const SIDEBAR_COLLAPSED_KEY = 'focuznow-sidebar-collapsed-v1';
 
 /**
- * Tabs that stay in the extension helper (blocking / live session tools).
- * Everything else opens on the web dashboard when running inside Chrome.
+ * Tabs that stay in the extension helper (blocking / live session tools /
+ * local-only surfaces like FocuzPass). Everything else opens on the web
+ * dashboard when running inside Chrome.
  */
 export const EXTENSION_HELPER_TABS = new Set([
     'blocklist',
     'sessions',
     'statistics',
+    'focuzpass',
 ]);
 
 /** @deprecated use EXTENSION_HELPER_TABS — kept for OptionsApp imports */
