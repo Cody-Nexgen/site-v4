@@ -96,11 +96,12 @@ const coverModules = import.meta.glob('../assets/shop/*.{webp,png,jpg,jpeg}', {
 }) as Record<string, string>;
 
 export function shopCoverUrl(itemId: string): string | undefined {
-    const match = Object.entries(coverModules).find(([path]) => {
-        const file = path.split('/').pop() ?? '';
-        return file === `${itemId}.webp` || file === `${itemId}.png` || file === `${itemId}.jpg` || file === `${itemId}.jpeg`;
-    });
-    return match?.[1];
+    const preferred = [`${itemId}.webp`, `${itemId}.png`, `${itemId}.jpg`, `${itemId}.jpeg`];
+    for (const file of preferred) {
+        const match = Object.entries(coverModules).find(([path]) => (path.split('/').pop() ?? '') === file);
+        if (match) return match[1];
+    }
+    return undefined;
 }
 
 export function getShopItem(id: string): ShopItem | undefined {
