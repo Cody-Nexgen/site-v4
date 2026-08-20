@@ -1,8 +1,8 @@
 /** Mirror of extension focusShop badge marks for the website. */
 export function badgeMark(itemId: string | undefined): string | undefined {
   const map: Record<string, string> = {
-    badge_laser: "LASER",
-    badge_shield: "SHIELD",
+    badge_laser: "VECTOR",
+    badge_shield: "AEGIS",
     badge_sprout: "SPROUT",
   };
   return itemId ? map[itemId] : undefined;
