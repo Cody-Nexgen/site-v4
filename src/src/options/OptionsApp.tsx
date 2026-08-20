@@ -30,7 +30,6 @@ import {
 } from 'lucide-react';
 import AiCoachGate from '../components/AiCoachGate';
 import ForestTab from './ForestTab';
-import FocusRoomView from '../components/FocusRoomView';
 import SmartYouTubeModal from '../components/SmartYouTubeModal';
 import { normalizeSmartYouTube } from '../lib/youtubeSmartMode';
 import { FeaturePreview } from '../components/FeaturePreview';
@@ -2669,7 +2668,6 @@ const OptionsApp = () => {
             case 'patterns': return <PatternsTab />;
             case 'shop': return <FocusShopTab />;
             case 'friends': return <FriendsTab />;
-            case 'focus_rooms': return <FocusRoomView onBack={() => navigateTab('overview')} embedded />;
             case 'ai_coach': return (
                 <AiCoachGate
                     onBack={() => navigateTab('overview')}
@@ -2769,13 +2767,13 @@ const OptionsApp = () => {
                     </div>
                 </header>
 
-                <div className={['calendar', 'lists', 'ai_coach', 'focus_rooms'].includes(activeTab)
+                <div className={['calendar', 'lists', 'ai_coach'].includes(activeTab)
                     ? 'flex-1 min-h-0 w-full overflow-hidden'
                     : 'px-6 pb-12 w-full overflow-y-auto scrollbar-hide'}
                 >
                     <div
                         key={activeTab}
-                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${['calendar', 'lists', 'ai_coach', 'focus_rooms'].includes(activeTab) ? 'h-full' : ''}`}
+                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${['calendar', 'lists', 'ai_coach'].includes(activeTab) ? 'h-full' : ''}`}
                     >
                         {renderContent()}
                     </div>

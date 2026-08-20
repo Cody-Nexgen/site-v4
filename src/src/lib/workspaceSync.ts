@@ -91,7 +91,6 @@ export const WEB_MANAGEMENT_TABS = new Set([
     'forest',
     'ai_patterns',
     'patterns',
-    'focus_rooms',
     'ai_coach',
     'support',
 ]);

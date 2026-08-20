@@ -9,7 +9,6 @@ import {
     LayoutDashboard,
     ListTodo,
     LogOut,
-    Mic2,
     Moon,
     PanelLeftClose,
     Search,
@@ -62,7 +61,6 @@ const ICONS: Record<string, ReactNode> = {
     challenges: <Zap size={14} />,
     forest: <Trees size={14} />,
     friends: <Users size={14} />,
-    focus_rooms: <Mic2 size={14} />,
 };
 
 const STORAGE_KEY = 'focuznow-sidebar-sections-v1';

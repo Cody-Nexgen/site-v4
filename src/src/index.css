@@ -1830,19 +1830,19 @@ html[data-theme="custom"] .pro-avatar-ring > * {
 /* Focus Shop cosmetic frames */
 .focus-frame-gold,
 .focus-equipped-frame-gold {
-  box-shadow: 0 0 0 2px #d4af37, 0 0 16px rgba(212, 175, 55, 0.35);
+  box-shadow: 0 0 0 1.5px #c4a35a;
 }
 
 .focus-frame-neon,
 .focus-equipped-frame-neon {
-  box-shadow: 0 0 0 2px #a855f7, 0 0 20px rgba(168, 85, 247, 0.45);
+  box-shadow: 0 0 0 1.5px #6ec8c4, 0 0 12px rgba(110, 200, 196, 0.28);
 }
 
 .focus-frame-minimal,
 .focus-equipped-frame-minimal {
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
 .focus-widget-glow {
-  filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.5));
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.22));
 }

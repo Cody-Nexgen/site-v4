@@ -45,23 +45,6 @@ export type LeaderboardEntry = {
     isMe: boolean;
 };
 
-export type FocusRoomMember = {
-    username: string;
-    displayName: string;
-    avatarUrl: string | null;
-};
-
-export type FocusRoom = {
-    id: string;
-    hostId?: string;
-    title: string;
-    durationMin: number;
-    startedAt: string;
-    endsAt: string;
-    participantCount: number;
-    members: FocusRoomMember[];
-};
-
 export async function sendFriendRequest(
     supabase: SupabaseClient,
     username: string,
@@ -139,67 +122,6 @@ export async function heartbeatFocusSession(
         p_ends_at: opts.endsAt ?? null,
         p_focus_minutes_delta: opts.focusMinutesDelta ?? 0,
     });
-}
-
-export async function createFocusRoom(
-    supabase: SupabaseClient,
-    title: string,
-    durationMin: number,
-    tokens?: { access_token: string; refresh_token: string } | null,
-): Promise<{ ok: boolean; roomId?: string; endsAt?: string; error?: string }> {
-    const auth = await attachSupabaseSession(supabase, tokens);
-    if (!auth.ok) return { ok: false, error: 'NOT_AUTHENTICATED' };
-    const { data, error } = await supabase.rpc('create_focus_room', {
-        p_title: title,
-        p_duration_min: durationMin,
-    });
-    if (error) return { ok: false, error: error.message };
-    const row = data as { ok?: boolean; room_id?: string; ends_at?: string; error?: string } | null;
-    if (!row?.ok) return { ok: false, error: row?.error ?? 'CREATE_FAILED' };
-    return { ok: true, roomId: row.room_id, endsAt: row.ends_at };
-}
-
-export async function joinFocusRoom(
-    supabase: SupabaseClient,
-    roomId: string,
-    tokens?: { access_token: string; refresh_token: string } | null,
-): Promise<{ ok: boolean; error?: string }> {
-    const auth = await attachSupabaseSession(supabase, tokens);
-    if (!auth.ok) return { ok: false, error: 'NOT_AUTHENTICATED' };
-    const { data, error } = await supabase.rpc('join_focus_room', { p_room_id: roomId });
-    if (error) return { ok: false, error: error.message };
-    const row = data as { ok?: boolean; error?: string } | null;
-    return row?.ok ? { ok: true } : { ok: false, error: row?.error ?? 'JOIN_FAILED' };
-}
-
-export async function leaveFocusRoom(
-    supabase: SupabaseClient,
-    roomId: string,
-    tokens?: { access_token: string; refresh_token: string } | null,
-): Promise<{ ok: boolean; error?: string }> {
-    const auth = await attachSupabaseSession(supabase, tokens);
-    if (!auth.ok) return { ok: false, error: 'NOT_AUTHENTICATED' };
-    const { data, error } = await supabase.rpc('leave_focus_room', { p_room_id: roomId });
-    if (error) return { ok: false, error: error.message };
-    const row = data as { ok?: boolean; error?: string } | null;
-    return row?.ok ? { ok: true } : { ok: false, error: row?.error ?? 'LEAVE_FAILED' };
-}
-
-export async function getFocusRoom(
-    supabase: SupabaseClient,
-    roomId: string,
-): Promise<{ ok: boolean; room?: FocusRoom; error?: string }> {
-    const { data, error } = await supabase.rpc('get_focus_room', { p_room_id: roomId });
-    if (error) return { ok: false, error: error.message };
-    const row = data as { ok?: boolean; room?: FocusRoom; error?: string } | null;
-    if (!row?.ok || !row.room) return { ok: false, error: row?.error ?? 'ROOM_NOT_FOUND' };
-    return { ok: true, room: row.room };
-}
-
-export const FOCUS_ROOM_STORAGE_KEY = 'focuznow_active_focus_room';
-
-export function focusRoomUrl(roomId: string): string {
-    return `https://focuznow.com/room/${roomId}`;
 }
 
 export const AUTO_SCHEDULE_COACH_PROMPT = `Analyze my daily goal, planner tasks, habits, calendar events, and recent focus patterns. Build an optimal deep work schedule for today with realistic time blocks.

@@ -55,7 +55,6 @@ export const COLLAPSIBLE_NAV: NavSection[] = [
         label: 'Social',
         tabs: [
             { id: 'friends', label: 'Friends' },
-            { id: 'focus_rooms', label: 'Focus Rooms' },
         ],
     },
 ];
@@ -88,6 +87,7 @@ export const TAB_ALIASES: Record<string, string> = {
     tasks: 'calendar',
     gamification: 'progress',
     pomodoro: 'sessions',
+    focus_rooms: 'friends',
 };
 
 export function resolveTabId(tab: string | null | undefined): string {

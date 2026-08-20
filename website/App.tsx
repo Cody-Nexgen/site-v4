@@ -32,8 +32,7 @@ import BlockedPage from "@/components/blocked-page";
 import OnboardingModal from "@/components/onboarding-modal";
 import ScheduleBookingPage from "@/components/schedule-booking-page";
 import PublicProfilePage from "@/components/public-profile-page";
-import FocusRoomPage from "@/components/focus-room-page";
-import { isScheduleRoute, getPublicProfileUsername, isPublicProfileRoute, isFocusRoomRoute, getFocusRoomId } from "@/lib/routing";
+import { isScheduleRoute, getPublicProfileUsername, isPublicProfileRoute } from "@/lib/routing";
 import { clearAuthErrorFromUrl } from "@/lib/auth-providers";
 import { isBetaTesterSite } from "@/lib/site-mode";
 import BetaApp from "@/components/beta/beta-app";
@@ -53,7 +52,6 @@ function FocuzNowApp() {
     | "notion-auth"
     | "schedule"
     | "public_profile"
-    | "focus_room"
   >("landing");
   const [session, setSession] = useState<any>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -122,7 +120,6 @@ function FocuzNowApp() {
       const isResetPasswordPath = path === "/reset-password";
       const isNotionAuth = path === "/notion-auth" || viewQuery === "notion-auth";
       const isSchedulePath = /^\/schedule\/[^/]+/.test(path);
-      const isFocusRoomPath = /^\/room\/[^/]+/.test(path);
       const publicProfileUser = getPublicProfileUsername();
 
       if (isForgotPasswordPath) {
@@ -145,12 +142,6 @@ function FocuzNowApp() {
 
       if (isSchedulePath) {
         setCurrentView("schedule");
-        setLoading(false);
-        return;
-      }
-
-      if (isFocusRoomPath) {
-        setCurrentView("focus_room");
         setLoading(false);
         return;
       }
@@ -186,7 +177,6 @@ function FocuzNowApp() {
 
         if (
           !isSchedulePath &&
-          !isFocusRoomPath &&
           !billingReturn &&
           beginExtensionHandoff()
         ) {
@@ -236,17 +226,14 @@ function FocuzNowApp() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (session && !isScheduleRoute() && !isFocusRoomRoute()) {
+      if (session && !isScheduleRoute()) {
         syncSessionWithExtension(session);
       }
-      if (event === "SIGNED_IN" && session && !isScheduleRoute() && !isFocusRoomRoute()) {
+      if (event === "SIGNED_IN" && session && !isScheduleRoute()) {
         beginExtensionHandoff();
       }
       if (isScheduleRoute()) {
         setCurrentView("schedule");
-        setLoading(false);
-      } else if (isFocusRoomRoute()) {
-        setCurrentView("focus_room");
         setLoading(false);
       } else if (isPublicProfileRoute()) {
         setCurrentView("public_profile");
@@ -376,11 +363,6 @@ function FocuzNowApp() {
 
   if (currentView === "schedule") {
     return <ScheduleBookingPage />;
-  }
-
-  if (currentView === "focus_room") {
-    const roomId = getFocusRoomId();
-    if (roomId) return <FocusRoomPage roomId={roomId} />;
   }
 
   if (currentView === "public_profile") {

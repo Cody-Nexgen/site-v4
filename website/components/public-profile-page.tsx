@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { ExternalLink, Flame, Target, Trophy, Clock } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { badgeEmoji } from "@/lib/focus-shop";
+import { badgeMark } from "@/lib/focus-shop";
 
 type PublicStats = {
   level: number;
@@ -128,8 +128,8 @@ export default function PublicProfilePage({ username }: { username: string }) {
                     Lv {stats.level} · {stats.rank}
                   </span>
                   {stats.equippedBadge && (
-                    <span className="text-xl" title="Badge">
-                      {badgeEmoji(stats.equippedBadge)}
+                    <span className="px-2 py-1 rounded border border-white/15 text-[10px] font-semibold tracking-[0.16em] text-neutral-300">
+                      {badgeMark(stats.equippedBadge)}
                     </span>
                   )}
                 </div>

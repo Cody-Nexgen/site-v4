@@ -17,7 +17,6 @@ import {
     Trophy,
     User,
     Users,
-    Mic2,
     ShoppingBag,
 } from 'lucide-react';
 import { isDevModeEnabled, toggleDevMode } from '../lib/devMode';
@@ -45,7 +44,6 @@ const NAV_ICONS: Record<string, typeof LayoutGrid> = {
     forest: Trees,
     shop: ShoppingBag,
     friends: Users,
-    focus_rooms: Mic2,
     statistics: BarChart3,
     ai_coach: Sparkles,
     patterns: BarChart3,

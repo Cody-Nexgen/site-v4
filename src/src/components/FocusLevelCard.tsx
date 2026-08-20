@@ -1,6 +1,6 @@
 import { getLevelProgress, FOCUS_RANKS, milestoneLabel } from '../lib/focusProgression';
 import type { FocusProgressionState } from '../lib/focusProgression';
-import { badgeEmoji } from '../lib/focusShop';
+import { badgeMark } from '../lib/focusShop';
 
 type Props = {
     progression: FocusProgressionState;
@@ -73,11 +73,14 @@ export function FocusLevelCard({ progression, compact = false, className = '' }:
                 </div>
                 <div className="text-right">
                     <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">Coins</p>
-                    <p className="text-2xl font-semibold text-amber-400 tabular-nums mt-1">{progression.coins}</p>
+                    <p className="text-2xl font-semibold text-neutral-100 tabular-nums mt-1">{progression.coins}</p>
                     <p className="text-[10px] text-neutral-500 mt-1 max-w-[8rem]">Earned from sessions &amp; habits</p>
                     {progression.equippedCosmetics.badge && (
-                        <span className="text-lg" title="Equipped badge">
-                            {badgeEmoji(progression.equippedCosmetics.badge)}
+                        <span
+                            className="mt-2 inline-block text-[10px] font-semibold tracking-[0.16em] text-neutral-400 border border-white/[0.1] rounded px-1.5 py-0.5"
+                            title="Equipped badge"
+                        >
+                            {badgeMark(progression.equippedCosmetics.badge)}
                         </span>
                     )}
                 </div>
