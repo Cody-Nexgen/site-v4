@@ -5,6 +5,7 @@ import {
     SHOP_ITEMS,
     SHOP_TYPE_LABELS,
     getShopItem,
+    shopCoverUrl,
     type ShopItem,
     type ShopItemType,
 } from '../lib/focusShop';
@@ -86,6 +87,20 @@ function WidgetPreview({ item }: { item: ShopItem }) {
 }
 
 function ProductPreview({ item, level }: { item: ShopItem; level: number }) {
+    const cover = shopCoverUrl(item.id);
+    if (cover) {
+        return (
+            <div className="relative min-h-[11rem] overflow-hidden bg-[#0a0a0b]">
+                <img
+                    src={cover}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    draggable={false}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10" />
+            </div>
+        );
+    }
     if (item.type === 'frame') return <FramePreview item={item} level={level} />;
     if (item.type === 'badge') return <BadgePreview item={item} />;
     return <WidgetPreview item={item} />;

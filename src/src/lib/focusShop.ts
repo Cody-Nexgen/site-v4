@@ -9,7 +9,7 @@ export type ShopItem = {
     /** Short profile mark (badges) or catalog label. */
     mark: string;
     cssClass?: string;
-    /** Hex used for preview swatches only. */
+    /** Hex used for preview swatches / fallback art. */
     swatch: string;
 };
 
@@ -88,6 +88,20 @@ export const SHOP_ITEMS: ShopItem[] = [
         swatch: '#f2f2f4',
     },
 ];
+
+/** Drop generated covers here as `{id}.webp` (or .png). Vite picks them up automatically. */
+const coverModules = import.meta.glob('../assets/shop/*.{webp,png,jpg,jpeg}', {
+    eager: true,
+    import: 'default',
+}) as Record<string, string>;
+
+export function shopCoverUrl(itemId: string): string | undefined {
+    const match = Object.entries(coverModules).find(([path]) => {
+        const file = path.split('/').pop() ?? '';
+        return file === `${itemId}.webp` || file === `${itemId}.png` || file === `${itemId}.jpg` || file === `${itemId}.jpeg`;
+    });
+    return match?.[1];
+}
 
 export function getShopItem(id: string): ShopItem | undefined {
     return SHOP_ITEMS.find((item) => item.id === id);
