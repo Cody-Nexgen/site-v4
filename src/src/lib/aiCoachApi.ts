@@ -84,16 +84,16 @@ export async function streamAiCoachChat(opts: {
     const siteUrl =
         cfg.url ||
         (typeof window !== 'undefined'
-            ? (window.__FOCUZ_SITE_SUPABASE__ as { supabaseUrl?: string } | undefined)?.supabaseUrl
+            ? (window.__FOCUZ_SITE_SUPABASE__ as unknown as { supabaseUrl?: string } | undefined)?.supabaseUrl
             : '') ||
-        (supabase as { supabaseUrl?: string }).supabaseUrl ||
+        (supabase as unknown as { supabaseUrl?: string }).supabaseUrl ||
         '';
     const siteKey =
         cfg.anonKey ||
         (typeof window !== 'undefined'
-            ? (window.__FOCUZ_SITE_SUPABASE__ as { supabaseKey?: string } | undefined)?.supabaseKey
+            ? (window.__FOCUZ_SITE_SUPABASE__ as unknown as { supabaseKey?: string } | undefined)?.supabaseKey
             : '') ||
-        (supabase as { supabaseKey?: string }).supabaseKey ||
+        (supabase as unknown as { supabaseKey?: string }).supabaseKey ||
         '';
 
     if (!siteUrl || !siteKey) {

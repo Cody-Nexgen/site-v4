@@ -155,6 +155,10 @@ export default function DashboardPage({ session, onLogout, onOpenCalendar }: Das
                 title="Site blocking & Pomodoro timer"
                 description="Blocking, distraction redirects, and the Pomodoro timer run in your browser via the FocuzNow extension."
               />
+              <InstallExtensionCard
+                title="FocuzPass encrypted vault"
+                description="Passwords and cards stay on-device in the extension — AES-256-GCM encrypted, never synced to the website or Supabase."
+              />
             </div>
           </div>
         );

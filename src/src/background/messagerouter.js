@@ -4,6 +4,7 @@
 // ===============================================
 
 import { supabase } from '../lib/supabase';
+import { handleFocuzPassMessage, isFocuzPassMessage } from './focuzPassBridge';
 import {
     blockDomainManual,
     unblockDomainManual,
@@ -304,6 +305,10 @@ export function initMessageRouter() {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         (async () => {
             try {
+                if (isFocuzPassMessage(msg?.type)) {
+                    sendResponse(await handleFocuzPassMessage(msg));
+                    return;
+                }
                 switch (msg.type) {
                     case 'SYNC_SESSION':
                     case 'SB_SESSION_SYNC':

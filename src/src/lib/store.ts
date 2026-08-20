@@ -714,7 +714,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     refreshStats: async () => {
-        const stats: { date: string, total: number, sites: Record<string, number> }[] = [];
+        const stats: { date: string; total: number; sites: Record<string, number>; focusMs?: number }[] = [];
         const todayObj = new Date();
         const lookbackDays = 90;
         const keysToFetch: string[] = [];

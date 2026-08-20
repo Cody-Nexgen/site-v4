@@ -8,6 +8,7 @@ import { initBlockEngine, incrementBlockedCount } from "./blockengine.js";
 import { initAnalytics } from "./analytics.js";
 import { initPomodoro } from "./pomodoro.js";
 import { initFutureSelfService } from "./futureSelfService.js";
+import { initFocuzPassVault } from "./focuzPassBridge";
 import { registerSlip } from "../lib/forest";
 
 const blockedPagePath = "view=blocked";
@@ -44,6 +45,7 @@ chrome.runtime.onStartup.addListener(async () => {
 // ---------------------------------------------------------
 
 initMessageRouter();
+initFocuzPassVault();
 initBlockEngine();
 initAnalytics();
 void initPomodoro();

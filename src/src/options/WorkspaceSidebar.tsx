@@ -9,6 +9,7 @@ import {
     LayoutDashboard,
     ListTodo,
     LogOut,
+    KeyRound,
     Moon,
     PanelLeftClose,
     Search,
@@ -50,6 +51,7 @@ type Props = {
 
 const ICONS: Record<string, ReactNode> = {
     overview: <LayoutDashboard size={14} />,
+    focuzpass: <KeyRound size={14} />,
     calendar: <CalendarDays size={14} />,
     lists: <ListTodo size={14} />,
     ai_coach: <Sparkles size={14} />,

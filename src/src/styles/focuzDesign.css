@@ -412,3 +412,256 @@ html[data-dashboard-theme="light"] .workspace-topbar {
     background: rgba(255, 255, 255, 0.95);
     border-color: rgba(24, 24, 27, 0.08);
 }
+
+/* FocuzPass — a sealed, local-first ledger inside the workspace shell. */
+.focuz-pass {
+    --vault-accent: #f6c85f;
+    --vault-accent-soft: rgba(246, 200, 95, 0.09);
+}
+
+.vault-content-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(310px, 0.72fr);
+}
+
+.vault-button {
+    display: inline-flex;
+    height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 0.5rem;
+    padding-inline: 0.85rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1;
+    transition:
+        transform 140ms cubic-bezier(0.16, 1, 0.3, 1),
+        color 140ms ease,
+        background-color 140ms ease,
+        border-color 140ms ease;
+}
+
+.vault-button:hover {
+    transform: translateY(-1px);
+}
+
+.vault-button:active {
+    transform: translateY(0) scale(0.98);
+}
+
+.vault-button-primary {
+    border: 1px solid rgba(246, 200, 95, 0.48);
+    background: #f2c14f;
+    color: #211b0c;
+    box-shadow: 0 6px 20px rgba(246, 200, 95, 0.09);
+}
+
+.vault-button-primary:hover {
+    background: #f7cb68;
+    border-color: rgba(255, 220, 135, 0.72);
+}
+
+.vault-button-secondary {
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    background: rgba(255, 255, 255, 0.035);
+    color: #a3a3a3;
+}
+
+.vault-button-secondary:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: #e5e5e5;
+}
+
+.vault-icon-button {
+    display: inline-flex;
+    height: 1.75rem;
+    width: 1.75rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.4rem;
+    border: 1px solid transparent;
+    color: #626267;
+    transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.vault-icon-button:hover {
+    border-color: rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.04);
+    color: #d4d4d8;
+}
+
+.vault-icon-button:active {
+    transform: scale(0.94);
+}
+
+.vault-button:focus-visible,
+.vault-icon-button:focus-visible,
+.vault-row:focus-visible,
+.vault-filter-scroll button:focus-visible,
+.vault-transfer:focus-visible {
+    outline: 2px solid rgba(246, 200, 95, 0.78);
+    outline-offset: 2px;
+}
+
+.vault-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.vault-field > span {
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #71717a;
+}
+
+.vault-field input,
+.vault-field textarea {
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    background: rgba(0, 0, 0, 0.24);
+    padding: 0.65rem 0.75rem;
+    font-size: 0.76rem;
+    line-height: 1.25rem;
+    color: #e5e5e5;
+    outline: none;
+    transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.vault-field input::placeholder,
+.vault-field textarea::placeholder {
+    color: #46464b;
+}
+
+.vault-field input:focus,
+.vault-field textarea:focus {
+    border-color: rgba(246, 200, 95, 0.34);
+    background: rgba(255, 255, 255, 0.025);
+    box-shadow: 0 0 0 3px rgba(246, 200, 95, 0.055);
+}
+
+.vault-range {
+    height: 0.2rem;
+    cursor: pointer;
+    appearance: none;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    accent-color: var(--vault-accent);
+}
+
+.vault-range::-webkit-slider-thumb {
+    height: 0.8rem;
+    width: 0.8rem;
+    appearance: none;
+    border-radius: 999px;
+    border: 2px solid #211b0c;
+    background: var(--vault-accent);
+    box-shadow: 0 0 0 1px rgba(246, 200, 95, 0.4);
+}
+
+.vault-lock-orbit {
+    position: relative;
+}
+
+.vault-lock-orbit::after {
+    position: absolute;
+    inset: -0.75rem;
+    content: '';
+    border: 1px solid rgba(246, 200, 95, 0.09);
+    border-radius: 1.2rem;
+    animation: vault-breathe 2.8s ease-in-out infinite;
+}
+
+@keyframes vault-breathe {
+    0%, 100% { transform: scale(0.92); opacity: 0.2; }
+    50% { transform: scale(1.06); opacity: 0.85; }
+}
+
+html[data-dashboard-theme="light"] .focuz-pass {
+    --vault-accent: #a46408;
+    --vault-accent-soft: rgba(164, 100, 8, 0.08);
+}
+
+html[data-dashboard-theme="light"] .focuz-pass .vault-shell,
+html[data-dashboard-theme="light"] .focuz-pass .vault-generator {
+    background: rgba(255, 255, 255, 0.78) !important;
+    border-color: rgba(24, 24, 27, 0.1) !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-pass .vault-detail {
+    background: rgba(24, 24, 27, 0.018);
+}
+
+html[data-dashboard-theme="light"] .focuz-pass .vault-item-mark,
+html[data-dashboard-theme="light"] .focuz-pass .vault-button-secondary,
+html[data-dashboard-theme="light"] .focuz-pass .vault-search input {
+    background: rgba(24, 24, 27, 0.035);
+    border-color: rgba(24, 24, 27, 0.09);
+}
+
+html[data-dashboard-theme="light"] .focuz-pass [class*="text-amber-3"] {
+    color: #9a5c06 !important;
+}
+
+html[data-dashboard-theme="light"] .focuz-pass .vault-button-secondary {
+    color: #52525b;
+}
+
+html[data-dashboard-theme="light"] .focuz-pass .vault-field input,
+html[data-dashboard-theme="light"] .focuz-pass .vault-field textarea,
+html[data-dashboard-theme="light"] .vault-modal .vault-field input,
+html[data-dashboard-theme="light"] .vault-modal .vault-field textarea {
+    background: rgba(24, 24, 27, 0.03);
+    border-color: rgba(24, 24, 27, 0.1);
+    color: #18181b;
+}
+
+html[data-dashboard-theme="light"] .vault-modal {
+    background: #ffffff !important;
+    border-color: rgba(24, 24, 27, 0.12) !important;
+}
+
+@media (max-width: 1023px) {
+    .vault-content-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .vault-detail {
+        border-top: 1px solid rgba(255, 255, 255, 0.065);
+    }
+}
+
+@media (max-width: 680px) {
+    .focuz-pass {
+        padding-top: 1.1rem;
+    }
+
+    .vault-row {
+        padding-inline: 0.8rem;
+    }
+
+    .vault-content-grid .vault-detail {
+        min-height: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vault-lock-orbit::after {
+        animation: none;
+        opacity: 0.55;
+    }
+
+    .vault-button,
+    .vault-icon-button,
+    .vault-row,
+    .vault-transfer * {
+        transition-duration: 0.01ms !important;
+    }
+}

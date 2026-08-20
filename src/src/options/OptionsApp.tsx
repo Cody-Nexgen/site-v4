@@ -64,6 +64,7 @@ import { useHostBookingNotifications } from '../hooks/useHostBookingNotification
 import { OptionsCommandPalette } from './OptionsCommandPalette';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import SetupPage from './SetupPage';
+import FocuzPassTab from './FocuzPassTab';
 import {
     isSetupComplete,
     markSetupComplete,
@@ -2654,6 +2655,7 @@ const OptionsApp = () => {
     const renderContent = () => {
         switch (activeTab) {
             case 'overview': return <OverviewTab />;
+            case 'focuzpass': return <FocuzPassTab />;
             case 'calendar': return <SchedulingCalendarPage fullscreen />;
             case 'lists': return <ListsTab />;
             case 'sessions': return <SessionsTab />;

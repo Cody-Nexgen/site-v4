@@ -187,6 +187,21 @@ export const CloseIcon = () => {
 
 const cards = [
   {
+    description: "Local vault",
+    title: "FocuzPass",
+    src: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=400",
+    ctaText: "Open Vault",
+    content: () => {
+      return (
+        <p>
+          FocuzPass is a local-first password vault built into the FocuzNow extension. Logins, cards, and passkey metadata stay encrypted on your device with AES-256-GCM — never uploaded to FocuzNow cloud.
+          <br /> <br />
+          Unlock with your master password in the extension dashboard. The website shows a companion screen only; your vault never syncs through the browser site.
+        </p>
+      );
+    },
+  },
+  {
     description: "Daily Analysis",
     title: "AI Tips, Tricks & Insights",
     src: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&q=80&w=400",

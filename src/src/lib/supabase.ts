@@ -85,8 +85,8 @@ export async function initSupabaseFromStorage(): Promise<SupabaseConfig> {
     if (typeof window !== 'undefined' && window.__FOCUZ_SITE_SUPABASE__) {
         supabase = window.__FOCUZ_SITE_SUPABASE__;
         const client = window.__FOCUZ_SITE_SUPABASE__;
-        const clientUrl = (client as { supabaseUrl?: string }).supabaseUrl || '';
-        const clientKey = (client as { supabaseKey?: string }).supabaseKey || '';
+        const clientUrl = (client as unknown as { supabaseUrl?: string }).supabaseUrl || '';
+        const clientKey = (client as unknown as { supabaseKey?: string }).supabaseKey || '';
         if (clientUrl && clientKey && !activeConfig.isConfigured) {
             activeConfig = resolveSupabaseConfig(clientUrl, clientKey, null);
         }
@@ -119,11 +119,11 @@ export function bindSiteSupabaseClient(
     // Website Vite often lacks VITE_SUPABASE_* on the extension tree — take URL/key from the host.
     const clientUrl =
         cfg?.url ||
-        (client as { supabaseUrl?: string }).supabaseUrl ||
+        (client as unknown as { supabaseUrl?: string }).supabaseUrl ||
         '';
     const clientKey =
         cfg?.anonKey ||
-        (client as { supabaseKey?: string }).supabaseKey ||
+        (client as unknown as { supabaseKey?: string }).supabaseKey ||
         '';
     if (clientUrl && clientKey) {
         activeConfig = resolveSupabaseConfig(clientUrl, clientKey, null);

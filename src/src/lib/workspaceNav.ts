@@ -13,6 +13,7 @@ export type NavSection = {
 
 export const PRIMARY_NAV: NavTab[] = [
     { id: 'overview', label: 'Dashboard' },
+    { id: 'focuzpass', label: 'FocuzPass' },
 ];
 
 export const COLLAPSIBLE_NAV: NavSection[] = [
