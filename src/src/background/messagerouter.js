@@ -306,7 +306,7 @@ export function initMessageRouter() {
         (async () => {
             try {
                 if (isFocuzPassMessage(msg?.type)) {
-                    sendResponse(await handleFocuzPassMessage(msg));
+                    sendResponse(await handleFocuzPassMessage(msg, sender));
                     return;
                 }
                 switch (msg.type) {

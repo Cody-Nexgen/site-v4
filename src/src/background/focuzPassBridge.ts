@@ -3,8 +3,26 @@
  * Vault key lives only in this module's memory for the SW lifetime.
  */
 
-import { FocuzPassVault, type VaultUpsertInput } from '../lib/focuzPass/vaultCore';
+import {
+    FocuzPassVault,
+    isExactVaultDomain,
+    normalizeVaultDomain,
+    type VaultUpsertInput,
+} from '../lib/focuzPass/vaultCore';
 import { randomBytes } from '../lib/focuzPass/crypto';
+
+const PENDING_PREFIX = 'focuzpass.pending-login.';
+const PENDING_TTL_MS = 2 * 60 * 1000;
+const pendingMemory = new Map<string, PendingLogin>();
+
+type PendingLogin = {
+    domain: string;
+    title: string;
+    identity: string;
+    password: string;
+    faviconUrl?: string;
+    createdAt: number;
+};
 
 const chromeStorage = {
     async get(keys: string[]) {
@@ -68,13 +86,58 @@ export function initFocuzPassVault() {
     });
 }
 
+function senderPage(sender?: chrome.runtime.MessageSender): { tabId: number; domain: string } | null {
+    const tabId = sender?.tab?.id;
+    const rawUrl = sender?.url || sender?.tab?.url;
+    if (tabId == null || !rawUrl) return null;
+    try {
+        const url = new URL(rawUrl);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+        const domain = normalizeVaultDomain(url.hostname);
+        return domain ? { tabId, domain } : null;
+    } catch {
+        return null;
+    }
+}
+
+function pendingKey(tabId: number) {
+    return `${PENDING_PREFIX}${tabId}`;
+}
+
+async function readPending(sender?: chrome.runtime.MessageSender): Promise<PendingLogin | null> {
+    const page = senderPage(sender);
+    if (!page) return null;
+    const key = pendingKey(page.tabId);
+    const stored = chrome.storage.session ? await chrome.storage.session.get(key) : {};
+    const pending = (stored[key] as PendingLogin | undefined) || pendingMemory.get(key);
+    if (!pending) return null;
+    if (Date.now() - pending.createdAt > PENDING_TTL_MS || !isExactVaultDomain(pending.domain, page.domain)) {
+        if (chrome.storage.session) await chrome.storage.session.remove(key);
+        pendingMemory.delete(key);
+        return null;
+    }
+    return pending;
+}
+
+async function clearPending(sender?: chrome.runtime.MessageSender) {
+    const page = senderPage(sender);
+    if (!page) return;
+    const key = pendingKey(page.tabId);
+    if (chrome.storage.session) await chrome.storage.session.remove(key);
+    pendingMemory.delete(key);
+}
+
 export async function handleFocuzPassMessage(msg: {
     type: string;
     masterPassword?: string;
     item?: VaultUpsertInput;
     id?: string;
     length?: number;
-}): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
+    title?: string;
+    identity?: string;
+    password?: string;
+    faviconUrl?: string;
+}, sender?: chrome.runtime.MessageSender): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
     try {
         switch (msg.type) {
             case 'FOCUZPASS_STATUS':
@@ -98,6 +161,103 @@ export async function handleFocuzPassMessage(msg: {
                 return { ok: true, data: null };
             case 'FOCUZPASS_GENERATE':
                 return { ok: true, data: generatePassword(msg.length) };
+            case 'FOCUZPASS_PAGE_CONTEXT': {
+                const page = senderPage(sender);
+                if (!page) throw new Error('FocuzPass is unavailable on this page');
+                const status = await vault.getStatus('extension');
+                if (!status.configured) {
+                    return { ok: true, data: { state: 'unconfigured', domain: page.domain, matches: [] } };
+                }
+                if (!status.unlocked) {
+                    return { ok: true, data: { state: 'locked', domain: page.domain, matches: [] } };
+                }
+                return {
+                    ok: true,
+                    data: {
+                        state: 'ready',
+                        domain: page.domain,
+                        matches: vault.findLoginMatches(page.domain),
+                    },
+                };
+            }
+            case 'FOCUZPASS_CAPTURE_LOGIN': {
+                const page = senderPage(sender);
+                if (!page) throw new Error('FocuzPass is unavailable on this page');
+                const status = await vault.getStatus('extension');
+                if (!status.configured || !status.unlocked) {
+                    return { ok: true, data: { captured: false, reason: status.configured ? 'locked' : 'unconfigured' } };
+                }
+                const identity = String(msg.identity || '').trim();
+                const password = String(msg.password || '');
+                if (!identity || !password) {
+                    return { ok: true, data: { captured: false, reason: 'empty' } };
+                }
+                const exact = vault
+                    .findLoginMatches(page.domain)
+                    .find((item) => item.identity.toLowerCase() === identity.toLowerCase() && item.password === password);
+                if (exact) {
+                    await vault.markUsed(exact.id);
+                    await clearPending(sender);
+                    return { ok: true, data: { captured: false, reason: 'already-saved', itemId: exact.id } };
+                }
+                const pending: PendingLogin = {
+                    domain: page.domain,
+                    title: String(msg.title || page.domain).trim().slice(0, 120) || page.domain,
+                    identity: identity.slice(0, 320),
+                    password,
+                    faviconUrl: String(msg.faviconUrl || '').slice(0, 2048) || undefined,
+                    createdAt: Date.now(),
+                };
+                const key = pendingKey(page.tabId);
+                if (chrome.storage.session) await chrome.storage.session.set({ [key]: pending });
+                else pendingMemory.set(key, pending);
+                return { ok: true, data: { captured: true } };
+            }
+            case 'FOCUZPASS_PENDING_LOGIN': {
+                const pending = await readPending(sender);
+                return {
+                    ok: true,
+                    data: pending
+                        ? {
+                              available: true,
+                              domain: pending.domain,
+                              title: pending.title,
+                              identity: pending.identity,
+                              faviconUrl: pending.faviconUrl,
+                          }
+                        : { available: false },
+                };
+            }
+            case 'FOCUZPASS_COMMIT_PENDING_LOGIN': {
+                const pending = await readPending(sender);
+                if (!pending) throw new Error('This login save request has expired');
+                const matches = vault.findLoginMatches(pending.domain);
+                const existing = matches.find(
+                    (item) => item.identity.toLowerCase() === pending.identity.toLowerCase(),
+                );
+                const saved = await vault.upsert({
+                    id: existing?.id,
+                    type: 'login',
+                    title: pending.title,
+                    identity: pending.identity,
+                    domain: pending.domain,
+                    password: pending.password,
+                    authMethod: 'PASSWORD',
+                });
+                await clearPending(sender);
+                return { ok: true, data: { saved: true, itemId: saved.id } };
+            }
+            case 'FOCUZPASS_DISMISS_PENDING_LOGIN':
+                await clearPending(sender);
+                return { ok: true, data: null };
+            case 'FOCUZPASS_MARK_USED': {
+                const page = senderPage(sender);
+                if (!page) throw new Error('FocuzPass is unavailable on this page');
+                const item = vault.findLoginMatches(page.domain).find((candidate) => candidate.id === msg.id);
+                if (!item) throw new Error('No matching login for this site');
+                await vault.markUsed(item.id);
+                return { ok: true, data: null };
+            }
             default:
                 return { ok: false, error: 'Unknown FocuzPass message' };
         }

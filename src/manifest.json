@@ -85,6 +85,7 @@
                 "<all_urls>"
             ],
             "js": [
+                "src/content/focuzPassOverlayEntry.ts",
                 "src/content/draggableTimer.ts",
                 "src/content/inAppBlock.ts"
             ],

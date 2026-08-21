@@ -16,6 +16,8 @@ import {
     FocuzPassVault,
     createMemoryStorage,
     assertNoPlaintextSecrets,
+    isExactVaultDomain,
+    normalizeVaultDomain,
 } from './vaultCore';
 import { PRIMARY_NAV } from '../workspaceNav';
 import { isExtensionHelperTab, shouldOpenTabOnWeb } from '../workspaceSync';
@@ -111,6 +113,42 @@ test('FocuzPass vault setup/unlock/CRUD stores no plaintext secrets', async () =
     const loginId = again.find((item) => item.type === 'login')!.id;
     await vault.delete(loginId);
     assert.equal(vault.list().length, 2);
+});
+
+test('FocuzPass overlay matching is exact-domain only', () => {
+    assert.equal(normalizeVaultDomain('https://www.GitHub.com/login'), 'github.com');
+    assert.equal(isExactVaultDomain('github.com', 'www.github.com'), true);
+    assert.equal(isExactVaultDomain('accounts.google.com', 'google.com'), false);
+    assert.equal(isExactVaultDomain('github.com.evil.example', 'github.com'), false);
+});
+
+test('FocuzPass vault returns only exact-domain login matches and records use', async () => {
+    const storage = createMemoryStorage();
+    const vault = new FocuzPassVault(storage);
+    await vault.setup('domain-match-master');
+    const github = await vault.upsert({
+        type: 'login',
+        title: 'GitHub',
+        identity: 'one@example.com',
+        domain: 'https://www.github.com/login',
+        password: 'ExactDomainSecret1!',
+    });
+    await vault.upsert({
+        type: 'login',
+        title: 'GitLab',
+        identity: 'two@example.com',
+        domain: 'gitlab.com',
+        password: 'OtherDomainSecret2!',
+    });
+
+    const matches = vault.findLoginMatches('github.com');
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0]?.id, github.id);
+    assert.equal(matches[0]?.password, 'ExactDomainSecret1!');
+
+    await vault.markUsed(github.id);
+    assert.ok(vault.findLoginMatches('github.com')[0]?.lastUsedAt);
+    assert.equal(vault.findLoginMatches('github.com.evil.example').length, 0);
 });
 
 test('FocuzPass vault rejects wrong master password on unlock', async () => {

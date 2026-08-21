@@ -90,6 +90,30 @@ export function formatRelativeTime(iso?: string): string {
     return `${months} month${months === 1 ? '' : 's'} ago`;
 }
 
+/** Exact host matching only. `www.` is treated as a presentation alias, never a wildcard. */
+export function normalizeVaultDomain(value?: string): string {
+    if (!value) return '';
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return '';
+    try {
+        const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`);
+        return url.hostname.replace(/^www\./, '').replace(/\.$/, '');
+    } catch {
+        return trimmed
+            .replace(/^https?:\/\//, '')
+            .split('/')[0]!
+            .split(':')[0]!
+            .replace(/^www\./, '')
+            .replace(/\.$/, '');
+    }
+}
+
+export function isExactVaultDomain(stored?: string, current?: string): boolean {
+    const a = normalizeVaultDomain(stored);
+    const b = normalizeVaultDomain(current);
+    return Boolean(a && b && a === b);
+}
+
 function defaultMark(title: string, type: VaultUpsertInput['type']): string {
     const cleaned = title.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     if (type === 'card') return cleaned.slice(0, 4) || 'CARD';
@@ -407,6 +431,31 @@ export class FocuzPassVault {
         if (!this.vaultKey) throw new Error('Vault is locked');
         this.touch();
         return this.items.map((item) => ({ ...item }));
+    }
+
+    findLoginMatches(domain: string): DecryptedLoginItem[] {
+        this.enforceLockTimers();
+        if (!this.vaultKey) throw new Error('Vault is locked');
+        const normalized = normalizeVaultDomain(domain);
+        if (!normalized) return [];
+        this.touch();
+        return this.items
+            .filter(
+                (item): item is DecryptedLoginItem =>
+                    item.type === 'login' && isExactVaultDomain(item.domain, normalized),
+            )
+            .map((item) => ({ ...item }));
+    }
+
+    async markUsed(id: string): Promise<void> {
+        this.enforceLockTimers();
+        if (!this.vaultKey) throw new Error('Vault is locked');
+        const item = this.items.find((candidate) => candidate.id === id);
+        if (!item) throw new Error('Vault item not found');
+        item.lastUsedAt = nowIso();
+        item.updatedAt = item.lastUsedAt;
+        await this.persist();
+        this.touch();
     }
 
     async upsert(input: VaultUpsertInput): Promise<DecryptedVaultItem> {
