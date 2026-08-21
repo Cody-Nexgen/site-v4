@@ -223,7 +223,7 @@ function shouldUseExtensionRpc(type: string | undefined): boolean {
     return EXTENSION_RPC_TYPES.has(type);
 }
 
-function extensionPresent(): boolean {
+export function extensionPresent(): boolean {
     if (typeof document === 'undefined') return false;
     return (
         document.documentElement.getAttribute('data-focuznow-extension') === 'true' ||

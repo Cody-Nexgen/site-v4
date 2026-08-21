@@ -102,6 +102,8 @@ export function isExtensionHelperTab(tab: string): boolean {
 }
 
 export function shouldOpenTabOnWeb(tab: string): boolean {
+    // Local-only vault — never hand FocuzPass off to the website.
+    if (tab === 'focuzpass') return false;
     try {
         if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
             return !isExtensionHelperTab(tab);

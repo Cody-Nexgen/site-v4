@@ -2435,6 +2435,14 @@ const OptionsApp = () => {
 
     const navigateTab = (tab: string) => {
         const resolved = resolveTabId(tab);
+        // FocuzPass is local-only — always keep it inside the current surface.
+        if (resolved === 'focuzpass') {
+            setActiveTab(resolved);
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', resolved);
+            window.history.replaceState({}, '', url.pathname + url.search);
+            return;
+        }
         // Extension helper: open full dashboard on the web for management tabs.
         if (!isWebPlatform() && shouldOpenTabOnWeb(resolved)) {
             openWebDashboard(resolved);
@@ -2484,6 +2492,10 @@ const OptionsApp = () => {
         const tab = new URLSearchParams(window.location.search).get('tab');
         if (!tab) return;
         const resolved = resolveTabId(tab);
+        if (resolved === 'focuzpass') {
+            setActiveTab(resolved);
+            return;
+        }
         if (!isWebPlatform() && shouldOpenTabOnWeb(resolved)) {
             openWebDashboard(resolved);
             return;
@@ -2537,7 +2549,9 @@ const OptionsApp = () => {
         const tab = params.get('tab');
         if (tab) {
             const resolved = resolveTabId(tab);
-            if (!isWebPlatform() && shouldOpenTabOnWeb(resolved)) {
+            if (resolved === 'focuzpass') {
+                setActiveTab(resolved);
+            } else if (!isWebPlatform() && shouldOpenTabOnWeb(resolved)) {
                 openWebDashboard(resolved);
             } else {
                 setActiveTab(resolved);

@@ -487,12 +487,7 @@ function CompanionScreen() {
 
     const openExtension = () => {
         try {
-            window.postMessage({ type: 'OPEN_EXTENSION_OPTIONS' }, '*');
-        } catch {
-            /* ignore */
-        }
-        try {
-            chrome.runtime?.openOptionsPage?.();
+            window.postMessage({ type: 'OPEN_EXTENSION_OPTIONS', tab: 'focuzpass' }, '*');
         } catch {
             /* ignore */
         }
@@ -508,10 +503,10 @@ function CompanionScreen() {
                 <div className="vault-lock-orbit mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] text-amber-300">
                     <Laptop size={24} />
                 </div>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300/75">Local-first companion</p>
-                <h2 className="text-2xl font-semibold tracking-[-0.035em] text-white">FocuzPass lives in the extension</h2>
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300/75">Extension required</p>
+                <h2 className="text-2xl font-semibold tracking-[-0.035em] text-white">Connect FocuzPass</h2>
                 <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-neutral-500">
-                    Your encrypted vault never syncs to FocuzNow cloud or this website. Open the browser extension dashboard to set up, unlock, and manage credentials on this device.
+                    Your vault is encrypted on this device inside the FocuzNow extension. Install or reload the extension, then reopen this tab — the same vault opens here and in the extension.
                 </p>
                 <div className="mt-7 flex flex-col gap-2 sm:flex-row sm:justify-center">
                     {extensionInstalled ? (
@@ -520,7 +515,7 @@ function CompanionScreen() {
                             className="vault-button vault-button-primary h-10 justify-center"
                             onClick={openExtension}
                         >
-                            Open extension dashboard
+                            Open FocuzPass in extension
                             <ArrowRight size={14} />
                         </button>
                     ) : (
@@ -534,9 +529,16 @@ function CompanionScreen() {
                             Get the FocuzNow extension
                         </a>
                     )}
+                    <button
+                        type="button"
+                        className="vault-button vault-button-secondary h-10 justify-center"
+                        onClick={() => window.location.reload()}
+                    >
+                        Retry connection
+                    </button>
                 </div>
                 <p className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-neutral-600">
-                    <ShieldCheck size={11} /> AES-256-GCM · master password never leaves your device
+                    <ShieldCheck size={11} /> Secrets never sync to FocuzNow cloud
                 </p>
             </motion.div>
         </section>
@@ -576,23 +578,32 @@ export default function FocuzPassTab() {
     }, []);
 
     const refreshStatus = useCallback(async () => {
-        if (isWebPlatform()) {
-            setBoot('companion');
-            return;
+        try {
+            const next = await focuzPassStatus();
+            setStatus(next);
+            if (!next.configured) {
+                clearSecrets();
+                setBoot('setup');
+                return;
+            }
+            if (!next.unlocked) {
+                clearSecrets();
+                setBoot('locked');
+                return;
+            }
+            await loadUnlocked();
+        } catch (err) {
+            const needsExtension =
+                isWebPlatform() &&
+                ((err as { needsExtension?: boolean })?.needsExtension ||
+                    /extension/i.test(err instanceof Error ? err.message : ''));
+            if (needsExtension) {
+                clearSecrets();
+                setBoot('companion');
+                return;
+            }
+            throw err;
         }
-        const next = await focuzPassStatus();
-        setStatus(next);
-        if (!next.configured) {
-            clearSecrets();
-            setBoot('setup');
-            return;
-        }
-        if (!next.unlocked) {
-            clearSecrets();
-            setBoot('locked');
-            return;
-        }
-        await loadUnlocked();
     }, [clearSecrets, loadUnlocked]);
 
     useEffect(() => {

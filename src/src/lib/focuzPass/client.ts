@@ -1,19 +1,39 @@
-/** Extension UI client — all crypto/CRUD goes through the service worker. */
+/** FocuzPass UI client — crypto/CRUD always runs in the extension service worker. */
 
 import { isWebPlatform } from '../platform';
+import { extensionPresent, sendExtensionRpc } from '../platform/webPlatform';
 import type { DecryptedVaultItem, VaultUpsertInput, VaultStatus } from './vaultCore';
 
 export type { DecryptedVaultItem, VaultStatus, VaultUpsertInput };
 
-type MessageResponse<T> = { ok: true; data: T } | { ok: false; error: string };
+type MessageResponse<T> = { ok: true; data: T } | { ok: false; error: string; needsExtension?: boolean };
+
+const SLOW_OPS = new Set(['FOCUZPASS_SETUP', 'FOCUZPASS_UNLOCK']);
 
 async function send<T>(message: Record<string, unknown>): Promise<T> {
+    const type = String(message.type || '');
+    const timeoutMs = SLOW_OPS.has(type) ? 20000 : 10000;
+
+    let response: MessageResponse<T>;
     if (isWebPlatform()) {
-        throw new Error('FocuzPass vault is only available in the browser extension');
+        if (!extensionPresent()) {
+            throw Object.assign(new Error('Install or reload the FocuzNow extension to use FocuzPass'), {
+                needsExtension: true,
+            });
+        }
+        response = (await sendExtensionRpc<MessageResponse<T>>(message as never, timeoutMs)) as MessageResponse<T>;
+    } else {
+        response = (await chrome.runtime.sendMessage(message)) as MessageResponse<T>;
     }
-    const response = (await chrome.runtime.sendMessage(message)) as MessageResponse<T>;
+
     if (!response || response.ok !== true) {
-        throw new Error((response && 'error' in response && response.error) || 'FocuzPass request failed');
+        const err = new Error(
+            (response && 'error' in response && response.error) || 'FocuzPass request failed',
+        ) as Error & { needsExtension?: boolean };
+        if (response && 'needsExtension' in response && response.needsExtension) {
+            err.needsExtension = true;
+        }
+        throw err;
     }
     return response.data;
 }
