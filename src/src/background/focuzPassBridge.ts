@@ -7,6 +7,7 @@ import {
     FocuzPassVault,
     isExactVaultDomain,
     normalizeVaultDomain,
+    type VaultItemAction,
     type VaultUpsertInput,
 } from '../lib/focuzPass/vaultCore';
 import { randomBytes } from '../lib/focuzPass/crypto';
@@ -21,6 +22,7 @@ type PendingLogin = {
     identity: string;
     password: string;
     faviconUrl?: string;
+    accountCreation: boolean;
     createdAt: number;
 };
 
@@ -137,6 +139,9 @@ export async function handleFocuzPassMessage(msg: {
     identity?: string;
     password?: string;
     faviconUrl?: string;
+    accountCreation?: boolean;
+    action?: VaultItemAction;
+    collection?: { name: string; color: string; icon: string };
 }, sender?: chrome.runtime.MessageSender): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
     try {
         switch (msg.type) {
@@ -151,11 +156,19 @@ export async function handleFocuzPassMessage(msg: {
                 return { ok: true, data: await vault.getStatus('extension') };
             case 'FOCUZPASS_LIST':
                 return { ok: true, data: vault.list() };
+            case 'FOCUZPASS_SNAPSHOT':
+                return { ok: true, data: vault.snapshot() };
             case 'FOCUZPASS_UPSERT':
                 return { ok: true, data: await vault.upsert(msg.item as VaultUpsertInput) };
             case 'FOCUZPASS_DELETE':
                 await vault.delete(String(msg.id || ''));
                 return { ok: true, data: null };
+            case 'FOCUZPASS_ITEM_ACTION':
+                return { ok: true, data: await vault.itemAction(msg.action as VaultItemAction) };
+            case 'FOCUZPASS_CREATE_VAULT':
+                return { ok: true, data: await vault.createVault(msg.collection || { name: '', color: '', icon: '' }) };
+            case 'FOCUZPASS_CREATE_TAG':
+                return { ok: true, data: await vault.createTag(msg.collection || { name: '', color: '', icon: '' }) };
             case 'FOCUZPASS_TOUCH':
                 vault.touch();
                 return { ok: true, data: null };
@@ -184,17 +197,19 @@ export async function handleFocuzPassMessage(msg: {
                 const page = senderPage(sender);
                 if (!page) throw new Error('FocuzPass is unavailable on this page');
                 const status = await vault.getStatus('extension');
-                if (!status.configured || !status.unlocked) {
-                    return { ok: true, data: { captured: false, reason: status.configured ? 'locked' : 'unconfigured' } };
+                if (!status.configured) {
+                    return { ok: true, data: { captured: false, reason: 'unconfigured' } };
                 }
                 const identity = String(msg.identity || '').trim();
                 const password = String(msg.password || '');
                 if (!identity || !password) {
                     return { ok: true, data: { captured: false, reason: 'empty' } };
                 }
-                const exact = vault
-                    .findLoginMatches(page.domain)
-                    .find((item) => item.identity.toLowerCase() === identity.toLowerCase() && item.password === password);
+                const exact = status.unlocked
+                    ? vault
+                          .findLoginMatches(page.domain)
+                          .find((item) => item.identity.toLowerCase() === identity.toLowerCase() && item.password === password)
+                    : undefined;
                 if (exact) {
                     await vault.markUsed(exact.id);
                     await clearPending(sender);
@@ -206,6 +221,7 @@ export async function handleFocuzPassMessage(msg: {
                     identity: identity.slice(0, 320),
                     password,
                     faviconUrl: String(msg.faviconUrl || '').slice(0, 2048) || undefined,
+                    accountCreation: Boolean(msg.accountCreation),
                     createdAt: Date.now(),
                 };
                 const key = pendingKey(page.tabId);
@@ -224,6 +240,7 @@ export async function handleFocuzPassMessage(msg: {
                               title: pending.title,
                               identity: pending.identity,
                               faviconUrl: pending.faviconUrl,
+                              accountCreation: pending.accountCreation,
                           }
                         : { available: false },
                 };

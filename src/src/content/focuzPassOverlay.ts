@@ -29,6 +29,7 @@ type PendingLogin = {
     title?: string;
     identity?: string;
     faviconUrl?: string;
+    accountCreation?: boolean;
 };
 
 type MessageResponse<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -39,32 +40,35 @@ type FieldControl = {
     button: HTMLButtonElement;
 };
 
+type ControlState = 'checking' | 'locked' | 'ready';
+
+type VaultStatus = {
+    configured: boolean;
+    unlocked: boolean;
+};
+
 const FIELD_HOST_ATTR = 'data-focuzpass-field-host';
 const POPOVER_HOST_ID = 'focuzpass-popover-host';
 const SAVE_HOST_ID = 'focuzpass-save-host';
 const SUBMIT_DEBOUNCE_MS = 1800;
-
-const KEY_ICON = `
-<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <circle cx="7.5" cy="15.5" r="4.5"></circle>
-  <path d="m11 12 8.5-8.5M16 7l2 2M18 5l2 2"></path>
-</svg>`;
-
-const LOCK_ICON = `
-<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-  <rect width="15" height="11" x="4.5" y="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
-</svg>`;
-
-const SPARK_ICON = `
-<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-  <path d="m12 3-1.2 3.8a2 2 0 0 1-1.3 1.3L5.7 9.3l3.8 1.2a2 2 0 0 1 1.3 1.3L12 15.6l1.2-3.8a2 2 0 0 1 1.3-1.3l3.8-1.2-3.8-1.2a2 2 0 0 1-1.3-1.3L12 3Z"></path><path d="m19 15-.6 1.8a1 1 0 0 1-.6.6L16 18l1.8.6a1 1 0 0 1 .6.6L19 21l.6-1.8a1 1 0 0 1 .6-.6L22 18l-1.8-.6a1 1 0 0 1-.6-.6L19 15Z"></path>
-</svg>`;
 
 const CHECK_ICON = `
 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"></path></svg>`;
 
 const ARROW_ICON = `
 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>`;
+
+const CHEVRON_ICON = `
+<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.5 5 5-5 5"></path></svg>`;
+
+const LOCK_ICON = `
+<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="8.5" width="11" height="8" rx="2"></rect><path d="M7 8.5V6.7a3 3 0 0 1 6 0v1.8"></path></svg>`;
+
+const SLIDERS_ICON = `
+<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 14h12"></path><circle cx="8" cy="6" r="1.8" fill="#242426"></circle><circle cx="12" cy="14" r="1.8" fill="#242426"></circle></svg>`;
+
+const PLUS_ICON = `
+<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4v12M4 10h12"></path></svg>`;
 
 const FIELD_STYLE = `
     :host { all: initial; color-scheme: dark; }
@@ -210,6 +214,116 @@ const SAVE_STYLE = `
     @media (prefers-reduced-motion: reduce) { .toast { animation: none; } * { transition-duration: .01ms !important; } }
 `;
 
+const NEUTRAL_FIELD_STYLE = `
+    :host { color-scheme: dark; }
+    button {
+        gap: 1px; padding: 2px 3px; color: #f4f4f5; background: #202023; border-color: #5b5c61;
+        border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.32); box-sizing: border-box;
+    }
+    button:hover { transform: none; color: #ffffff; background: #29292d; border-color: #77787e; }
+    button:active { transform: scale(.96); }
+    button:focus-visible { outline-color: #8eaefc; }
+    .control-chevron, .control-lock, .control-mark { display: flex; align-items: center; justify-content: center; }
+    .control-chevron { width: 13px; height: 13px; color: #e4e4e7; transition: transform 150ms ease; }
+    .control-chevron svg { width: 13px; height: 13px; }
+    button.is-open .control-chevron { transform: rotate(90deg); }
+    .control-mark {
+        width: 17px; height: 17px; border-radius: 50%; color: #ffffff; background: #3975e9;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.34); font: 700 9px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    .control-lock { width: 17px; height: 17px; color: #e4e4e7; }
+    .control-lock svg { width: 15px; height: 15px; }
+`;
+
+const NEUTRAL_PANEL_STYLE = `
+    :host { color-scheme: dark; }
+    .panel {
+        width: 100%; color: #f7f7f8; background: #29292b; border-color: rgba(255,255,255,.12); border-radius: 16px;
+        box-shadow: 0 22px 64px rgba(0,0,0,.46), 0 3px 12px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05);
+        animation-duration: 210ms;
+    }
+    .panel::before, .head, .brand, .eyebrow, .section-label, .method, .chevron, .local, .empty-icon { display: none; }
+    .body { padding: 10px; }
+    .account-list { display: grid; gap: 7px; }
+    .account-row {
+        display: flex; align-items: center; gap: 5px; overflow: hidden; padding: 3px;
+        border: 1px solid rgba(255,255,255,.07); border-radius: 13px; background: #242426;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.018);
+        transition: border-color 150ms ease, background 150ms ease, transform 150ms cubic-bezier(.16,1,.3,1);
+    }
+    .account-row:hover { transform: translateY(-1px); border-color: rgba(255,255,255,.13); background: #272729; }
+    .account {
+        min-width: 0; flex: 1; gap: 12px; padding: 10px; border-color: transparent; border-radius: 10px; background: transparent;
+    }
+    .account:hover { transform: none; border-color: transparent; background: rgba(255,255,255,.025); }
+    .account:active { transform: scale(.992); background: rgba(255,255,255,.04); }
+    .account:focus-visible, .action:focus-visible, .text-action:focus-visible, .manage:focus-visible { outline-color: #8eaefc; }
+    .favicon, .mark {
+        width: 46px; height: 46px; border-color: rgba(255,255,255,.09); border-radius: 11px; background: #323236;
+        box-shadow: 0 5px 13px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.055);
+    }
+    .favicon { object-fit: contain; padding: 7px; }
+    .mark { color: #d6d7da; background: #34353a; font-size: 11px; }
+    .account-title { color: #f7f7f8; font-size: 13.5px; font-weight: 650; letter-spacing: -.015em; }
+    .account-id { margin-top: 4px; color: #9b9da4; font-size: 10.5px; }
+    .manage {
+        all: unset; width: 38px; height: 38px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+        margin-right: 6px; border: 1px solid rgba(255,255,255,.095); border-radius: 10px; color: #afb1b7; background: #2d2d30; cursor: pointer;
+        transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+    }
+    .manage:hover { color: #f2f2f3; background: #37373b; border-color: rgba(255,255,255,.16); }
+    .manage:active { transform: scale(.95); }
+    .manage svg { width: 18px; height: 18px; }
+    .empty { padding: 18px 16px 16px; }
+    .empty-title { color: #f7f7f8; font-size: 14px; }
+    .empty-copy { margin: 7px 0 16px; color: #96989f; font-size: 11px; line-height: 1.55; }
+    .action { height: 42px; color: #171719; background: #f2f2f3; border-color: #ffffff; border-radius: 10px; box-shadow: none; font-size: 11px; }
+    .action:hover { transform: none; background: #ffffff; }
+    .footer { padding: 9px 10px 10px; border-top-color: rgba(255,255,255,.07); background: #252527; }
+    .text-action {
+        width: 100%; height: 44px; display: flex; align-items: center; justify-content: flex-start; gap: 11px; padding: 0 13px;
+        border: 1px solid rgba(255,255,255,.07); border-radius: 11px; color: #e4e4e7; background: #2b2b2e; font-size: 11px; font-weight: 650;
+        transition: color 140ms ease, background 140ms ease, border-color 140ms ease, transform 140ms cubic-bezier(.16,1,.3,1);
+    }
+    .text-action:hover { color: #ffffff; background: #323236; border-color: rgba(255,255,255,.13); transform: translateY(-1px); }
+    .text-action:active { transform: scale(.99); }
+    .text-action svg { width: 16px; height: 16px; color: #aeb5c3; }
+    .loading { padding: 18px 15px; color: #b0b1b6; font-size: 11px; }
+    .spinner { border-color: #4b4c51; border-top-color: #d8d9dc; }
+`;
+
+const NEUTRAL_SAVE_STYLE = `
+    :host { color-scheme: dark; }
+    .toast {
+        width: min(420px, calc(100vw - 24px)); color: #f7f7f8; background: #29292b; border-color: rgba(255,255,255,.12); border-radius: 17px;
+        box-shadow: 0 22px 64px rgba(0,0,0,.46), 0 3px 12px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05);
+        animation-duration: 220ms;
+    }
+    .toast::before, .eyebrow { display: none; }
+    .main { padding: 18px 18px 16px; gap: 14px; align-items: center; }
+    .site-icon, .site-mark {
+        width: 48px; height: 48px; border-color: rgba(255,255,255,.09); border-radius: 12px; background: #333337;
+        box-shadow: 0 6px 15px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .site-icon { padding: 8px; }
+    .site-mark { color: #d6d7da; background: #34353a; }
+    h2 { color: #f7f7f8; font-size: 15px; font-weight: 670; letter-spacing: -.02em; }
+    p { margin-top: 5px; color: #9b9da4; font-size: 10.5px; }
+    .close { color: #8d8e94; }
+    .close:hover { color: #ffffff; background: #333439; }
+    .actions { padding: 12px 16px 16px; border-top-color: rgba(255,255,255,.07); background: #272729; }
+    button.action { height: 38px; padding: 0 15px; border-radius: 10px; font-size: 10.5px; }
+    .secondary { color: #c0c1c6; border-color: rgba(255,255,255,.09); background: #2d2d30; }
+    .secondary:hover { color: #ffffff; background: #36363a; }
+    .primary { color: #171719; border-color: #ffffff; background: #f2f2f3; }
+    .primary:hover { transform: translateY(-1px); background: #ffffff; }
+    .primary:active, .secondary:active { transform: scale(.98); }
+    button:focus-visible { outline-color: #8eaefc; }
+    .saved { min-height: 76px; padding: 18px; color: #f0f0f2; font-size: 12px; }
+    .saved span { width: 36px; height: 36px; border-radius: 11px; color: #82d8af; background: #263a32; box-shadow: inset 0 1px 0 rgba(255,255,255,.045); }
+    .saved svg { width: 16px; height: 16px; }
+`;
+
 function createElement<K extends keyof HTMLElementTagNameMap>(
     tag: K,
     className?: string,
@@ -297,6 +411,55 @@ function passwordInputFor(form: HTMLFormElement): HTMLInputElement | null {
     return preferred || candidates[0] || null;
 }
 
+function isAccountCreationForm(form: HTMLFormElement, passwordInput: HTMLInputElement): boolean {
+    const passwordFields = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="password"]'));
+    const descriptors = `${form.id} ${form.className} ${form.getAttribute('name') || ''} ${form.getAttribute('aria-label') || ''} ${form.innerText}`
+        .toLowerCase()
+        .slice(0, 3000);
+    return passwordInput.autocomplete.toLowerCase() === 'new-password'
+        || passwordFields.some((input) => input.autocomplete.toLowerCase() === 'new-password')
+        || passwordFields.length > 1
+        || /sign\s*up|create\s+(an?\s+)?account|register|join\s+(now|us)/.test(descriptors);
+}
+
+function submitFilledLogin(passwordInput: HTMLInputElement) {
+    const form = passwordInput.form || passwordInput.closest('form');
+    if (form) {
+        const submitter = Array.from(
+            form.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button, input[type="submit"], input[type="button"]'),
+        ).find((candidate) => {
+            if (candidate.disabled || !isElementVisuallyAvailable(candidate)) return false;
+            const type = (candidate.getAttribute('type') || (candidate.tagName === 'BUTTON' ? 'submit' : '')).toLowerCase();
+            const label = `${candidate.textContent || ''} ${candidate.getAttribute('value') || ''} ${candidate.getAttribute('aria-label') || ''}`.toLowerCase();
+            return type === 'submit' || /sign\s*in|log\s*in|continue|submit/.test(label);
+        });
+        if (submitter) submitter.click();
+        else form.requestSubmit();
+        return;
+    }
+
+    for (const type of ['keydown', 'keypress', 'keyup'] as const) {
+        passwordInput.dispatchEvent(new KeyboardEvent(type, {
+            key: 'Enter',
+            code: 'Enter',
+            bubbles: true,
+            cancelable: true,
+        }));
+    }
+}
+
+function fillRelatedPasswordConfirmation(passwordInput: HTMLInputElement, password: string) {
+    const form = passwordInput.form || passwordInput.closest('form');
+    if (!form) return;
+    for (const candidate of form.querySelectorAll<HTMLInputElement>('input[type="password"]')) {
+        if (candidate === passwordInput || !isRenderableInput(candidate)) continue;
+        const descriptor = `${candidate.name} ${candidate.id} ${candidate.autocomplete} ${candidate.placeholder} ${candidate.getAttribute('aria-label') || ''}`.toLowerCase();
+        if (candidate.autocomplete.toLowerCase() === 'new-password' || /confirm|repeat|verify|password.?2/.test(descriptor)) {
+            setInputValue(candidate, password);
+        }
+    }
+}
+
 function setInputValue(input: HTMLInputElement, value: string) {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
     if (setter) setter.call(input, value);
@@ -326,22 +489,6 @@ function siteMark(value?: string): string {
     return cleaned.slice(0, 2) || 'FP';
 }
 
-function authMethodLabel(method: string): string {
-    const labels: Record<string, string> = {
-        PASSWORD: 'Password',
-        GOOGLE_SSO: 'Google',
-        MICROSOFT_SSO: 'Microsoft',
-        CLASSLINK_SSO: 'ClassLink',
-        APPLE_SSO: 'Apple',
-        OKTA_SSO: 'Okta',
-        SAML_GENERIC: 'SSO',
-        PASSKEY: 'Passkey',
-        MAGIC_LINK: 'Magic link',
-        OTP_ONLY: 'One-time code',
-    };
-    return labels[method] || method.replaceAll('_', ' ').toLowerCase();
-}
-
 export type FocuzPassOverlayTransport = <T>(message: Record<string, unknown>) => Promise<T>;
 
 async function runtimeSendMessage<T>(message: Record<string, unknown>): Promise<T> {
@@ -364,6 +511,7 @@ class FocuzPassPageOverlay {
     private contextRequest = 0;
     private lastCaptures = new WeakMap<HTMLFormElement, number>();
     private observer: MutationObserver | null = null;
+    private controlState: ControlState = 'checking';
 
     constructor(private readonly send: FocuzPassOverlayTransport = runtimeSendMessage) {}
 
@@ -373,6 +521,7 @@ class FocuzPassPageOverlay {
         document.documentElement.setAttribute('data-focuzpass-overlay', 'v1');
 
         this.scan();
+        void this.refreshControlState();
         this.observer = new MutationObserver(() => this.scheduleScan());
         this.observer.observe(document.documentElement, {
             childList: true,
@@ -389,6 +538,9 @@ class FocuzPassPageOverlay {
         window.addEventListener('resize', this.schedulePosition, true);
         window.addEventListener('pageshow', this.checkPendingSoon);
         document.addEventListener('visibilitychange', this.handleVisibility);
+        if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+            chrome.runtime.onMessage.addListener(this.handleRuntimeMessage);
+        }
         window.setTimeout(() => void this.checkPending(), 650);
     }
 
@@ -419,17 +571,44 @@ class FocuzPassPageOverlay {
         host.style.cssText = 'all:initial;position:fixed;z-index:2147483645;width:26px;height:26px;display:none;';
         const shadow = host.attachShadow({ mode: 'open' });
         const style = document.createElement('style');
-        style.textContent = FIELD_STYLE;
+        style.textContent = `${FIELD_STYLE}\n${NEUTRAL_FIELD_STYLE}`;
         const button = document.createElement('button');
         button.type = 'button';
         button.setAttribute('aria-label', 'Open FocuzPass');
         button.title = 'FocuzPass';
-        button.innerHTML = KEY_ICON;
         button.addEventListener('pointerdown', (event) => event.preventDefault());
         button.addEventListener('click', () => void this.toggle(input));
         shadow.append(style, button);
         document.documentElement.appendChild(host);
-        this.controls.set(input, { host, shadow, button });
+        const control = { host, shadow, button };
+        this.controls.set(input, control);
+        this.updateControl(input, control);
+    }
+
+    private refreshControlState = async () => {
+        try {
+            const status = await this.send<VaultStatus>({ type: 'FOCUZPASS_STATUS' });
+            this.controlState = status.configured && status.unlocked ? 'ready' : 'locked';
+        } catch {
+            this.controlState = 'locked';
+        }
+        this.updateControls();
+        this.schedulePosition();
+    };
+
+    private updateControls() {
+        for (const [input, control] of this.controls) this.updateControl(input, control);
+    }
+
+    private updateControl(input: HTMLInputElement, control: FieldControl) {
+        const open = Boolean(this.popoverHost && this.activeInput === input);
+        const ready = this.controlState === 'ready';
+        control.button.className = `${ready ? 'is-ready' : 'is-locked'}${open ? ' is-open' : ''}`;
+        control.button.setAttribute('aria-expanded', String(open));
+        control.button.setAttribute('aria-label', ready ? 'Show saved logins' : 'Unlock FocuzPass');
+        control.button.innerHTML = ready
+            ? `<span class="control-chevron">${CHEVRON_ICON}</span><span class="control-mark" aria-hidden="true">F</span>`
+            : `<span class="control-lock">${LOCK_ICON}</span>`;
     }
 
     private schedulePosition = () => {
@@ -448,9 +627,10 @@ class FocuzPassPageOverlay {
             }
             const rect = input.getBoundingClientRect();
             const size = Math.max(22, Math.min(28, rect.height - 6));
-            control.host.style.width = `${size}px`;
+            const width = this.controlState === 'ready' ? Math.max(38, size + 13) : size;
+            control.host.style.width = `${width}px`;
             control.host.style.height = `${size}px`;
-            control.host.style.left = `${Math.max(3, rect.right - size - 5)}px`;
+            control.host.style.left = `${Math.max(3, rect.right - width - 5)}px`;
             control.host.style.top = `${Math.max(3, rect.top + (rect.height - size) / 2)}px`;
             control.host.style.display = 'block';
         }
@@ -466,6 +646,7 @@ class FocuzPassPageOverlay {
         this.activeInput = input;
         this.activeControl = this.controls.get(input) || null;
         this.createPopover();
+        this.updateControls();
         this.renderLoading();
         this.positionPopover();
 
@@ -473,6 +654,8 @@ class FocuzPassPageOverlay {
         try {
             const context = await this.send<PageContext>({ type: 'FOCUZPASS_PAGE_CONTEXT' });
             if (request !== this.contextRequest || !this.popoverHost) return;
+            this.controlState = context.state === 'ready' ? 'ready' : 'locked';
+            this.updateControls();
             this.renderContext(context);
         } catch (error) {
             if (request !== this.contextRequest || !this.popoverHost) return;
@@ -483,32 +666,25 @@ class FocuzPassPageOverlay {
     private createPopover() {
         const host = document.createElement('div');
         host.id = POPOVER_HOST_ID;
-        host.style.cssText = 'all:initial;position:fixed;z-index:2147483646;width:326px;max-width:calc(100vw - 16px);';
+        host.style.cssText = 'all:initial;position:fixed;z-index:2147483646;width:392px;max-width:calc(100vw - 16px);';
         const shadow = host.attachShadow({ mode: 'open' });
         const style = document.createElement('style');
-        style.textContent = PANEL_STYLE;
+        style.textContent = `${PANEL_STYLE}\n${NEUTRAL_PANEL_STYLE}`;
         shadow.appendChild(style);
         document.documentElement.appendChild(host);
         this.popoverHost = host;
     }
 
-    private panelFrame(title: string, icon = KEY_ICON) {
+    private panelFrame(label = 'FocuzPass') {
         const shadow = this.popoverHost!.shadowRoot!;
         shadow.querySelector('.panel')?.remove();
         const panel = createElement('div', 'panel');
         panel.setAttribute('role', 'dialog');
-        panel.setAttribute('aria-label', 'FocuzPass');
-        const head = createElement('div', 'head');
-        const brand = createElement('span', 'brand');
-        appendIcon(brand, icon);
-        const copy = createElement('div', 'head-copy');
-        copy.append(createElement('p', 'eyebrow', 'FocuzPass'), createElement('p', 'head-title', title));
-        const close = closeIconButton('Close FocuzPass');
-        close.addEventListener('click', () => this.closePopover());
-        head.append(brand, copy, close);
+        panel.setAttribute('aria-label', label);
         const body = createElement('div', 'body');
-        panel.append(head, body);
+        panel.append(body);
         shadow.appendChild(panel);
+        window.requestAnimationFrame(() => this.positionPopover());
         return { panel, body };
     }
 
@@ -523,7 +699,7 @@ class FocuzPassPageOverlay {
     private renderContext(context: PageContext) {
         if (!this.popoverHost) return;
         if (context.state === 'locked') {
-            this.renderGate('Vault locked', 'Unlock FocuzPass to see accounts saved for this site.', 'Unlock in dashboard');
+            this.renderGate('Vault locked', 'Unlock FocuzPass to see saved logins for this site.', 'Unlock FocuzPass');
             return;
         }
         if (context.state === 'unconfigured') {
@@ -538,52 +714,40 @@ class FocuzPassPageOverlay {
     }
 
     private renderGate(title: string, description: string, actionLabel: string) {
-        const { body } = this.panelFrame(title, LOCK_ICON);
+        const { body } = this.panelFrame(title);
         const empty = createElement('div', 'empty');
-        const emptyIcon = createElement('div', 'empty-icon');
-        appendIcon(emptyIcon, LOCK_ICON);
-        empty.append(emptyIcon, createElement('p', 'empty-title', title), createElement('p', 'empty-copy', description));
+        empty.append(createElement('p', 'empty-title', title), createElement('p', 'empty-copy', description));
         const action = createElement('button', 'action', actionLabel);
         action.type = 'button';
         appendIcon(action, ARROW_ICON);
-        action.addEventListener('click', () => {
-            void chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS', tab: 'focuzpass' });
-            this.closePopover();
-        });
+        action.addEventListener('click', () => this.openDashboard());
         empty.appendChild(action);
         body.appendChild(empty);
     }
 
     private renderEmpty(domain: string) {
-        const { panel, body } = this.panelFrame(domain);
+        const { panel, body } = this.panelFrame(`Saved logins for ${domain}`);
         const empty = createElement('div', 'empty');
-        const emptyIcon = createElement('div', 'empty-icon');
-        appendIcon(emptyIcon, SPARK_ICON);
         empty.append(
-            emptyIcon,
-            createElement('p', 'empty-title', 'No login saved yet'),
-            createElement('p', 'empty-copy', 'Create a strong password now. FocuzPass can offer to save it after you sign in.'),
+            createElement('p', 'empty-title', 'No saved logins'),
+            createElement('p', 'empty-copy', `No account is saved for ${domain}.`),
         );
-        const action = createElement('button', 'action', 'Create strong password');
-        action.type = 'button';
-        action.prepend(this.iconNode(SPARK_ICON));
-        action.addEventListener('click', () => void this.generateAndFill());
-        empty.appendChild(action);
         body.appendChild(empty);
-        panel.appendChild(this.createFooter());
+        const footer = this.createFooter();
+        footer.appendChild(this.createNewPasswordButton());
+        panel.appendChild(footer);
     }
 
     private renderMatches(domain: string, matches: LoginMatch[]) {
-        const { panel, body } = this.panelFrame(`Sign in to ${domain}`);
-        body.appendChild(createElement('p', 'section-label', matches.length === 1 ? 'Saved account' : `${matches.length} saved accounts`));
+        const { panel, body } = this.panelFrame(`Saved logins for ${domain}`);
         const list = createElement('div', 'account-list');
         const favicon = currentFavicon();
         for (const match of matches) {
+            const row = createElement('div', 'account-row');
             const button = createElement('button', 'account');
             button.type = 'button';
             button.setAttribute('aria-label', `Fill ${match.identity} for ${match.title}`);
             const mark = createElement('span', 'mark', match.mark || siteMark(match.title));
-            mark.style.color = match.markTone || '#aaa';
             if (favicon) {
                 const image = createElement('img', 'favicon');
                 image.alt = '';
@@ -595,20 +759,20 @@ class FocuzPassPageOverlay {
             }
             const copy = createElement('span', 'account-copy');
             copy.append(createElement('span', 'account-title', match.title), createElement('span', 'account-id', match.identity));
-            const method = createElement('span', 'method', authMethodLabel(match.authMethod));
-            const chevron = createElement('span', 'chevron');
-            appendIcon(chevron, ARROW_ICON);
-            button.append(copy, method, chevron);
+            button.append(copy);
             button.addEventListener('pointerdown', (event) => event.preventDefault());
             button.addEventListener('click', () => this.fillMatch(match));
-            list.appendChild(button);
+            const manage = createElement('button', 'manage');
+            manage.type = 'button';
+            manage.setAttribute('aria-label', `Manage ${match.title} login`);
+            appendIcon(manage, SLIDERS_ICON);
+            manage.addEventListener('click', () => this.openDashboard());
+            row.append(button, manage);
+            list.appendChild(row);
         }
         body.appendChild(list);
         const footer = this.createFooter();
-        const generate = createElement('button', 'text-action', 'Use a new password');
-        generate.type = 'button';
-        generate.addEventListener('click', () => void this.generateAndFill());
-        footer.appendChild(generate);
+        footer.appendChild(this.createNewPasswordButton());
         panel.appendChild(footer);
     }
 
@@ -616,10 +780,7 @@ class FocuzPassPageOverlay {
         if (!this.popoverHost) return;
         const { body } = this.panelFrame('Couldn’t open FocuzPass');
         const empty = createElement('div', 'empty');
-        const emptyIcon = createElement('div', 'empty-icon');
-        appendIcon(emptyIcon, LOCK_ICON);
         empty.append(
-            emptyIcon,
             createElement('p', 'empty-title', 'FocuzPass is unavailable'),
             createElement('p', 'empty-copy', message),
         );
@@ -627,17 +788,26 @@ class FocuzPassPageOverlay {
     }
 
     private createFooter() {
-        const footer = createElement('div', 'footer');
-        const local = createElement('span', 'local');
-        local.append(createElement('span', 'local-dot'), createElement('span', '', 'Local to this device'));
-        footer.appendChild(local);
-        return footer;
+        return createElement('div', 'footer');
+    }
+
+    private createNewPasswordButton() {
+        const button = createElement('button', 'text-action', 'New password');
+        button.type = 'button';
+        button.prepend(this.iconNode(PLUS_ICON));
+        button.addEventListener('click', () => void this.generateAndFill());
+        return button;
     }
 
     private iconNode(markup: string) {
         const span = createElement('span');
         appendIcon(span, markup);
         return span.firstElementChild || span;
+    }
+
+    private openDashboard() {
+        void chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS', tab: 'focuzpass' });
+        this.closePopover();
     }
 
     private fillMatch(match: LoginMatch) {
@@ -648,10 +818,8 @@ class FocuzPassPageOverlay {
         if (match.password) setInputValue(passwordInput, match.password);
         passwordInput.focus({ preventScroll: true });
         void this.send<null>({ type: 'FOCUZPASS_MARK_USED', id: match.id }).catch(() => undefined);
-        this.renderSuccess(
-            match.password ? 'Login filled' : 'Identity filled',
-            match.password ? 'Review the fields, then submit when you’re ready.' : `Continue using ${authMethodLabel(match.authMethod)}.`,
-        );
+        this.closePopover();
+        window.queueMicrotask(() => submitFilledLogin(passwordInput));
     }
 
     private async generateAndFill() {
@@ -660,34 +828,24 @@ class FocuzPassPageOverlay {
         try {
             const password = await this.send<string>({ type: 'FOCUZPASS_GENERATE', length: 20 });
             setInputValue(passwordInput, password);
+            fillRelatedPasswordConfirmation(passwordInput, password);
             passwordInput.focus({ preventScroll: true });
-            this.renderSuccess('Strong password created', 'Finish the form and FocuzPass will offer to save it after sign-in.');
+            this.closePopover();
         } catch (error) {
             this.renderError(error instanceof Error ? error.message : 'Could not generate a password');
         }
     }
 
-    private renderSuccess(title: string, description: string) {
-        if (!this.popoverHost) return;
-        const { body } = this.panelFrame('Ready when you are');
-        const success = createElement('div', 'success');
-        const icon = createElement('div', 'success-icon');
-        appendIcon(icon, CHECK_ICON);
-        success.append(icon, createElement('p', 'success-title', title), createElement('p', 'success-copy', description));
-        body.appendChild(success);
-        window.setTimeout(() => this.closePopover(), 1900);
-    }
-
     private positionPopover() {
         if (!this.popoverHost || !this.activeInput) return;
         const rect = this.activeInput.getBoundingClientRect();
-        const width = Math.min(326, window.innerWidth - 16);
+        const width = Math.min(392, window.innerWidth - 16);
         this.popoverHost.style.width = `${width}px`;
-        const estimatedHeight = Math.min(370, window.innerHeight - 16);
+        const panelHeight = Math.min(this.popoverHost.offsetHeight || 116, window.innerHeight - 16);
         const below = rect.bottom + 8;
-        const top = below + estimatedHeight <= window.innerHeight
+        const top = below + panelHeight <= window.innerHeight || rect.top < panelHeight + 16
             ? below
-            : Math.max(8, rect.top - estimatedHeight - 8);
+            : Math.max(8, rect.top - panelHeight - 8);
         const left = Math.min(window.innerWidth - width - 8, Math.max(8, rect.right - width));
         this.popoverHost.style.left = `${left}px`;
         this.popoverHost.style.top = `${top}px`;
@@ -699,6 +857,7 @@ class FocuzPassPageOverlay {
         this.popoverHost = null;
         this.activeInput = null;
         this.activeControl = null;
+        this.updateControls();
     }
 
     private handleOutsidePointer = (event: PointerEvent) => {
@@ -730,7 +889,7 @@ class FocuzPassPageOverlay {
         if (!form) return;
         const type = (target.getAttribute('type') || (target.tagName === 'BUTTON' ? 'submit' : '')).toLowerCase();
         const label = `${target.textContent || ''} ${target.getAttribute('value') || ''} ${target.getAttribute('aria-label') || ''}`.toLowerCase();
-        if (type === 'submit' || /sign\s*in|log\s*in|continue|create account|register/.test(label)) {
+        if (type === 'submit' || /sign\s*in|sign\s*up|log\s*in|continue|create account|register|join\s+(now|us)/.test(label)) {
             this.captureForm(form);
         }
     };
@@ -744,6 +903,7 @@ class FocuzPassPageOverlay {
         const identity = identityInput?.value.trim();
         const password = passwordInput.value;
         if (!identity || !password) return;
+        const accountCreation = isAccountCreationForm(form, passwordInput);
         this.lastCaptures.set(form, now);
         const beforeUrl = location.href;
         void this.send<{ captured: boolean; reason?: string }>({
@@ -752,12 +912,13 @@ class FocuzPassPageOverlay {
             identity,
             password,
             faviconUrl: currentFavicon(),
+            accountCreation,
         }).then((result) => {
             if (!result.captured) return;
             window.setTimeout(() => {
                 const moved = location.href !== beforeUrl;
                 const formGone = !form.isConnected || !isRenderableInput(passwordInput);
-                if (moved || formGone) void this.checkPending();
+                if (accountCreation || moved || formGone) void this.checkPending();
             }, 1350);
         }).catch(() => undefined);
     }
@@ -767,7 +928,17 @@ class FocuzPassPageOverlay {
     };
 
     private handleVisibility = () => {
-        if (document.visibilityState === 'visible') this.checkPendingSoon();
+        if (document.visibilityState !== 'visible') return;
+        void this.refreshControlState();
+        if (this.saveHost) this.removeSavePrompt();
+        this.checkPendingSoon();
+    };
+
+    private handleRuntimeMessage = (message: { type?: string }) => {
+        if (message?.type !== 'FOCUZPASS_LOCKED') return;
+        this.controlState = 'locked';
+        this.closePopover();
+        this.updateControls();
     };
 
     private async checkPending() {
@@ -787,7 +958,7 @@ class FocuzPassPageOverlay {
         host.style.cssText = 'all:initial;position:fixed;right:18px;bottom:18px;z-index:2147483647;max-width:calc(100vw - 24px);';
         const shadow = host.attachShadow({ mode: 'open' });
         const style = document.createElement('style');
-        style.textContent = SAVE_STYLE;
+        style.textContent = `${SAVE_STYLE}\n${NEUTRAL_SAVE_STYLE}`;
         const toast = createElement('div', 'toast');
         toast.setAttribute('role', 'dialog');
         toast.setAttribute('aria-label', 'Save login to FocuzPass');
@@ -804,8 +975,7 @@ class FocuzPassPageOverlay {
         }
         const copy = createElement('div', 'copy');
         copy.append(
-            createElement('div', 'eyebrow', 'FocuzPass'),
-            createElement('h2', '', 'Save this login?'),
+            createElement('h2', '', pending.accountCreation ? 'Save this new account?' : 'Save this password?'),
             createElement('p', '', `${pending.identity} · ${pending.domain}`),
         );
         const close = closeIconButton('Not now');
@@ -817,7 +987,6 @@ class FocuzPassPageOverlay {
         notNow.addEventListener('click', () => void this.dismissPending());
         const save = createElement('button', 'action primary', 'Save login');
         save.type = 'button';
-        save.prepend(this.iconNode(KEY_ICON));
         save.addEventListener('click', () => void this.commitPending(toast));
         actions.append(notNow, save);
         toast.append(main, actions);
@@ -833,15 +1002,26 @@ class FocuzPassPageOverlay {
             const saved = createElement('div', 'saved');
             const icon = createElement('span');
             appendIcon(icon, CHECK_ICON);
-            saved.append(icon, createElement('span', '', 'Login saved to FocuzPass'));
+            saved.append(icon, createElement('span', '', 'Password saved'));
             toast.appendChild(saved);
             window.setTimeout(() => this.removeSavePrompt(), 1750);
         } catch (error) {
-            toast.querySelector('.actions')?.remove();
             const copy = toast.querySelector('.copy');
             if (copy) {
                 copy.querySelector('h2')!.textContent = 'Unlock to save';
                 copy.querySelector('p')!.textContent = error instanceof Error ? error.message : 'Open FocuzPass and try again.';
+            }
+            const actions = toast.querySelector<HTMLElement>('.actions');
+            if (actions) {
+                const notNow = createElement('button', 'action secondary', 'Not now');
+                notNow.type = 'button';
+                notNow.addEventListener('click', () => void this.dismissPending());
+                const open = createElement('button', 'action primary', 'Open FocuzPass');
+                open.type = 'button';
+                open.addEventListener('click', () => {
+                    void chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS', tab: 'focuzpass' });
+                });
+                actions.replaceChildren(notNow, open);
             }
         }
     }

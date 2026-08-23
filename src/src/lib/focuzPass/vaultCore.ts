@@ -24,6 +24,7 @@ import {
     FOCUZPASS_VAULT_VERSION,
     type AuthMethod,
     type DecryptedCardItem,
+    type DecryptedCustomItem,
     type DecryptedLoginItem,
     type DecryptedPasskeyItem,
     type DecryptedVaultItem,
@@ -31,16 +32,21 @@ import {
     type EncryptedVaultDocument,
     type PasswordStrength,
     type StoredCardItem,
+    type StoredCustomItem,
     type StoredLoginItem,
     type StoredPasskeyItem,
     type StoredVaultItem,
     type VaultBlob,
+    type VaultCollection,
     type VaultMeta,
     type VaultSettings,
+    type VaultSnapshot,
     type VaultStatus,
+    type VaultTag,
+    type CustomItemKind,
 } from './types';
 
-export type { DecryptedVaultItem, VaultStatus };
+export type { CustomItemKind, DecryptedVaultItem, VaultCollection, VaultSnapshot, VaultStatus, VaultTag };
 
 export type VaultStorageAdapter = {
     get: (keys: string[]) => Promise<Record<string, unknown>>;
@@ -50,7 +56,8 @@ export type VaultStorageAdapter = {
 
 export type VaultUpsertInput = {
     id?: string;
-    type: 'login' | 'card' | 'passkey';
+    type: 'login' | 'card' | 'passkey' | 'custom';
+    kind?: CustomItemKind;
     title: string;
     identity: string;
     domain?: string;
@@ -61,9 +68,37 @@ export type VaultUpsertInput = {
     note?: string;
     authMethod?: AuthMethod;
     credentialId?: string;
+    fields?: Record<string, string>;
     mark?: string;
     markTone?: string;
+    vaultId?: string;
+    tagIds?: string[];
+    favorite?: boolean;
+    archivedAt?: string;
+    deletedAt?: string;
 };
+
+export type VaultItemAction =
+    | { action: 'favorite'; id: string; value: boolean }
+    | { action: 'move'; id: string; vaultId: string }
+    | { action: 'archive'; id: string }
+    | { action: 'unarchive'; id: string }
+    | { action: 'trash'; id: string }
+    | { action: 'restore'; id: string }
+    | { action: 'purge'; id: string }
+    | { action: 'duplicate'; id: string };
+
+export const DEFAULT_VAULT_ID = 'focuzpass-personal';
+
+function defaultVault(): VaultCollection {
+    return {
+        id: DEFAULT_VAULT_ID,
+        name: 'Personal',
+        color: '#6e8fb8',
+        icon: 'vault',
+        createdAt: nowIso(),
+    };
+}
 
 function nowIso() {
     return new Date().toISOString();
@@ -120,10 +155,22 @@ function defaultMark(title: string, type: VaultUpsertInput['type']): string {
     return cleaned.slice(0, 2) || 'FP';
 }
 
-function defaultTone(type: VaultUpsertInput['type']): string {
-    if (type === 'passkey') return '#fbbf24';
-    if (type === 'card') return '#60a5fa';
-    return '#e5e5e5';
+function defaultTone(type: VaultUpsertInput['type'], title: string): string {
+    if (type === 'passkey') return '#a78bfa';
+    if (type === 'card') return '#5aa9e6';
+    const palette = ['#86b7d9', '#a7d8a9', '#d6a6cf', '#b9a5de', '#e3b59f', '#93c9bd', '#d5c879'];
+    const hash = Array.from(title).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 17);
+    return palette[hash % palette.length]!;
+}
+
+function organization(item: Partial<DecryptedVaultItem> | Partial<StoredVaultItem>) {
+    return {
+        vaultId: item.vaultId || DEFAULT_VAULT_ID,
+        tagIds: Array.isArray(item.tagIds) ? [...new Set(item.tagIds.filter(Boolean))] : [],
+        favorite: Boolean(item.favorite),
+        archivedAt: item.archivedAt,
+        deletedAt: item.deletedAt,
+    };
 }
 
 async function encryptOptional(key: CryptoKey, value?: string): Promise<EncryptedPayload | undefined> {
@@ -139,6 +186,7 @@ async function decryptOptional(key: CryptoKey, value?: EncryptedPayload): Promis
 async function encryptItem(key: CryptoKey, item: DecryptedVaultItem): Promise<StoredVaultItem> {
     if (item.type === 'login') {
         const stored: StoredLoginItem = {
+            ...organization(item),
             id: item.id,
             type: 'login',
             title: item.title,
@@ -159,6 +207,7 @@ async function encryptItem(key: CryptoKey, item: DecryptedVaultItem): Promise<St
     }
     if (item.type === 'card') {
         const stored: StoredCardItem = {
+            ...organization(item),
             id: item.id,
             type: 'card',
             title: item.title,
@@ -175,20 +224,39 @@ async function encryptItem(key: CryptoKey, item: DecryptedVaultItem): Promise<St
         };
         return stored;
     }
-    const stored: StoredPasskeyItem = {
+    if (item.type === 'passkey') {
+        const stored: StoredPasskeyItem = {
+            ...organization(item),
+            id: item.id,
+            type: 'passkey',
+            title: item.title,
+            identity: item.identity,
+            domain: item.domain,
+            credentialId: item.credentialId,
+            notes: await encryptOptional(key, item.note),
+            mark: item.mark,
+            markTone: item.markTone,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+            lastUsedAt: item.lastUsedAt,
+            experimental: true,
+        };
+        return stored;
+    }
+    const stored: StoredCustomItem = {
+        ...organization(item),
         id: item.id,
-        type: 'passkey',
+        type: 'custom',
+        kind: item.kind,
         title: item.title,
         identity: item.identity,
-        domain: item.domain,
-        credentialId: item.credentialId,
+        fields: await encryptOptional(key, JSON.stringify(item.fields || {})),
         notes: await encryptOptional(key, item.note),
         mark: item.mark,
         markTone: item.markTone,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         lastUsedAt: item.lastUsedAt,
-        experimental: true,
     };
     return stored;
 }
@@ -196,6 +264,7 @@ async function encryptItem(key: CryptoKey, item: DecryptedVaultItem): Promise<St
 async function decryptItem(key: CryptoKey, item: StoredVaultItem): Promise<DecryptedVaultItem> {
     if (item.type === 'login') {
         const decrypted: DecryptedLoginItem = {
+            ...organization(item),
             id: item.id,
             type: 'login',
             title: item.title,
@@ -216,6 +285,7 @@ async function decryptItem(key: CryptoKey, item: StoredVaultItem): Promise<Decry
     }
     if (item.type === 'card') {
         const decrypted: DecryptedCardItem = {
+            ...organization(item),
             id: item.id,
             type: 'card',
             title: item.title,
@@ -232,20 +302,45 @@ async function decryptItem(key: CryptoKey, item: StoredVaultItem): Promise<Decry
         };
         return decrypted;
     }
-    const decrypted: DecryptedPasskeyItem = {
+    if (item.type === 'passkey') {
+        const decrypted: DecryptedPasskeyItem = {
+            ...organization(item),
+            id: item.id,
+            type: 'passkey',
+            title: item.title,
+            identity: item.identity,
+            domain: item.domain,
+            credentialId: item.credentialId,
+            note: await decryptOptional(key, item.notes),
+            mark: item.mark,
+            markTone: item.markTone,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+            lastUsedAt: item.lastUsedAt,
+            experimental: true,
+        };
+        return decrypted;
+    }
+    let fields: Record<string, string> = {};
+    try {
+        fields = JSON.parse((await decryptOptional(key, item.fields)) || '{}') as Record<string, string>;
+    } catch {
+        fields = {};
+    }
+    const decrypted: DecryptedCustomItem = {
+        ...organization(item),
         id: item.id,
-        type: 'passkey',
+        type: 'custom',
+        kind: item.kind,
         title: item.title,
         identity: item.identity,
-        domain: item.domain,
-        credentialId: item.credentialId,
+        fields,
         note: await decryptOptional(key, item.notes),
         mark: item.mark,
         markTone: item.markTone,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         lastUsedAt: item.lastUsedAt,
-        experimental: true,
     };
     return decrypted;
 }
@@ -262,6 +357,8 @@ export function assertNoPlaintextSecrets(serialized: string, samples: string[]) 
 export class FocuzPassVault {
     private vaultKey: CryptoKey | null = null;
     private items: DecryptedVaultItem[] = [];
+    private vaults: VaultCollection[] = [];
+    private tags: VaultTag[] = [];
     private unlockedAt = 0;
     private lastActivityAt = 0;
     private idleLockMs = FOCUZPASS_DEFAULT_IDLE_LOCK_MS;
@@ -301,6 +398,8 @@ export class FocuzPassVault {
     lock() {
         this.vaultKey = null;
         this.items = [];
+        this.vaults = [];
+        this.tags = [];
         this.unlockedAt = 0;
         this.lastActivityAt = 0;
         for (const cb of this.onLockCallbacks) {
@@ -339,7 +438,7 @@ export class FocuzPassVault {
         return {
             configured: Boolean(meta?.salt && meta?.verifier),
             unlocked,
-            itemCount: unlocked ? this.items.length : 0,
+            itemCount: unlocked ? this.items.filter((item) => !item.deletedAt).length : 0,
             idleLockMinutes: this.idleLockMs / 60000,
             unlockedAt: unlocked ? this.unlockedAt : null,
             absoluteLockAt: unlocked ? this.unlockedAt + FOCUZPASS_ABSOLUTE_MAX_MS : null,
@@ -369,7 +468,13 @@ export class FocuzPassVault {
             verifier,
         };
         const settings: VaultSettings = { idleLockMinutes: 15 };
-        const emptyDoc: EncryptedVaultDocument = { version: FOCUZPASS_VAULT_VERSION, items: [] };
+        const initialVault = defaultVault();
+        const emptyDoc: EncryptedVaultDocument = {
+            version: FOCUZPASS_VAULT_VERSION,
+            items: [],
+            vaults: [initialVault],
+            tags: [],
+        };
         const outer = await encryptAesGcm(key, JSON.stringify(emptyDoc));
         const blob: VaultBlob = { iv: outer.iv, ct: outer.ct };
 
@@ -381,6 +486,8 @@ export class FocuzPassVault {
 
         this.vaultKey = key;
         this.items = [];
+        this.vaults = [initialVault];
+        this.tags = [];
         this.unlockedAt = Date.now();
         this.lastActivityAt = this.unlockedAt;
         this.idleLockMs = settings.idleLockMinutes * 60000;
@@ -416,7 +523,14 @@ export class FocuzPassVault {
         }
 
         this.vaultKey = key;
-        this.items = items;
+        this.vaults = document.vaults?.length ? document.vaults : [defaultVault()];
+        this.tags = document.tags || [];
+        const validVaultIds = new Set(this.vaults.map((vault) => vault.id));
+        this.items = items.map((item) => ({
+            ...item,
+            vaultId: validVaultIds.has(item.vaultId) ? item.vaultId : this.vaults[0]!.id,
+            tagIds: item.tagIds.filter((id) => this.tags.some((tag) => tag.id === id)),
+        }));
         this.unlockedAt = Date.now();
         this.lastActivityAt = this.unlockedAt;
         const settings = (data[FOCUZPASS_STORAGE_SETTINGS] as VaultSettings | undefined) || {
@@ -430,7 +544,18 @@ export class FocuzPassVault {
         this.enforceLockTimers();
         if (!this.vaultKey) throw new Error('Vault is locked');
         this.touch();
-        return this.items.map((item) => ({ ...item }));
+        return this.items.filter((item) => !item.deletedAt).map((item) => ({ ...item }));
+    }
+
+    snapshot(): VaultSnapshot {
+        this.enforceLockTimers();
+        if (!this.vaultKey) throw new Error('Vault is locked');
+        this.touch();
+        return {
+            items: this.items.map((item) => ({ ...item, tagIds: [...item.tagIds] })),
+            vaults: this.vaults.map((vault) => ({ ...vault })),
+            tags: this.tags.map((tag) => ({ ...tag })),
+        };
     }
 
     findLoginMatches(domain: string): DecryptedLoginItem[] {
@@ -442,7 +567,7 @@ export class FocuzPassVault {
         return this.items
             .filter(
                 (item): item is DecryptedLoginItem =>
-                    item.type === 'login' && isExactVaultDomain(item.domain, normalized),
+                    item.type === 'login' && !item.archivedAt && !item.deletedAt && isExactVaultDomain(item.domain, normalized),
             )
             .map((item) => ({ ...item }));
     }
@@ -461,8 +586,11 @@ export class FocuzPassVault {
     async upsert(input: VaultUpsertInput): Promise<DecryptedVaultItem> {
         this.enforceLockTimers();
         if (!this.vaultKey) throw new Error('Vault is locked');
-        if (!input.title?.trim() || !input.identity?.trim()) {
-            throw new Error('Name and identity are required');
+        if (!input.title?.trim()) {
+            throw new Error('Name is required');
+        }
+        if (input.type !== 'custom' && !input.identity?.trim()) {
+            throw new Error('Identity is required');
         }
 
         const existing = input.id ? this.items.find((item) => item.id === input.id) : undefined;
@@ -470,7 +598,14 @@ export class FocuzPassVault {
         const createdAt = existing?.createdAt || nowIso();
         const updatedAt = nowIso();
         const mark = input.mark || existing?.mark || defaultMark(input.title, input.type);
-        const markTone = input.markTone || existing?.markTone || defaultTone(input.type);
+        const markTone = input.markTone || existing?.markTone || defaultTone(input.type, input.title);
+        const itemOrganization = {
+            vaultId: input.vaultId || existing?.vaultId || this.vaults[0]?.id || DEFAULT_VAULT_ID,
+            tagIds: input.tagIds ? [...new Set(input.tagIds)] : existing?.tagIds || [],
+            favorite: input.favorite ?? existing?.favorite ?? false,
+            archivedAt: input.archivedAt ?? existing?.archivedAt,
+            deletedAt: input.deletedAt ?? existing?.deletedAt,
+        };
 
         let next: DecryptedVaultItem;
         if (input.type === 'login') {
@@ -482,6 +617,7 @@ export class FocuzPassVault {
                       : undefined;
             const strength = password ? passwordStrength(password) : undefined;
             next = {
+                ...itemOrganization,
                 id,
                 type: 'login',
                 title: input.title.trim(),
@@ -506,6 +642,7 @@ export class FocuzPassVault {
                       ? existing.cardNumber
                       : undefined;
             next = {
+                ...itemOrganization,
                 id,
                 type: 'card',
                 title: input.title.trim(),
@@ -525,8 +662,9 @@ export class FocuzPassVault {
                 updatedAt,
                 lastUsedAt: existing?.lastUsedAt,
             };
-        } else {
+        } else if (input.type === 'passkey') {
             next = {
+                ...itemOrganization,
                 id,
                 type: 'passkey',
                 title: input.title.trim(),
@@ -544,6 +682,23 @@ export class FocuzPassVault {
                 lastUsedAt: existing?.lastUsedAt,
                 experimental: true,
             };
+        } else {
+            const kind = input.kind || (existing?.type === 'custom' ? existing.kind : 'identity');
+            next = {
+                ...itemOrganization,
+                id,
+                type: 'custom',
+                kind,
+                title: input.title.trim(),
+                identity: input.identity?.trim() || '',
+                fields: input.fields || (existing?.type === 'custom' ? existing.fields : {}),
+                note: input.note?.trim() || undefined,
+                mark,
+                markTone,
+                createdAt,
+                updatedAt,
+                lastUsedAt: existing?.lastUsedAt,
+            };
         }
 
         const idx = this.items.findIndex((item) => item.id === id);
@@ -555,11 +710,102 @@ export class FocuzPassVault {
     }
 
     async delete(id: string): Promise<void> {
+        await this.itemAction({ action: 'trash', id });
+    }
+
+    async createVault(input: { name: string; color: string; icon: string }): Promise<VaultCollection> {
         this.enforceLockTimers();
         if (!this.vaultKey) throw new Error('Vault is locked');
-        this.items = this.items.filter((item) => item.id !== id);
+        const name = input.name.trim();
+        if (!name) throw new Error('Vault name is required');
+        if (this.vaults.some((vault) => vault.name.toLowerCase() === name.toLowerCase())) {
+            throw new Error('A vault with this name already exists');
+        }
+        const vault: VaultCollection = {
+            id: crypto.randomUUID(),
+            name,
+            color: input.color || '#6e8fb8',
+            icon: input.icon || 'vault',
+            createdAt: nowIso(),
+        };
+        this.vaults.push(vault);
         await this.persist();
         this.touch();
+        return { ...vault };
+    }
+
+    async createTag(input: { name: string; color: string; icon: string }): Promise<VaultTag> {
+        this.enforceLockTimers();
+        if (!this.vaultKey) throw new Error('Vault is locked');
+        const name = input.name.trim();
+        if (!name) throw new Error('Tag name is required');
+        if (this.tags.some((tag) => tag.name.toLowerCase() === name.toLowerCase())) {
+            throw new Error('A tag with this name already exists');
+        }
+        const tag: VaultTag = {
+            id: crypto.randomUUID(),
+            name,
+            color: input.color || '#63b995',
+            icon: input.icon || 'tag',
+            createdAt: nowIso(),
+        };
+        this.tags.push(tag);
+        await this.persist();
+        this.touch();
+        return { ...tag };
+    }
+
+    async itemAction(input: VaultItemAction): Promise<DecryptedVaultItem | null> {
+        this.enforceLockTimers();
+        if (!this.vaultKey) throw new Error('Vault is locked');
+        const item = this.items.find((candidate) => candidate.id === input.id);
+        if (!item) throw new Error('Vault item not found');
+        if (input.action === 'purge') {
+            this.items = this.items.filter((candidate) => candidate.id !== input.id);
+            await this.persist();
+            this.touch();
+            return null;
+        }
+        if (input.action === 'duplicate') {
+            const duplicated: DecryptedVaultItem = {
+                ...item,
+                id: crypto.randomUUID(),
+                title: `${item.title} copy`,
+                tagIds: [...item.tagIds],
+                favorite: false,
+                archivedAt: undefined,
+                deletedAt: undefined,
+                createdAt: nowIso(),
+                updatedAt: nowIso(),
+                ...(item.type === 'custom' ? { fields: { ...item.fields } } : {}),
+            } as DecryptedVaultItem;
+            this.items.unshift(duplicated);
+            await this.persist();
+            this.touch();
+            return { ...duplicated };
+        }
+        if (input.action === 'favorite') item.favorite = input.value;
+        if (input.action === 'move') {
+            if (!this.vaults.some((vault) => vault.id === input.vaultId)) throw new Error('Vault not found');
+            item.vaultId = input.vaultId;
+        }
+        if (input.action === 'archive') {
+            item.archivedAt = nowIso();
+            item.deletedAt = undefined;
+        }
+        if (input.action === 'unarchive') item.archivedAt = undefined;
+        if (input.action === 'trash') {
+            item.deletedAt = nowIso();
+            item.archivedAt = undefined;
+        }
+        if (input.action === 'restore') {
+            item.deletedAt = undefined;
+            item.archivedAt = undefined;
+        }
+        item.updatedAt = nowIso();
+        await this.persist();
+        this.touch();
+        return { ...item };
     }
 
     /** Expose ciphertext samples for tests — does not include VK. */
@@ -581,12 +827,17 @@ export class FocuzPassVault {
                 if (item.cardNumber) secretSamples.push(item.cardNumber);
                 if (item.cvv) secretSamples.push(item.cvv);
             }
+            if (item.type === 'custom') {
+                secretSamples.push(...Object.values(item.fields).filter((value) => value !== item.identity && value !== item.title));
+            }
             if (item.note) secretSamples.push(item.note);
             storedItems.push(await encryptItem(this.vaultKey, item));
         }
         const document: EncryptedVaultDocument = {
             version: FOCUZPASS_VAULT_VERSION,
             items: storedItems,
+            vaults: this.vaults,
+            tags: this.tags,
         };
         const serializedInner = JSON.stringify(document);
         assertNoPlaintextSecrets(serializedInner, secretSamples);

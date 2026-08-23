@@ -115,6 +115,76 @@ test('FocuzPass vault setup/unlock/CRUD stores no plaintext secrets', async () =
     assert.equal(vault.list().length, 2);
 });
 
+test('FocuzPass organizes custom items across colored vaults and tags', async () => {
+    const storage = createMemoryStorage();
+    const vault = new FocuzPassVault(storage);
+    await vault.setup('organization-master-password');
+
+    const family = await vault.createVault({ name: 'Our Family', color: '#d79ab6', icon: 'home' });
+    const finance = await vault.createTag({ name: 'Finance', color: '#78b89a', icon: 'tag' });
+    const recoveryPhrase = 'orbit timber meadow ivory capable winter velvet';
+    const wallet = await vault.upsert({
+        type: 'custom',
+        kind: 'crypto_wallet',
+        title: 'Main wallet',
+        identity: 'Ethereum',
+        fields: {
+            network: 'Ethereum',
+            address: '0x1234567890',
+            password: 'WalletPassword!48',
+            recoveryPhrase,
+        },
+        vaultId: family.id,
+        tagIds: [finance.id],
+        markTone: '#6577d8',
+    });
+
+    const snapshot = vault.snapshot();
+    assert.equal(snapshot.vaults.find((entry) => entry.id === family.id)?.color, '#d79ab6');
+    assert.equal(snapshot.tags.find((entry) => entry.id === finance.id)?.color, '#78b89a');
+    assert.equal(snapshot.items.find((entry) => entry.id === wallet.id)?.vaultId, family.id);
+    assert.deepEqual(snapshot.items.find((entry) => entry.id === wallet.id)?.tagIds, [finance.id]);
+    assert.equal(snapshot.items.find((entry) => entry.id === wallet.id)?.type, 'custom');
+
+    const raw = JSON.stringify(await vault.readPersistedRaw());
+    assertNoPlaintextSecrets(raw, [recoveryPhrase, 'WalletPassword!48']);
+    assert.ok(!raw.includes(recoveryPhrase));
+});
+
+test('FocuzPass item actions support favorites, move, duplicate, archive, trash, and restore', async () => {
+    const vault = new FocuzPassVault(createMemoryStorage());
+    await vault.setup('lifecycle-master-password');
+    const work = await vault.createVault({ name: 'Work', color: '#6e8fb8', icon: 'work' });
+    const login = await vault.upsert({
+        type: 'login',
+        title: 'Example',
+        identity: 'person@example.com',
+        domain: 'example.com',
+        password: 'LifecycleSecret!94',
+    });
+
+    await vault.itemAction({ action: 'favorite', id: login.id, value: true });
+    await vault.itemAction({ action: 'move', id: login.id, vaultId: work.id });
+    const duplicated = await vault.itemAction({ action: 'duplicate', id: login.id });
+    assert.ok(duplicated);
+    assert.notEqual(duplicated?.id, login.id);
+    assert.equal(duplicated?.title, 'Example copy');
+    assert.equal(duplicated?.favorite, false);
+
+    await vault.itemAction({ action: 'archive', id: login.id });
+    assert.ok(vault.snapshot().items.find((entry) => entry.id === login.id)?.archivedAt);
+    assert.equal(vault.findLoginMatches('example.com').length, 1, 'the active duplicate remains fillable');
+    await vault.itemAction({ action: 'trash', id: login.id });
+    assert.ok(vault.snapshot().items.find((entry) => entry.id === login.id)?.deletedAt);
+    assert.equal(vault.list().some((entry) => entry.id === login.id), false);
+    await vault.itemAction({ action: 'restore', id: login.id });
+    const restored = vault.snapshot().items.find((entry) => entry.id === login.id);
+    assert.equal(restored?.deletedAt, undefined);
+    assert.equal(restored?.archivedAt, undefined);
+    assert.equal(restored?.vaultId, work.id);
+    assert.equal(restored?.favorite, true);
+});
+
 test('FocuzPass overlay matching is exact-domain only', () => {
     assert.equal(normalizeVaultDomain('https://www.GitHub.com/login'), 'github.com');
     assert.equal(isExactVaultDomain('github.com', 'www.github.com'), true);

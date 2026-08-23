@@ -2666,10 +2666,20 @@ const OptionsApp = () => {
         );
     }
 
+    const focuzPassMode = activeTab === 'focuzpass';
+    const fullHeightTab = ['calendar', 'lists', 'ai_coach', 'focuzpass'].includes(activeTab);
+
     const renderContent = () => {
         switch (activeTab) {
             case 'overview': return <OverviewTab />;
-            case 'focuzpass': return <FocuzPassTab />;
+            case 'focuzpass': return (
+                <FocuzPassTab
+                    avatarUrl={engineState.profileAvatar}
+                    username={engineState.profileUsername || engineState.profileName || session?.user?.email?.split('@')[0] || 'Username'}
+                    accountName={engineState.profileName || session?.user?.email || 'FocuzNow Account'}
+                    onExit={() => navigateTab('overview')}
+                />
+            );
             case 'calendar': return <SchedulingCalendarPage fullscreen />;
             case 'lists': return <ListsTab />;
             case 'sessions': return <SessionsTab />;
@@ -2702,28 +2712,30 @@ const OptionsApp = () => {
 
     return (
         <div
-            className={`focuz-dashboard focuz-dashboard-shell min-h-screen selection:bg-white/10 ${sidebarCollapsed ? 'focuz-dashboard--sidebar-collapsed' : ''} ${proGoldTheme ? 'pro-shell-vignette' : ''}`}
+            className={`focuz-dashboard focuz-dashboard-shell min-h-screen selection:bg-white/10 ${sidebarCollapsed ? 'focuz-dashboard--sidebar-collapsed' : ''} ${focuzPassMode ? 'focuz-dashboard--focuzpass' : ''} ${proGoldTheme && !focuzPassMode ? 'pro-shell-vignette' : ''}`}
         >
-            {proVisuals && <ProConfettiGate />}
+            {proVisuals && !focuzPassMode && <ProConfettiGate />}
             
             {/* Sidebar */}
-            <WorkspaceSidebar
-                activeTab={activeTab}
-                avatarUrl={engineState.profileAvatar}
-                username={engineState.profileUsername || engineState.profileName}
-                email={session?.user?.email}
-                isPro={isPro}
-                collapsed={sidebarCollapsed}
-                onToggleCollapse={toggleSidebarCollapsed}
-                onNavigate={navigateTab}
-                onOpenPalette={() => setPaletteOpen(true)}
-                onUpgrade={() => void openCheckout()}
-                onSignOut={() => void useAuthStore.getState().signOut()}
-            />
+            {!focuzPassMode && (
+                <WorkspaceSidebar
+                    activeTab={activeTab}
+                    avatarUrl={engineState.profileAvatar}
+                    username={engineState.profileUsername || engineState.profileName}
+                    email={session?.user?.email}
+                    isPro={isPro}
+                    collapsed={sidebarCollapsed}
+                    onToggleCollapse={toggleSidebarCollapsed}
+                    onNavigate={navigateTab}
+                    onOpenPalette={() => setPaletteOpen(true)}
+                    onUpgrade={() => void openCheckout()}
+                    onSignOut={() => void useAuthStore.getState().signOut()}
+                />
+            )}
 
             {/* Main Content */}
             <main className="workspace-main flex flex-col min-w-0 relative overflow-hidden">
-                {sidebarCollapsed && (
+                {sidebarCollapsed && !focuzPassMode && (
                     <>
                         <div
                             className="workspace-sidebar-hover-rail"
@@ -2756,7 +2768,7 @@ const OptionsApp = () => {
                     </>
                 )}
                 {/* Topbar */}
-                <header className="workspace-topbar h-11 shrink-0 px-6 flex items-center justify-between sticky top-0 z-50">
+                {!focuzPassMode && <header className="workspace-topbar h-11 shrink-0 px-6 flex items-center justify-between sticky top-0 z-50">
                     <div className="flex items-center gap-2">
                         <h1 className="text-xs font-medium text-neutral-400">{tabLabel(activeTab)}</h1>
                     </div>
@@ -2781,15 +2793,15 @@ const OptionsApp = () => {
                             </button>
                         )}
                     </div>
-                </header>
+                </header>}
 
-                <div className={['calendar', 'lists', 'ai_coach'].includes(activeTab)
+                <div className={fullHeightTab
                     ? 'flex-1 min-h-0 w-full overflow-hidden'
                     : 'px-6 pb-12 w-full overflow-y-auto scrollbar-hide'}
                 >
                     <div
                         key={activeTab}
-                        className={`${proVisuals ? 'pro-content-fade pro-page-enter' : ''} ${['calendar', 'lists', 'ai_coach'].includes(activeTab) ? 'h-full' : ''}`}
+                        className={`${proVisuals && !focuzPassMode ? 'pro-content-fade pro-page-enter' : ''} ${fullHeightTab ? 'h-full' : ''}`}
                     >
                         {renderContent()}
                     </div>

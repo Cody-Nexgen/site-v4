@@ -157,6 +157,7 @@ export default function DashboardPage({ session, onLogout, onOpenCalendar }: Das
               />
               <InstallExtensionCard
                 title="FocuzPass encrypted vault"
+                variant="vault"
                 description="Passwords and cards stay on-device in the extension — AES-256-GCM encrypted, never synced to the website or Supabase."
               />
             </div>

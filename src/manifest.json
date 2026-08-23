@@ -13,7 +13,8 @@
         "alarms",
         "identity",
         "scripting",
-        "idle"
+        "idle",
+        "favicon"
     ],
     "commands": {
         "toggle-command-palette": {

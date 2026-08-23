@@ -2,9 +2,18 @@
 
 import { isWebPlatform } from '../platform';
 import { extensionPresent, sendExtensionRpc } from '../platform/webPlatform';
-import type { DecryptedVaultItem, VaultUpsertInput, VaultStatus } from './vaultCore';
+import type {
+    CustomItemKind,
+    DecryptedVaultItem,
+    VaultCollection,
+    VaultItemAction,
+    VaultSnapshot,
+    VaultTag,
+    VaultUpsertInput,
+    VaultStatus,
+} from './vaultCore';
 
-export type { DecryptedVaultItem, VaultStatus, VaultUpsertInput };
+export type { CustomItemKind, DecryptedVaultItem, VaultCollection, VaultSnapshot, VaultStatus, VaultTag, VaultUpsertInput };
 
 type MessageResponse<T> = { ok: true; data: T } | { ok: false; error: string; needsExtension?: boolean };
 
@@ -58,12 +67,28 @@ export async function focuzPassList(): Promise<DecryptedVaultItem[]> {
     return send<DecryptedVaultItem[]>({ type: 'FOCUZPASS_LIST' });
 }
 
+export async function focuzPassSnapshot(): Promise<VaultSnapshot> {
+    return send<VaultSnapshot>({ type: 'FOCUZPASS_SNAPSHOT' });
+}
+
 export async function focuzPassUpsert(item: VaultUpsertInput): Promise<DecryptedVaultItem> {
     return send<DecryptedVaultItem>({ type: 'FOCUZPASS_UPSERT', item });
 }
 
 export async function focuzPassDelete(id: string): Promise<void> {
     await send<null>({ type: 'FOCUZPASS_DELETE', id });
+}
+
+export async function focuzPassItemAction(action: VaultItemAction): Promise<DecryptedVaultItem | null> {
+    return send<DecryptedVaultItem | null>({ type: 'FOCUZPASS_ITEM_ACTION', action });
+}
+
+export async function focuzPassCreateVault(collection: { name: string; color: string; icon: string }): Promise<VaultCollection> {
+    return send<VaultCollection>({ type: 'FOCUZPASS_CREATE_VAULT', collection });
+}
+
+export async function focuzPassCreateTag(collection: { name: string; color: string; icon: string }): Promise<VaultTag> {
+    return send<VaultTag>({ type: 'FOCUZPASS_CREATE_TAG', collection });
 }
 
 export async function focuzPassTouch(): Promise<void> {

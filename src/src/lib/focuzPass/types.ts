@@ -9,9 +9,23 @@ export const FOCUZPASS_PBKDF2_ITERATIONS = 600_000;
 export const FOCUZPASS_VERIFIER_PLAINTEXT = 'focuzpass.v1.ok';
 export const FOCUZPASS_ABSOLUTE_MAX_MS = 24 * 60 * 60 * 1000;
 export const FOCUZPASS_DEFAULT_IDLE_LOCK_MS = 15 * 60 * 1000;
-export const FOCUZPASS_VAULT_VERSION = 1;
+export const FOCUZPASS_VAULT_VERSION = 2;
 
-export type VaultItemType = 'login' | 'card' | 'passkey';
+export type VaultItemType = 'login' | 'card' | 'passkey' | 'custom';
+export type CustomItemKind =
+    | 'identity'
+    | 'password'
+    | 'api_credentials'
+    | 'bank_account'
+    | 'crypto_wallet'
+    | 'driver_license'
+    | 'email'
+    | 'medical_record'
+    | 'membership'
+    | 'passport'
+    | 'ssh_key'
+    | 'social_security_number'
+    | 'wireless_router';
 export type PasswordStrength = 'weak' | 'okay' | 'strong';
 export type AuthMethod =
     | 'PASSWORD'
@@ -48,8 +62,40 @@ export type VaultSettings = {
     idleLockMinutes: number;
 };
 
+export type VaultCollection = {
+    id: string;
+    name: string;
+    color: string;
+    icon: string;
+    createdAt: string;
+};
+
+export type VaultTag = {
+    id: string;
+    name: string;
+    color: string;
+    icon: string;
+    createdAt: string;
+};
+
+type StoredItemOrganization = {
+    vaultId?: string;
+    tagIds?: string[];
+    favorite?: boolean;
+    archivedAt?: string;
+    deletedAt?: string;
+};
+
+type DecryptedItemOrganization = {
+    vaultId: string;
+    tagIds: string[];
+    favorite: boolean;
+    archivedAt?: string;
+    deletedAt?: string;
+};
+
 /** Sensitive fields encrypted individually before outer vault wrap. */
-export type StoredLoginItem = {
+export type StoredLoginItem = StoredItemOrganization & {
     id: string;
     type: 'login';
     title: string;
@@ -67,7 +113,7 @@ export type StoredLoginItem = {
     lastUsedAt?: string;
 };
 
-export type StoredCardItem = {
+export type StoredCardItem = StoredItemOrganization & {
     id: string;
     type: 'card';
     title: string;
@@ -83,7 +129,7 @@ export type StoredCardItem = {
     lastUsedAt?: string;
 };
 
-export type StoredPasskeyItem = {
+export type StoredPasskeyItem = StoredItemOrganization & {
     id: string;
     type: 'passkey';
     title: string;
@@ -102,14 +148,31 @@ export type StoredPasskeyItem = {
     experimental: true;
 };
 
-export type StoredVaultItem = StoredLoginItem | StoredCardItem | StoredPasskeyItem;
+export type StoredCustomItem = StoredItemOrganization & {
+    id: string;
+    type: 'custom';
+    kind: CustomItemKind;
+    title: string;
+    identity: string;
+    fields?: EncryptedPayload;
+    notes?: EncryptedPayload;
+    mark: string;
+    markTone: string;
+    createdAt: string;
+    updatedAt: string;
+    lastUsedAt?: string;
+};
+
+export type StoredVaultItem = StoredLoginItem | StoredCardItem | StoredPasskeyItem | StoredCustomItem;
 
 export type EncryptedVaultDocument = {
     version: number;
     items: StoredVaultItem[];
+    vaults?: VaultCollection[];
+    tags?: VaultTag[];
 };
 
-export type DecryptedLoginItem = {
+export type DecryptedLoginItem = DecryptedItemOrganization & {
     id: string;
     type: 'login';
     title: string;
@@ -127,7 +190,7 @@ export type DecryptedLoginItem = {
     lastUsedAt?: string;
 };
 
-export type DecryptedCardItem = {
+export type DecryptedCardItem = DecryptedItemOrganization & {
     id: string;
     type: 'card';
     title: string;
@@ -143,7 +206,7 @@ export type DecryptedCardItem = {
     lastUsedAt?: string;
 };
 
-export type DecryptedPasskeyItem = {
+export type DecryptedPasskeyItem = DecryptedItemOrganization & {
     id: string;
     type: 'passkey';
     title: string;
@@ -159,7 +222,28 @@ export type DecryptedPasskeyItem = {
     experimental: true;
 };
 
-export type DecryptedVaultItem = DecryptedLoginItem | DecryptedCardItem | DecryptedPasskeyItem;
+export type DecryptedCustomItem = DecryptedItemOrganization & {
+    id: string;
+    type: 'custom';
+    kind: CustomItemKind;
+    title: string;
+    identity: string;
+    fields: Record<string, string>;
+    note?: string;
+    mark: string;
+    markTone: string;
+    createdAt: string;
+    updatedAt: string;
+    lastUsedAt?: string;
+};
+
+export type DecryptedVaultItem = DecryptedLoginItem | DecryptedCardItem | DecryptedPasskeyItem | DecryptedCustomItem;
+
+export type VaultSnapshot = {
+    items: DecryptedVaultItem[];
+    vaults: VaultCollection[];
+    tags: VaultTag[];
+};
 
 export type VaultStatus = {
     configured: boolean;
@@ -179,8 +263,12 @@ export type FocuzPassMessageType =
     | 'FOCUZPASS_UNLOCK'
     | 'FOCUZPASS_LOCK'
     | 'FOCUZPASS_LIST'
+    | 'FOCUZPASS_SNAPSHOT'
     | 'FOCUZPASS_UPSERT'
     | 'FOCUZPASS_DELETE'
+    | 'FOCUZPASS_ITEM_ACTION'
+    | 'FOCUZPASS_CREATE_VAULT'
+    | 'FOCUZPASS_CREATE_TAG'
     | 'FOCUZPASS_TOUCH'
     | 'FOCUZPASS_GENERATE'
     | 'FOCUZPASS_PAGE_CONTEXT'
