@@ -1778,15 +1778,29 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 
 .focuz-pass-ready .vault-month-group.is-custom-order > p { color: #6f7075; text-transform: none; letter-spacing: 0; }
 .focuz-pass-ready .vault-row { position: relative; }
-.focuz-pass-ready .vault-row.is-draggable { touch-action: none; cursor: grab; }
-.focuz-pass-ready .vault-row.is-draggable:active,
+.focuz-pass-ready .vault-row.is-draggable { cursor: default; }
 .focuz-pass-ready .vault-row.is-dragging { cursor: grabbing; }
 .focuz-pass-ready .vault-row.is-dragging { z-index: 20; background: #3b3b3e; opacity: 0.94; box-shadow: 0 16px 38px -18px rgba(0, 0, 0, 0.95), inset 0 1px rgba(255, 255, 255, 0.05); }
-.focuz-pass-ready .vault-row-drag { display: grid; width: 11px; flex: none; place-items: center; color: #5c5d62; opacity: 0; transition: opacity 130ms ease, color 130ms ease; }
+.focuz-pass-ready .vault-row-drag {
+    display: grid;
+    width: 34px;
+    min-width: 34px;
+    height: 38px;
+    margin: -4px 0 -4px -6px;
+    place-items: center;
+    border-radius: 9px;
+    color: #77787d;
+    cursor: grab;
+    opacity: 0.68;
+    touch-action: none;
+    user-select: none;
+    transition: background 130ms ease, color 130ms ease, opacity 130ms ease, transform 130ms ease;
+}
 .focuz-pass-ready .vault-row:hover .vault-row-drag,
 .focuz-pass-ready .vault-row:focus-within .vault-row-drag,
 .focuz-pass-ready .vault-row.is-dragging .vault-row-drag { opacity: 1; }
-.focuz-pass-ready .vault-row-drag:hover { color: #bbbcc0; }
+.focuz-pass-ready .vault-row-drag:hover { background: rgba(255, 255, 255, 0.065); color: #d0d1d4; }
+.focuz-pass-ready .vault-row-drag:active { color: #ededee; cursor: grabbing; transform: scale(0.96); }
 
 .vault-editor-field .vault-phone-input {
     position: relative;
@@ -1854,41 +1868,8 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 .vault-phone-country-menu button > strong { overflow: hidden; font-size: 10.5px; font-weight: 580; text-overflow: ellipsis; white-space: nowrap; }
 .vault-phone-country-menu button > small { color: #77787e; font-size: 9px; }
 
-.vault-editor-field .vault-address-autocomplete { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr) 18px; align-items: center; gap: 6px; margin-top: 2px; color: #7fa7ca; }
+.vault-editor-field .vault-address-autocomplete { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 6px; margin-top: 2px; color: #7fa7ca; }
 .vault-editor-field .vault-address-autocomplete > input { padding-top: 0; }
-.vault-address-spinner { width: 12px; height: 12px; border: 2px solid #56575c; border-right-color: transparent; border-radius: 50%; animation: vault-spin 650ms linear infinite; }
-.vault-address-suggestions {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: -8px;
-    right: -8px;
-    z-index: 90;
-    overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.11);
-    border-radius: 12px;
-    background: #1c1c1e;
-    padding: 6px;
-    box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.95), inset 0 1px rgba(255, 255, 255, 0.035);
-}
-
-.vault-editor-field .vault-address-suggestions > button {
-    position: static;
-    display: grid;
-    width: 100%;
-    min-height: 42px;
-    grid-template-columns: 18px minmax(0, 1fr);
-    align-items: center;
-    gap: 7px;
-    border-radius: 8px;
-    padding: 7px 8px;
-    color: #bfc0c4;
-    text-align: left;
-    transform: none;
-}
-
-.vault-editor-field .vault-address-suggestions > button:hover { background: rgba(255, 255, 255, 0.06); color: #ededee; }
-.vault-address-suggestions button > span { overflow: hidden; font-size: 10px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
-.vault-address-suggestions > small { display: block; padding: 7px 8px 3px 33px; color: #5f6066; font-size: 8px; }
 
 @media (max-width: 760px) {
     .focuz-pass-ready .vault-toolbar .vault-back-button span { display: none; }

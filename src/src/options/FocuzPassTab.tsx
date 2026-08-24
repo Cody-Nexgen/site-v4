@@ -826,7 +826,6 @@ function SortableVaultRow({ item, selected, draggable, onSelect, onContextMenu, 
             ref={setNodeRef}
             role="button"
             tabIndex={0}
-            onPointerDown={(event) => { if (draggable) listeners?.onPointerDown?.(event); }}
             onClick={onSelect}
             onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -838,7 +837,22 @@ function SortableVaultRow({ item, selected, draggable, onSelect, onContextMenu, 
             className={`vault-row${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}${draggable ? ' is-draggable' : ''}`}
             style={{ transform: DndCss.Transform.toString(transform), transition }}
         >
-            <span className="vault-row-drag" {...attributes} {...listeners} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => { event.stopPropagation(); listeners?.onPointerDown?.(event); }} aria-label={`Drag ${item.title} to reorder`}><GripVertical size={13} /></span>
+            {draggable && (
+                <span
+                    className="vault-row-drag"
+                    {...attributes}
+                    {...listeners}
+                    onClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => {
+                        event.stopPropagation();
+                        listeners?.onPointerDown?.(event);
+                    }}
+                    aria-label={`Drag ${item.title} to reorder`}
+                    title="Drag to reorder"
+                >
+                    <GripVertical size={16} />
+                </span>
+            )}
             <ItemMark item={item} />
             <span className="vault-row-copy">
                 <strong>{item.title}</strong>
@@ -1363,100 +1377,26 @@ function InternationalPhoneInput({ value, onChange, onBlur, invalid }: {
     );
 }
 
-type AddressSuggestion = {
-    place_id?: number;
-    display_name?: string;
-    address?: {
-        house_number?: string;
-        road?: string;
-        city?: string;
-        town?: string;
-        village?: string;
-        municipality?: string;
-        state?: string;
-        postcode?: string;
-        country?: string;
-        country_code?: string;
-    };
-};
-
 function AddressAutocompleteInput({ value, onChange, onBlur, invalid }: {
     value: string;
-    onChange: (value: string, parts?: Record<string, string>) => void;
+    onChange: (value: string) => void;
     onBlur: () => void;
     invalid?: boolean;
 }) {
-    const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
-    const [open, setOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const acceptedValue = useRef('');
-
-    useEffect(() => {
-        const query = value.trim();
-        if (query.length < 4 || query === acceptedValue.current) {
-            setSuggestions([]);
-            setOpen(false);
-            return;
-        }
-        const controller = new AbortController();
-        const timer = window.setTimeout(() => {
-            setLoading(true);
-            void fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=${encodeURIComponent(query)}`, {
-                headers: { Accept: 'application/json' },
-                signal: controller.signal,
-            })
-                .then((response) => response.ok ? response.json() : Promise.reject(new Error('Address search failed')))
-                .then((rows: AddressSuggestion[]) => {
-                    setSuggestions((rows || []).filter((row) => row.display_name));
-                    setOpen(true);
-                })
-                .catch((error: unknown) => {
-                    if ((error as { name?: string })?.name !== 'AbortError') setSuggestions([]);
-                })
-                .finally(() => setLoading(false));
-        }, 420);
-        return () => {
-            window.clearTimeout(timer);
-            controller.abort();
-        };
-    }, [value]);
-
-    const choose = (suggestion: AddressSuggestion) => {
-        const address = suggestion.address || {};
-        const label = suggestion.display_name || '';
-        acceptedValue.current = label;
-        onChange(label, {
-            address: label,
-            addressLine1: [address.house_number, address.road].filter(Boolean).join(' '),
-            city: address.city || address.town || address.village || address.municipality || '',
-            region: address.state || '',
-            postalCode: address.postcode || '',
-            country: address.country || '',
-            countryCode: address.country_code?.toUpperCase() || '',
-        });
-        setOpen(false);
-    };
-
     return (
-        <div className="vault-address-autocomplete" onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                setOpen(false);
-                onBlur();
-            }
-        }}>
+        <div className="vault-address-autocomplete">
             <MapPin size={14} />
-            <input value={value} onChange={(event) => { acceptedValue.current = ''; onChange(event.target.value); }} onFocus={() => suggestions.length && setOpen(true)} placeholder="Start typing an address…" autoComplete="street-address" aria-invalid={invalid} />
-            {loading && <span className="vault-address-spinner" aria-label="Finding addresses" />}
-            <AnimatePresence>{open && suggestions.length > 0 && (
-                <motion.div className="vault-address-suggestions" role="listbox" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}>
-                    {suggestions.map((suggestion) => (
-                        <button key={suggestion.place_id || suggestion.display_name} type="button" role="option" onClick={() => choose(suggestion)}>
-                            <MapPin size={14} /><span>{suggestion.display_name}</span>
-                        </button>
-                    ))}
-                    <small>Address suggestions · OpenStreetMap</small>
-                </motion.div>
-            )}</AnimatePresence>
+            <input
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                onBlur={onBlur}
+                name="street-address"
+                placeholder="Type or choose a saved address…"
+                autoComplete="street-address"
+                autoCapitalize="words"
+                spellCheck={false}
+                aria-invalid={invalid}
+            />
         </div>
     );
 }
@@ -1795,7 +1735,7 @@ export default function FocuzPassTab({
     const searchRef = useRef<HTMLInputElement>(null);
     const listSearchRef = useRef<HTMLInputElement>(null);
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { delay: 180, tolerance: 7 } }),
+        useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
     );
 
