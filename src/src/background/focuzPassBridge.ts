@@ -15,6 +15,7 @@ import { randomBytes } from '../lib/focuzPass/crypto';
 const PENDING_PREFIX = 'focuzpass.pending-login.';
 const PENDING_TTL_MS = 2 * 60 * 1000;
 const pendingMemory = new Map<string, PendingLogin>();
+let accessWindowId: number | null = null;
 
 type PendingLogin = {
     domain: string;
@@ -106,6 +107,36 @@ function pendingKey(tabId: number) {
     return `${PENDING_PREFIX}${tabId}`;
 }
 
+async function openAccessWindow() {
+    if (accessWindowId != null) {
+        try {
+            await chrome.windows.update(accessWindowId, { focused: true });
+            return;
+        } catch {
+            accessWindowId = null;
+        }
+    }
+
+    const created = await chrome.windows.create({
+        url: chrome.runtime.getURL('src/focuzpass-unlock/index.html'),
+        type: 'popup',
+        width: 440,
+        height: 610,
+        focused: true,
+    });
+    if (!created) throw new Error('Could not open the FocuzPass access window');
+    accessWindowId = created.id ?? null;
+    if (accessWindowId != null) {
+        const openedId = accessWindowId;
+        const onRemoved = (windowId: number) => {
+            if (windowId !== openedId) return;
+            accessWindowId = null;
+            chrome.windows.onRemoved.removeListener(onRemoved);
+        };
+        chrome.windows.onRemoved.addListener(onRemoved);
+    }
+}
+
 async function readPending(sender?: chrome.runtime.MessageSender): Promise<PendingLogin | null> {
     const page = senderPage(sender);
     if (!page) return null;
@@ -178,6 +209,9 @@ export async function handleFocuzPassMessage(msg: {
                 return { ok: true, data: null };
             case 'FOCUZPASS_GENERATE':
                 return { ok: true, data: generatePassword(msg.length) };
+            case 'FOCUZPASS_OPEN_ACCESS_WINDOW':
+                await openAccessWindow();
+                return { ok: true, data: null };
             case 'FOCUZPASS_PAGE_CONTEXT': {
                 const page = senderPage(sender);
                 if (!page) throw new Error('FocuzPass is unavailable on this page');
@@ -295,5 +329,8 @@ export async function handleFocuzPassMessage(msg: {
 }
 
 export function isFocuzPassMessage(type: unknown): boolean {
-    return typeof type === 'string' && type.startsWith('FOCUZPASS_') && type !== 'FOCUZPASS_LOCKED';
+    return typeof type === 'string'
+        && type.startsWith('FOCUZPASS_')
+        && type !== 'FOCUZPASS_LOCKED'
+        && type !== 'FOCUZPASS_ACCESS_CHANGED';
 }

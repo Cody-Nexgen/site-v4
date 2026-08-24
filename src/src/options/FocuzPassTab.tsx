@@ -78,12 +78,12 @@ import {
     focuzPassDelete,
     focuzPassItemAction,
     focuzPassLock,
+    focuzPassOpenAccessWindow,
+    focuzPassReadRememberedOrder,
     focuzPassReorder,
-    focuzPassSetup,
     focuzPassSnapshot,
     focuzPassStatus,
     focuzPassTouch,
-    focuzPassUnlock,
     focuzPassUpsert,
     type CustomItemKind,
     type DecryptedVaultItem,
@@ -500,16 +500,10 @@ function clearSensitiveUi(
     setItems: (items: VaultItem[]) => void,
     setRevealed: (v: boolean) => void,
     setCopied: (v: string) => void,
-    setUnlockValue: (v: string) => void,
-    setSetupPassword: (v: string) => void,
-    setSetupConfirm: (v: string) => void,
 ) {
     setItems([]);
     setRevealed(false);
     setCopied('');
-    setUnlockValue('');
-    setSetupPassword('');
-    setSetupConfirm('');
 }
 
 function faviconUrl(item: VaultItem): string | null {
@@ -860,6 +854,88 @@ function SortableVaultRow({ item, selected, draggable, onSelect, onContextMenu, 
             </span>
             <button type="button" className="vault-row-more" onPointerDown={(event) => event.stopPropagation()} onClick={onMore} aria-label={`More actions for ${item.title}`}><EllipsisVertical size={15} /></button>
         </div>
+    );
+}
+
+function VaultCommandMenu({ item, vaults, className = '', style, onAction, onMove, onDelete, onClose }: {
+    item: VaultItem;
+    vaults: VaultCollection[];
+    className?: string;
+    style?: CSSProperties;
+    onAction: (action: 'favorite' | 'archive' | 'unarchive' | 'restore' | 'purge' | 'duplicate', value?: boolean) => void;
+    onMove: (vaultId: string) => void;
+    onDelete: () => void;
+    onClose: () => void;
+}) {
+    const currentVault = vaults.find((vault) => vault.id === item.vaultId);
+    const otherVaults = vaults.filter((vault) => vault.id !== item.vaultId);
+    const descriptor = item.domain || (item.type === 'custom' && item.kind ? ITEM_DEFINITIONS[item.kind].label : TYPE_META[item.type].label);
+    return (
+        <motion.div
+            className={`vault-command-menu ${className}`.trim()}
+            role="menu"
+            aria-label={`Actions for ${item.title}`}
+            style={{ ...style, '--vault-command-tone': currentVault?.color || item.markTone } as CSSProperties}
+            initial={{ opacity: 0, y: -5, scale: 0.975 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -3, scale: 0.985 }}
+            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    onClose();
+                    return;
+                }
+                if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+                const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+                if (!buttons.length) return;
+                event.preventDefault();
+                const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                const nextIndex = event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                        ? buttons.length - 1
+                        : event.key === 'ArrowDown'
+                            ? (currentIndex + 1 + buttons.length) % buttons.length
+                            : (currentIndex - 1 + buttons.length) % buttons.length;
+                buttons[nextIndex]?.focus();
+            }}
+        >
+            <header className="vault-command-menu__identity">
+                <ItemMark item={item} />
+                <span><strong>{item.title}</strong><small>{descriptor}</small></span>
+                <ShieldCheck size={14} aria-label="Private item" />
+            </header>
+            {item.deletedAt ? (
+                <div className="vault-command-menu__group">
+                    <button role="menuitem" type="button" autoFocus onClick={() => onAction('restore')}><ArchiveRestore size={16} /><span>Restore item</span></button>
+                    <button role="menuitem" type="button" className="is-danger" onClick={() => onAction('purge')}><Trash2 size={16} /><span>Delete permanently</span></button>
+                </div>
+            ) : (
+                <>
+                    <div className="vault-command-menu__group" aria-label="Organize item">
+                        <button role="menuitem" type="button" autoFocus onClick={() => onAction('favorite', !item.favorite)}><ExactFavoritesIcon size={16} /><span>{item.favorite ? 'Remove from Favorites' : 'Add to Favorites'}</span></button>
+                        <button role="menuitem" type="button" onClick={() => onAction('duplicate')}><CopyPlus size={16} /><span>Duplicate</span></button>
+                    </div>
+                    {otherVaults.length > 0 && (
+                        <div className="vault-command-menu__vaults" role="group" aria-label="Move to vault">
+                            <p><FolderInput size={13} /><span>Move to vault</span></p>
+                            {otherVaults.map((vault) => (
+                                <button role="menuitem" type="button" key={vault.id} onClick={() => onMove(vault.id)}>
+                                    <CollectionMark color={vault.color} icon={vault.icon} size={14} />
+                                    <span>{vault.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <div className="vault-command-menu__group is-final" aria-label="Item lifecycle">
+                        <button role="menuitem" type="button" onClick={() => onAction(item.archivedAt ? 'unarchive' : 'archive')}><ExactArchiveIcon size={16} /><span>{item.archivedAt ? 'Restore from Archive' : 'Archive'}</span></button>
+                        <button role="menuitem" type="button" className="is-danger" onClick={onDelete}><Trash2 size={16} /><span>Delete</span></button>
+                    </div>
+                </>
+            )}
+        </motion.div>
     );
 }
 
@@ -1726,28 +1802,44 @@ export default function FocuzPassTab({
     const [vaultsOpen, setVaultsOpen] = useState(true);
     const [tagsOpen, setTagsOpen] = useState(true);
     const [actionsOpen, setActionsOpen] = useState(false);
-    const [unlockValue, setUnlockValue] = useState('');
-    const [setupPassword, setSetupPassword] = useState('');
-    const [setupConfirm, setSetupConfirm] = useState('');
+    const [accessWindowBusy, setAccessWindowBusy] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [toast, setToast] = useState('');
     const searchRef = useRef<HTMLInputElement>(null);
     const listSearchRef = useRef<HTMLInputElement>(null);
+    const accessLaunchRef = useRef<BootState | null>(null);
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
     );
 
     const clearSecrets = useCallback(() => {
-        clearSensitiveUi(setItems, setRevealed, setCopied, setUnlockValue, setSetupPassword, setSetupConfirm);
+        clearSensitiveUi(setItems, setRevealed, setCopied);
         setVaults([]);
         setTags([]);
     }, []);
 
     const loadUnlocked = useCallback(async () => {
         const snapshot = await focuzPassSnapshot();
-        const ui = snapshot.items.map(toUiItem);
+        const rememberedOrder = await focuzPassReadRememberedOrder();
+        const rememberedRank = new Map(rememberedOrder.map((id, index) => [id, index]));
+        const ui = snapshot.items.map(toUiItem).sort((a, b) => {
+            const aRank = rememberedRank.get(a.id);
+            const bRank = rememberedRank.get(b.id);
+            if (aRank != null && bRank != null) return aRank - bRank;
+            if (aRank != null) return -1;
+            if (bRank != null) return 1;
+            return a.sortOrder - b.sortOrder;
+        }).map((item, index) => ({ ...item, sortOrder: index }));
+        const vaultOrder = snapshot.items
+            .slice()
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+            .map((item) => item.id);
+        const visibleOrder = ui.map((item) => item.id);
+        if (rememberedOrder.length > 0 && visibleOrder.some((id, index) => id !== vaultOrder[index])) {
+            void focuzPassReorder(visibleOrder).catch(() => undefined);
+        }
         setItems(ui);
         setVaults(snapshot.vaults);
         setTags(snapshot.tags);
@@ -1784,6 +1876,22 @@ export default function FocuzPassTab({
         }
     }, [clearSecrets, loadUnlocked]);
 
+    const launchAccessWindow = useCallback(async () => {
+        if (accessWindowBusy) return;
+        setAccessWindowBusy(true);
+        setError('');
+        try {
+            await focuzPassOpenAccessWindow();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Could not open the secure FocuzPass window';
+            setError(/unknown focuzpass message/i.test(message)
+                ? 'Reload the extension once to enable the new secure unlock window.'
+                : message);
+        } finally {
+            setAccessWindowBusy(false);
+        }
+    }, [accessWindowBusy]);
+
     useEffect(() => {
         let cancelled = false;
         void (async () => {
@@ -1808,6 +1916,9 @@ export default function FocuzPassTab({
                 setBoot('locked');
                 setStatus((current) => (current ? { ...current, unlocked: false, itemCount: 0, remainingMs: null } : current));
             }
+            if (message?.type === 'FOCUZPASS_ACCESS_CHANGED') {
+                void refreshStatus().catch(() => undefined);
+            }
         };
         try {
             chrome.runtime?.onMessage?.addListener(onMessage);
@@ -1815,7 +1926,27 @@ export default function FocuzPassTab({
         } catch {
             return undefined;
         }
-    }, [clearSecrets]);
+    }, [clearSecrets, refreshStatus]);
+
+    useEffect(() => {
+        if (boot !== 'setup' && boot !== 'locked') {
+            accessLaunchRef.current = null;
+            return;
+        }
+        if (accessLaunchRef.current !== boot) {
+            accessLaunchRef.current = boot;
+            void launchAccessWindow();
+        }
+        const timer = window.setInterval(() => {
+            void focuzPassStatus()
+                .then(async (next) => {
+                    setStatus(next);
+                    if (next.unlocked) await loadUnlocked();
+                })
+                .catch(() => undefined);
+        }, 750);
+        return () => window.clearInterval(timer);
+    }, [boot, launchAccessWindow, loadUnlocked]);
 
     useEffect(() => {
         if (boot !== 'ready') return;
@@ -1847,6 +1978,8 @@ export default function FocuzPassTab({
             const target = event.target as HTMLElement;
             if (event.key === 'Escape') {
                 setRowMenu(null);
+                setActionsOpen(false);
+                setProfileOpen(false);
                 setFiltersOpen(false);
                 setSortOpen(false);
                 return;
@@ -1955,7 +2088,8 @@ export default function FocuzPassTab({
         const orderById = new Map(merged.map((item, index) => [item.id, index]));
         setItems((current) => current.map((item) => ({ ...item, sortOrder: orderById.get(item.id) ?? item.sortOrder })));
         try {
-            await focuzPassReorder(merged.map((item) => item.id));
+            const result = await focuzPassReorder(merged.map((item) => item.id));
+            if (!result.persistedInVault) showToast('Order saved. Reload the extension once to finish updating.');
         } catch (err) {
             await loadUnlocked();
             setToast(err instanceof Error ? err.message : 'Could not save the custom order');
@@ -2134,49 +2268,6 @@ export default function FocuzPassTab({
         if (selected) await moveItem(selected, vaultId);
     };
 
-    const handleSetup = async (event: FormEvent) => {
-        event.preventDefault();
-        if (setupPassword.length < 8) {
-            setError('Master password must be at least 8 characters');
-            return;
-        }
-        if (setupPassword !== setupConfirm) {
-            setError('Passwords do not match');
-            return;
-        }
-        setBusy(true);
-        setError('');
-        try {
-            const next = await focuzPassSetup(setupPassword);
-            setStatus(next);
-            setSetupPassword('');
-            setSetupConfirm('');
-            await loadUnlocked();
-            showToast('Vault created on this device');
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Setup failed');
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const handleUnlock = async (event: FormEvent) => {
-        event.preventDefault();
-        if (!unlockValue.trim()) return;
-        setBusy(true);
-        setError('');
-        try {
-            const next = await focuzPassUnlock(unlockValue);
-            setUnlockValue('');
-            setStatus(next);
-            await loadUnlocked();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unlock failed');
-        } finally {
-            setBusy(false);
-        }
-    };
-
     const handleLock = async () => {
         setBusy(true);
         try {
@@ -2228,22 +2319,14 @@ export default function FocuzPassTab({
                         <button type="button" className="vault-more-button" onClick={() => setActionsOpen((open) => !open)} aria-label="More item actions" aria-expanded={actionsOpen}><EllipsisVertical size={18} /></button>
                         <AnimatePresence>
                             {actionsOpen && (
-                                <motion.div className="vault-item-actions-menu" initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -3, scale: 0.985 }}>
-                                    {selected.deletedAt ? (
-                                        <>
-                                            <button type="button" onClick={() => void updateSelectedAction('restore')}><ArchiveRestore size={15} /> Restore</button>
-                                            <button type="button" className="is-danger" onClick={() => void updateSelectedAction('purge')}><Trash2 size={15} /> Delete permanently</button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <button type="button" onClick={() => void updateSelectedAction('favorite', !selected.favorite)}><ExactFavoritesIcon size={15} /> {selected.favorite ? 'Remove from Favorites' : 'Add to Favorites'}</button>
-                                            {vaults.length > 1 && <div className="vault-move-group"><span><FolderInput size={13} /> Move to</span>{vaults.filter((vault) => vault.id !== selected.vaultId).map((vault) => <button type="button" key={vault.id} onClick={() => void moveSelected(vault.id)}><CollectionMark color={vault.color} icon={vault.icon} size={11} /> {vault.name}</button>)}</div>}
-                                            <button type="button" onClick={() => void updateSelectedAction('duplicate')}><CopyPlus size={15} /> Duplicate</button>
-                                            <button type="button" onClick={() => void updateSelectedAction(selected.archivedAt ? 'unarchive' : 'archive')}><ExactArchiveIcon size={15} /> {selected.archivedAt ? 'Restore from Archive' : 'Archive'}</button>
-                                            <button type="button" className="is-danger" onClick={() => void deleteSelected()}><Trash2 size={15} /> Delete</button>
-                                        </>
-                                    )}
-                                </motion.div>
+                                <VaultCommandMenu
+                                    item={selected}
+                                    vaults={vaults}
+                                    onAction={(action, value) => void updateSelectedAction(action, value)}
+                                    onMove={(vaultId) => void moveSelected(vaultId)}
+                                    onDelete={() => void deleteSelected()}
+                                    onClose={() => setActionsOpen(false)}
+                                />
                             )}
                         </AnimatePresence>
                     </div>
@@ -2309,26 +2392,16 @@ export default function FocuzPassTab({
                     <div className="vault-lock-orbit vault-access-symbol">
                         <KeyRound size={24} />
                     </div>
-                    <p className="vault-access-kicker">First-run setup</p>
-                    <h2 className="vault-access-heading">Create your local vault</h2>
+                    <p className="vault-access-kicker">Secure extension window</p>
+                    <h2 className="vault-access-heading">Create your vault privately</h2>
                     <p className="vault-access-copy">
-                        Choose a master password. It is never stored — only a device-local encrypted vault blob is saved.
+                        Master-password setup now happens in a separate FocuzPass window, outside the dashboard and website.
                     </p>
-                    <form className="vault-access-form" onSubmit={handleSetup}>
-                        <label className="vault-access-field">
-                            <span>Master password</span>
-                            <input type="password" value={setupPassword} onChange={(event) => setSetupPassword(event.target.value)} autoFocus placeholder="At least 8 characters" autoComplete="new-password" />
-                        </label>
-                        <label className="vault-access-field">
-                            <span>Confirm master password</span>
-                            <input type="password" value={setupConfirm} onChange={(event) => setSetupConfirm(event.target.value)} placeholder="Repeat master password" autoComplete="new-password" />
-                        </label>
-                        {error && <p className="vault-access-error" role="alert">{error}</p>}
-                        <button type="submit" disabled={busy} className="vault-button vault-button-primary vault-access-submit">
-                            {busy ? 'Creating vault…' : 'Create encrypted vault'}
-                            {!busy && <ArrowRight size={14} />}
-                        </button>
-                    </form>
+                    {error && <p className="vault-access-error" role="alert">{error}</p>}
+                    <button type="button" disabled={accessWindowBusy} className="vault-button vault-button-primary vault-access-submit" onClick={() => void launchAccessWindow()}>
+                        {accessWindowBusy ? 'Opening secure window…' : 'Open setup window'}
+                        {!accessWindowBusy && <ArrowRight size={14} />}
+                    </button>
                     <p className="vault-access-footnote"><ShieldCheck size={13} /> Your password never leaves this device</p>
                 </motion.div>
             </section>
@@ -2346,20 +2419,14 @@ export default function FocuzPassTab({
                     <div className="vault-lock-orbit vault-access-symbol">
                         <FocuzPassAccessLockIcon />
                     </div>
-                    <p className="vault-access-kicker">FocuzPass is locked</p>
+                    <p className="vault-access-kicker">Secure extension window</p>
                     <h2 className="vault-access-heading">Your vault is locked</h2>
-                    <p className="vault-access-copy">Unlock to access logins, cards, and passkey metadata stored on this device.</p>
-                    <form className="vault-access-form" onSubmit={handleUnlock}>
-                        <label className="vault-access-field">
-                            <span>Master password</span>
-                            <input type="password" value={unlockValue} onChange={(event) => setUnlockValue(event.target.value)} autoFocus placeholder="Enter your master password" autoComplete="current-password" />
-                        </label>
-                        {error && <p className="vault-access-error" role="alert">{error}</p>}
-                        <button type="submit" disabled={busy} className="vault-button vault-button-primary vault-access-submit">
-                            {busy ? 'Unlocking…' : 'Unlock vault'}
-                            {!busy && <ArrowRight size={14} />}
-                        </button>
-                    </form>
+                    <p className="vault-access-copy">Enter your master password in the separate FocuzPass window. This page will unlock automatically when it succeeds.</p>
+                    {error && <p className="vault-access-error" role="alert">{error}</p>}
+                    <button type="button" disabled={accessWindowBusy} className="vault-button vault-button-primary vault-access-submit" onClick={() => void launchAccessWindow()}>
+                        {accessWindowBusy ? 'Opening secure window…' : 'Reopen unlock window'}
+                        {!accessWindowBusy && <ArrowRight size={14} />}
+                    </button>
                     <p className="vault-access-footnote"><Laptop size={13} /> Decrypted only for this browser session</p>
                 </motion.div>
             </section>
@@ -2541,8 +2608,8 @@ export default function FocuzPassTab({
                                                     selected={isSelected}
                                                     draggable={sortMode === 'custom'}
                                                     onSelect={() => { setSelectedId(item.id); setRevealed(false); setActionsOpen(false); }}
-                                                    onContextMenu={(event) => { event.preventDefault(); setSelectedId(item.id); setRevealed(false); setActionsOpen(false); setRowMenu({ itemId: item.id, x: Math.min(event.clientX, window.innerWidth - 228), y: Math.min(event.clientY, window.innerHeight - 300) }); }}
-                                                    onMore={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); setSelectedId(item.id); setRowMenu({ itemId: item.id, x: Math.min(rect.right, window.innerWidth - 228), y: Math.min(rect.bottom + 5, window.innerHeight - 300) }); }}
+                                                    onContextMenu={(event) => { event.preventDefault(); setSelectedId(item.id); setRevealed(false); setActionsOpen(false); setRowMenu({ itemId: item.id, x: Math.max(10, Math.min(event.clientX, window.innerWidth - 274)), y: Math.max(10, Math.min(event.clientY, window.innerHeight - 430)) }); }}
+                                                    onMore={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); setSelectedId(item.id); setRowMenu({ itemId: item.id, x: Math.max(10, Math.min(rect.right - 262, window.innerWidth - 274)), y: Math.max(10, Math.min(rect.bottom + 5, window.innerHeight - 430)) }); }}
                                                 />
                                             );
                                         })}
@@ -2641,22 +2708,16 @@ export default function FocuzPassTab({
                 {rowMenu && rowMenuItem && (
                     <ModalPortal>
                         <motion.div className="vault-context-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => event.target === event.currentTarget && setRowMenu(null)}>
-                            <motion.div className="vault-item-actions-menu vault-row-actions-menu" style={{ left: rowMenu.x, top: rowMenu.y }} initial={{ opacity: 0, y: -3, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -2, scale: 0.99 }} onMouseDown={(event) => event.stopPropagation()}>
-                                {rowMenuItem.deletedAt ? (
-                                    <>
-                                        <button type="button" onClick={() => void updateItemAction(rowMenuItem, 'restore')}><ArchiveRestore size={15} /> Restore</button>
-                                        <button type="button" className="is-danger" onClick={() => void updateItemAction(rowMenuItem, 'purge')}><Trash2 size={15} /> Delete permanently</button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <button type="button" onClick={() => void updateItemAction(rowMenuItem, 'favorite', !rowMenuItem.favorite)}><ExactFavoritesIcon size={15} /> {rowMenuItem.favorite ? 'Remove from Favorites' : 'Add to Favorites'}</button>
-                                        {vaults.length > 1 && <div className="vault-move-group"><span><FolderInput size={13} /> Move to</span>{vaults.filter((vault) => vault.id !== rowMenuItem.vaultId).map((vault) => <button type="button" key={vault.id} onClick={() => void moveItem(rowMenuItem, vault.id)}><CollectionMark color={vault.color} icon={vault.icon} size={11} /> {vault.name}</button>)}</div>}
-                                        <button type="button" onClick={() => void updateItemAction(rowMenuItem, 'duplicate')}><CopyPlus size={15} /> Duplicate</button>
-                                        <button type="button" onClick={() => void updateItemAction(rowMenuItem, rowMenuItem.archivedAt ? 'unarchive' : 'archive')}><ExactArchiveIcon size={15} /> {rowMenuItem.archivedAt ? 'Restore from Archive' : 'Archive'}</button>
-                                        <button type="button" className="is-danger" onClick={() => void deleteItem(rowMenuItem)}><Trash2 size={15} /> Delete</button>
-                                    </>
-                                )}
-                            </motion.div>
+                            <VaultCommandMenu
+                                item={rowMenuItem}
+                                vaults={vaults}
+                                className="vault-row-actions-menu"
+                                style={{ left: rowMenu.x, top: rowMenu.y }}
+                                onAction={(action, value) => void updateItemAction(rowMenuItem, action, value)}
+                                onMove={(vaultId) => void moveItem(rowMenuItem, vaultId)}
+                                onDelete={() => void deleteItem(rowMenuItem)}
+                                onClose={() => setRowMenu(null)}
+                            />
                         </motion.div>
                     </ModalPortal>
                 )}

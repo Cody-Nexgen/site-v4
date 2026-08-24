@@ -6,7 +6,7 @@ Use these prompts to generate placeholder artwork for the extension onboarding f
 
 ## 1. Welcome orbit
 
-**Prompt:** Minimal 3D isometric illustration for a productivity browser extension onboarding screen. A glowing violet orbit ring encircles a stylized browser window showing a calm focus timer and a small shield icon. Soft indigo particles drift along the orbit path. Dark charcoal background (#0a0a0b), glassmorphic UI cards with subtle blur, no text labels. Premium, calm, 1Password-inspired aesthetic. Clean vector-style render, high contrast violet accent lighting.
+**Prompt:** Minimal 3D isometric illustration for a productivity browser extension onboarding screen. A glowing violet orbit ring encircles a stylized browser window showing a calm focus timer and a small shield icon. Soft indigo particles drift along the orbit path. Dark charcoal background (#0a0a0b), layered matte UI surfaces with subtle depth, no text labels. Premium, calm FocuzNow precision-instrument aesthetic. Clean vector-style render with restrained violet accent lighting.
 
 ---
 

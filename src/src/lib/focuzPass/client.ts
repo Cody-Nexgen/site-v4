@@ -1,6 +1,6 @@
 /** FocuzPass UI client — crypto/CRUD always runs in the extension service worker. */
 
-import { isWebPlatform } from '../platform';
+import { getPlatform, isWebPlatform } from '../platform';
 import { extensionPresent, sendExtensionRpc } from '../platform/webPlatform';
 import type {
     CustomItemKind,
@@ -18,6 +18,7 @@ export type { CustomItemKind, DecryptedVaultItem, VaultCollection, VaultSnapshot
 type MessageResponse<T> = { ok: true; data: T } | { ok: false; error: string; needsExtension?: boolean };
 
 const SLOW_OPS = new Set(['FOCUZPASS_SETUP', 'FOCUZPASS_UNLOCK']);
+const FOCUZPASS_UI_ORDER_KEY = 'focuzpass.ui.custom-order.v1';
 
 async function send<T>(message: Record<string, unknown>): Promise<T> {
     const type = String(message.type || '');
@@ -83,8 +84,30 @@ export async function focuzPassItemAction(action: VaultItemAction): Promise<Decr
     return send<DecryptedVaultItem | null>({ type: 'FOCUZPASS_ITEM_ACTION', action });
 }
 
-export async function focuzPassReorder(orderedIds: string[]): Promise<void> {
-    await send<null>({ type: 'FOCUZPASS_REORDER', orderedIds });
+export async function focuzPassReadRememberedOrder(): Promise<string[]> {
+    const stored = await getPlatform().storageLocal.get(FOCUZPASS_UI_ORDER_KEY);
+    const value = stored[FOCUZPASS_UI_ORDER_KEY];
+    return Array.isArray(value) ? [...new Set(value.map(String).filter(Boolean))] : [];
+}
+
+export async function focuzPassReorder(orderedIds: string[]): Promise<{ persistedInVault: boolean }> {
+    const normalized = [...new Set(orderedIds.map(String).filter(Boolean))];
+    await getPlatform().storageLocal.set({ [FOCUZPASS_UI_ORDER_KEY]: normalized });
+    try {
+        await send<null>({ type: 'FOCUZPASS_REORDER', orderedIds: normalized });
+        return { persistedInVault: true };
+    } catch (error) {
+        if (/unknown focuzpass message/i.test(error instanceof Error ? error.message : '')) {
+            // Compatibility with a dashboard tab that is newer than its still-running service worker.
+            // The visible order stays stable and will be promoted into the encrypted vault after reload.
+            return { persistedInVault: false };
+        }
+        throw error;
+    }
+}
+
+export async function focuzPassOpenAccessWindow(): Promise<void> {
+    await send<null>({ type: 'FOCUZPASS_OPEN_ACCESS_WINDOW' });
 }
 
 export async function focuzPassCreateVault(collection: { name: string; color: string; icon: string }): Promise<VaultCollection> {
