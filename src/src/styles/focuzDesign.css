@@ -1664,6 +1664,165 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 .focuz-pass-ready .vault-sort-menu > button.is-active { background: rgba(117, 154, 192, 0.11); }
 .focuz-pass-ready .vault-sort-menu > button.is-active strong { color: #e9f1f7; }
 
+/* FocuzPass library layout: the existing visual system with an on-demand inspector. */
+.focuz-pass-ready .vault-content-grid.vault-library-layout {
+    position: relative;
+    isolation: isolate;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.focuz-pass-ready .vault-library-layout .vault-list {
+    grid-column: 1;
+    border-right: 0;
+    box-shadow: none;
+}
+
+.vault-library-columns {
+    display: grid;
+    height: 28px;
+    flex: none;
+    grid-template-columns: 34px 42px minmax(200px, 1.6fr) minmax(100px, 0.65fr) minmax(110px, 0.75fr) minmax(90px, 0.6fr) 24px;
+    align-items: center;
+    gap: 10px;
+    border-block: 1px solid rgba(255, 255, 255, 0.045);
+    padding: 0 16px;
+    color: #6f7075;
+    font-size: 9px;
+    font-weight: 650;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+}
+
+.focuz-pass-ready .vault-library-layout .vault-list-scroll {
+    padding-right: 12px;
+}
+
+.focuz-pass-ready .vault-library-layout .vault-row {
+    display: grid;
+    grid-template-columns: 34px 42px minmax(200px, 1.6fr) minmax(100px, 0.65fr) minmax(110px, 0.75fr) minmax(90px, 0.6fr) 24px;
+    align-items: center;
+    gap: 10px;
+}
+
+.focuz-pass-ready .vault-library-layout .vault-row-drag {
+    margin: -4px 0 -4px -6px;
+}
+
+.focuz-pass-ready .vault-library-layout .vault-row-drag.is-placeholder {
+    cursor: default;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.focuz-pass-ready .vault-library-layout .vault-row-copy,
+.focuz-pass-ready .vault-library-layout .vault-row-type,
+.focuz-pass-ready .vault-library-layout .vault-row-vault,
+.focuz-pass-ready .vault-library-layout .vault-row-activity {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.focuz-pass-ready .vault-library-layout .vault-row-copy {
+    display: block;
+    width: 100%;
+}
+
+.focuz-pass-ready .vault-library-layout .vault-row-type,
+.focuz-pass-ready .vault-library-layout .vault-row-vault,
+.focuz-pass-ready .vault-library-layout .vault-row-activity {
+    display: block;
+    flex: none;
+    color: #88898e;
+    font-size: 11px;
+    font-weight: 480;
+}
+
+.focuz-pass-ready .vault-library-layout .vault-row-vault { color: #a0a0a5; }
+.focuz-pass-ready .vault-library-layout .vault-row-activity { color: #737479; }
+
+.focuz-pass-ready .vault-library-layout .vault-row-more {
+    justify-self: end;
+}
+
+.focuz-pass-ready .vault-inspector {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 45;
+    width: min(590px, calc(100% - 24px));
+    height: auto;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.105);
+    border-radius: 14px;
+    background: #242425;
+    box-shadow: 0 28px 74px -26px rgba(0, 0, 0, 0.92), 0 3px 10px rgba(0, 0, 0, 0.3), inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.focuz-pass-ready .vault-inspector .vault-detail-current,
+.focuz-pass-ready .vault-inspector .vault-detail-page {
+    height: 100%;
+}
+
+.vault-inspector-close {
+    display: inline-flex;
+    width: 30px;
+    height: 30px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    margin-right: 2px;
+    border-radius: 8px;
+    color: #aaaab0;
+    transition: background 130ms ease, color 130ms ease, transform 100ms ease;
+}
+
+.vault-inspector-close:hover { background: rgba(255, 255, 255, 0.055); color: #fff; }
+.vault-inspector-close:active { transform: scale(0.96); }
+.vault-inspector-close:focus-visible { outline: 2px solid rgba(137, 191, 232, 0.5); outline-offset: 1px; }
+
+@media (max-width: 1040px) {
+    .vault-library-columns,
+    .focuz-pass-ready .vault-library-layout .vault-row {
+        grid-template-columns: 34px 42px minmax(170px, 1fr) minmax(100px, 0.7fr) 24px;
+    }
+
+    .vault-library-columns > span:nth-child(4),
+    .vault-library-columns > span:nth-child(6),
+    .focuz-pass-ready .vault-library-layout .vault-row-type,
+    .focuz-pass-ready .vault-library-layout .vault-row-activity {
+        display: none;
+    }
+
+    .focuz-pass-ready .vault-inspector { width: min(520px, calc(100% - 24px)); }
+}
+
+@media (max-width: 700px) {
+    .focuz-pass-ready .vault-content-grid.vault-library-layout { grid-template-columns: minmax(0, 1fr); }
+    .focuz-pass-ready .vault-inspector { top: 8px; right: 8px; bottom: 8px; width: calc(100% - 16px); }
+}
+
+@media (max-width: 560px) {
+    .vault-library-columns,
+    .focuz-pass-ready .vault-library-layout .vault-row {
+        grid-template-columns: 34px 42px minmax(0, 1fr) 24px;
+    }
+
+    .vault-library-columns > span:nth-child(5),
+    .focuz-pass-ready .vault-library-layout .vault-row-vault {
+        display: none;
+    }
+
+    .vault-library-columns { padding-inline: 10px; }
+    .focuz-pass-ready .vault-library-layout .vault-list-scroll { padding-inline: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vault-inspector-close { transition: none; }
+}
+
 /* FocuzPass command sheets: item-first, matte, and deliberately unlike generic card menus. */
 .vault-command-menu {
     --vault-command-tone: #86a7be;

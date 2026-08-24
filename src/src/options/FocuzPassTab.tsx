@@ -806,8 +806,9 @@ function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean })
     );
 }
 
-function SortableVaultRow({ item, selected, draggable, onSelect, onContextMenu, onMore }: {
+function SortableVaultRow({ item, vaultName, selected, draggable, onSelect, onContextMenu, onMore }: {
     item: VaultItem;
+    vaultName: string;
     selected: boolean;
     draggable: boolean;
     onSelect: () => void;
@@ -815,6 +816,7 @@ function SortableVaultRow({ item, selected, draggable, onSelect, onContextMenu, 
     onMore: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled: !draggable });
+    const typeLabel = item.type === 'custom' && item.kind ? ITEM_DEFINITIONS[item.kind].label : TYPE_META[item.type].label;
     return (
         <div
             ref={setNodeRef}
@@ -831,7 +833,7 @@ function SortableVaultRow({ item, selected, draggable, onSelect, onContextMenu, 
             className={`vault-row${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}${draggable ? ' is-draggable' : ''}`}
             style={{ transform: DndCss.Transform.toString(transform), transition }}
         >
-            {draggable && (
+            {draggable ? (
                 <span
                     className="vault-row-drag"
                     {...attributes}
@@ -846,12 +848,15 @@ function SortableVaultRow({ item, selected, draggable, onSelect, onContextMenu, 
                 >
                     <GripVertical size={16} />
                 </span>
-            )}
+            ) : <span className="vault-row-drag is-placeholder" aria-hidden="true" />}
             <ItemMark item={item} />
             <span className="vault-row-copy">
                 <strong>{item.title}</strong>
                 <small>{item.authMethod === 'Password' ? item.identity : item.authMethod}</small>
             </span>
+            <span className="vault-row-type">{typeLabel}</span>
+            <span className="vault-row-vault">{vaultName}</span>
+            <span className="vault-row-activity">{item.lastUsed}</span>
             <button type="button" className="vault-row-more" onPointerDown={(event) => event.stopPropagation()} onClick={onMore} aria-label={`More actions for ${item.title}`}><EllipsisVertical size={15} /></button>
         </div>
     );
@@ -2308,6 +2313,7 @@ export default function FocuzPassTab({
         >
             <div className="vault-detail-topbar">
                 <div className="vault-detail-location">
+                    <button type="button" className="vault-inspector-close" autoFocus onClick={() => { setSelectedId(''); setActionsOpen(false); }} aria-label="Close item details"><X size={14} /></button>
                     {selectedVault && <><CollectionMark color={selectedVault.color} icon={selectedVault.icon} size={13} /><strong>{selectedVault.name}</strong></>}
                     <span><ShieldCheck size={13} /> Private <ChevronDown size={11} /></span>
                 </div>
@@ -2573,7 +2579,7 @@ export default function FocuzPassTab({
                     )}
                 </AnimatePresence>
 
-                <div className="vault-content-grid">
+                <div className="vault-content-grid vault-library-layout">
                     <div className="vault-list">
                         <div className="vault-list-toolbar">
                             <div className="vault-category-summary"><LayoutGrid size={11} /><span>All Categories</span></div>
@@ -2592,6 +2598,10 @@ export default function FocuzPassTab({
 
                         <AnimatePresence initial={false}>{listSearchOpen && <motion.label className="vault-list-inline-search" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}><Search size={12} /><input ref={listSearchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search names, websites, fields…" />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear list search"><X size={11} /></button>}</motion.label>}</AnimatePresence>
 
+                        <div className="vault-library-columns" aria-hidden="true">
+                            <span /><span /><span>Item</span><span>Type</span><span>Vault</span><span>Activity</span><span />
+                        </div>
+
                         <div className="vault-list-scroll">
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => { void handleDragEnd(event); }}>
                             <SortableContext items={filteredItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
@@ -2605,6 +2615,7 @@ export default function FocuzPassTab({
                                                 <SortableVaultRow
                                                     key={item.id}
                                                     item={item}
+                                                    vaultName={vaults.find((vault) => vault.id === item.vaultId)?.name || 'Personal'}
                                                     selected={isSelected}
                                                     draggable={sortMode === 'custom'}
                                                     onSelect={() => { setSelectedId(item.id); setRevealed(false); setActionsOpen(false); }}
@@ -2631,7 +2642,23 @@ export default function FocuzPassTab({
                         </div>
                     </div>
 
-                    <aside className="vault-detail" onClick={() => actionsOpen && setActionsOpen(false)}>
+                    <AnimatePresence>
+                    {selected && (
+                        <motion.aside
+                            className="vault-detail vault-inspector"
+                            aria-label={`Details for ${selected.title}`}
+                            onClick={() => actionsOpen && setActionsOpen(false)}
+                            onKeyDown={(event) => {
+                                if (event.key !== 'Escape') return;
+                                event.preventDefault();
+                                setSelectedId('');
+                                setActionsOpen(false);
+                            }}
+                            initial={reduceMotion ? false : { x: '104%', opacity: 0.8 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={reduceMotion ? { opacity: 0 } : { x: '104%', opacity: 0.8 }}
+                            transition={{ duration: reduceMotion ? 0 : 0.28, ease: [0.16, 1, 0.3, 1] }}
+                        >
                         <div className="vault-detail-current">{detailPanel}</div>
                         <div className="vault-detail-legacy" aria-hidden="true">
                         <AnimatePresence mode="wait">
@@ -2693,7 +2720,9 @@ export default function FocuzPassTab({
                             )}
                         </AnimatePresence>
                         </div>
-                    </aside>
+                        </motion.aside>
+                    )}
+                    </AnimatePresence>
                 </div>
 
             </div>
