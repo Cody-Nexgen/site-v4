@@ -21,6 +21,46 @@ import {
 } from './vaultCore';
 import { PRIMARY_NAV } from '../workspaceNav';
 import { isExtensionHelperTab, shouldOpenTabOnWeb } from '../workspaceSync';
+import {
+    detectCardBrand,
+    formatCardExpiry,
+    formatCardNumber,
+    formatInternationalPhone,
+    isValidCardExpiry,
+    isValidCardNumber,
+    isValidPhone,
+    PHONE_COUNTRIES,
+    validateFieldValue,
+} from './fieldUtils';
+
+test('FocuzPass detects and formats major payment card brands', () => {
+    assert.equal(detectCardBrand('4111 1111 1111 1111'), 'visa');
+    assert.equal(detectCardBrand('5555 5555 5555 4444'), 'mastercard');
+    assert.equal(detectCardBrand('378282246310005'), 'amex');
+    assert.equal(detectCardBrand('6011111111111117'), 'discover');
+    assert.equal(formatCardNumber('378282246310005'), '3782 822463 10005');
+    assert.equal(isValidCardNumber('4111 1111 1111 1111'), true);
+    assert.equal(isValidCardNumber('4111 1111 1111 1112'), false);
+});
+
+test('FocuzPass formats expiry and rejects expired or malformed credentials', () => {
+    assert.equal(formatCardExpiry('1229'), '12/29');
+    assert.equal(formatCardExpiry('9'), '09');
+    assert.equal(isValidCardExpiry('12/29', new Date('2028-01-10T00:00:00Z')), true);
+    assert.equal(isValidCardExpiry('12/27', new Date('2028-01-10T00:00:00Z')), false);
+    assert.match(validateFieldValue('email', 'not-an-email') || '', /valid email/i);
+    assert.equal(validateFieldValue('email', 'person@example.com'), null);
+    assert.match(validateFieldValue('cvv', '123', { cardNumber: '378282246310005' }) || '', /4-digit/i);
+});
+
+test('FocuzPass formats and validates international phone numbers by country', () => {
+    const us = PHONE_COUNTRIES.find((country) => country.iso === 'US')!;
+    const gb = PHONE_COUNTRIES.find((country) => country.iso === 'GB')!;
+    assert.equal(formatInternationalPhone('4045550100', us), '+1 (404) 555-0100');
+    assert.equal(formatInternationalPhone('2079460958', gb), '+44 2079 460 958');
+    assert.equal(isValidPhone('+1 (404) 555-0100'), true);
+    assert.equal(isValidPhone('+1 (404) 55'), false);
+});
 
 test('FocuzPass crypto round-trips AES-256-GCM plaintext', async () => {
     const salt = randomBytes(16);
@@ -183,6 +223,19 @@ test('FocuzPass item actions support favorites, move, duplicate, archive, trash,
     assert.equal(restored?.archivedAt, undefined);
     assert.equal(restored?.vaultId, work.id);
     assert.equal(restored?.favorite, true);
+});
+
+test('FocuzPass custom item order persists across lock and unlock', async () => {
+    const storage = createMemoryStorage();
+    const vault = new FocuzPassVault(storage);
+    await vault.setup('ordered-master-password');
+    const first = await vault.upsert({ type: 'login', title: 'First', identity: 'first@example.com', password: 'FirstSecret123!' });
+    const second = await vault.upsert({ type: 'login', title: 'Second', identity: 'second@example.com', password: 'SecondSecret123!' });
+    await vault.reorder([first.id, second.id]);
+    assert.deepEqual(vault.snapshot().items.sort((a, b) => a.sortOrder - b.sortOrder).map((item) => item.id), [first.id, second.id]);
+    vault.lock();
+    await vault.unlock('ordered-master-password');
+    assert.deepEqual(vault.snapshot().items.sort((a, b) => a.sortOrder - b.sortOrder).map((item) => item.id), [first.id, second.id]);
 });
 
 test('FocuzPass overlay matching is exact-domain only', () => {

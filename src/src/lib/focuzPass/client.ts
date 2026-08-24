@@ -83,6 +83,10 @@ export async function focuzPassItemAction(action: VaultItemAction): Promise<Decr
     return send<DecryptedVaultItem | null>({ type: 'FOCUZPASS_ITEM_ACTION', action });
 }
 
+export async function focuzPassReorder(orderedIds: string[]): Promise<void> {
+    await send<null>({ type: 'FOCUZPASS_REORDER', orderedIds });
+}
+
 export async function focuzPassCreateVault(collection: { name: string; color: string; icon: string }): Promise<VaultCollection> {
     return send<VaultCollection>({ type: 'FOCUZPASS_CREATE_VAULT', collection });
 }

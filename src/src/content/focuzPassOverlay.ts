@@ -1,26 +1,41 @@
 /**
  * FocuzPass form companion.
  *
- * Runs in an isolated content-script world, renders inside Shadow DOM, never auto-submits,
- * and only requests credentials for the exact page hostname from the service worker.
+ * Runs in an isolated content-script world, renders inside Shadow DOM, and only submits after
+ * the user explicitly chooses an item. Site logins remain exact-host scoped.
  */
 
-type LoginMatch = {
+type AutofillItem = {
     id: string;
-    type: 'login';
+    type: 'login' | 'card' | 'custom';
+    kind?: string;
     title: string;
     identity: string;
     domain?: string;
     password?: string;
-    authMethod: string;
+    cardNumber?: string;
+    expiry?: string;
+    cvv?: string;
+    fields?: Record<string, string>;
+    authMethod?: string;
     mark: string;
     markTone: string;
 };
+
+type LoginMatch = AutofillItem & { type: 'login' };
+
+type FieldRole =
+    | 'username' | 'password' | 'email' | 'phone'
+    | 'name' | 'given-name' | 'family-name' | 'organization'
+    | 'address-line1' | 'address-line2' | 'city' | 'region' | 'postal-code' | 'country'
+    | 'cardholder' | 'card-number' | 'card-expiry' | 'card-exp-month' | 'card-exp-year' | 'cvv'
+    | 'birth-date' | 'credential' | 'unknown';
 
 type PageContext = {
     state: 'unconfigured' | 'locked' | 'ready';
     domain: string;
     matches: LoginMatch[];
+    items: AutofillItem[];
 };
 
 type PendingLogin = {
@@ -264,6 +279,10 @@ const NEUTRAL_PANEL_STYLE = `
     }
     .favicon { object-fit: contain; padding: 7px; }
     .mark { color: #d6d7da; background: #34353a; font-size: 11px; }
+    .mark.card-brand { width: 46px; height: 32px; border: 0; border-radius: 9px; color: #1833a4; background: linear-gradient(145deg,#f7f8fa,#cbd1d9); font-size: 8px; font-weight: 850; }
+    .mark.card-brand.is-amex { color: #fff; background: linear-gradient(145deg,#45abe3,#1478b5); }
+    .mark.card-brand.is-discover { color: #171719; background: linear-gradient(145deg,#fff,#dedee0); }
+    .mark.card-brand.is-mastercard { color: transparent; background: radial-gradient(circle at 42% 50%,#e21d2a 0 25%,transparent 26%),radial-gradient(circle at 60% 50%,#f2a31e 0 25%,transparent 26%),linear-gradient(145deg,#f7f7f8,#d4d4d7); }
     .account-title { color: #f7f7f8; font-size: 13.5px; font-weight: 650; letter-spacing: -.015em; }
     .account-id { margin-top: 4px; color: #9b9da4; font-size: 10.5px; }
     .manage {
@@ -350,8 +369,60 @@ function closeIconButton(label: string) {
     return button;
 }
 
+function fieldDescriptor(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): string {
+    return `${element.name} ${element.id} ${element.getAttribute('autocomplete') || ''} ${element.getAttribute('placeholder') || ''} ${element.getAttribute('aria-label') || ''}`
+        .toLowerCase()
+        .replace(/[_-]+/g, ' ');
+}
+
+function classifyField(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): FieldRole {
+    const autocomplete = (element.getAttribute('autocomplete') || '').toLowerCase().split(/\s+/).at(-1) || '';
+    const autocompleteRoles: Record<string, FieldRole> = {
+        username: 'username', 'current-password': 'password', 'new-password': 'password', email: 'email', tel: 'phone',
+        name: 'name', 'given-name': 'given-name', 'family-name': 'family-name', organization: 'organization',
+        'street-address': 'address-line1', 'address-line1': 'address-line1', 'address-line2': 'address-line2',
+        'address-level2': 'city', 'address-level1': 'region', 'postal-code': 'postal-code', country: 'country', 'country-name': 'country',
+        'cc-name': 'cardholder', 'cc-number': 'card-number', 'cc-exp': 'card-expiry', 'cc-exp-month': 'card-exp-month',
+        'cc-exp-year': 'card-exp-year', 'cc-csc': 'cvv', bday: 'birth-date',
+    };
+    if (autocompleteRoles[autocomplete]) return autocompleteRoles[autocomplete];
+
+    if (element instanceof HTMLInputElement) {
+        if (element.type === 'password') return 'password';
+        if (element.type === 'email') return 'email';
+        if (element.type === 'tel') return 'phone';
+    }
+    const value = fieldDescriptor(element);
+    if (/search|coupon|promo|discount|one time|otp|verification code|captcha/.test(value)) return 'unknown';
+    if (/card.?holder|name on card/.test(value)) return 'cardholder';
+    if (/card.?number|credit.?card|debit.?card|cc.?number/.test(value)) return 'card-number';
+    if (/expir|expiry|expiration|cc.?exp/.test(value) && /month|mm\b/.test(value)) return 'card-exp-month';
+    if (/expir|expiry|expiration|cc.?exp/.test(value) && /year|yy/.test(value)) return 'card-exp-year';
+    if (/expir|expiry|expiration|cc.?exp/.test(value)) return 'card-expiry';
+    if (/\bcvv\b|\bcvc\b|security.?code|card.?code|cc.?csc/.test(value)) return 'cvv';
+    if (/confirm|repeat|verify/.test(value) && /password|passcode/.test(value)) return 'password';
+    if (/password|passcode|passwd/.test(value)) return 'password';
+    if (/e.?mail/.test(value)) return 'email';
+    if (/phone|mobile|telephone|\btel\b/.test(value)) return 'phone';
+    if (/first.?name|given.?name|forename/.test(value)) return 'given-name';
+    if (/last.?name|family.?name|surname/.test(value)) return 'family-name';
+    if (/full.?name|your.?name|legal.?name|\bname\b/.test(value)) return 'name';
+    if (/company|organization|organisation|business/.test(value)) return 'organization';
+    if (/address.?2|address.?line.?2|apartment|\bapt\b|suite|unit/.test(value)) return 'address-line2';
+    if (/street|address.?1|address.?line.?1|shipping.?address|billing.?address/.test(value)) return 'address-line1';
+    if (/\bcity\b|town/.test(value)) return 'city';
+    if (/state|province|region|county/.test(value)) return 'region';
+    if (/zip|postal/.test(value)) return 'postal-code';
+    if (/country/.test(value)) return 'country';
+    if (/birth|dob|date of birth/.test(value)) return 'birth-date';
+    if (/routing|account.?number|api.?key|client.?secret|access.?token|social.?security|\bssn\b|license.?number|passport.?number|member.?id|policy.?number|wallet.?address|recovery.?phrase|private.?key|public.?key|network.?name|wi.?fi/.test(value)) return 'credential';
+    if (/user|login|account.?name/.test(value)) return 'username';
+    return 'unknown';
+}
+
 function isVisibleInput(input: HTMLInputElement): boolean {
-    if (!input.isConnected || input.disabled || input.readOnly || input.type !== 'password') return false;
+    if (!input.isConnected || input.disabled || input.readOnly || classifyField(input) === 'unknown') return false;
+    if (['hidden', 'checkbox', 'radio', 'submit', 'button', 'reset', 'file', 'image', 'range', 'color'].includes(input.type)) return false;
     if (!isElementVisuallyAvailable(input)) return false;
     const rect = input.getBoundingClientRect();
     return rect.width >= 80 && rect.height >= 22 && rect.bottom >= 0 && rect.top <= window.innerHeight;
@@ -468,6 +539,116 @@ function setInputValue(input: HTMLInputElement, value: string) {
     input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+function setControlValue(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
+    if (control instanceof HTMLInputElement) {
+        setInputValue(control, value);
+        return;
+    }
+    if (control instanceof HTMLSelectElement) {
+        const normalized = value.trim().toLowerCase();
+        const option = Array.from(control.options).find((candidate) => candidate.value.toLowerCase() === normalized || candidate.text.trim().toLowerCase() === normalized)
+            || Array.from(control.options).find((candidate) => candidate.text.trim().toLowerCase().includes(normalized));
+        const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+        if (setter) setter.call(control, option?.value || value);
+        else control.value = option?.value || value;
+    } else {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        if (setter) setter.call(control, value);
+        else control.value = value;
+    }
+    control.dispatchEvent(new Event('input', { bubbles: true }));
+    control.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function normalizedKey(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function itemValues(item: AutofillItem): { roles: Partial<Record<FieldRole, string>>; fields: Record<string, string> } {
+    const fields = item.fields || {};
+    const get = (...keys: string[]) => {
+        const entry = Object.entries(fields).find(([key]) => keys.some((candidate) => normalizedKey(key) === normalizedKey(candidate)));
+        return entry?.[1] || '';
+    };
+    const roles: Partial<Record<FieldRole, string>> = {};
+
+    if (item.type === 'login') {
+        roles.username = item.identity;
+        if (item.identity.includes('@')) roles.email = item.identity;
+        roles.password = item.password || '';
+    } else if (item.type === 'card') {
+        const [month = '', year = ''] = (item.expiry || '').split('/');
+        roles.cardholder = item.identity;
+        roles.name = item.identity;
+        roles['card-number'] = item.cardNumber || '';
+        roles['card-expiry'] = item.expiry || '';
+        roles['card-exp-month'] = month;
+        roles['card-exp-year'] = year.length === 2 ? `20${year}` : year;
+        roles.cvv = item.cvv || '';
+    } else {
+        const fullName = get('fullName', 'memberName', 'accountHolder') || item.identity;
+        const nameParts = fullName.trim().split(/\s+/);
+        roles.name = fullName;
+        roles['given-name'] = nameParts[0] || '';
+        roles['family-name'] = nameParts.slice(1).join(' ');
+        roles.username = get('username', 'adminUsername') || (item.kind === 'email' ? get('email') : '');
+        roles.password = get('password', 'adminPassword', 'passphrase');
+        roles.email = get('email', 'recoveryEmail');
+        roles.phone = get('phone');
+        roles.organization = get('organization', 'bankName', 'provider');
+        roles['address-line1'] = get('addressLine1', 'streetAddress', 'address');
+        roles['address-line2'] = get('addressLine2', 'apartment', 'suite');
+        roles.city = get('city');
+        roles.region = get('region', 'state', 'issuedState');
+        roles['postal-code'] = get('postalCode', 'zip');
+        roles.country = get('country', 'nationality');
+        roles['birth-date'] = get('dateOfBirth');
+    }
+    return { roles, fields };
+}
+
+function valueForControl(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, item: AutofillItem): string {
+    const { roles, fields } = itemValues(item);
+    const role = classifyField(control);
+    if (roles[role]) return roles[role] || '';
+    const descriptor = normalizedKey(fieldDescriptor(control));
+    const direct = Object.entries(fields).find(([key]) => {
+        const normalized = normalizedKey(key);
+        return normalized.length >= 4 && (descriptor.includes(normalized) || normalized.includes(descriptor));
+    });
+    return direct?.[1] || '';
+}
+
+function relevantItemsForRole(items: AutofillItem[], role: FieldRole): AutofillItem[] {
+    const cardRole = role.startsWith('card-') || role === 'cardholder' || role === 'cvv';
+    if (cardRole) return items.filter((item) => item.type === 'card');
+    if (role === 'password' || role === 'username') {
+        return items.filter((item) => item.type === 'login' || (item.type === 'custom' && ['password', 'email', 'api_credentials', 'wireless_router'].includes(item.kind || '')));
+    }
+    if (role === 'email') return items.filter((item) => item.type === 'login' && item.identity.includes('@') || item.type === 'custom' && ['identity', 'email'].includes(item.kind || ''));
+    if (['phone', 'name', 'given-name', 'family-name', 'organization', 'address-line1', 'address-line2', 'city', 'region', 'postal-code', 'country', 'birth-date'].includes(role)) {
+        return items.filter((item) => item.type === 'custom' && ['identity', 'driver_license', 'medical_record', 'membership', 'passport', 'social_security_number'].includes(item.kind || ''));
+    }
+    if (role === 'credential') return items.filter((item) => item.type === 'custom');
+    return items.filter((item) => item.type !== 'login');
+}
+
+function itemSubtitle(item: AutofillItem): string {
+    if (item.type === 'card') return item.cardNumber ? `Card ending ${item.cardNumber.replace(/\D/g, '').slice(-4)}` : 'Credit card';
+    if (item.type === 'custom') return item.fields?.email || item.fields?.username || item.identity || (item.kind || 'item').replace(/_/g, ' ');
+    return item.identity;
+}
+
+function paymentBrand(number?: string): string {
+    const digits = (number || '').replace(/\D/g, '');
+    if (/^4/.test(digits)) return 'visa';
+    if (/^(5[1-5]|2[2-7])/.test(digits)) return 'mastercard';
+    if (/^3[47]/.test(digits)) return 'amex';
+    if (/^(6011|65|64[4-9])/.test(digits)) return 'discover';
+    if (/^35/.test(digits)) return 'jcb';
+    return 'card';
+}
+
 function currentFavicon(): string | undefined {
     const icon = document.querySelector<HTMLLinkElement>('link[rel~="icon"][href], link[rel="shortcut icon"][href]');
     const candidate = icon?.href || `${location.origin}/favicon.ico`;
@@ -527,7 +708,7 @@ class FocuzPassPageOverlay {
             childList: true,
             subtree: true,
             attributes: true,
-            attributeFilter: ['type', 'disabled', 'readonly', 'autocomplete'],
+            attributeFilter: ['type', 'disabled', 'readonly', 'autocomplete', 'name', 'id', 'placeholder', 'aria-label'],
         });
 
         document.addEventListener('submit', this.handleSubmit, true);
@@ -550,7 +731,8 @@ class FocuzPassPageOverlay {
     };
 
     private scan() {
-        const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="password"]'));
+        const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input'))
+            .filter((input) => classifyField(input) !== 'unknown' && !['hidden', 'checkbox', 'radio', 'submit', 'button', 'reset', 'file', 'image', 'range', 'color'].includes(input.type));
         const live = new Set(inputs);
         for (const [input, control] of this.controls) {
             if (!live.has(input) || !input.isConnected) {
@@ -605,7 +787,7 @@ class FocuzPassPageOverlay {
         const ready = this.controlState === 'ready';
         control.button.className = `${ready ? 'is-ready' : 'is-locked'}${open ? ' is-open' : ''}`;
         control.button.setAttribute('aria-expanded', String(open));
-        control.button.setAttribute('aria-label', ready ? 'Show saved logins' : 'Unlock FocuzPass');
+        control.button.setAttribute('aria-label', ready ? 'Show matching FocuzPass items' : 'Unlock FocuzPass');
         control.button.innerHTML = ready
             ? `<span class="control-chevron">${CHEVRON_ICON}</span><span class="control-mark" aria-hidden="true">F</span>`
             : `<span class="control-lock">${LOCK_ICON}</span>`;
@@ -706,11 +888,14 @@ class FocuzPassPageOverlay {
             this.renderGate('Set up your vault', 'Create a master password before saving or filling logins.', 'Set up FocuzPass');
             return;
         }
-        if (context.matches.length === 0) {
-            this.renderEmpty(context.domain);
+        const role = this.activeInput ? classifyField(this.activeInput) : 'unknown';
+        const matches = relevantItemsForRole(context.items || context.matches, role)
+            .filter((item) => Boolean(valueForControl(this.activeInput!, item)));
+        if (matches.length === 0) {
+            this.renderEmpty(context.domain, role);
             return;
         }
-        this.renderMatches(context.domain, context.matches);
+        this.renderMatches(context.domain, matches);
     }
 
     private renderGate(title: string, description: string, actionLabel: string) {
@@ -725,12 +910,13 @@ class FocuzPassPageOverlay {
         body.appendChild(empty);
     }
 
-    private renderEmpty(domain: string) {
-        const { panel, body } = this.panelFrame(`Saved logins for ${domain}`);
+    private renderEmpty(domain: string, role: FieldRole) {
+        const { panel, body } = this.panelFrame(`FocuzPass items for ${domain}`);
+        const label = role.startsWith('card-') || role === 'cardholder' || role === 'cvv' ? 'cards' : role === 'password' || role === 'username' ? 'logins' : 'matching items';
         const empty = createElement('div', 'empty');
         empty.append(
-            createElement('p', 'empty-title', 'No saved logins'),
-            createElement('p', 'empty-copy', `No account is saved for ${domain}.`),
+            createElement('p', 'empty-title', `No saved ${label}`),
+            createElement('p', 'empty-copy', `FocuzPass has nothing that matches this field on ${domain}.`),
         );
         body.appendChild(empty);
         const footer = this.createFooter();
@@ -738,8 +924,8 @@ class FocuzPassPageOverlay {
         panel.appendChild(footer);
     }
 
-    private renderMatches(domain: string, matches: LoginMatch[]) {
-        const { panel, body } = this.panelFrame(`Saved logins for ${domain}`);
+    private renderMatches(domain: string, matches: AutofillItem[]) {
+        const { panel, body } = this.panelFrame(`FocuzPass items for ${domain}`);
         const list = createElement('div', 'account-list');
         const favicon = currentFavicon();
         for (const match of matches) {
@@ -747,8 +933,9 @@ class FocuzPassPageOverlay {
             const button = createElement('button', 'account');
             button.type = 'button';
             button.setAttribute('aria-label', `Fill ${match.identity} for ${match.title}`);
-            const mark = createElement('span', 'mark', match.mark || siteMark(match.title));
-            if (favicon) {
+            const brand = match.type === 'card' ? paymentBrand(match.cardNumber) : '';
+            const mark = createElement('span', `mark${brand ? ` card-brand is-${brand}` : ''}`, brand ? (brand === 'card' ? 'CARD' : brand.toUpperCase()) : match.mark || siteMark(match.title));
+            if (favicon && match.type === 'login') {
                 const image = createElement('img', 'favicon');
                 image.alt = '';
                 image.src = favicon;
@@ -758,13 +945,13 @@ class FocuzPassPageOverlay {
                 button.appendChild(mark);
             }
             const copy = createElement('span', 'account-copy');
-            copy.append(createElement('span', 'account-title', match.title), createElement('span', 'account-id', match.identity));
+            copy.append(createElement('span', 'account-title', match.title), createElement('span', 'account-id', itemSubtitle(match)));
             button.append(copy);
             button.addEventListener('pointerdown', (event) => event.preventDefault());
             button.addEventListener('click', () => this.fillMatch(match));
             const manage = createElement('button', 'manage');
             manage.type = 'button';
-            manage.setAttribute('aria-label', `Manage ${match.title} login`);
+            manage.setAttribute('aria-label', `Manage ${match.title}`);
             appendIcon(manage, SLIDERS_ICON);
             manage.addEventListener('click', () => this.openDashboard());
             row.append(button, manage);
@@ -792,10 +979,11 @@ class FocuzPassPageOverlay {
     }
 
     private createNewPasswordButton() {
-        const button = createElement('button', 'text-action', 'New password');
+        const passwordTarget = this.activeInput && classifyField(this.activeInput) === 'password';
+        const button = createElement('button', 'text-action', passwordTarget ? 'New password' : 'Manage FocuzPass');
         button.type = 'button';
         button.prepend(this.iconNode(PLUS_ICON));
-        button.addEventListener('click', () => void this.generateAndFill());
+        button.addEventListener('click', () => passwordTarget ? void this.generateAndFill() : this.openDashboard());
         return button;
     }
 
@@ -810,16 +998,36 @@ class FocuzPassPageOverlay {
         this.closePopover();
     }
 
-    private fillMatch(match: LoginMatch) {
-        const passwordInput = this.activeInput;
-        if (!passwordInput) return;
-        const identityInput = identityInputFor(passwordInput);
-        if (identityInput) setInputValue(identityInput, match.identity);
-        if (match.password) setInputValue(passwordInput, match.password);
-        passwordInput.focus({ preventScroll: true });
+    private fillMatch(match: AutofillItem) {
+        const activeInput = this.activeInput;
+        if (!activeInput) return;
+        const scope = activeInput.form || activeInput.closest('form') || activeInput.closest('[role="dialog"], main, section, article') || document;
+        const controls = Array.from(scope.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea'));
+        for (const control of controls) {
+            if (control instanceof HTMLInputElement && (!isRenderableInput(control) || ['hidden', 'checkbox', 'radio', 'submit', 'button', 'file'].includes(control.type))) continue;
+            if (!(control instanceof HTMLInputElement) && (control.disabled || !isElementVisuallyAvailable(control))) continue;
+            const role = classifyField(control);
+            let value = valueForControl(control, match);
+            if (!value) continue;
+            if (role === 'card-number') value = value.replace(/\D/g, '');
+            if (role === 'card-expiry' && control instanceof HTMLInputElement && control.type === 'month') {
+                const [month, year] = value.split('/');
+                value = `${year?.length === 2 ? `20${year}` : year}-${month}`;
+            }
+            if (role === 'card-exp-year' && control instanceof HTMLInputElement && control.maxLength === 2) value = value.slice(-2);
+            setControlValue(control, value);
+        }
+        if (match.type === 'login' && match.password) {
+            const passwordInput = controls.find((control): control is HTMLInputElement => control instanceof HTMLInputElement && classifyField(control) === 'password');
+            if (passwordInput) fillRelatedPasswordConfirmation(passwordInput, match.password);
+        }
+        activeInput.focus({ preventScroll: true });
         void this.send<null>({ type: 'FOCUZPASS_MARK_USED', id: match.id }).catch(() => undefined);
         this.closePopover();
-        window.queueMicrotask(() => submitFilledLogin(passwordInput));
+        if (match.type === 'login') window.queueMicrotask(() => {
+            const passwordInput = controls.find((control): control is HTMLInputElement => control instanceof HTMLInputElement && classifyField(control) === 'password');
+            submitFilledLogin(passwordInput || activeInput);
+        });
     }
 
     private async generateAndFill() {

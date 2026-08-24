@@ -84,6 +84,7 @@ type StoredItemOrganization = {
     favorite?: boolean;
     archivedAt?: string;
     deletedAt?: string;
+    sortOrder?: number;
 };
 
 type DecryptedItemOrganization = {
@@ -92,6 +93,7 @@ type DecryptedItemOrganization = {
     favorite: boolean;
     archivedAt?: string;
     deletedAt?: string;
+    sortOrder: number;
 };
 
 /** Sensitive fields encrypted individually before outer vault wrap. */
@@ -267,6 +269,7 @@ export type FocuzPassMessageType =
     | 'FOCUZPASS_UPSERT'
     | 'FOCUZPASS_DELETE'
     | 'FOCUZPASS_ITEM_ACTION'
+    | 'FOCUZPASS_REORDER'
     | 'FOCUZPASS_CREATE_VAULT'
     | 'FOCUZPASS_CREATE_TAG'
     | 'FOCUZPASS_TOUCH'

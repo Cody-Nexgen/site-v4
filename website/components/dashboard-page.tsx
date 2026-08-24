@@ -39,6 +39,7 @@ type WorkspaceState = {
   weeklyGoalHours?: number;
   dailyFocusTarget?: number;
   profileName?: string;
+  profileAvatar?: string;
 };
 
 export default function DashboardPage({ session, onLogout, onOpenCalendar }: DashboardPageProps) {
@@ -46,6 +47,7 @@ export default function DashboardPage({ session, onLogout, onOpenCalendar }: Das
   const [loading, setLoading] = useState(true);
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState("");
 
   // Settings State
   const [dailyLimit, setDailyLimit] = useState(2); // hours
@@ -100,6 +102,15 @@ export default function DashboardPage({ session, onLogout, onOpenCalendar }: Das
       hasSyncedData: Object.keys(state).length > 0,
     };
   }, [workspaceState]);
+
+  const metadata = session?.user?.user_metadata ?? {};
+  const profileAvatarUrl = (
+    (typeof workspaceState?.profileAvatar === "string" && workspaceState.profileAvatar.trim()) ||
+    (typeof metadata.avatar_url === "string" && metadata.avatar_url.trim()) ||
+    (typeof metadata.picture === "string" && metadata.picture.trim()) ||
+    ""
+  );
+  const profileName = workspaceState?.profileName?.trim() || metadata.full_name || metadata.name || session?.user?.email?.split('@')[0] || 'User';
 
   const renderContent = () => {
     switch (activeTab) {
@@ -300,14 +311,21 @@ export default function DashboardPage({ session, onLogout, onOpenCalendar }: Das
           {/* Header */}
           <header className="flex justify-between items-end">
             <div>
-              <h2 className="text-3xl font-bold text-white mb-2">Welcome back, {session?.user?.email?.split('@')[0] || 'User'}</h2>
+              <h2 className="text-3xl font-bold text-white mb-2">Welcome back, {profileName}</h2>
               <p className="text-zinc-400">Here's your cloud-synced productivity overview.</p>
             </div>
-            <div className="flex gap-4">
+            <div className="flex items-center gap-3">
               <GlassCard className="px-4 py-2 flex items-center gap-2 bg-purple-500/10 border-purple-500/20">
                 <Globe className="w-4 h-4 text-purple-400" />
                 <span className="text-sm font-bold text-purple-200">Synced to cloud</span>
               </GlassCard>
+              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-900 text-sm font-bold text-zinc-200 shadow-lg shadow-black/30" title={profileName}>
+                {profileAvatarUrl && failedAvatarUrl !== profileAvatarUrl ? (
+                  <img src={profileAvatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatarUrl(profileAvatarUrl)} className="h-full w-full object-cover" />
+                ) : (
+                  <span aria-hidden="true">{String(profileName).trim().charAt(0).toUpperCase() || 'F'}</span>
+                )}
+              </div>
             </div>
           </header>
 

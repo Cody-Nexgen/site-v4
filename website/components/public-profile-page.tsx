@@ -38,6 +38,7 @@ export default function PublicProfilePage({ username }: { username: string }) {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -111,11 +112,11 @@ export default function PublicProfilePage({ username }: { username: string }) {
               <div
                 className={`w-20 h-20 rounded-2xl bg-purple-500/20 border-2 border-purple-500/30 flex items-center justify-center overflow-hidden shrink-0 ${frame}`}
               >
-                {profile.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="" className="w-full h-full object-cover" />
+                {profile.avatarUrl && failedAvatarUrl !== profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatarUrl(profile.avatarUrl || "")} className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-3xl font-black text-purple-300">
-                    {profile.displayName.charAt(0).toUpperCase()}
+                    {profile.displayName.charAt(0).toUpperCase() || 'F'}
                   </span>
                 )}
               </div>

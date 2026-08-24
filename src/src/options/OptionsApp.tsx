@@ -115,6 +115,11 @@ export const GlassCard = ({ children, className = "", onClick, style }: { childr
     </div>
 );
 
+function accountAvatarFromMetadata(metadata: Record<string, unknown> | null | undefined): string {
+    const candidates = [metadata?.avatar_url, metadata?.picture, metadata?.avatar];
+    return candidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim() || '';
+}
+
 
 export const ActivityGraph = ({
     stats: statsProp,
@@ -1622,6 +1627,7 @@ const AccountSettings = () => {
         session?.access_token && session?.refresh_token
             ? { access_token: session.access_token, refresh_token: session.refresh_token }
             : null;
+    const sessionAccountAvatarUrl = accountAvatarFromMetadata(session?.user?.user_metadata);
 
     useEffect(() => {
         if (progression) setPublicProfileEnabled(progression.publicProfileEnabled);
@@ -1695,7 +1701,7 @@ const AccountSettings = () => {
                 const settings = {
                     profileName: name,
                     profileInitial: (name.charAt(0) || 'F').toUpperCase(),
-                    profileAvatar: profile.avatarUrl || '',
+                    profileAvatar: profile.avatarUrl || sessionAccountAvatarUrl || '',
                 };
                 await new Promise<void>((r) =>
                     chrome.runtime.sendMessage(
@@ -1712,7 +1718,7 @@ const AccountSettings = () => {
         return () => {
             cancelled = true;
         };
-    }, [session?.user?.id, session?.access_token, session?.refresh_token, fetchEngineState]);
+    }, [session?.user?.id, session?.user?.email, session?.access_token, session?.refresh_token, sessionAccountAvatarUrl, fetchEngineState]);
 
     useEffect(() => {
         if (!profileLoaded || !sessionTokens) return;
@@ -2454,13 +2460,9 @@ const OptionsApp = () => {
         window.history.replaceState({}, '', url.pathname + url.search);
     };
 
-    const sidebarExpandLockUntilRef = useRef(0);
     const toggleSidebarCollapsed = () => {
         setSidebarCollapsed((prev) => {
             const next = !prev;
-            // After collapsing, ignore the hover rail briefly so the cursor
-            // still sitting on the left edge doesn't bounce it open again.
-            if (next) sidebarExpandLockUntilRef.current = Date.now() + 800;
             writeSidebarCollapsed(next);
             return next;
         });
@@ -2666,6 +2668,8 @@ const OptionsApp = () => {
         );
     }
 
+    const accountAvatarUrl = accountAvatarFromMetadata(session?.user?.user_metadata);
+    const resolvedProfileAvatar = engineState.profileAvatar || accountAvatarUrl;
     const focuzPassMode = activeTab === 'focuzpass';
     const fullHeightTab = ['calendar', 'lists', 'ai_coach', 'focuzpass'].includes(activeTab);
 
@@ -2674,7 +2678,8 @@ const OptionsApp = () => {
             case 'overview': return <OverviewTab />;
             case 'focuzpass': return (
                 <FocuzPassTab
-                    avatarUrl={engineState.profileAvatar}
+                    avatarUrl={resolvedProfileAvatar}
+                    avatarFallbackUrl={accountAvatarUrl}
                     username={engineState.profileUsername || engineState.profileName || session?.user?.email?.split('@')[0] || 'Username'}
                     accountName={engineState.profileName || session?.user?.email || 'FocuzNow Account'}
                     onExit={() => navigateTab('overview')}
@@ -2720,7 +2725,8 @@ const OptionsApp = () => {
             {!focuzPassMode && (
                 <WorkspaceSidebar
                     activeTab={activeTab}
-                    avatarUrl={engineState.profileAvatar}
+                    avatarUrl={resolvedProfileAvatar}
+                    avatarFallbackUrl={accountAvatarUrl}
                     username={engineState.profileUsername || engineState.profileName}
                     email={session?.user?.email}
                     isPro={isPro}
@@ -2736,36 +2742,17 @@ const OptionsApp = () => {
             {/* Main Content */}
             <main className="workspace-main flex flex-col min-w-0 relative overflow-hidden">
                 {sidebarCollapsed && !focuzPassMode && (
-                    <>
-                        <div
-                            className="workspace-sidebar-hover-rail"
-                            onMouseEnter={() => {
-                                window.clearTimeout((window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover);
-                                (window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover = window.setTimeout(() => {
-                                    if (Date.now() < sidebarExpandLockUntilRef.current) return;
-                                    setSidebarCollapsed(false);
-                                    writeSidebarCollapsed(false);
-                                }, 550);
-                            }}
-                            onMouseLeave={() => {
-                                window.clearTimeout((window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover);
-                            }}
-                            aria-hidden
-                        />
                         <button
                             type="button"
                             className="workspace-sidebar-expand-fab"
                             aria-label="Expand sidebar"
                             onClick={() => {
-                                window.clearTimeout((window as unknown as { __focuzSidebarHover?: number }).__focuzSidebarHover);
-                                sidebarExpandLockUntilRef.current = 0;
                                 setSidebarCollapsed(false);
                                 writeSidebarCollapsed(false);
                             }}
                         >
                             <IconChevronRight size={16} />
                         </button>
-                    </>
                 )}
                 {/* Topbar */}
                 {!focuzPassMode && <header className="workspace-topbar h-11 shrink-0 px-6 flex items-center justify-between sticky top-0 z-50">

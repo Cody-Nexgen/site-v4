@@ -38,6 +38,7 @@ import { colorFromString, getInitials } from '../lib/avatarInitials';
 type Props = {
     activeTab: string;
     avatarUrl?: string;
+    avatarFallbackUrl?: string;
     username?: string;
     email?: string;
     isPro: boolean;
@@ -82,6 +83,7 @@ function readExpanded(): Record<string, boolean> {
 export function WorkspaceSidebar({
     activeTab,
     avatarUrl,
+    avatarFallbackUrl,
     username,
     email,
     isPro,
@@ -93,6 +95,7 @@ export function WorkspaceSidebar({
     onSignOut,
 }: Props) {
     const [accountOpen, setAccountOpen] = useState(false);
+    const [failedAvatarSources, setFailedAvatarSources] = useState<string[]>([]);
     const [expanded, setExpanded] = useState<Record<string, boolean>>(readExpanded);
     const [colorMode, setColorMode] = useState<DashboardColorMode>(getDashboardColorMode);
     const accountRef = useRef<HTMLDivElement>(null);
@@ -100,6 +103,8 @@ export function WorkspaceSidebar({
     const displayName = username?.trim() || email?.split('@')[0] || 'Account';
     const initials = getInitials(displayName);
     const avatarColor = colorFromString(displayName);
+    const avatarSources = [avatarUrl, avatarFallbackUrl].filter((source, index, all): source is string => Boolean(source) && all.indexOf(source) === index);
+    const avatarSource = avatarSources.find((source) => !failedAvatarSources.includes(source));
     const resolvedColorMode = resolveDashboardColorMode(colorMode);
     const nextColorMode = resolvedColorMode === 'dark' ? 'light' : 'dark';
     const colorModeLabel = `Switch to ${nextColorMode} mode`;
@@ -161,8 +166,8 @@ export function WorkspaceSidebar({
                     aria-controls="workspace-account-menu"
                     className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[4px] px-1.5 text-left transition-colors hover:bg-white/[0.035]"
                 >
-                    {avatarUrl ? (
-                        <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-[5px] object-cover" />
+                    {avatarSource ? (
+                        <img src={avatarSource} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatarSources((current) => current.includes(avatarSource) ? current : [...current, avatarSource])} className="h-5 w-5 shrink-0 rounded-[5px] object-cover" />
                     ) : (
                         <span
                             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[9px] font-medium text-white"

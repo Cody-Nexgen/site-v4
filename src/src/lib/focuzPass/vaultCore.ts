@@ -76,6 +76,7 @@ export type VaultUpsertInput = {
     favorite?: boolean;
     archivedAt?: string;
     deletedAt?: string;
+    sortOrder?: number;
 };
 
 export type VaultItemAction =
@@ -170,6 +171,7 @@ function organization(item: Partial<DecryptedVaultItem> | Partial<StoredVaultIte
         favorite: Boolean(item.favorite),
         archivedAt: item.archivedAt,
         deletedAt: item.deletedAt,
+        sortOrder: typeof item.sortOrder === 'number' && Number.isFinite(item.sortOrder) ? item.sortOrder : 0,
     };
 }
 
@@ -526,10 +528,12 @@ export class FocuzPassVault {
         this.vaults = document.vaults?.length ? document.vaults : [defaultVault()];
         this.tags = document.tags || [];
         const validVaultIds = new Set(this.vaults.map((vault) => vault.id));
-        this.items = items.map((item) => ({
+        const hasSavedOrder = items.length <= 1 || items.some((item) => item.sortOrder !== 0);
+        this.items = items.map((item, index) => ({
             ...item,
             vaultId: validVaultIds.has(item.vaultId) ? item.vaultId : this.vaults[0]!.id,
             tagIds: item.tagIds.filter((id) => this.tags.some((tag) => tag.id === id)),
+            sortOrder: hasSavedOrder ? item.sortOrder : index,
         }));
         this.unlockedAt = Date.now();
         this.lastActivityAt = this.unlockedAt;
@@ -605,6 +609,7 @@ export class FocuzPassVault {
             favorite: input.favorite ?? existing?.favorite ?? false,
             archivedAt: input.archivedAt ?? existing?.archivedAt,
             deletedAt: input.deletedAt ?? existing?.deletedAt,
+            sortOrder: input.sortOrder ?? existing?.sortOrder ?? (this.items.length ? Math.min(...this.items.map((item) => item.sortOrder)) - 1 : 0),
         };
 
         let next: DecryptedVaultItem;
@@ -777,6 +782,7 @@ export class FocuzPassVault {
                 deletedAt: undefined,
                 createdAt: nowIso(),
                 updatedAt: nowIso(),
+                sortOrder: this.items.length ? Math.min(...this.items.map((candidate) => candidate.sortOrder)) - 1 : 0,
                 ...(item.type === 'custom' ? { fields: { ...item.fields } } : {}),
             } as DecryptedVaultItem;
             this.items.unshift(duplicated);
@@ -806,6 +812,21 @@ export class FocuzPassVault {
         await this.persist();
         this.touch();
         return { ...item };
+    }
+
+    async reorder(orderedIds: string[]): Promise<void> {
+        this.enforceLockTimers();
+        if (!this.vaultKey) throw new Error('Vault is locked');
+        const uniqueIds = [...new Set(orderedIds.filter(Boolean))];
+        const byId = new Map(this.items.map((item) => [item.id, item]));
+        const ordered = uniqueIds.map((id) => byId.get(id)).filter((item): item is DecryptedVaultItem => Boolean(item));
+        const included = new Set(ordered.map((item) => item.id));
+        const remaining = [...this.items]
+            .filter((item) => !included.has(item.id))
+            .sort((a, b) => a.sortOrder - b.sortOrder);
+        this.items = [...ordered, ...remaining].map((item, index) => ({ ...item, sortOrder: index }));
+        await this.persist();
+        this.touch();
     }
 
     /** Expose ciphertext samples for tests — does not include VK. */

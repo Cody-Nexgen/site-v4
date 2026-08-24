@@ -142,6 +142,7 @@ export async function handleFocuzPassMessage(msg: {
     accountCreation?: boolean;
     action?: VaultItemAction;
     collection?: { name: string; color: string; icon: string };
+    orderedIds?: string[];
 }, sender?: chrome.runtime.MessageSender): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
     try {
         switch (msg.type) {
@@ -165,6 +166,9 @@ export async function handleFocuzPassMessage(msg: {
                 return { ok: true, data: null };
             case 'FOCUZPASS_ITEM_ACTION':
                 return { ok: true, data: await vault.itemAction(msg.action as VaultItemAction) };
+            case 'FOCUZPASS_REORDER':
+                await vault.reorder(Array.isArray(msg.orderedIds) ? msg.orderedIds.map(String) : []);
+                return { ok: true, data: null };
             case 'FOCUZPASS_CREATE_VAULT':
                 return { ok: true, data: await vault.createVault(msg.collection || { name: '', color: '', icon: '' }) };
             case 'FOCUZPASS_CREATE_TAG':
@@ -179,17 +183,23 @@ export async function handleFocuzPassMessage(msg: {
                 if (!page) throw new Error('FocuzPass is unavailable on this page');
                 const status = await vault.getStatus('extension');
                 if (!status.configured) {
-                    return { ok: true, data: { state: 'unconfigured', domain: page.domain, matches: [] } };
+                    return { ok: true, data: { state: 'unconfigured', domain: page.domain, matches: [], items: [] } };
                 }
                 if (!status.unlocked) {
-                    return { ok: true, data: { state: 'locked', domain: page.domain, matches: [] } };
+                    return { ok: true, data: { state: 'locked', domain: page.domain, matches: [], items: [] } };
                 }
+                const snapshot = vault.snapshot();
+                const activeItems = snapshot.items.filter((item) => {
+                    if (item.archivedAt || item.deletedAt || item.type === 'passkey') return false;
+                    return item.type !== 'login' || isExactVaultDomain(item.domain, page.domain);
+                });
                 return {
                     ok: true,
                     data: {
                         state: 'ready',
                         domain: page.domain,
-                        matches: vault.findLoginMatches(page.domain),
+                        matches: activeItems.filter((item) => item.type === 'login'),
+                        items: activeItems,
                     },
                 };
             }
@@ -270,8 +280,8 @@ export async function handleFocuzPassMessage(msg: {
             case 'FOCUZPASS_MARK_USED': {
                 const page = senderPage(sender);
                 if (!page) throw new Error('FocuzPass is unavailable on this page');
-                const item = vault.findLoginMatches(page.domain).find((candidate) => candidate.id === msg.id);
-                if (!item) throw new Error('No matching login for this site');
+                const item = vault.snapshot().items.find((candidate) => candidate.id === msg.id && !candidate.archivedAt && !candidate.deletedAt);
+                if (!item || (item.type === 'login' && !isExactVaultDomain(item.domain, page.domain))) throw new Error('No matching item for this page');
                 await vault.markUsed(item.id);
                 return { ok: true, data: null };
             }

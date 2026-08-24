@@ -1,6 +1,34 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
+    DndContext,
+    KeyboardSensor,
+    PointerSensor,
+    closestCenter,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    arrayMove,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS as DndCss } from '@dnd-kit/utilities';
+import {
+    AE as FlagAE, AR as FlagAR, AT as FlagAT, AU as FlagAU, BD as FlagBD, BE as FlagBE,
+    BR as FlagBR, CA as FlagCA, CH as FlagCH, CN as FlagCN, CZ as FlagCZ, DE as FlagDE,
+    DK as FlagDK, ES as FlagES, FI as FlagFI, FR as FlagFR, GB as FlagGB, GH as FlagGH,
+    GR as FlagGR, HU as FlagHU, ID as FlagID, IE as FlagIE, IL as FlagIL, IN as FlagIN,
+    IT as FlagIT, JP as FlagJP, KE as FlagKE, KR as FlagKR, MX as FlagMX, MY as FlagMY,
+    NG as FlagNG, NL as FlagNL, NO as FlagNO, NZ as FlagNZ, PH as FlagPH, PK as FlagPK,
+    PL as FlagPL, PT as FlagPT, RO as FlagRO, SA as FlagSA, SE as FlagSE, SG as FlagSG,
+    TH as FlagTH, TR as FlagTR, UA as FlagUA, US as FlagUS, VN as FlagVN, ZA as FlagZA,
+} from 'country-flag-icons/react/3x2';
+import {
     ArchiveRestore,
+    ArrowLeft,
     ArrowRight,
     BadgeCheck,
     BookOpen,
@@ -17,12 +45,15 @@ import {
     EyeOff,
     Fingerprint,
     FolderInput,
+    Funnel,
+    GripVertical,
     HeartPulse,
     IdCard,
     KeyRound,
     Landmark,
     LayoutGrid,
     Laptop,
+    MapPin,
     Lock,
     Mail,
     MoreHorizontal,
@@ -32,18 +63,14 @@ import {
     Router,
     Search,
     ShieldCheck,
-    ShieldEllipsis,
     Sparkles,
-    Star,
     Terminal,
     TicketCheck,
     Trash2,
-    UserRound,
     WalletCards,
     X,
 } from 'lucide-react';
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import vaultIconUrl from '../assets/focuzpass-vault.png';
+import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import ModalPortal from '../components/ModalPortal';
 import {
     focuzPassCreateTag,
@@ -51,6 +78,7 @@ import {
     focuzPassDelete,
     focuzPassItemAction,
     focuzPassLock,
+    focuzPassReorder,
     focuzPassSetup,
     focuzPassSnapshot,
     focuzPassStatus,
@@ -63,13 +91,29 @@ import {
     type VaultStatus,
     type VaultTag,
 } from '../lib/focuzPass/client';
+import {
+    CARD_BRAND_LABELS,
+    detectCardBrand,
+    digitsOnly,
+    formatFieldValue,
+    formatInternationalPhone,
+    formatPhoneLocal,
+    PHONE_COUNTRIES,
+    phoneCountryFromValue,
+    phoneLocalDigits,
+    validateFieldValue,
+    type FocuzPassFieldFormat,
+    type PhoneCountry,
+} from '../lib/focuzPass/fieldUtils';
 import { formatRelativeTime } from '../lib/focuzPass/vaultCore';
 import { isWebPlatform } from '../lib/platform';
 
 type VaultItemType = 'login' | 'card' | 'passkey' | 'custom';
 type EditableItemKind = 'login' | 'card' | CustomItemKind;
-type VaultFilter = 'all' | VaultItemType | 'risk';
+type VaultFilter = 'all' | Exclude<VaultItemType, 'custom'> | CustomItemKind | 'risk';
 type PasswordStrength = 'weak' | 'okay' | 'strong';
+type VaultSort = 'custom' | 'activity' | 'created-newest' | 'created-oldest' | 'name-asc' | 'name-desc' | 'type';
+type CreatedFilter = 'any' | '7d' | '30d' | '90d' | 'year';
 
 type VaultItem = {
     id: string;
@@ -88,6 +132,8 @@ type VaultItem = {
     risk?: 'weak' | 'reused';
     lastUsed: string;
     sortDate: string;
+    createdAt: string;
+    sortOrder: number;
     note?: string;
     mark: string;
     markTone: string;
@@ -122,7 +168,30 @@ const FILTERS: { id: VaultFilter; label: string; icon: typeof KeyRound }[] = [
     { id: 'login', label: 'Logins', icon: KeyRound },
     { id: 'card', label: 'Cards', icon: CreditCard },
     { id: 'passkey', label: 'Passkeys', icon: Fingerprint },
+    { id: 'identity', label: 'Identities', icon: IdCard },
+    { id: 'password', label: 'Passwords', icon: KeyRound },
+    { id: 'email', label: 'Email accounts', icon: Mail },
+    { id: 'bank_account', label: 'Bank accounts', icon: Landmark },
+    { id: 'crypto_wallet', label: 'Crypto wallets', icon: WalletCards },
+    { id: 'driver_license', label: 'Driver licenses', icon: BadgeCheck },
+    { id: 'medical_record', label: 'Medical records', icon: HeartPulse },
+    { id: 'membership', label: 'Memberships', icon: TicketCheck },
+    { id: 'passport', label: 'Passports', icon: BookOpen },
+    { id: 'api_credentials', label: 'API credentials', icon: Braces },
+    { id: 'ssh_key', label: 'SSH keys', icon: Terminal },
+    { id: 'social_security_number', label: 'Social Security', icon: ShieldCheck },
+    { id: 'wireless_router', label: 'Wireless routers', icon: Router },
     { id: 'risk', label: 'Security review', icon: ShieldCheck },
+];
+
+const SORT_OPTIONS: { id: VaultSort; label: string; description: string }[] = [
+    { id: 'custom', label: 'Custom order', description: 'Hold and drag items into place' },
+    { id: 'activity', label: 'Recent activity', description: 'Recently used or edited first' },
+    { id: 'created-newest', label: 'Newest created', description: 'Newest additions first' },
+    { id: 'created-oldest', label: 'Oldest created', description: 'Oldest additions first' },
+    { id: 'name-asc', label: 'Name A–Z', description: 'Alphabetical ascending' },
+    { id: 'name-desc', label: 'Name Z–A', description: 'Alphabetical descending' },
+    { id: 'type', label: 'Item type', description: 'Group similar credentials' },
 ];
 
 const TYPE_META: Record<VaultItemType, { label: string; icon: typeof KeyRound }> = {
@@ -161,8 +230,8 @@ const ITEM_DEFINITIONS: Record<EditableItemKind, {
         fields: [
             { key: 'fullName', label: 'Full name', placeholder: 'Full legal name' },
             { key: 'email', label: 'Email', placeholder: 'you@example.com' },
-            { key: 'phone', label: 'Phone', placeholder: '+1 555 000 0000' },
-            { key: 'address', label: 'Address', placeholder: 'Street, city, region, postal code', type: 'textarea' },
+            { key: 'phone', label: 'Phone', placeholder: '(555) 000-0000' },
+            { key: 'address', label: 'Address', placeholder: 'Start typing an address…' },
             { key: 'dateOfBirth', label: 'Date of birth', placeholder: 'Choose a date', type: 'date' },
         ],
     },
@@ -292,146 +361,54 @@ const ITEM_DEFINITIONS: Record<EditableItemKind, {
     },
 };
 
+const ITEM_ICON_PALETTES: Record<EditableItemKind, { top: string; main: string; lower: string; depth: string; ink: string; light: string }> = {
+    login: { top: '#C8FBF5', main: '#55D3D1', lower: '#248F95', depth: '#155B62', ink: '#174F58', light: '#EDFFFC' },
+    card: { top: '#CDEEFF', main: '#5AB8E7', lower: '#2D82B2', depth: '#185372', ink: '#174E70', light: '#F0FAFF' },
+    identity: { top: '#DDD9FF', main: '#8C86E9', lower: '#5953BA', depth: '#37337C', ink: '#373271', light: '#F5F3FF' },
+    password: { top: '#D7F7FF', main: '#60CBE8', lower: '#2785AE', depth: '#15536F', ink: '#164E69', light: '#F1FCFF' },
+    api_credentials: { top: '#C6F6EE', main: '#4DC7B2', lower: '#258979', depth: '#155B52', ink: '#14584F', light: '#EFFFFB' },
+    bank_account: { top: '#FFE6A8', main: '#F0B246', lower: '#B97722', depth: '#784B16', ink: '#744816', light: '#FFF8DF' },
+    crypto_wallet: { top: '#E3D9FF', main: '#9A7AE3', lower: '#6047A8', depth: '#3B2B70', ink: '#41306F', light: '#F7F3FF' },
+    driver_license: { top: '#FFD8E7', main: '#E67CA7', lower: '#A9436E', depth: '#702A49', ink: '#6F2948', light: '#FFF3F8' },
+    email: { top: '#FFD5E9', main: '#D9699F', lower: '#993B6A', depth: '#642444', ink: '#682747', light: '#FFF2F8' },
+    medical_record: { top: '#FFD8D8', main: '#E87379', lower: '#AE3E48', depth: '#74262E', ink: '#7D2C35', light: '#FFF5F5' },
+    membership: { top: '#E9DCFF', main: '#A67BDD', lower: '#7044AA', depth: '#472A70', ink: '#4C2E74', light: '#FAF6FF' },
+    passport: { top: '#D5E8FF', main: '#5C99D9', lower: '#3265A0', depth: '#1D416B', ink: '#234E7B', light: '#F3F8FF' },
+    ssh_key: { top: '#D8E4E4', main: '#719493', lower: '#466463', depth: '#2A4141', ink: '#263E3D', light: '#F1F7F6' },
+    social_security_number: { top: '#D8E5FF', main: '#668DD7', lower: '#3D61A4', depth: '#273F70', ink: '#2B4677', light: '#F4F7FF' },
+    wireless_router: { top: '#D7EEF4', main: '#71AFC2', lower: '#477B8D', depth: '#2A5260', ink: '#2F5866', light: '#F3FBFD' },
+};
+
 function SoftItemTypeIcon({ kind, size = 32 }: { kind: EditableItemKind; size?: number }) {
+    const gradientId = useFocusIconId(`fp-item-${kind}`);
+    const palette = ITEM_ICON_PALETTES[kind];
+    const fill = `url(#${gradientId})`;
     let glyph: ReactNode;
 
     switch (kind) {
-        case 'login':
-            glyph = <>
-                <rect className="item-icon-paper" x="8" y="6" width="32" height="36" rx="8" />
-                <rect className="item-icon-mid" x="11" y="9" width="26" height="30" rx="6" />
-                <rect className="item-icon-paper" x="15" y="13" width="18" height="22" rx="4" />
-                <circle className="item-icon-ink" cx="24" cy="23" r="4.2" />
-                <path d="M22.5 26h3l-.8 6h-1.4l-.8-6Z" className="item-icon-ink" />
-            </>;
-            break;
-        case 'card':
-            glyph = <>
-                <rect className="item-icon-paper" x="5" y="10" width="38" height="28" rx="5" />
-                <rect className="item-icon-ink" x="5" y="16" width="38" height="7" />
-                <rect className="item-icon-mid" x="10" y="29" width="13" height="3.5" rx="1.75" />
-                <circle className="item-icon-accent" cx="36" cy="30.5" r="4" />
-            </>;
-            break;
-        case 'identity':
-            glyph = <>
-                <rect className="item-icon-ink" x="8" y="13" width="34" height="25" rx="5" opacity=".26" />
-                <rect className="item-icon-paper" x="6" y="10" width="34" height="25" rx="5" />
-                <rect className="item-icon-mid" x="9" y="13" width="12" height="19" rx="3" />
-                <circle className="item-icon-paper" cx="15" cy="19" r="3.25" />
-                <path d="M11 29c.6-3.3 1.9-5 4-5s3.4 1.7 4 5M25 17h10M25 22h8M25 27h10" className="item-icon-ink-stroke" />
-                <circle className="item-icon-accent" cx="35" cy="31" r="2.25" />
-            </>;
-            break;
-        case 'password':
-            glyph = <>
-                <circle className="item-icon-paper" cx="19" cy="20" r="11" />
-                <circle className="item-icon-mid" cx="19" cy="20" r="6" />
-                <circle className="item-icon-ink" cx="19" cy="20" r="2.5" />
-                <path d="m26.5 27.5 11 11m-2.7-8.3-3.4 3.4m8-1.2-4 4" className="item-icon-paper-stroke" />
-            </>;
-            break;
-        case 'api_credentials':
-            glyph = <>
-                <rect className="item-icon-paper" x="5" y="8" width="38" height="32" rx="5" />
-                <path d="M5 15h38" className="item-icon-ink-stroke" />
-                <circle className="item-icon-accent" cx="10" cy="11.5" r="1.5" />
-                <circle className="item-icon-mid" cx="15" cy="11.5" r="1.5" />
-                <path d="m18 23-5 4 5 4m12-8 5 4-5 4m-4-10-4 12" className="item-icon-ink-stroke" />
-            </>;
-            break;
-        case 'bank_account':
-            glyph = <>
-                <circle className="item-icon-paper" cx="24" cy="24" r="17" />
-                <circle className="item-icon-mid" cx="24" cy="24" r="13" />
-                <path d="m13 21 11-7 11 7M15 23h18M17 23v9m7-9v9m7-9v9M14 34h20" className="item-icon-ink-stroke" />
-            </>;
-            break;
-        case 'crypto_wallet':
-            glyph = <>
-                <rect className="item-icon-mid" x="10" y="8" width="29" height="19" rx="5" transform="rotate(5 24.5 17.5)" />
-                <circle className="item-icon-accent" cx="16" cy="16" r="9" />
-                <path d="M14 10.5v11m-2.5-8.5h5.4c3.1 0 3.1 4 0 4h-5.4m5.2 0c3.5 0 3.5 4 0 4h-5.2m3.2-12v3m0 9v2" className="item-icon-paper-stroke" />
-                <rect className="item-icon-ink" x="7" y="21" width="37" height="23" rx="7" opacity=".28" />
-                <rect className="item-icon-paper" x="4" y="18" width="38" height="24" rx="7" />
-                <path d="M7 23h31" className="item-icon-mid-stroke" />
-                <rect className="item-icon-mid" x="26" y="25" width="19" height="12" rx="4" />
-                <circle className="item-icon-ink" cx="32" cy="31" r="2" />
-            </>;
-            break;
-        case 'driver_license':
-            glyph = <>
-                <rect className="item-icon-paper" x="4" y="10" width="40" height="29" rx="5" />
-                <rect className="item-icon-accent" x="4" y="10" width="40" height="7" rx="5" />
-                <circle className="item-icon-mid" cx="14" cy="25" r="5" />
-                <path d="M8.5 35c.8-4.2 2.7-6.3 5.5-6.3s4.7 2.1 5.5 6.3M24 22h14M24 28h11M24 34h8" className="item-icon-ink-stroke" />
-            </>;
-            break;
-        case 'email':
-            glyph = <>
-                <rect className="item-icon-paper" x="6" y="10" width="36" height="29" rx="5" />
-                <path d="m8 14 16 13 16-13" className="item-icon-ink-stroke" />
-                <path d="m8 36 11-11m21 11L29 25" className="item-icon-mid-stroke" />
-                <circle className="item-icon-accent" cx="38" cy="11" r="5" />
-            </>;
-            break;
-        case 'medical_record':
-            glyph = <>
-                <rect className="item-icon-paper" x="9" y="7" width="30" height="35" rx="5" />
-                <rect className="item-icon-mid" x="17" y="5" width="14" height="7" rx="3" />
-                <path d="M24 34s-9-5.1-9-11a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.9-9 11-9 11Z" className="item-icon-accent" />
-                <path d="M24 21v8m-4-4h8" className="item-icon-paper-stroke" />
-            </>;
-            break;
-        case 'membership':
-            glyph = <>
-                <rect className="item-icon-paper" x="4" y="11" width="40" height="27" rx="6" />
-                <path d="M4 19h40" className="item-icon-mid-stroke" />
-                <path d="m14 25 1.4 2.6 3 .5-2.2 2.1.5 3-2.7-1.4-2.7 1.4.5-3-2.2-2.1 3-.5L14 25Zm10 0 1.4 2.6 3 .5-2.2 2.1.5 3-2.7-1.4-2.7 1.4.5-3-2.2-2.1 3-.5L24 25Zm10 0 1.4 2.6 3 .5-2.2 2.1.5 3-2.7-1.4-2.7 1.4.5-3-2.2-2.1 3-.5L34 25Z" className="item-icon-accent" />
-            </>;
-            break;
-        case 'passport':
-            glyph = <>
-                <rect className="item-icon-paper" x="9" y="5" width="30" height="38" rx="5" />
-                <circle className="item-icon-mid" cx="24" cy="23" r="10" />
-                <circle cx="24" cy="23" r="7" className="item-icon-paper-stroke" />
-                <path d="M17 23h14M24 16c3 3.6 3 10.4 0 14m0-14c-3 3.6-3 10.4 0 14" className="item-icon-paper-stroke" />
-                <path d="M17 36h14" className="item-icon-ink-stroke" />
-            </>;
-            break;
-        case 'ssh_key':
-            glyph = <>
-                <rect className="item-icon-paper" x="4" y="8" width="40" height="31" rx="5" />
-                <rect className="item-icon-ink" x="7" y="12" width="34" height="23" rx="3" />
-                <path d="m11 18 5 4-5 4m8 0h6" className="item-icon-paper-stroke" />
-                <circle className="item-icon-accent" cx="33" cy="30" r="5" />
-                <path d="m36.5 26.5 6-6m-2 2 2 2m-4 0 2 2" className="item-icon-accent-stroke" />
-            </>;
-            break;
-        case 'social_security_number':
-            glyph = <>
-                <rect className="item-icon-paper" x="5" y="9" width="38" height="30" rx="6" />
-                <path d="M24 13c4 3 7.5 3.2 7.5 3.2v7.3c0 6-3.1 9.3-7.5 11.5-4.4-2.2-7.5-5.5-7.5-11.5v-7.3S20 16 24 13Z" className="item-icon-mid" />
-                <circle className="item-icon-paper" cx="24" cy="21" r="2" />
-                <path d="M20.5 27h7M10 17h4m-4 6h3m21-6h4m-3 6h3" className="item-icon-ink-stroke" />
-            </>;
-            break;
-        case 'wireless_router':
-            glyph = <>
-                <rect className="item-icon-paper" x="5" y="23" width="38" height="16" rx="5" />
-                <path d="M11 23V12m26 11V12" className="item-icon-ink-stroke" />
-                <path d="M16 19c4.4-4.4 11.6-4.4 16 0m-12 0c2.2-2.2 5.8-2.2 8 0" className="item-icon-mid-stroke" />
-                <circle className="item-icon-accent" cx="24" cy="21" r="2" />
-                <circle className="item-icon-mid" cx="12" cy="31" r="2" />
-                <circle className="item-icon-accent" cx="18" cy="31" r="2" />
-                <path d="M27 31h10" className="item-icon-ink-stroke" />
-            </>;
-            break;
+        case 'login': glyph = <><rect x="4" y="5.5" width="24" height="24" rx="8" fill={palette.depth} /><rect x="4" y="4" width="24" height="24" rx="8" fill={fill} /><path d="M9 5.5h13" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity=".5" /><rect x="9" y="8.5" width="14" height="14" rx="4.5" fill={palette.light} /><circle cx="16" cy="14.5" r="2.7" fill={palette.ink} /><path d="M14.9 16.6h2.2l-.45 4h-1.3Z" fill={palette.ink} /></>; break;
+        case 'card': glyph = <><rect x="3" y="7.5" width="26" height="19" rx="6" fill={palette.depth} /><rect x="3" y="6" width="26" height="19" rx="6" fill={fill} /><path d="M7.5 7.2h16" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity=".52" /><rect x="3" y="11" width="26" height="5" fill={palette.ink} /><rect x="7" y="20" width="8" height="2.7" rx="1.35" fill={palette.light} opacity=".82" /><circle cx="24" cy="21.3" r="2.5" fill={palette.light} opacity=".72" /></>; break;
+        case 'identity': glyph = <><rect x="3" y="7.5" width="26" height="20" rx="6" fill={palette.depth} /><rect x="3" y="6" width="26" height="20" rx="6" fill={fill} /><path d="M7.5 7.3h16" stroke="#fff" strokeWidth="1.05" strokeLinecap="round" opacity=".48" /><rect x="6" y="10" width="9" height="12" rx="3" fill={palette.light} opacity=".86" /><circle cx="10.5" cy="14" r="2.5" fill={palette.ink} opacity=".72" /><path d="M7.7 20.3c.6-2.5 1.5-3.6 2.8-3.6s2.2 1.1 2.8 3.6" fill={palette.ink} opacity=".72" /><rect x="18" y="11" width="7" height="2.2" rx="1.1" fill={palette.light} /><rect x="18" y="16" width="6" height="2" rx="1" fill={palette.ink} opacity=".55" /></>; break;
+        case 'password': glyph = <><path d="M4 14.8a9 9 0 1 1 16.7 4.7L29 27.8h-4.2v-3h-3v-3h-3l-1.1-1.1A9 9 0 0 1 4 14.8Z" fill={palette.depth} transform="translate(0 1.4)" /><path d="M4 14.8a9 9 0 1 1 16.7 4.7L29 27.8h-4.2v-3h-3v-3h-3l-1.1-1.1A9 9 0 0 1 4 14.8Z" fill={fill} /><path d="M7.5 10.5c2.2-3.4 6.7-4.3 10-1.8" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity=".5" /><circle cx="12.8" cy="14.5" r="3" fill={palette.light} /><circle cx="12.8" cy="14.5" r="1.2" fill={palette.ink} /></>; break;
+        case 'api_credentials': glyph = <><rect x="3" y="5.5" width="26" height="22" rx="7" fill={palette.depth} /><rect x="3" y="4" width="26" height="22" rx="7" fill={fill} /><path d="M8 5.4h15" stroke="#fff" strokeWidth="1.05" strokeLinecap="round" opacity=".46" /><rect x="6" y="9" width="20" height="13" rx="4" fill={palette.ink} /><path d="m11.5 13-2.5 2 2.5 2m9-4 2.5 2-2.5 2m-3-5-3 6" fill="none" stroke={palette.light} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></>; break;
+        case 'bank_account': glyph = <><circle cx="16" cy="17" r="13" fill={palette.depth} /><circle cx="16" cy="15.5" r="13" fill={fill} /><path d="M8.5 8.5c3.5-3.3 8.9-4.2 13.2-1.5" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity=".5" /><path d="m8 14 8-5 8 5H8Zm2 2h12m-10 0v6m4-6v6m4-6v6M9 24h14" fill="none" stroke={palette.ink} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></>; break;
+        case 'crypto_wallet': glyph = <><circle cx="10" cy="10" r="7" fill={palette.depth} transform="translate(0 1)" /><circle cx="10" cy="10" r="7" fill={palette.light} /><path d="M9.6 5.8v8.3m-2-6.2h4.2c2 0 2 2.6 0 2.6H7.6m4 0c2.2 0 2.2 2.6 0 2.6h-4" fill="none" stroke={palette.ink} strokeWidth="1.25" strokeLinecap="round" /><rect x="5" y="12.5" width="24" height="16" rx="6" fill={palette.depth} /><rect x="4" y="11" width="24" height="16" rx="6" fill={fill} /><path d="M8 12.4h14" stroke="#fff" strokeWidth="1" strokeLinecap="round" opacity=".42" /><rect x="18" y="16" width="12" height="7" rx="3" fill={palette.light} /><circle cx="22" cy="19.5" r="1.3" fill={palette.ink} /></>; break;
+        case 'driver_license': glyph = <><rect x="3" y="7.5" width="26" height="20" rx="6" fill={palette.depth} /><rect x="3" y="6" width="26" height="20" rx="6" fill={fill} /><path d="M7 7.3h17" stroke="#fff" strokeWidth="1.05" strokeLinecap="round" opacity=".5" /><rect x="3" y="6" width="26" height="5" rx="5" fill={palette.light} opacity=".6" /><circle cx="10" cy="16" r="3.4" fill={palette.light} /><path d="M6.7 22c.5-2.7 1.6-4 3.3-4s2.8 1.3 3.3 4" fill={palette.ink} opacity=".7" /><rect x="17" y="14" width="8" height="2.2" rx="1.1" fill={palette.ink} opacity=".65" /><rect x="17" y="19" width="6" height="2" rx="1" fill={palette.light} /></>; break;
+        case 'email': glyph = <><rect x="3" y="7.5" width="26" height="20" rx="6" fill={palette.depth} /><rect x="3" y="6" width="26" height="20" rx="6" fill={fill} /><path d="M7 7.4h17" stroke="#fff" strokeWidth="1.05" strokeLinecap="round" opacity=".48" /><path d="m5.5 10 10.5 8.4L26.5 10" fill={palette.light} opacity=".9" /><path d="m5.5 23 7.5-6m13.5 6L19 17" fill="none" stroke={palette.ink} strokeWidth="1.5" strokeLinecap="round" opacity=".72" /></>; break;
+        case 'medical_record': glyph = <><rect x="6" y="5.5" width="20" height="24" rx="7" fill={palette.depth} /><rect x="6" y="4" width="20" height="24" rx="7" fill={fill} /><path d="M10 5.4h12" stroke="#fff" strokeWidth="1.05" strokeLinecap="round" opacity=".5" /><rect x="11" y="2.5" width="10" height="5" rx="2.5" fill={palette.light} /><circle cx="16" cy="17" r="6" fill={palette.light} opacity=".88" /><path d="M16 13.5v7m-3.5-3.5h7" stroke={palette.ink} strokeWidth="2" strokeLinecap="round" /></>; break;
+        case 'membership': glyph = <><path d="M3 8a5 5 0 0 1 5-5h16a5 5 0 0 1 5 5v4a4 4 0 0 0 0 8v4a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-4a4 4 0 0 0 0-8Z" fill={palette.depth} transform="translate(0 1)" /><path d="M3 7a5 5 0 0 1 5-5h16a5 5 0 0 1 5 5v4a4 4 0 0 0 0 8v4a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-4a4 4 0 0 0 0-8Z" fill={fill} /><path d="M8 3.5h14" stroke="#fff" strokeWidth="1.05" strokeLinecap="round" opacity=".48" /><path d="m11 11 1.5 3 3.3.5-2.4 2.3.6 3.2-3-1.5L8 20l.6-3.2-2.4-2.3 3.3-.5Z" fill={palette.light} /><rect x="18" y="12" width="7" height="2.3" rx="1.15" fill={palette.light} /><rect x="18" y="18" width="5" height="2" rx="1" fill={palette.ink} opacity=".55" /></>; break;
+        case 'passport': glyph = <><rect x="6" y="3.5" width="20" height="27" rx="7" fill={palette.depth} /><rect x="6" y="2" width="20" height="27" rx="7" fill={fill} /><path d="M10 3.5h12" stroke="#fff" strokeWidth="1.05" strokeLinecap="round" opacity=".5" /><circle cx="16" cy="14" r="6" fill={palette.light} opacity=".9" /><circle cx="16" cy="14" r="4.3" fill="none" stroke={palette.ink} strokeWidth="1.2" /><path d="M11.7 14h8.6M16 9.7c1.8 2.1 1.8 6.5 0 8.6m0-8.6c-1.8 2.1-1.8 6.5 0 8.6" fill="none" stroke={palette.ink} strokeWidth="1" strokeLinecap="round" /><rect x="11" y="23" width="10" height="2" rx="1" fill={palette.light} /></>; break;
+        case 'ssh_key': glyph = <><rect x="3" y="5.5" width="26" height="22" rx="7" fill={palette.depth} /><rect x="3" y="4" width="26" height="22" rx="7" fill={fill} /><path d="M8 5.3h15" stroke="#fff" strokeWidth="1" strokeLinecap="round" opacity=".45" /><rect x="6" y="8" width="20" height="14" rx="4" fill={palette.ink} /><path d="m10 12 3 2.5-3 2.5m5 0h4" fill="none" stroke={palette.light} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><circle cx="23" cy="22" r="5" fill={palette.light} /><circle cx="22" cy="21" r="1.4" fill="none" stroke={palette.ink} strokeWidth="1.2" /><path d="m24 23 4 4m-1.4-1.4-1.5 1.5" fill="none" stroke={palette.ink} strokeWidth="1.2" strokeLinecap="round" /></>; break;
+        case 'social_security_number': glyph = <><rect x="3" y="7.5" width="26" height="20" rx="7" fill={palette.depth} /><rect x="3" y="6" width="26" height="20" rx="7" fill={fill} /><path d="M8 7.4h15" stroke="#fff" strokeWidth="1.05" strokeLinecap="round" opacity=".48" /><path d="M16 9.5c3 2.2 5.5 2.4 5.5 2.4v4.8c0 4.3-2.2 6.6-5.5 8.1-3.3-1.5-5.5-3.8-5.5-8.1v-4.8S13 11.7 16 9.5Z" fill={palette.light} /><circle cx="16" cy="15.5" r="1.5" fill={palette.ink} /><rect x="13.5" y="19" width="5" height="1.6" rx=".8" fill={palette.ink} /></>; break;
+        case 'wireless_router': glyph = <><path d="M8 15V7m16 8V7" fill="none" stroke={palette.ink} strokeWidth="2.4" strokeLinecap="round" /><path d="M10.5 12c3-3 8-3 11 0m-8 0c1.4-1.3 3.7-1.3 5 0" fill="none" stroke={palette.light} strokeWidth="1.8" strokeLinecap="round" /><rect x="3" y="15.5" width="26" height="12" rx="6" fill={palette.depth} /><rect x="3" y="14" width="26" height="12" rx="6" fill={fill} /><path d="M8 15.3h15" stroke="#fff" strokeWidth="1.05" strokeLinecap="round" opacity=".48" /><circle cx="9" cy="20" r="1.5" fill={palette.light} /><circle cx="14" cy="20" r="1.5" fill={palette.ink} /><rect x="19" y="19" width="6" height="2" rx="1" fill={palette.light} /></>; break;
     }
 
     return (
         <span className={`vault-type-icon vault-type-icon--${kind}`} style={{ '--item-type-icon-size': `${size}px` } as CSSProperties} aria-hidden="true">
-            <svg viewBox="0 0 48 48" role="presentation">{glyph}</svg>
+            <svg viewBox="0 0 32 32" role="presentation">
+                <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={palette.top} /><stop offset="39%" stopColor={palette.main} /><stop offset="73%" stopColor={palette.lower} /><stop offset="100%" stopColor={palette.depth} /></linearGradient></defs>
+                {glyph}
+            </svg>
         </span>
     );
 }
@@ -477,6 +454,8 @@ function toUiItem(item: DecryptedVaultItem): VaultItem {
         risk: item.type === 'login' ? item.risk : undefined,
         lastUsed: formatRelativeTime(item.lastUsedAt),
         sortDate: item.lastUsedAt || item.updatedAt || item.createdAt,
+        createdAt: item.createdAt,
+        sortOrder: item.sortOrder,
         note: item.note,
         mark: item.mark,
         markTone: item.markTone,
@@ -559,6 +538,89 @@ function isSensitiveField(field: FieldDefinition) {
     return field.type === 'password' || ['recoveryPhrase', 'privateKey'].includes(field.key);
 }
 
+function fieldFormat(kind: EditableItemKind, field: FieldDefinition): FocuzPassFieldFormat | undefined {
+    const key = field.key.toLowerCase();
+    if (kind === 'card' && key === 'cardnumber') return 'card-number';
+    if (kind === 'card' && key === 'expiry') return 'card-expiry';
+    if (kind === 'card' && key === 'cvv') return 'cvv';
+    if (field.type === 'date') return 'date';
+    if (key.includes('email')) return 'email';
+    if (key.includes('phone')) return 'phone';
+    if (['domain', 'website', 'hostname'].includes(key)) return 'url';
+    if (key === 'postalcode') return 'postal-code';
+    if (key === 'routingnumber') return 'routing-number';
+    if (key === 'swift') return 'swift';
+    if (key === 'ipaddress') return 'ip-address';
+    if (key === 'port') return 'port';
+    if (key === 'ssn') return 'ssn';
+    if (key.startsWith('address') || ['city', 'region', 'country'].includes(key)) return 'address';
+    return undefined;
+}
+
+function fieldRequired(kind: EditableItemKind, field: FieldDefinition): boolean {
+    if (kind === 'card') return ['identity', 'cardNumber', 'expiry', 'cvv'].includes(field.key);
+    if (kind === 'login') return ['identity', 'password', 'domain'].includes(field.key);
+    if (kind === 'identity') return ['fullName'].includes(field.key);
+    if (kind === 'email') return ['email', 'password'].includes(field.key);
+    return false;
+}
+
+function inputTypeForField(kind: EditableItemKind, field: FieldDefinition) {
+    const format = fieldFormat(kind, field);
+    if (field.type === 'date') return 'date';
+    if (field.type === 'password') return 'password';
+    if (format === 'email') return 'email';
+    if (format === 'phone') return 'tel';
+    if (format === 'url') return 'url';
+    return 'text';
+}
+
+function inputModeForField(kind: EditableItemKind, field: FieldDefinition): 'text' | 'email' | 'tel' | 'url' | 'numeric' | undefined {
+    const format = fieldFormat(kind, field);
+    if (['card-number', 'card-expiry', 'cvv', 'routing-number', 'port', 'ssn'].includes(format || '')) return 'numeric';
+    if (format === 'email') return 'email';
+    if (format === 'phone') return 'tel';
+    if (format === 'url') return 'url';
+    return undefined;
+}
+
+function autocompleteForField(kind: EditableItemKind, field: FieldDefinition): string {
+    const key = field.key.toLowerCase();
+    const exact: Record<string, string> = {
+        identity: kind === 'card' ? 'cc-name' : 'username',
+        fullname: 'name', email: 'email', recoveryemail: 'email', phone: 'tel',
+        addressline1: 'address-line1', addressline2: 'address-line2', city: 'address-level2',
+        region: 'address-level1', postalcode: 'postal-code', country: 'country-name',
+        cardnumber: 'cc-number', expiry: 'cc-exp', cvv: 'cc-csc', dateofbirth: 'bday',
+        organization: 'organization', username: 'username', password: 'current-password',
+    };
+    return exact[key] || 'off';
+}
+
+function CardBrandMark({ number, compact = false }: { number?: string; compact?: boolean }) {
+    const brand = detectCardBrand(number || '');
+    const label = CARD_BRAND_LABELS[brand];
+    return (
+        <span className={`vault-card-brand is-${brand}${compact ? ' is-compact' : ''}`} title={label} aria-label={label}>
+            {brand === 'mastercard' && <span className="vault-card-circles"><i /><i /></span>}
+            <strong>{brand === 'amex' ? 'AMEX' : brand === 'diners' ? 'DC' : brand === 'unionpay' ? 'UP' : brand === 'unknown' ? 'CARD' : brand.toUpperCase()}</strong>
+        </span>
+    );
+}
+
+function useFocusIconId(prefix: string) {
+    return `${prefix}-${useId().replace(/:/g, '')}`;
+}
+
+function mixHex(first: string, second: string, amount: number) {
+    const parse = (value: string) => /^#[0-9a-f]{6}$/i.test(value)
+        ? [1, 3, 5].map((index) => Number.parseInt(value.slice(index, index + 2), 16))
+        : [110, 143, 184];
+    const start = parse(first);
+    const end = parse(second);
+    return `#${start.map((value, index) => Math.round(value + ((end[index] || 0) - value) * amount).toString(16).padStart(2, '0')).join('')}`;
+}
+
 function ExactSidebarDrawerCloseIcon({ size = 16 }: { size?: number }) {
     return (
         <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" width={size} height={size} aria-hidden="true">
@@ -583,77 +645,121 @@ function ExactSidebarPlusIcon({ size = 16 }: { size?: number }) {
     );
 }
 
-function ExactAllItemsIcon({ size = 16 }: { size?: number }) {
+function ExactAllItemsIcon({ size = 20 }: { size?: number }) {
+    const gradientId = useFocusIconId('fp-all');
     return (
-        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" width={size} height={size} aria-hidden="true">
-            <path fillRule="evenodd" clipRule="evenodd" d="M13 1H3C1.346 1 0 2.346 0 4V13C0 13.7956 0.31607 14.5587 0.87868 15.1213C1.44129 15.6839 2.20435 16 3 16H13C13.7956 16 14.5587 15.6839 15.1213 15.1213C15.6839 14.5587 16 13.7956 16 13V4C16 2.346 14.654 1 13 1ZM6.244 10.959C5.98 10.475 5.552 10 5 10H2V7.115H14V10H11C10.448 10 10.02 10.474 9.756 10.959C9.58398 11.2745 9.33012 11.5379 9.02112 11.7214C8.71211 11.9048 8.35937 12.0017 8 12.0017C7.64063 12.0017 7.28789 11.9048 6.97888 11.7214C6.66988 11.5379 6.41602 11.2745 6.244 10.959ZM3 3H13C13.2652 3 13.5196 3.10536 13.7071 3.29289C13.8946 3.48043 14 3.73478 14 4V5.115H2V4C2 3.449 2.449 3 3 3Z" fill="#ABB7C2" />
+        <svg className="fp-style-icon" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+            <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#F2F6F9" /><stop offset="38%" stopColor="#CBD5DE" /><stop offset="72%" stopColor="#A7B3BF" /><stop offset="100%" stopColor="#7E8B98" /></linearGradient></defs>
+            <rect x="3" y="5.8" width="26" height="22" rx="7" fill="#66727D" />
+            <rect x="3" y="4.5" width="26" height="22" rx="7" fill={`url(#${gradientId})`} />
+            <path d="M9 5.7H23" fill="none" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" opacity=".55" />
+            <rect x="7" y="9" width="18" height="4" rx="2" fill="#73818D" />
+            <rect x="9" y="17" width="14" height="3.8" rx="1.9" fill="#73818D" />
         </svg>
     );
 }
 
-function ExactTagIcon({ size = 16, color = '#43A670' }: { size?: number; color?: string }) {
+function ExactTagIcon({ size = 20, color = '#52D58E' }: { size?: number; color?: string }) {
+    const gradientId = useFocusIconId('fp-tag');
+    const top = mixHex(color, '#ffffff', 0.34);
+    const lower = mixHex(color, '#000000', 0.2);
+    const depth = mixHex(color, '#000000', 0.38);
     return (
-        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" width={size} height={size} aria-hidden="true">
-            <path fill={color} fillRule="evenodd" d="M8 15a7 7 0 0 1-7-7V4a3 3 0 0 1 3-3h4a7 7 0 1 1 0 14ZM5.5 7a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" clipRule="evenodd" />
+        <svg className="fp-style-icon" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+            <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={top} /><stop offset="40%" stopColor={color} /><stop offset="74%" stopColor={lower} /><stop offset="100%" stopColor={depth} /></linearGradient></defs>
+            <path transform="translate(0 1.5)" fill={depth} d="M4 8C4 5.6 5.6 4 8 4h6c1.4 0 2.5.45 3.45 1.4L27 14.95a3.82 3.82 0 0 1 0 5.4L20.35 27a3.82 3.82 0 0 1-5.4 0L5.4 17.45A4.82 4.82 0 0 1 4 14Z" />
+            <path fill={`url(#${gradientId})`} d="M4 8C4 5.6 5.6 4 8 4h6c1.4 0 2.5.45 3.45 1.4L27 14.95a3.82 3.82 0 0 1 0 5.4L20.35 27a3.82 3.82 0 0 1-5.4 0L5.4 17.45A4.82 4.82 0 0 1 4 14Z" />
+            <path d="M7.2 5.7H13" fill="none" stroke="#FFFFFF" strokeWidth="1.15" strokeLinecap="round" opacity=".5" />
+            <circle cx="10" cy="10" r="2.5" fill={depth} />
+            <circle cx="9.5" cy="9.3" r=".75" fill="#FFFFFF" opacity=".48" />
         </svg>
     );
 }
 
-function ExactFavoritesIcon({ size = 16 }: { size?: number }) {
+function ExactFavoritesIcon({ size = 20 }: { size?: number }) {
+    const gradientId = useFocusIconId('fp-favorite');
+    const star = "M16 2.8c.8 0 1.45.45 1.8 1.15l2.4 4.9 5.4.8c1.4.2 1.95 1.9.95 2.9l-3.9 3.8.9 5.4c.25 1.4-1.25 2.5-2.5 1.85L16 20.95l-5.05 2.65c-1.25.65-2.75-.45-2.5-1.85l.9-5.4-3.9-3.8c-1-1-.45-2.7.95-2.9l5.4-.8 2.4-4.9c.35-.7 1-1.15 1.8-1.15Z";
     return (
-        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" width={size} height={size} aria-hidden="true">
-            <path fillRule="evenodd" clipRule="evenodd" d="M15.7099 6.88499L13.0759 9.92399L13.3989 13.942C13.4153 14.1438 13.3796 14.3464 13.2952 14.5304C13.2109 14.7145 13.0806 14.8737 12.917 14.993C12.7534 15.1122 12.5619 15.1875 12.3608 15.2115C12.1598 15.2354 11.956 15.2074 11.7689 15.13L7.99991 13.575L4.23091 15.13C4.04392 15.2073 3.84019 15.2354 3.63925 15.2114C3.43831 15.1875 3.24688 15.1124 3.0833 14.9932C2.91971 14.8741 2.78945 14.715 2.70499 14.5311C2.62053 14.3472 2.58469 14.1447 2.60091 13.943L2.92191 9.92299L0.289914 6.88599C0.156368 6.73265 0.0646395 6.54744 0.023596 6.34829C-0.0174476 6.14913 -0.00641827 5.94275 0.0556178 5.7491C0.117654 5.55545 0.228598 5.38108 0.377727 5.24285C0.526855 5.10461 0.709124 5.00719 0.906914 4.95999L4.86091 4.01399L6.99391 0.560988C7.09978 0.389363 7.2478 0.247676 7.42388 0.149404C7.59996 0.0511317 7.79826 -0.000457764 7.99991 -0.000457764C8.20156 -0.000457764 8.39986 0.0511317 8.57595 0.149404C8.75203 0.247676 8.90005 0.389363 9.00591 0.560988L11.1369 4.01399L15.0919 4.95999C15.2897 5.00701 15.472 5.10425 15.6212 5.2423C15.7704 5.38036 15.8815 5.55457 15.9438 5.74809C16.006 5.94162 16.0172 6.14793 15.9765 6.34708C15.9357 6.54624 15.8442 6.7315 15.7109 6.88499H15.7099Z" fill="#DC6602" />
+        <svg className="fp-style-icon" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+            <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#FFD076" /><stop offset="38%" stopColor="#FFA037" /><stop offset="72%" stopColor="#F47A18" /><stop offset="100%" stopColor="#C94D08" /></linearGradient></defs>
+            <path transform="translate(0 1.6)" fill="#A9450A" d={star} />
+            <path fill={`url(#${gradientId})`} d={star} />
+            <path d="M11.5 9c1.7-3.2 5.6-4 8-1" fill="none" stroke="#FFF7D7" strokeWidth="1.15" strokeLinecap="round" opacity=".58" />
         </svg>
     );
-}
-
-function hexToRgbUnit(hex: string) {
-    const normalized = /^#[0-9a-f]{6}$/i.test(hex) ? hex.slice(1) : '6e8fb8';
-    return [0, 2, 4].map((offset) => Number.parseInt(normalized.slice(offset, offset + 2), 16) / 255);
 }
 
 function ExactVaultIcon({ color }: { color: string }) {
-    const [red, green, blue] = hexToRgbUnit(color);
-    const usesReferenceColors = color.toLowerCase() === '#6e8fb8';
-    const matrix = [
-        0.2126 * red, 0.7152 * red, 0.0722 * red, 0, 0,
-        0.2126 * green, 0.7152 * green, 0.0722 * green, 0, 0,
-        0.2126 * blue, 0.7152 * blue, 0.0722 * blue, 0, 0,
-        0, 0, 0, 1, 0,
-    ].join(' ');
+    const outerId = useFocusIconId('fp-vault');
+    const wheelId = useFocusIconId('fp-vault-wheel');
+    const isDefaultVault = color.toLowerCase() === '#6e8fb8';
+    const top = isDefaultVault ? '#F8FBFD' : mixHex(color, '#ffffff', 0.72);
+    const upper = isDefaultVault ? '#DDE5EB' : mixHex(color, '#ffffff', 0.42);
+    const face = isDefaultVault ? '#AEBAC4' : color;
+    const lower = isDefaultVault ? '#8996A1' : mixHex(color, '#000000', 0.15);
+    const depth = isDefaultVault ? '#707C87' : mixHex(color, '#000000', 0.3);
     return (
-        <svg viewBox="0 0 256 256" width="100%" height="100%" aria-hidden="true" className="vault-source-icon">
+        <svg viewBox="0 0 32 32" width="100%" height="100%" aria-hidden="true" className="vault-source-icon fp-style-icon">
             <defs>
-                <filter id={`vault-tint-${color.slice(1)}`} colorInterpolationFilters="sRGB">
-                    <feColorMatrix type="matrix" values={matrix} />
-                </filter>
+                <linearGradient id={outerId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={top} /><stop offset="42%" stopColor={upper} /><stop offset="75%" stopColor={face} /><stop offset="100%" stopColor={lower} /></linearGradient>
+                <radialGradient id={wheelId} cx="38%" cy="28%" r="78%"><stop offset="0%" stopColor="#C5CED6" /><stop offset="55%" stopColor="#8996A1" /><stop offset="100%" stopColor="#53606C" /></radialGradient>
             </defs>
-            <image
-                href={vaultIconUrl}
-                width="256"
-                height="256"
-                preserveAspectRatio="xMidYMid meet"
-                filter={usesReferenceColors ? undefined : `url(#vault-tint-${color.slice(1)})`}
-            />
+            <rect x="3" y="4.5" width="26" height="26" rx="9" fill={depth} />
+            <rect x="3" y="3" width="26" height="26" rx="9" fill={`url(#${outerId})`} />
+            <path d="M8 4.4h15" fill="none" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" opacity=".66" />
+            <circle cx="16" cy="16" r="8" fill={`url(#${wheelId})`} />
+            <circle cx="16" cy="16" r="3.1" fill="#E9EEF2" />
+            <circle cx="16" cy="16" r="1.15" fill="#66727E" />
+            <rect x="15" y="7" width="2" height="4" rx="1" fill="#EAF0F4" />
+            <rect x="21" y="15" width="4" height="2" rx="1" fill="#EAF0F4" />
+            <rect x="15" y="21" width="2" height="4" rx="1" fill="#EAF0F4" />
+            <rect x="7" y="15" width="4" height="2" rx="1" fill="#EAF0F4" />
         </svg>
     );
 }
 
-function ExactArchiveIcon({ size = 16 }: { size?: number }) {
+function ExactArchiveIcon({ size = 20 }: { size?: number }) {
+    const gradientId = useFocusIconId('fp-archive');
     return (
-        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" width={size} height={size} aria-hidden="true">
-            <path fillRule="evenodd" clipRule="evenodd" d="M1.50004 1C1.1458 0.999474 0.802806 1.12433 0.531805 1.35246C0.260803 1.58059 0.0792835 1.89727 0.0193966 2.24641C-0.0404902 2.59555 0.0251201 2.95462 0.204607 3.26002C0.384094 3.56543 0.665874 3.79745 1.00004 3.915V12C1.00004 12.7957 1.31611 13.5587 1.87872 14.1213C2.44133 14.6839 3.20439 15 4.00004 15H12C12.7957 15 13.5588 14.6839 14.1214 14.1213C14.684 13.5587 15 12.7957 15 12V3.915C15.3342 3.79745 15.616 3.56543 15.7955 3.26002C15.975 2.95462 16.0406 2.59555 15.9807 2.24641C15.9208 1.89727 15.7393 1.58059 15.4683 1.35246C15.1973 1.12433 14.8543 0.999474 14.5 1H1.50004Z" fill="#B9BDC2" />
-            <path d="M0.0849609 3H15.915C15.8115 3.29258 15.6199 3.54587 15.3665 3.72497C15.113 3.90407 14.8103 4.00016 14.5 4H1.49996C1.18963 4.00016 0.886897 3.90407 0.63347 3.72497C0.380043 3.54587 0.188403 3.29258 0.0849609 3ZM5.99996 6H9.99996C10.2652 6 10.5195 6.10536 10.7071 6.29289C10.8946 6.48043 11 6.73478 11 7C11 7.26522 10.8946 7.51957 10.7071 7.70711C10.5195 7.89464 10.2652 8 9.99996 8H5.99996C5.73474 8 5.48039 7.89464 5.29285 7.70711C5.10532 7.51957 4.99996 7.26522 4.99996 7C4.99996 6.73478 5.10532 6.48043 5.29285 6.29289C5.48039 6.10536 5.73474 6 5.99996 6Z" fill="#656E76" />
+        <svg className="fp-style-icon" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+            <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#EDF2F5" /><stop offset="40%" stopColor="#CBD4DC" /><stop offset="73%" stopColor="#A4B0BA" /><stop offset="100%" stopColor="#788591" /></linearGradient></defs>
+            <rect x="5" y="10.5" width="22" height="17" rx="7" fill="#74808B" />
+            <rect x="5" y="9" width="22" height="17" rx="7" fill={`url(#${gradientId})`} />
+            <rect x="4" y="6" width="24" height="8" rx="4" fill="#8995A0" />
+            <rect x="4" y="4.8" width="24" height="8" rx="4" fill={`url(#${gradientId})`} />
+            <path d="M8 6h15" fill="none" stroke="#FFFFFF" strokeWidth="1.15" strokeLinecap="round" opacity=".62" />
+            <rect x="11" y="17" width="10" height="3.6" rx="1.8" fill="#687581" />
         </svg>
     );
 }
 
-function ExactRecentlyDeletedIcon({ size = 16 }: { size?: number }) {
+function ExactRecentlyDeletedIcon({ size = 20 }: { size?: number }) {
+    const gradientId = useFocusIconId('fp-history');
     return (
-        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" width={size} height={size} aria-hidden="true">
-            <path d="M5.5 8H10.5" stroke="#F4512A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path fillRule="evenodd" clipRule="evenodd" d="M3.38 4H4C4.26522 4 4.51957 4.10536 4.70711 4.29289C4.89464 4.48043 5 4.73478 5 5C5 5.26522 4.89464 5.51957 4.70711 5.70711C4.51957 5.89464 4.26522 6 4 6H1C0.734784 6 0.48043 5.89464 0.292893 5.70711C0.105357 5.51957 0 5.26522 0 5V2C0 1.73478 0.105357 1.48043 0.292893 1.29289C0.48043 1.10536 0.734784 1 1 1C1.26522 1 1.51957 1.10536 1.70711 1.29289C1.89464 1.48043 2 1.73478 2 2V2.548C3.503 0.97 5.705 0 8 0C9.53345 0.000178223 11.0345 0.44107 12.3245 1.27017C13.6145 2.09928 14.639 3.28166 15.2761 4.67651C15.9131 6.07137 16.1358 7.61993 15.9177 9.13779C15.6997 10.6556 15.0499 12.0788 14.0459 13.2379C13.0419 14.397 11.7259 15.2431 10.2547 15.6754C8.78347 16.1078 7.21898 16.1082 5.74752 15.6766C4.27606 15.245 2.95964 14.3997 1.95501 13.2411C0.950391 12.0826 0.299899 10.6597 0.081 9.142C0.0433393 8.87944 0.111524 8.61266 0.270555 8.40037C0.429586 8.18808 0.666436 8.04766 0.929 8.01C1.19156 7.97234 1.45834 8.04052 1.67063 8.19956C1.88292 8.35859 2.02334 8.59544 2.061 8.858C2.28306 10.3551 3.06249 11.713 4.2432 12.6598C5.4239 13.6066 6.91872 14.0724 8.42827 13.9639C9.93782 13.8554 11.3507 13.1807 12.3839 12.0748C13.417 10.9688 13.9943 9.51344 14 8C14 6.4087 13.3679 4.88258 12.2426 3.75736C11.1174 2.63214 9.5913 2 8 2C6.206 2 4.5 2.784 3.38 4Z" fill="#A6A6A6" />
+        <svg className="fp-style-icon" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+            <defs><radialGradient id={gradientId} cx="38%" cy="28%" r="78%"><stop offset="0%" stopColor="#FFD0C3" /><stop offset="42%" stopColor="#FF927A" /><stop offset="74%" stopColor="#EA624B" /><stop offset="100%" stopColor="#B83D2F" /></radialGradient></defs>
+            <circle cx="16" cy="17.4" r="12" fill="#8F2E24" />
+            <circle cx="16" cy="16" r="12" fill={`url(#${gradientId})`} />
+            <path d="M8.5 10c2.5-4.2 9-6.1 13.7-2.5" fill="none" stroke="#FFF5F0" strokeWidth="1.25" strokeLinecap="round" opacity=".68" />
+            <path d="M16 9.5v6.7l4.6 2.7" fill="none" stroke="#8E3028" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M8.2 7.4H4.7v3.5" fill="none" stroke="#FFF9F5" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
+    );
+}
+
+function VaultProfileAvatar({ avatarUrl, fallbackUrl, name }: { avatarUrl?: string | null; fallbackUrl?: string | null; name: string }) {
+    const [failedSources, setFailedSources] = useState<string[]>([]);
+    const sources = [avatarUrl, fallbackUrl].filter((source, index, all): source is string => Boolean(source) && all.indexOf(source) === index);
+    const source = sources.find((candidate) => !failedSources.includes(candidate));
+    const initial = (name.trim().charAt(0) || 'F').toUpperCase();
+    return (
+        <span className="vault-profile-avatar">
+            {source ? (
+                <img src={source} alt="" referrerPolicy="no-referrer" onError={() => setFailedSources((current) => current.includes(source) ? current : [...current, source])} />
+            ) : (
+                <span className="vault-profile-avatar-fallback" aria-hidden="true">{initial}</span>
+            )}
+        </span>
     );
 }
 
@@ -680,11 +786,12 @@ function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean })
     const favicon = faviconUrl(item);
     const definition = itemDefinition(item);
     const tone = item.markTone === '#e5e5e5' ? definition.tone : item.markTone;
-    const typeIconKind = item.type === 'custom' && item.kind ? item.kind : item.type === 'card' ? 'card' : null;
+    const typeIconKind = item.type === 'custom' && item.kind ? item.kind : null;
+    const isCard = item.type === 'card';
     return (
         <span
-            className={`vault-item-mark${typeIconKind ? ' is-type-icon' : ''}${favicon ? ' has-favicon' : ''} relative ${large ? 'h-[60px] w-[60px] rounded-[13px] text-[18px]' : 'h-8 w-8 rounded-[7px] text-[11px]'} flex shrink-0 items-center justify-center overflow-hidden border font-bold tracking-[-0.03em]`}
-            style={typeIconKind || favicon ? undefined : {
+            className={`vault-item-mark${typeIconKind || isCard ? ' is-type-icon' : ''}${isCard ? ' is-card-brand' : ''}${favicon ? ' has-favicon' : ''} relative ${large ? 'h-[60px] w-[60px] rounded-[13px] text-[18px]' : 'h-8 w-8 rounded-[7px] text-[11px]'} flex shrink-0 items-center justify-center overflow-hidden border font-bold tracking-[-0.03em]`}
+            style={typeIconKind || isCard || favicon ? undefined : {
                 color: tone,
                 background: hexWithAlpha(tone, '35'),
                 borderColor: hexWithAlpha(tone, '55'),
@@ -692,7 +799,7 @@ function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean })
             }}
             aria-hidden="true"
         >
-            {typeIconKind ? <SoftItemTypeIcon kind={typeIconKind} size={large ? 60 : 32} /> : item.mark}
+            {isCard ? <CardBrandMark number={item.cardNumber} compact={!large} /> : typeIconKind ? <SoftItemTypeIcon kind={typeIconKind} size={large ? 60 : 32} /> : item.mark}
             {favicon && (
                 <img
                     src={favicon}
@@ -702,6 +809,43 @@ function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean })
                 />
             )}
         </span>
+    );
+}
+
+function SortableVaultRow({ item, selected, draggable, onSelect, onContextMenu, onMore }: {
+    item: VaultItem;
+    selected: boolean;
+    draggable: boolean;
+    onSelect: () => void;
+    onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => void;
+    onMore: (event: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled: !draggable });
+    return (
+        <div
+            ref={setNodeRef}
+            role="button"
+            tabIndex={0}
+            onPointerDown={(event) => { if (draggable) listeners?.onPointerDown?.(event); }}
+            onClick={onSelect}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelect();
+                }
+            }}
+            onContextMenu={onContextMenu}
+            className={`vault-row${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}${draggable ? ' is-draggable' : ''}`}
+            style={{ transform: DndCss.Transform.toString(transform), transition }}
+        >
+            <span className="vault-row-drag" {...attributes} {...listeners} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => { event.stopPropagation(); listeners?.onPointerDown?.(event); }} aria-label={`Drag ${item.title} to reorder`}><GripVertical size={13} /></span>
+            <ItemMark item={item} />
+            <span className="vault-row-copy">
+                <strong>{item.title}</strong>
+                <small>{item.authMethod === 'Password' ? item.identity : item.authMethod}</small>
+            </span>
+            <button type="button" className="vault-row-more" onPointerDown={(event) => event.stopPropagation()} onClick={onMore} aria-label={`More actions for ${item.title}`}><EllipsisVertical size={15} /></button>
+        </div>
     );
 }
 
@@ -1045,18 +1189,36 @@ function draftFromItem(item: VaultItem, tagIds = item.tagIds): ItemDraft | null 
 
 const COLLECTION_COLORS = ['#6e8fb8', '#8da9c4', '#78b89a', '#d79ab6', '#b49bd6', '#d5a16f', '#cf7f79', '#80b8bd'];
 const COLLECTION_ICONS = [
-    { id: 'vault', icon: ShieldEllipsis },
-    { id: 'home', icon: UserRound },
-    { id: 'work', icon: Landmark },
-    { id: 'star', icon: Star },
-    { id: 'tag', icon: ExactTagIcon },
+    { id: 'vault' },
+    { id: 'home' },
+    { id: 'work' },
+    { id: 'star' },
+    { id: 'tag' },
 ];
 
+function FocusCollectionGlyph({ color, icon, size }: { color: string; icon: string; size: number }) {
+    const gradientId = useFocusIconId(`fp-collection-${icon}`);
+    if (icon === 'vault') return <ExactVaultIcon color={color} />;
+    if (icon === 'tag') return <ExactTagIcon size={size} color={color} />;
+    const top = mixHex(color, '#ffffff', 0.42);
+    const lower = mixHex(color, '#000000', 0.2);
+    const depth = mixHex(color, '#000000', 0.38);
+    let glyph: ReactNode;
+    if (icon === 'home') {
+        glyph = <><path d="m4 15 12-11 12 11v12H4Z" fill={depth} transform="translate(0 1.4)" /><path d="m4 14 12-11 12 11v12H4Z" fill={`url(#${gradientId})`} /><path d="m8 13 8-7 8 7" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity=".48" /><rect x="12" y="17" width="8" height="9" rx="3" fill="#F4F2EF" opacity=".86" /></>;
+    } else if (icon === 'work') {
+        glyph = <><rect x="3" y="10.5" width="26" height="18" rx="7" fill={depth} /><rect x="3" y="9" width="26" height="18" rx="7" fill={`url(#${gradientId})`} /><path d="M9 10.4h14" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity=".5" /><path d="M11 9V7c0-1.7 1.3-3 3-3h4c1.7 0 3 1.3 3 3v2" fill="none" stroke={lower} strokeWidth="2.5" strokeLinecap="round" /><rect x="3" y="15" width="26" height="5" fill={lower} opacity=".75" /><rect x="13" y="16" width="6" height="4" rx="2" fill="#F3F1ED" /></>;
+    } else {
+        const star = "M16 3.2c.8 0 1.4.4 1.8 1.2l2.3 4.7 5.2.8c1.4.2 1.9 1.9.9 2.9l-3.8 3.7.9 5.2c.2 1.4-1.2 2.4-2.5 1.8L16 21l-4.9 2.5c-1.3.6-2.7-.4-2.5-1.8l.9-5.2-3.8-3.7c-1-1-.5-2.7.9-2.9l5.2-.8 2.3-4.7c.4-.8 1-1.2 1.9-1.2Z";
+        glyph = <><path d={star} transform="translate(0 1.4)" fill={depth} /><path d={star} fill={`url(#${gradientId})`} /><path d="M11.5 9c1.6-3 5.3-3.8 7.6-1" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity=".5" /></>;
+    }
+    return <svg className="fp-style-icon" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true"><defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={top} /><stop offset="42%" stopColor={color} /><stop offset="75%" stopColor={lower} /><stop offset="100%" stopColor={depth} /></linearGradient></defs>{glyph}</svg>;
+}
+
 function CollectionMark({ color, icon, size = 14 }: { color: string; icon: string; size?: number }) {
-    const Icon = COLLECTION_ICONS.find((option) => option.id === icon)?.icon || ShieldEllipsis;
     return (
         <span className={`vault-collection-mark${icon === 'vault' ? ' is-vault' : ''}`} style={{ color }}>
-            {icon === 'vault' ? <ExactVaultIcon color={color} /> : icon === 'tag' ? <ExactTagIcon size={size} color={color} /> : <Icon size={size} />}
+            <FocusCollectionGlyph color={color} icon={icon} size={size} />
         </span>
     );
 }
@@ -1087,7 +1249,7 @@ function CollectionModal({ mode, onClose, onCreate, busy }: {
                     <div className="vault-collection-preview"><CollectionMark color={color} icon={icon} size={20} /><span>{name || (mode === 'vault' ? 'Vault name' : 'Tag name')}</span></div>
                     <label className="vault-field"><span>Name</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder={mode === 'vault' ? 'Family, Work, Personal…' : 'Starter kit, Finance…'} /></label>
                     <div className="vault-choice-group"><span>Color</span><div className="vault-color-grid">{COLLECTION_COLORS.map((value) => <button key={value} type="button" className={color === value ? 'is-selected' : ''} style={{ background: value }} onClick={() => setColor(value)} aria-label={`Use ${value}`} />)}</div></div>
-                    <div className="vault-choice-group"><span>Icon</span><div className="vault-icon-grid">{COLLECTION_ICONS.map((option) => { const Icon = option.icon; return <button key={option.id} type="button" className={icon === option.id ? 'is-selected' : ''} onClick={() => setIcon(option.id)} aria-label={`Use ${option.id} icon`}><Icon size={16} /></button>; })}</div></div>
+                    <div className="vault-choice-group"><span>Icon</span><div className="vault-icon-grid">{COLLECTION_ICONS.map((option) => <button key={option.id} type="button" className={icon === option.id ? 'is-selected' : ''} onClick={() => setIcon(option.id)} aria-label={`Use ${option.id} icon`}><FocusCollectionGlyph color={color} icon={option.id} size={22} /></button>)}</div></div>
                     <div className="vault-modal-actions"><button type="button" onClick={onClose} className="vault-button vault-button-secondary">Cancel</button><button type="submit" className="vault-button vault-button-primary" disabled={busy}><Plus size={14} /> Create {mode}</button></div>
                 </motion.form>
             </motion.div>
@@ -1140,11 +1302,174 @@ function ItemPickerModal({ onClose, onSelect }: { onClose: () => void; onSelect:
     );
 }
 
+const PHONE_FLAGS: Record<string, typeof FlagUS> = {
+    AE: FlagAE, AR: FlagAR, AT: FlagAT, AU: FlagAU, BD: FlagBD, BE: FlagBE, BR: FlagBR,
+    CA: FlagCA, CH: FlagCH, CN: FlagCN, CZ: FlagCZ, DE: FlagDE, DK: FlagDK, ES: FlagES,
+    FI: FlagFI, FR: FlagFR, GB: FlagGB, GH: FlagGH, GR: FlagGR, HU: FlagHU, ID: FlagID,
+    IE: FlagIE, IL: FlagIL, IN: FlagIN, IT: FlagIT, JP: FlagJP, KE: FlagKE, KR: FlagKR,
+    MX: FlagMX, MY: FlagMY, NG: FlagNG, NL: FlagNL, NO: FlagNO, NZ: FlagNZ, PH: FlagPH,
+    PK: FlagPK, PL: FlagPL, PT: FlagPT, RO: FlagRO, SA: FlagSA, SE: FlagSE, SG: FlagSG,
+    TH: FlagTH, TR: FlagTR, UA: FlagUA, US: FlagUS, VN: FlagVN, ZA: FlagZA,
+};
+
+function CountryFlagIcon({ iso }: { iso: string }) {
+    const Flag = PHONE_FLAGS[iso] || FlagUS;
+    return <span className="vault-country-flag"><Flag role="img" aria-label={`${iso} flag`} /></span>;
+}
+
+function InternationalPhoneInput({ value, onChange, onBlur, invalid }: {
+    value: string;
+    onChange: (value: string) => void;
+    onBlur: () => void;
+    invalid?: boolean;
+}) {
+    const [country, setCountry] = useState<PhoneCountry>(() => phoneCountryFromValue(value));
+    const [open, setOpen] = useState(false);
+    const selectCountry = (next: PhoneCountry) => {
+        const localDigits = phoneLocalDigits(value, country);
+        setCountry(next);
+        onChange(formatInternationalPhone(localDigits, next));
+        setOpen(false);
+    };
+    return (
+        <div className="vault-phone-input" onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setOpen(false);
+                onBlur();
+            }
+        }}>
+            <button type="button" className="vault-phone-country" onClick={() => setOpen((current) => !current)} aria-label={`Choose phone country, currently ${country.name}`} aria-expanded={open}>
+                <CountryFlagIcon iso={country.iso} /><small>{country.dialCode}</small><ChevronDown size={10} />
+            </button>
+            <input
+                type="tel"
+                inputMode="tel"
+                value={formatPhoneLocal(value, country)}
+                onChange={(event) => onChange(formatInternationalPhone(event.target.value, country))}
+                placeholder={country.style === 'nanp' ? '(555) 000-0000' : 'Phone number'}
+                autoComplete="tel-national"
+                aria-invalid={invalid}
+            />
+            <AnimatePresence>{open && (
+                <motion.div className="vault-phone-country-menu" role="listbox" initial={{ opacity: 0, y: -5, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.99 }}>
+                    {PHONE_COUNTRIES.map((option) => (
+                        <button key={option.iso} type="button" role="option" aria-selected={option.iso === country.iso} onClick={() => selectCountry(option)}>
+                            <CountryFlagIcon iso={option.iso} /><strong>{option.name}</strong><small>{option.dialCode}</small>{option.iso === country.iso && <Check size={12} />}
+                        </button>
+                    ))}
+                </motion.div>
+            )}</AnimatePresence>
+        </div>
+    );
+}
+
+type AddressSuggestion = {
+    place_id?: number;
+    display_name?: string;
+    address?: {
+        house_number?: string;
+        road?: string;
+        city?: string;
+        town?: string;
+        village?: string;
+        municipality?: string;
+        state?: string;
+        postcode?: string;
+        country?: string;
+        country_code?: string;
+    };
+};
+
+function AddressAutocompleteInput({ value, onChange, onBlur, invalid }: {
+    value: string;
+    onChange: (value: string, parts?: Record<string, string>) => void;
+    onBlur: () => void;
+    invalid?: boolean;
+}) {
+    const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const acceptedValue = useRef('');
+
+    useEffect(() => {
+        const query = value.trim();
+        if (query.length < 4 || query === acceptedValue.current) {
+            setSuggestions([]);
+            setOpen(false);
+            return;
+        }
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => {
+            setLoading(true);
+            void fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=${encodeURIComponent(query)}`, {
+                headers: { Accept: 'application/json' },
+                signal: controller.signal,
+            })
+                .then((response) => response.ok ? response.json() : Promise.reject(new Error('Address search failed')))
+                .then((rows: AddressSuggestion[]) => {
+                    setSuggestions((rows || []).filter((row) => row.display_name));
+                    setOpen(true);
+                })
+                .catch((error: unknown) => {
+                    if ((error as { name?: string })?.name !== 'AbortError') setSuggestions([]);
+                })
+                .finally(() => setLoading(false));
+        }, 420);
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [value]);
+
+    const choose = (suggestion: AddressSuggestion) => {
+        const address = suggestion.address || {};
+        const label = suggestion.display_name || '';
+        acceptedValue.current = label;
+        onChange(label, {
+            address: label,
+            addressLine1: [address.house_number, address.road].filter(Boolean).join(' '),
+            city: address.city || address.town || address.village || address.municipality || '',
+            region: address.state || '',
+            postalCode: address.postcode || '',
+            country: address.country || '',
+            countryCode: address.country_code?.toUpperCase() || '',
+        });
+        setOpen(false);
+    };
+
+    return (
+        <div className="vault-address-autocomplete" onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setOpen(false);
+                onBlur();
+            }
+        }}>
+            <MapPin size={14} />
+            <input value={value} onChange={(event) => { acceptedValue.current = ''; onChange(event.target.value); }} onFocus={() => suggestions.length && setOpen(true)} placeholder="Start typing an address…" autoComplete="street-address" aria-invalid={invalid} />
+            {loading && <span className="vault-address-spinner" aria-label="Finding addresses" />}
+            <AnimatePresence>{open && suggestions.length > 0 && (
+                <motion.div className="vault-address-suggestions" role="listbox" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}>
+                    {suggestions.map((suggestion) => (
+                        <button key={suggestion.place_id || suggestion.display_name} type="button" role="option" onClick={() => choose(suggestion)}>
+                            <MapPin size={14} /><span>{suggestion.display_name}</span>
+                        </button>
+                    ))}
+                    <small>Address suggestions · OpenStreetMap</small>
+                </motion.div>
+            )}</AnimatePresence>
+        </div>
+    );
+}
+
 function valuesForItem(item: VaultItem | undefined, kind: EditableItemKind) {
     if (!item) return {} as Record<string, string>;
     if (kind === 'login') return { identity: item.identity, password: item.password || '', domain: item.domain || '' };
     if (kind === 'card') return { identity: item.identity, cardNumber: item.cardNumber || '', expiry: item.expiry || '', cvv: item.cvv || '' };
-    return item.fields || {};
+    const fields = { ...(item.fields || {}) };
+    if (kind === 'identity' && !fields.address) {
+        fields.address = [fields.addressLine1, fields.addressLine2, fields.city, fields.region, fields.postalCode, fields.country].filter(Boolean).join(', ');
+    }
+    return fields;
 }
 
 function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, onClose, onSave, onCreateTag, busy }: {
@@ -1154,7 +1479,7 @@ function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, onClose, on
     tags: VaultTag[];
     defaultVaultId?: string;
     onClose: () => void;
-    onSave: (draft: ItemDraft) => void;
+    onSave: (draft: ItemDraft) => Promise<void>;
     onCreateTag: (value: { name: string; color: string; icon: string }) => Promise<VaultTag>;
     busy?: boolean;
 }) {
@@ -1165,34 +1490,107 @@ function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, onClose, on
     const [vaultId, setVaultId] = useState(item?.vaultId || defaultVaultId || vaults[0]?.id || '');
     const [tagIds, setTagIds] = useState<string[]>(item?.tagIds || []);
     const [tagModalOpen, setTagModalOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [tagBusy, setTagBusy] = useState(false);
+    const [localError, setLocalError] = useState('');
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const selectedTags = tags.filter((tag) => tagIds.includes(tag.id));
     const availableTags = tags.filter((tag) => !tagIds.includes(tag.id));
-    const setValue = (key: string, value: string) => setValues((current) => ({ ...current, [key]: value }));
-    const submit = (event: FormEvent) => {
-        event.preventDefault();
-        if (!title.trim() || busy) return;
-        onSave({
-            id: item?.id,
-            kind,
-            title: title.trim(),
-            identity: kind === 'login' || kind === 'card' ? (values.identity || '').trim() : (values[definition.fields[0]?.key || ''] || '').trim(),
-            domain: kind === 'login' ? values.domain?.trim() : undefined,
-            password: kind === 'login' ? values.password : undefined,
-            cardNumber: kind === 'card' ? values.cardNumber?.replace(/\s/g, '') : undefined,
-            expiry: kind === 'card' ? values.expiry : undefined,
-            cvv: kind === 'card' ? values.cvv : undefined,
-            fields: kind === 'login' || kind === 'card' ? undefined : values,
-            note: note.trim() || undefined,
-            vaultId,
-            tagIds,
-            markTone: item?.markTone || definition.tone,
+    const setValue = (field: FieldDefinition, value: string) => {
+        const formatted = formatFieldValue(fieldFormat(kind, field), value);
+        setValues((current) => ({ ...current, [field.key]: formatted }));
+        setFieldErrors((current) => {
+            if (!current[field.key]) return current;
+            const next = { ...current };
+            delete next[field.key];
+            return next;
         });
+    };
+    const setAddressValue = (value: string, parts?: Record<string, string>) => {
+        setValues((current) => parts
+            ? { ...current, ...parts, address: value }
+            : { ...current, address: value, addressLine1: '', city: '', region: '', postalCode: '', country: '', countryCode: '' });
+        setFieldErrors((current) => {
+            if (!current.address) return current;
+            const next = { ...current };
+            delete next.address;
+            return next;
+        });
+    };
+    const validateField = (field: FieldDefinition, value = values[field.key] || '') => {
+        const message = validateFieldValue(fieldFormat(kind, field), value, {
+            required: fieldRequired(kind, field),
+            cardNumber: values.cardNumber,
+        });
+        setFieldErrors((current) => {
+            const next = { ...current };
+            if (message) next[field.key] = message;
+            else delete next[field.key];
+            return next;
+        });
+        return message;
+    };
+    const submit = async (event: FormEvent) => {
+        event.preventDefault();
+        if (saving) return;
+        const nextErrors: Record<string, string> = {};
+        if (!title.trim()) nextErrors.title = 'Give this item a name.';
+        for (const field of definition.fields) {
+            const message = validateFieldValue(fieldFormat(kind, field), values[field.key] || '', {
+                required: fieldRequired(kind, field),
+                cardNumber: values.cardNumber,
+            });
+            if (message) nextErrors[field.key] = message;
+        }
+        if (Object.keys(nextErrors).length > 0) {
+            setFieldErrors(nextErrors);
+            setLocalError('Fix the highlighted fields before saving.');
+            return;
+        }
+        setSaving(true);
+        setLocalError('');
+        try {
+            await onSave({
+                id: item?.id,
+                kind,
+                title: title.trim(),
+                identity: kind === 'login' || kind === 'card' ? (values.identity || '').trim() : (values[definition.fields[0]?.key || ''] || '').trim(),
+                domain: kind === 'login' ? values.domain?.trim() : undefined,
+                password: kind === 'login' ? values.password : undefined,
+                cardNumber: kind === 'card' ? digitsOnly(values.cardNumber || '') : undefined,
+                expiry: kind === 'card' ? values.expiry : undefined,
+                cvv: kind === 'card' ? values.cvv : undefined,
+                fields: kind === 'login' || kind === 'card' ? undefined : values,
+                note: note.trim() || undefined,
+                vaultId,
+                tagIds,
+                markTone: item?.markTone || definition.tone,
+            });
+        } catch (err) {
+            setLocalError(err instanceof Error ? err.message : 'Could not save this item.');
+        } finally {
+            setSaving(false);
+        }
+    };
+    const createTag = async (value: { name: string; color: string; icon: string }) => {
+        if (tagBusy) return;
+        setTagBusy(true);
+        setLocalError('');
+        try {
+            const tag = await onCreateTag(value);
+            setTagIds((current) => current.includes(tag.id) ? current : [...current, tag.id]);
+            setTagModalOpen(false);
+        } catch (err) {
+            setLocalError(err instanceof Error ? err.message : 'Could not create this tag.');
+        } finally {
+            setTagBusy(false);
+        }
     };
     return (
         <ModalPortal>
             <motion.div className="vault-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
                 <motion.div role="dialog" aria-modal="true" className="vault-editor-modal" initial={{ opacity: 0, y: 16, scale: 0.988 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.99 }}>
-                    <form onSubmit={submit}>
+                    <form onSubmit={submit} noValidate>
                         <div className="vault-editor-titlebar">
                             <button type="button" onClick={onClose} aria-label="Back"><ChevronLeft size={18} /></button>
                             <div><small>{item ? 'Editing' : 'Creating'}</small><h2>{item ? 'Edit item' : 'New item'}</h2></div>
@@ -1200,25 +1598,35 @@ function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, onClose, on
                         </div>
                         <div className="vault-editor-scroll">
                             <div className="vault-editor-identity">
-                                <SoftItemTypeIcon kind={kind} size={58} />
-                                <label><span>Item name</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={definition.label} autoFocus /></label>
+                                {kind === 'card' ? <CardBrandMark number={values.cardNumber} /> : <SoftItemTypeIcon kind={kind} size={58} />}
+                                <label className={fieldErrors.title ? 'has-error' : ''}><span>Item name</span><input value={title} onChange={(event) => { setTitle(event.target.value); setFieldErrors((current) => { const next = { ...current }; delete next.title; return next; }); }} placeholder={definition.label} autoFocus />{fieldErrors.title && <small>{fieldErrors.title}</small>}</label>
                             </div>
                             <section className="vault-editor-section">
                                 <div className="vault-editor-section-heading"><div><strong>Item details</strong><small>Your information is encrypted locally</small></div><span>{definition.label}</span></div>
                                 <div className="vault-editor-field-card">
-                                    {definition.fields.map((field) => (
-                                        <label key={field.key} className="vault-editor-field">
+                                    {definition.fields.map((field) => {
+                                        const format = fieldFormat(kind, field);
+                                        const isPhone = format === 'phone';
+                                        const isAddress = kind === 'identity' && field.key === 'address';
+                                        return (
+                                        <label key={field.key} className={`vault-editor-field${fieldErrors[field.key] ? ' has-error' : ''}`}>
                                             <span>{field.label}</span>
                                             {field.type === 'textarea' ? (
-                                                <textarea value={values[field.key] || ''} onChange={(event) => setValue(field.key, event.target.value)} placeholder={field.placeholder} rows={field.key === 'recoveryPhrase' || field.key.toLowerCase().includes('key') ? 4 : 2} />
+                                                <textarea value={values[field.key] || ''} onChange={(event) => setValue(field, event.target.value)} onBlur={() => validateField(field)} placeholder={field.placeholder} rows={field.key === 'recoveryPhrase' || field.key.toLowerCase().includes('key') ? 4 : 2} />
+                                            ) : isPhone ? (
+                                                <InternationalPhoneInput value={values[field.key] || ''} onChange={(value) => setValue(field, value)} onBlur={() => validateField(field)} invalid={Boolean(fieldErrors[field.key])} />
+                                            ) : isAddress ? (
+                                                <AddressAutocompleteInput value={values.address || ''} onChange={setAddressValue} onBlur={() => validateField(field)} invalid={Boolean(fieldErrors[field.key])} />
                                             ) : (
                                                 <div className="relative">
-                                                    <input type={field.type === 'date' ? 'date' : field.type === 'password' ? 'password' : 'text'} inputMode={field.type === 'number' ? 'numeric' : undefined} value={values[field.key] || ''} onChange={(event) => setValue(field.key, event.target.value)} placeholder={field.placeholder} autoComplete="off" />
-                                                    {field.key === 'password' && <button type="button" onClick={() => setValue(field.key, randomPassword())} aria-label="Generate password"><Sparkles size={14} /></button>}
+                                                    <input type={inputTypeForField(kind, field)} inputMode={inputModeForField(kind, field)} value={values[field.key] || ''} onChange={(event) => setValue(field, event.target.value)} onBlur={() => validateField(field)} placeholder={field.placeholder} autoComplete={autocompleteForField(kind, field)} aria-invalid={Boolean(fieldErrors[field.key])} />
+                                                    {field.key === 'cardNumber' && <span className="vault-editor-card-brand"><CardBrandMark number={values.cardNumber} compact /></span>}
+                                                    {field.key === 'password' && <button type="button" onClick={() => setValue(field, randomPassword())} aria-label="Generate password"><Sparkles size={14} /></button>}
                                                 </div>
                                             )}
+                                            {fieldErrors[field.key] && <small className="vault-editor-field-error">{fieldErrors[field.key]}</small>}
                                         </label>
-                                    ))}
+                                    );})}
                                 </div>
                             </section>
                             <section className="vault-editor-section">
@@ -1255,9 +1663,9 @@ function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, onClose, on
                                 </div>
                             </section>
                         </div>
-                        <div className="vault-modal-actions"><span>Changes stay on this device</span><div><button type="button" onClick={onClose} className="vault-button vault-button-secondary">Cancel</button><button type="submit" disabled={busy} className="vault-button vault-button-primary"><ShieldCheck size={14} /> Save item</button></div></div>
+                        <div className="vault-modal-actions"><span className={localError ? 'is-error' : ''}>{localError || 'Changes stay on this device'}</span><div><button type="button" onClick={onClose} className="vault-button vault-button-secondary">Cancel</button><button type="submit" disabled={saving || busy} className="vault-button vault-button-primary"><ShieldCheck size={14} /> {saving ? 'Saving…' : 'Save item'}</button></div></div>
                     </form>
-                    <AnimatePresence>{tagModalOpen && <CollectionModal mode="tag" busy={busy} onClose={() => setTagModalOpen(false)} onCreate={(value) => { void onCreateTag(value).then((tag) => { setTagIds((current) => [...current, tag.id]); setTagModalOpen(false); }).catch(() => undefined); }} />}</AnimatePresence>
+                    <AnimatePresence>{tagModalOpen && <CollectionModal mode="tag" busy={tagBusy} onClose={() => setTagModalOpen(false)} onCreate={(value) => { void createTag(value); }} />}</AnimatePresence>
                 </motion.div>
             </motion.div>
         </ModalPortal>
@@ -1279,25 +1687,29 @@ function CompanionScreen() {
     };
 
     return (
-        <section className="focuz-pass mx-auto flex min-h-[calc(100vh-7.5rem)] w-full max-w-[1480px] items-center justify-center py-10">
+        <section className="focuz-pass vault-companion-screen">
             <motion.div
-                className="relative w-full max-w-[520px] overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.025] p-8 text-center"
+                className="vault-companion-card"
                 initial={reduceMotion ? false : { opacity: 0, scale: 0.985 }}
                 animate={{ opacity: 1, scale: 1 }}
             >
-                <div className="vault-lock-orbit mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl border border-white/[0.09] bg-white/[0.035] text-neutral-300">
-                    <Laptop size={24} />
+                <div className="vault-companion-preview" aria-hidden="true">
+                    <div className="vault-companion-preview-head"><span><ShieldCheck size={13} /> Local vault</span><i /></div>
+                    <div className="vault-companion-preview-row"><SoftItemTypeIcon kind="login" size={34} /><span><strong>Saved login</strong><small>Ready to fill on this device</small></span><Check size={14} /></div>
+                    <div className="vault-companion-preview-row"><CardBrandMark number="4111111111111111" /><span><strong>Payment card</strong><small>Protected card details</small></span><Lock size={14} /></div>
+                    <div className="vault-companion-preview-row"><SoftItemTypeIcon kind="identity" size={34} /><span><strong>Identity & address</strong><small>One-click form filling</small></span><MapPin size={14} /></div>
                 </div>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500">Extension required</p>
-                <h2 className="text-2xl font-semibold tracking-[-0.035em] text-white">Connect FocuzPass</h2>
-                <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-neutral-500">
+                <div className="vault-companion-symbol"><Laptop size={22} /></div>
+                <p className="vault-companion-eyebrow">Extension required</p>
+                <h2>Connect FocuzPass</h2>
+                <p className="vault-companion-copy">
                     Your vault is encrypted on this device inside the FocuzNow extension. Install or reload the extension, then reopen this tab — the same vault opens here and in the extension.
                 </p>
-                <div className="mt-7 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                <div className="vault-companion-actions">
                     {extensionInstalled ? (
                         <button
                             type="button"
-                            className="vault-button vault-button-primary h-10 justify-center"
+                            className="vault-button vault-button-primary"
                             onClick={openExtension}
                         >
                             Open FocuzPass in extension
@@ -1308,7 +1720,7 @@ function CompanionScreen() {
                             href="https://chrome.google.com/webstore/detail/your-extension-id"
                             target="_blank"
                             rel="noreferrer"
-                            className="vault-button vault-button-primary h-10 justify-center"
+                            className="vault-button vault-button-primary"
                         >
                             <Download size={14} />
                             Get the FocuzNow extension
@@ -1316,13 +1728,13 @@ function CompanionScreen() {
                     )}
                     <button
                         type="button"
-                        className="vault-button vault-button-secondary h-10 justify-center"
+                        className="vault-button vault-button-secondary"
                         onClick={() => window.location.reload()}
                     >
                         Retry connection
                     </button>
                 </div>
-                <p className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-neutral-600">
+                <p className="vault-companion-footnote">
                     <ShieldCheck size={11} /> Secrets never sync to FocuzNow cloud
                 </p>
             </motion.div>
@@ -1332,11 +1744,13 @@ function CompanionScreen() {
 
 export default function FocuzPassTab({
     avatarUrl,
+    avatarFallbackUrl,
     username = 'Username',
     accountName = 'FocuzNow Account',
     onExit,
 }: {
     avatarUrl?: string | null;
+    avatarFallbackUrl?: string | null;
     username?: string;
     accountName?: string;
     onExit?: () => void;
@@ -1348,7 +1762,7 @@ export default function FocuzPassTab({
     const [vaults, setVaults] = useState<VaultCollection[]>([]);
     const [tags, setTags] = useState<VaultTag[]>([]);
     const [view, setView] = useState<VaultView>({ kind: 'all' });
-    const [filter, setFilter] = useState<VaultFilter>('all');
+    const [typeFilters, setTypeFilters] = useState<VaultFilter[]>([]);
     const [query, setQuery] = useState('');
     const [selectedId, setSelectedId] = useState('');
     const [revealed, setRevealed] = useState(false);
@@ -1358,6 +1772,16 @@ export default function FocuzPassTab({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [collectionModal, setCollectionModal] = useState<'vault' | 'tag' | null>(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
+    const [sortOpen, setSortOpen] = useState(false);
+    const [listSearchOpen, setListSearchOpen] = useState(false);
+    const [sortMode, setSortMode] = useState<VaultSort>('custom');
+    const [createdFilter, setCreatedFilter] = useState<CreatedFilter>('any');
+    const [createdFrom, setCreatedFrom] = useState('');
+    const [createdTo, setCreatedTo] = useState('');
+    const [favoritesOnly, setFavoritesOnly] = useState(false);
+    const [riskOnly, setRiskOnly] = useState(false);
+    const [navCollapsed, setNavCollapsed] = useState(false);
+    const [rowMenu, setRowMenu] = useState<{ itemId: string; x: number; y: number } | null>(null);
     const [profileOpen, setProfileOpen] = useState(false);
     const [vaultsOpen, setVaultsOpen] = useState(true);
     const [tagsOpen, setTagsOpen] = useState(true);
@@ -1369,6 +1793,11 @@ export default function FocuzPassTab({
     const [error, setError] = useState('');
     const [toast, setToast] = useState('');
     const searchRef = useRef<HTMLInputElement>(null);
+    const listSearchRef = useRef<HTMLInputElement>(null);
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { delay: 180, tolerance: 7 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
 
     const clearSecrets = useCallback(() => {
         clearSensitiveUi(setItems, setRevealed, setCopied, setUnlockValue, setSetupPassword, setSetupConfirm);
@@ -1476,6 +1905,12 @@ export default function FocuzPassTab({
     useEffect(() => {
         const handleShortcut = (event: KeyboardEvent) => {
             const target = event.target as HTMLElement;
+            if (event.key === 'Escape') {
+                setRowMenu(null);
+                setFiltersOpen(false);
+                setSortOpen(false);
+                return;
+            }
             if (event.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
                 event.preventDefault();
                 searchRef.current?.focus();
@@ -1485,17 +1920,41 @@ export default function FocuzPassTab({
         return () => window.removeEventListener('keydown', handleShortcut);
     }, []);
 
-    const counts = useMemo(() => ({
-        all: items.filter((item) => !item.archivedAt && !item.deletedAt).length,
-        login: items.filter((item) => item.type === 'login' && !item.archivedAt && !item.deletedAt).length,
-        card: items.filter((item) => item.type === 'card' && !item.archivedAt && !item.deletedAt).length,
-        passkey: items.filter((item) => item.type === 'passkey' && !item.archivedAt && !item.deletedAt).length,
-        custom: items.filter((item) => item.type === 'custom' && !item.archivedAt && !item.deletedAt).length,
-        risk: items.filter((item) => item.risk && !item.archivedAt && !item.deletedAt).length,
-    }), [items]);
+    const countForFilter = useCallback((candidate: VaultFilter) => items.filter((item) => {
+        const active = !item.archivedAt && !item.deletedAt;
+        const inView = (view.kind === 'all' && active)
+            || (view.kind === 'favorites' && active && item.favorite)
+            || (view.kind === 'archive' && Boolean(item.archivedAt) && !item.deletedAt)
+            || (view.kind === 'deleted' && Boolean(item.deletedAt))
+            || (view.kind === 'vault' && active && item.vaultId === view.id)
+            || (view.kind === 'tag' && active && item.tagIds.includes(view.id));
+        if (!inView) return false;
+        if (candidate === 'all') return true;
+        if (candidate === 'risk') return Boolean(item.risk);
+        if (candidate === 'login' || candidate === 'card' || candidate === 'passkey') return item.type === candidate;
+        return item.type === 'custom' && item.kind === candidate;
+    }).length, [items, view]);
+
+    const toggleTypeFilter = (candidate: VaultFilter) => {
+        setTypeFilters((current) => current.includes(candidate)
+            ? current.filter((value) => value !== candidate)
+            : [...current, candidate]);
+    };
 
     const filteredItems = useMemo(() => {
         const normalized = query.trim().toLowerCase();
+        const now = Date.now();
+        const createdAfter = createdFilter === '7d'
+            ? now - 7 * 86400000
+            : createdFilter === '30d'
+                ? now - 30 * 86400000
+                : createdFilter === '90d'
+                    ? now - 90 * 86400000
+                    : createdFilter === 'year'
+                        ? new Date(new Date().getFullYear(), 0, 1).getTime()
+                        : 0;
+        const customFrom = createdFrom ? new Date(`${createdFrom}T00:00:00`).getTime() : 0;
+        const customTo = createdTo ? new Date(`${createdTo}T23:59:59.999`).getTime() : 0;
         return items.filter((item) => {
             const active = !item.archivedAt && !item.deletedAt;
             const matchesView =
@@ -1505,22 +1964,67 @@ export default function FocuzPassTab({
                 (view.kind === 'deleted' && Boolean(item.deletedAt)) ||
                 (view.kind === 'vault' && active && item.vaultId === view.id) ||
                 (view.kind === 'tag' && active && item.tagIds.includes(view.id));
-            const matchesType = filter === 'all' || (filter === 'risk' ? Boolean(item.risk) : item.type === filter);
+            const matchesType = typeFilters.length === 0 || typeFilters.some((candidate) =>
+                candidate === 'login' || candidate === 'card' || candidate === 'passkey'
+                    ? item.type === candidate
+                    : item.type === 'custom' && item.kind === candidate,
+            );
             const matchesQuery = !normalized || [item.title, item.identity, item.domain, item.authMethod, ...Object.values(item.fields)].some((value) => value?.toLowerCase().includes(normalized));
-            return matchesView && matchesType && matchesQuery;
-        }).sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime());
-    }, [filter, items, query, view]);
+            const createdTime = new Date(item.createdAt).getTime();
+            const matchesCreated = (!createdAfter || createdTime >= createdAfter)
+                && (!customFrom || createdTime >= customFrom)
+                && (!customTo || createdTime <= customTo);
+            return matchesView && matchesType && matchesQuery && matchesCreated && (!favoritesOnly || item.favorite) && (!riskOnly || Boolean(item.risk));
+        }).sort((a, b) => {
+            if (sortMode === 'custom') return a.sortOrder - b.sortOrder;
+            if (sortMode === 'created-newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            if (sortMode === 'created-oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            if (sortMode === 'name-asc') return a.title.localeCompare(b.title);
+            if (sortMode === 'name-desc') return b.title.localeCompare(a.title);
+            if (sortMode === 'type') return `${a.type}-${a.kind || ''}-${a.title}`.localeCompare(`${b.type}-${b.kind || ''}-${b.title}`);
+            return new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime();
+        });
+    }, [createdFilter, createdFrom, createdTo, favoritesOnly, items, query, riskOnly, sortMode, typeFilters, view]);
 
     const groupedItems = useMemo(() => {
+        if (sortMode === 'custom') return [['Custom order', filteredItems] as [string, VaultItem[]]];
         const groups = new Map<string, VaultItem[]>();
         filteredItems.forEach((item) => {
-            const label = monthLabel(item.sortDate);
+            const label = monthLabel(sortMode.startsWith('created-') ? item.createdAt : item.sortDate);
             groups.set(label, [...(groups.get(label) || []), item]);
         });
         return Array.from(groups.entries());
-    }, [filteredItems]);
+    }, [filteredItems, sortMode]);
+
+    const activeFilterCount = typeFilters.length
+        + (createdFilter !== 'any' ? 1 : 0)
+        + (createdFrom || createdTo ? 1 : 0)
+        + (favoritesOnly ? 1 : 0)
+        + (riskOnly ? 1 : 0);
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        if (!event.over || event.active.id === event.over.id) return;
+        const oldIndex = filteredItems.findIndex((item) => item.id === event.active.id);
+        const newIndex = filteredItems.findIndex((item) => item.id === event.over?.id);
+        if (oldIndex < 0 || newIndex < 0) return;
+        const reorderedVisible = arrayMove(filteredItems, oldIndex, newIndex);
+        const visibleIds = new Set(filteredItems.map((item) => item.id));
+        const allOrdered = [...items].sort((a, b) => a.sortOrder - b.sortOrder);
+        let visibleIndex = 0;
+        const merged = allOrdered.map((item) => visibleIds.has(item.id) ? reorderedVisible[visibleIndex++]! : item);
+        const orderById = new Map(merged.map((item, index) => [item.id, index]));
+        setItems((current) => current.map((item) => ({ ...item, sortOrder: orderById.get(item.id) ?? item.sortOrder })));
+        try {
+            await focuzPassReorder(merged.map((item) => item.id));
+        } catch (err) {
+            await loadUnlocked();
+            setToast(err instanceof Error ? err.message : 'Could not save the custom order');
+            window.setTimeout(() => setToast(''), 2200);
+        }
+    };
 
     const selected = selectedId ? filteredItems.find((item) => item.id === selectedId) : undefined;
+    const rowMenuItem = rowMenu ? items.find((item) => item.id === rowMenu.itemId) : undefined;
     const associatedPasskey = selected?.type === 'login'
         ? items.find((item) => item.type === 'passkey' && !item.deletedAt && !item.archivedAt && item.domain?.toLowerCase() === selected.domain?.toLowerCase() && item.identity.toLowerCase() === selected.identity.toLowerCase())
         : undefined;
@@ -1542,7 +2046,7 @@ export default function FocuzPassTab({
         window.setTimeout(() => setToast(''), 2200);
     };
 
-    const saveItem = async (draft: ItemDraft, options: { closeModal?: boolean; toastMessage?: string } = {}) => {
+    const saveItem = async (draft: ItemDraft, options: { closeModal?: boolean; toastMessage?: string; throwOnError?: boolean } = {}) => {
         setBusy(true);
         setError('');
         try {
@@ -1575,25 +2079,30 @@ export default function FocuzPassTab({
             showToast(options.toastMessage || `${ui.title} saved to your vault`);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not save item');
+            if (options.throwOnError) throw err;
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const deleteItem = async (target: VaultItem) => {
+        setBusy(true);
+        try {
+            await focuzPassDelete(target.id);
+            await loadUnlocked();
+            if (selectedId === target.id) setSelectedId('');
+            setActionsOpen(false);
+            setRowMenu(null);
+            showToast(`${target.title} moved to Recently Deleted`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Could not delete item');
         } finally {
             setBusy(false);
         }
     };
 
     const deleteSelected = async () => {
-        if (!selected) return;
-        setBusy(true);
-        try {
-            await focuzPassDelete(selected.id);
-            await loadUnlocked();
-            setSelectedId('');
-            setActionsOpen(false);
-            showToast(`${selected.title} moved to Recently Deleted`);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Could not delete item');
-        } finally {
-            setBusy(false);
-        }
+        if (selected) await deleteItem(selected);
     };
 
     const createCollection = async (mode: 'vault' | 'tag', value: { name: string; color: string; icon: string }) => {
@@ -1622,20 +2131,34 @@ export default function FocuzPassTab({
         }
     };
 
-    const updateSelectedAction = async (
+    const createTagForEditor = async (value: { name: string; color: string; icon: string }): Promise<VaultTag> => {
+        try {
+            const created = await focuzPassCreateTag(value);
+            setTags((current) => current.some((tag) => tag.id === created.id) ? current : [...current, created]);
+            showToast(`${created.name} tag created`);
+            return created;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Could not create tag';
+            setError(message);
+            throw err;
+        }
+    };
+
+    const updateItemAction = async (
+        target: VaultItem,
         action: 'favorite' | 'archive' | 'unarchive' | 'restore' | 'purge' | 'duplicate',
         value?: boolean,
     ) => {
-        if (!selected) return;
         setBusy(true);
         try {
             const result = action === 'favorite'
-                ? await focuzPassItemAction({ action, id: selected.id, value: Boolean(value) })
-                : await focuzPassItemAction({ action, id: selected.id });
+                ? await focuzPassItemAction({ action, id: target.id, value: Boolean(value) })
+                : await focuzPassItemAction({ action, id: target.id });
             await loadUnlocked();
             setSelectedId(result?.id || '');
             setActionsOpen(false);
-            showToast(action === 'duplicate' ? `${selected.title} duplicated` : action === 'favorite' ? (value ? 'Added to Favorites' : 'Removed from Favorites') : action === 'archive' ? `${selected.title} archived` : action === 'restore' ? `${selected.title} restored` : action === 'purge' ? `${selected.title} permanently deleted` : `${selected.title} updated`);
+            setRowMenu(null);
+            showToast(action === 'duplicate' ? `${target.title} duplicated` : action === 'favorite' ? (value ? 'Added to Favorites' : 'Removed from Favorites') : action === 'archive' ? `${target.title} archived` : action === 'restore' ? `${target.title} restored` : action === 'purge' ? `${target.title} permanently deleted` : `${target.title} updated`);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not update item');
         } finally {
@@ -1643,21 +2166,32 @@ export default function FocuzPassTab({
         }
     };
 
-    const moveSelected = async (vaultId: string) => {
-        if (!selected) return;
+    const updateSelectedAction = async (
+        action: 'favorite' | 'archive' | 'unarchive' | 'restore' | 'purge' | 'duplicate',
+        value?: boolean,
+    ) => {
+        if (selected) await updateItemAction(selected, action, value);
+    };
+
+    const moveItem = async (target: VaultItem, vaultId: string) => {
         setBusy(true);
         try {
-            await focuzPassItemAction({ action: 'move', id: selected.id, vaultId });
+            await focuzPassItemAction({ action: 'move', id: target.id, vaultId });
             await loadUnlocked();
             setActionsOpen(false);
-            showToast(`Moved ${selected.title}`);
+            setRowMenu(null);
+            showToast(`Moved ${target.title}`);
         } catch (err) {
-            const message = err instanceof Error ? err.message : `Could not move ${selected.title}`;
+            const message = err instanceof Error ? err.message : `Could not move ${target.title}`;
             setError(message);
             showToast(message);
         } finally {
             setBusy(false);
         }
+    };
+
+    const moveSelected = async (vaultId: string) => {
+        if (selected) await moveItem(selected, vaultId);
     };
 
     const handleSetup = async (event: FormEvent) => {
@@ -1894,20 +2428,18 @@ export default function FocuzPassTab({
 
     return (
         <section className="focuz-pass focuz-pass-ready h-full w-full">
-            <div className="vault-shell">
+            <div className={`vault-shell${navCollapsed ? ' is-nav-collapsed' : ''}`}>
                 <aside className="vault-nav">
                     <div className="vault-brand-row">
                         <span>FocuzPass</span>
-                        <button type="button" onClick={onExit} aria-label="Return to FocuzNow dashboard" title="Return to FocuzNow">
+                        <button type="button" onClick={() => setNavCollapsed((collapsed) => !collapsed)} aria-label={navCollapsed ? 'Expand FocuzPass sidebar' : 'Collapse FocuzPass sidebar'} title={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
                             <ExactSidebarDrawerCloseIcon size={15} />
                         </button>
                     </div>
 
                     <div className="vault-profile-wrap">
                         <button type="button" className="vault-profile" onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen}>
-                            <span className="vault-profile-avatar">
-                                {avatarUrl ? <img src={avatarUrl} alt="" /> : <ShieldEllipsis size={15} />}
-                            </span>
+                            <VaultProfileAvatar avatarUrl={avatarUrl} fallbackUrl={avatarFallbackUrl} name={username || accountName} />
                             <span className="vault-profile-copy">
                                 <strong className="truncate">{username}</strong>
                                 <small className="truncate">{accountName}</small>
@@ -1925,8 +2457,8 @@ export default function FocuzPassTab({
                     </div>
 
                     <nav className="vault-primary-nav" aria-label="FocuzPass navigation">
-                        <button type="button" className={`vault-nav-item${view.kind === 'all' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'all' }); setFilter('all'); setQuery(''); setSelectedId(''); }}><ExactAllItemsIcon size={16} /> All Items</button>
-                        <button type="button" className={`vault-nav-item${view.kind === 'favorites' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'favorites' }); setSelectedId(''); }}><ExactFavoritesIcon size={16} /> Favorites</button>
+                        <button type="button" className={`vault-nav-item${view.kind === 'all' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'all' }); setTypeFilters([]); setQuery(''); setSelectedId(''); }}><ExactAllItemsIcon size={20} /><span className="vault-nav-label">All Items</span></button>
+                        <button type="button" className={`vault-nav-item${view.kind === 'favorites' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'favorites' }); setSelectedId(''); }}><ExactFavoritesIcon size={20} /><span className="vault-nav-label">Favorites</span></button>
 
                         <section className="vault-nav-section" aria-label="Vaults">
                             <div className="vault-nav-heading">
@@ -1941,7 +2473,7 @@ export default function FocuzPassTab({
                             <div className={`vault-nav-section-items${vaultsOpen ? '' : ' is-collapsed'}`} aria-hidden={!vaultsOpen}>
                                 <div>
                                     {vaults.map((vault) => (
-                                        <button key={vault.id} type="button" tabIndex={vaultsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'vault' && view.id === vault.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'vault', id: vault.id }); setSelectedId(''); }}><CollectionMark color={vault.color} icon={vault.icon} size={16} /> <span className="truncate">{vault.name}</span></button>
+                                        <button key={vault.id} type="button" tabIndex={vaultsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'vault' && view.id === vault.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'vault', id: vault.id }); setSelectedId(''); }}><CollectionMark color={vault.color} icon={vault.icon} size={20} /> <span className="vault-nav-label truncate">{vault.name}</span></button>
                                     ))}
                                 </div>
                             </div>
@@ -1960,7 +2492,7 @@ export default function FocuzPassTab({
                             <div className={`vault-nav-section-items${tagsOpen ? '' : ' is-collapsed'}`} aria-hidden={!tagsOpen}>
                                 <div>
                                     {tags.map((tag) => (
-                                        <button key={tag.id} type="button" tabIndex={tagsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'tag' && view.id === tag.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'tag', id: tag.id }); setSelectedId(''); }}><CollectionMark color={tag.color} icon={tag.icon} size={16} /> <span className="truncate">{tag.name}</span></button>
+                                        <button key={tag.id} type="button" tabIndex={tagsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'tag' && view.id === tag.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'tag', id: tag.id }); setSelectedId(''); }}><CollectionMark color={tag.color} icon={tag.icon} size={20} /> <span className="vault-nav-label truncate">{tag.name}</span></button>
                                     ))}
                                 </div>
                             </div>
@@ -1968,12 +2500,13 @@ export default function FocuzPassTab({
                     </nav>
 
                     <div className="vault-nav-bottom">
-                        <button type="button" className={`vault-nav-item${view.kind === 'archive' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'archive' }); setSelectedId(''); }}><ExactArchiveIcon size={16} /> Archive</button>
-                        <button type="button" className={`vault-nav-item${view.kind === 'deleted' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'deleted' }); setSelectedId(''); }}><ExactRecentlyDeletedIcon size={16} /> Recently Deleted</button>
+                        <button type="button" className={`vault-nav-item${view.kind === 'archive' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'archive' }); setSelectedId(''); }}><ExactArchiveIcon size={20} /><span className="vault-nav-label">Archive</span></button>
+                        <button type="button" className={`vault-nav-item${view.kind === 'deleted' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'deleted' }); setSelectedId(''); }}><ExactRecentlyDeletedIcon size={20} /><span className="vault-nav-label">Recently Deleted</span></button>
                     </div>
                 </aside>
 
                 <header className="vault-toolbar">
+                    {onExit && <button type="button" className="vault-back-button" onClick={onExit}><ArrowLeft size={14} /><span>FocuzNow</span></button>}
                     <label className="vault-search">
                         <Search size={14} aria-hidden="true" />
                         <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search in ${viewTitle}`} />
@@ -1983,62 +2516,94 @@ export default function FocuzPassTab({
                     <button type="button" onClick={() => setModal('picker')} className="vault-new-item"><Plus size={13} /> New Item</button>
                 </header>
 
+                <AnimatePresence>
+                    {filtersOpen && (
+                        <ModalPortal>
+                            <div className="vault-filter-layer">
+                                <motion.button type="button" className="vault-filter-scrim" aria-label="Close filters" onClick={() => setFiltersOpen(false)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+                                <motion.aside className="vault-filter-drawer" role="dialog" aria-modal="true" aria-label="Filter vault items" initial={{ x: -28, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -22, opacity: 0 }} transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.2, 0, 0, 1] }}>
+                                    <header><div><small>Current view</small><h2>Filter {viewTitle}</h2></div><button type="button" onClick={() => setFiltersOpen(false)} aria-label="Close filters"><X size={16} /></button></header>
+                                    <div className="vault-filter-drawer-scroll">
+                                        <section>
+                                            <div className="vault-filter-drawer-heading"><div><strong>Item type</strong><small>Select one or more</small></div>{typeFilters.length > 0 && <button type="button" onClick={() => setTypeFilters([])}>Clear</button>}</div>
+                                            <div className="vault-filter-checkbox-grid">
+                                                {FILTERS.filter((option) => option.id !== 'all' && option.id !== 'risk').map((option) => {
+                                                    const FilterIcon = option.icon;
+                                                    const checked = typeFilters.includes(option.id);
+                                                    return (
+                                                        <button key={option.id} type="button" role="checkbox" aria-checked={checked} className={checked ? 'is-checked' : ''} onClick={() => toggleTypeFilter(option.id)}>
+                                                            <span className="vault-filter-checkbox">{checked && <Check size={11} />}</span><FilterIcon size={14} /><span>{option.label}</span><small>{countForFilter(option.id)}</small>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </section>
+                                        <section>
+                                            <div className="vault-filter-drawer-heading"><div><strong>Created</strong><small>Choose a quick range or exact dates</small></div></div>
+                                            <div className="vault-filter-radio-list">
+                                                {([['any', 'Any time'], ['7d', 'Past 7 days'], ['30d', 'Past 30 days'], ['90d', 'Past 90 days'], ['year', 'This year']] as [CreatedFilter, string][]).map(([value, label]) => (
+                                                    <button key={value} type="button" role="radio" aria-checked={createdFilter === value && !createdFrom && !createdTo} className={createdFilter === value && !createdFrom && !createdTo ? 'is-checked' : ''} onClick={() => { setCreatedFilter(value); setCreatedFrom(''); setCreatedTo(''); }}>
+                                                        <span>{createdFilter === value && !createdFrom && !createdTo && <i />}</span>{label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <div className="vault-filter-date-range">
+                                                <label><span>From</span><input type="date" value={createdFrom} onChange={(event) => { setCreatedFrom(event.target.value); setCreatedFilter('any'); }} /></label>
+                                                <i>to</i>
+                                                <label><span>To</span><input type="date" value={createdTo} min={createdFrom || undefined} onChange={(event) => { setCreatedTo(event.target.value); setCreatedFilter('any'); }} /></label>
+                                            </div>
+                                        </section>
+                                        <section>
+                                            <div className="vault-filter-drawer-heading"><div><strong>More filters</strong><small>Narrow this view further</small></div></div>
+                                            <button type="button" role="checkbox" aria-checked={favoritesOnly} className={`vault-filter-wide-check${favoritesOnly ? ' is-checked' : ''}`} onClick={() => setFavoritesOnly((current) => !current)}><span className="vault-filter-checkbox">{favoritesOnly && <Check size={11} />}</span><ExactFavoritesIcon size={15} /><div><strong>Favorites only</strong><small>Show starred items</small></div></button>
+                                            <button type="button" role="checkbox" aria-checked={riskOnly} className={`vault-filter-wide-check${riskOnly ? ' is-checked' : ''}`} onClick={() => setRiskOnly((current) => !current)}><span className="vault-filter-checkbox">{riskOnly && <Check size={11} />}</span><ShieldCheck size={15} /><div><strong>Security review</strong><small>Weak or reused credentials</small></div></button>
+                                        </section>
+                                    </div>
+                                    <footer><button type="button" onClick={() => { setTypeFilters([]); setCreatedFilter('any'); setCreatedFrom(''); setCreatedTo(''); setFavoritesOnly(false); setRiskOnly(false); }}>Clear all</button><button type="button" className="is-primary" onClick={() => setFiltersOpen(false)}>Show {filteredItems.length} items</button></footer>
+                                </motion.aside>
+                            </div>
+                        </ModalPortal>
+                    )}
+                </AnimatePresence>
+
                 <div className="vault-content-grid">
                     <div className="vault-list">
                         <div className="vault-list-toolbar">
-                            <div className="relative">
-                                <button type="button" className="vault-category-button" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen}>
-                                    <LayoutGrid size={10} />
-                                    <span>{filter === 'all' ? 'All Categories' : FILTERS.find((option) => option.id === filter)?.label}</span>
-                                    <ChevronDown size={8} />
-                                </button>
-                                <AnimatePresence>
-                                    {filtersOpen && (
-                                        <motion.div className="vault-category-menu" initial={{ opacity: 0, y: -3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }}>
-                                            {FILTERS.map((option) => {
-                                                const FilterIcon = option.icon;
-                                                return (
-                                                    <button key={option.id} type="button" className={filter === option.id ? 'is-active' : ''} onClick={() => { setFilter(option.id); setFiltersOpen(false); }}>
-                                                        <FilterIcon size={10} />
-                                                        <span>{option.label}</span>
-                                                        <small>{counts[option.id]}</small>
-                                                    </button>
-                                                );
-                                            })}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
+                            <div className="vault-category-summary"><LayoutGrid size={11} /><span>All Categories</span></div>
                             <div className="vault-list-actions">
-                                <button type="button" onClick={() => searchRef.current?.focus()} aria-label="Search this item list"><ListSearchIcon /></button>
-                                <button type="button" onClick={() => showToast('Items are grouped by most recent activity.')} aria-label="Sort items"><SortItemsIcon /></button>
+                                <button type="button" className={listSearchOpen ? 'is-active' : ''} onClick={() => { setListSearchOpen((open) => { const next = !open; if (next) window.setTimeout(() => listSearchRef.current?.focus(), 0); return next; }); setSortOpen(false); }} aria-label="Search this item list"><ListSearchIcon /></button>
+                                <button type="button" className={filtersOpen || activeFilterCount ? 'is-active' : ''} onClick={() => { setFiltersOpen(true); setSortOpen(false); }} aria-label={`Filter items${activeFilterCount ? `, ${activeFilterCount} active` : ''}`} aria-expanded={filtersOpen}><Funnel size={13} />{activeFilterCount > 0 && <small>{activeFilterCount}</small>}</button>
+                                <div className="relative">
+                                    <button type="button" className={sortOpen ? 'is-active' : ''} onClick={() => { setSortOpen((open) => !open); setFiltersOpen(false); }} aria-label="Sort items" aria-expanded={sortOpen}><SortItemsIcon /></button>
+                                    <AnimatePresence>{sortOpen && <motion.div className="vault-sort-menu" initial={{ opacity: 0, y: -5, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.99 }}>
+                                        <div className="vault-sort-menu-heading"><span>Sort by</span><small>{SORT_OPTIONS.find((option) => option.id === sortMode)?.label}</small></div>
+                                        {SORT_OPTIONS.map((option) => <button key={option.id} type="button" className={sortMode === option.id ? 'is-active' : ''} onClick={() => { setSortMode(option.id); setSortOpen(false); }}><span className="vault-sort-radio">{sortMode === option.id && <i />}</span><span><strong>{option.label}</strong><small>{option.description}</small></span>{option.id === 'custom' && <GripVertical size={13} />}</button>)}
+                                    </motion.div>}</AnimatePresence>
+                                </div>
                             </div>
                         </div>
 
+                        <AnimatePresence initial={false}>{listSearchOpen && <motion.label className="vault-list-inline-search" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}><Search size={12} /><input ref={listSearchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search names, websites, fields…" />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear list search"><X size={11} /></button>}</motion.label>}</AnimatePresence>
+
                         <div className="vault-list-scroll">
-                            <AnimatePresence mode="popLayout">
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => { void handleDragEnd(event); }}>
+                            <SortableContext items={filteredItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+                            <AnimatePresence initial={false}>
                                 {filteredItems.length > 0 ? groupedItems.map(([group, groupItems]) => (
-                                    <motion.section key={group} className="vault-month-group" initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }}>
+                                    <motion.section key={group} className={`vault-month-group${sortMode === 'custom' ? ' is-custom-order' : ''}`} initial={false} animate={{ opacity: 1 }}>
                                         <p>{group}</p>
                                         {groupItems.map((item) => {
                                             const isSelected = selected?.id === item.id;
                                             return (
-                                                <motion.button
-                                                    layout
+                                                <SortableVaultRow
                                                     key={item.id}
-                                                    type="button"
-                                                    onClick={() => { setSelectedId(item.id); setRevealed(false); setActionsOpen(false); }}
-                                                    className={`vault-row ${isSelected ? 'is-selected' : ''}`}
-                                                    initial={reduceMotion ? false : { opacity: 0, y: 2 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0 }}
-                                                >
-                                                    <ItemMark item={item} />
-                                                    <span>
-                                                        <strong>{item.title}</strong>
-                                                        <small>{item.authMethod === 'Password' ? item.identity : item.authMethod}</small>
-                                                    </span>
-                                                </motion.button>
+                                                    item={item}
+                                                    selected={isSelected}
+                                                    draggable={sortMode === 'custom'}
+                                                    onSelect={() => { setSelectedId(item.id); setRevealed(false); setActionsOpen(false); }}
+                                                    onContextMenu={(event) => { event.preventDefault(); setSelectedId(item.id); setRevealed(false); setActionsOpen(false); setRowMenu({ itemId: item.id, x: Math.min(event.clientX, window.innerWidth - 228), y: Math.min(event.clientY, window.innerHeight - 300) }); }}
+                                                    onMore={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); setSelectedId(item.id); setRowMenu({ itemId: item.id, x: Math.min(rect.right, window.innerWidth - 228), y: Math.min(rect.bottom + 5, window.innerHeight - 300) }); }}
+                                                />
                                             );
                                         })}
                                     </motion.section>
@@ -2050,10 +2615,12 @@ export default function FocuzPassTab({
                                 ) : (
                                     <motion.div className="vault-list-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                                         <p>No matching items</p>
-                                        <button type="button" onClick={() => { setFilter('all'); setQuery(''); }}>Clear filters</button>
+                                        <button type="button" onClick={() => { setTypeFilters([]); setCreatedFilter('any'); setCreatedFrom(''); setCreatedTo(''); setFavoritesOnly(false); setRiskOnly(false); setQuery(''); }}>Clear filters</button>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
+                            </SortableContext>
+                            </DndContext>
                         </div>
                     </div>
 
@@ -2126,8 +2693,33 @@ export default function FocuzPassTab({
 
             <AnimatePresence>
                 {modal === 'picker' && <ItemPickerModal onClose={() => setModal(null)} onSelect={(kind) => { setEditingId(null); setEditorKind(kind); setModal('editor'); }} />}
-                {modal === 'editor' && <ItemEditorModal kind={editorKind} item={editingId ? items.find((item) => item.id === editingId) : undefined} vaults={vaults} tags={tags} defaultVaultId={view.kind === 'vault' ? view.id : undefined} onClose={() => { setModal(null); setEditingId(null); }} onSave={(draft) => void saveItem(draft)} onCreateTag={async (value) => (await createCollection('tag', value)) as VaultTag} busy={busy} />}
+                {modal === 'editor' && <ItemEditorModal kind={editorKind} item={editingId ? items.find((item) => item.id === editingId) : undefined} vaults={vaults} tags={tags} defaultVaultId={view.kind === 'vault' ? view.id : undefined} onClose={() => { setModal(null); setEditingId(null); }} onSave={(draft) => saveItem(draft, { throwOnError: true })} onCreateTag={createTagForEditor} busy={busy} />}
                 {collectionModal && <CollectionModal mode={collectionModal} onClose={() => setCollectionModal(null)} onCreate={(value) => { void createCollection(collectionModal, value).catch((err) => { setError(err instanceof Error ? err.message : `Could not create ${collectionModal}`); }); }} busy={busy} />}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {rowMenu && rowMenuItem && (
+                    <ModalPortal>
+                        <motion.div className="vault-context-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => event.target === event.currentTarget && setRowMenu(null)}>
+                            <motion.div className="vault-item-actions-menu vault-row-actions-menu" style={{ left: rowMenu.x, top: rowMenu.y }} initial={{ opacity: 0, y: -3, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -2, scale: 0.99 }} onMouseDown={(event) => event.stopPropagation()}>
+                                {rowMenuItem.deletedAt ? (
+                                    <>
+                                        <button type="button" onClick={() => void updateItemAction(rowMenuItem, 'restore')}><ArchiveRestore size={15} /> Restore</button>
+                                        <button type="button" className="is-danger" onClick={() => void updateItemAction(rowMenuItem, 'purge')}><Trash2 size={15} /> Delete permanently</button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button type="button" onClick={() => void updateItemAction(rowMenuItem, 'favorite', !rowMenuItem.favorite)}><ExactFavoritesIcon size={15} /> {rowMenuItem.favorite ? 'Remove from Favorites' : 'Add to Favorites'}</button>
+                                        {vaults.length > 1 && <div className="vault-move-group"><span><FolderInput size={13} /> Move to</span>{vaults.filter((vault) => vault.id !== rowMenuItem.vaultId).map((vault) => <button type="button" key={vault.id} onClick={() => void moveItem(rowMenuItem, vault.id)}><CollectionMark color={vault.color} icon={vault.icon} size={11} /> {vault.name}</button>)}</div>}
+                                        <button type="button" onClick={() => void updateItemAction(rowMenuItem, 'duplicate')}><CopyPlus size={15} /> Duplicate</button>
+                                        <button type="button" onClick={() => void updateItemAction(rowMenuItem, rowMenuItem.archivedAt ? 'unarchive' : 'archive')}><ExactArchiveIcon size={15} /> {rowMenuItem.archivedAt ? 'Restore from Archive' : 'Archive'}</button>
+                                        <button type="button" className="is-danger" onClick={() => void deleteItem(rowMenuItem)}><Trash2 size={15} /> Delete</button>
+                                    </>
+                                )}
+                            </motion.div>
+                        </motion.div>
+                    </ModalPortal>
+                )}
             </AnimatePresence>
 
             <AnimatePresence>
