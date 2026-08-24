@@ -606,6 +606,35 @@ function useFocusIconId(prefix: string) {
     return `${prefix}-${useId().replace(/:/g, '')}`;
 }
 
+function FocuzPassMark({ size = 28 }: { size?: number }) {
+    const shellId = useFocusIconId('fp-mark-shell');
+    const coreId = useFocusIconId('fp-mark-core');
+    return (
+        <svg className="focuz-pass-mark fp-style-icon" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+            <defs>
+                <linearGradient id={shellId} x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#DDE4E5" />
+                    <stop offset="48%" stopColor="#9BAAAF" />
+                    <stop offset="100%" stopColor="#647278" />
+                </linearGradient>
+                <radialGradient id={coreId} cx="38%" cy="30%" r="72%">
+                    <stop offset="0%" stopColor="#B7ADB9" />
+                    <stop offset="58%" stopColor="#80788B" />
+                    <stop offset="100%" stopColor="#4D4956" />
+                </radialGradient>
+            </defs>
+            <rect x="3" y="4.5" width="26" height="25" rx="9" fill="#3F484C" />
+            <rect x="3" y="3" width="26" height="25" rx="9" fill={`url(#${shellId})`} />
+            <path d="M8.5 12V9.5c0-.55.45-1 1-1H12M20 8.5h2.5c.55 0 1 .45 1 1V12M23.5 20v2.5c0 .55-.45 1-1 1H20M12 23.5H9.5c-.55 0-1-.45-1-1V20" fill="none" stroke="#F7FAFA" strokeWidth="1.65" strokeLinecap="round" opacity=".82" />
+            <circle cx="16" cy="16" r="6.1" fill="#4F555B" />
+            <circle cx="16" cy="15.4" r="5.25" fill={`url(#${coreId})`} />
+            <circle cx="16" cy="14.6" r="1.65" fill="#EAE6EC" />
+            <path d="M15.1 16h1.8l-.4 3.6h-1Z" fill="#EAE6EC" />
+            <path d="M7.7 5.5h12.8" fill="none" stroke="#FFFFFF" strokeWidth="1.15" strokeLinecap="round" opacity=".5" />
+        </svg>
+    );
+}
+
 function mixHex(first: string, second: string, amount: number) {
     const parse = (value: string) => /^#[0-9a-f]{6}$/i.test(value)
         ? [1, 3, 5].map((index) => Number.parseInt(value.slice(index, index + 2), 16))
@@ -829,7 +858,7 @@ function SortableVaultRow({ item, selected, draggable, onSelect, onContextMenu, 
             }}
             onContextMenu={onContextMenu}
             className={`vault-row${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}${draggable ? ' is-draggable' : ''}`}
-            style={{ transform: DndCss.Transform.toString(transform), transition }}
+            style={{ transform: DndCss.Transform.toString(transform), transition, '--vault-row-tone': item.markTone } as CSSProperties}
         >
             {draggable && (
                 <span
@@ -2114,6 +2143,22 @@ export default function FocuzPassTab({
               : view.kind === 'tag'
                 ? tags.find((tag) => tag.id === view.id)?.name || 'Tag'
                 : 'All Items';
+    const viewVault = view.kind === 'vault' ? vaults.find((vault) => vault.id === view.id) : undefined;
+    const viewTag = view.kind === 'tag' ? tags.find((tag) => tag.id === view.id) : undefined;
+    const viewAccent = viewVault?.color
+        || viewTag?.color
+        || (view.kind === 'favorites' ? '#dc6602' : view.kind === 'deleted' ? '#e47463' : view.kind === 'archive' ? '#95a2aa' : '#93aeb7');
+    const viewMark = viewVault
+        ? <CollectionMark color={viewVault.color} icon={viewVault.icon} size={18} />
+        : viewTag
+          ? <CollectionMark color={viewTag.color} icon={viewTag.icon} size={18} />
+          : view.kind === 'favorites'
+            ? <ExactFavoritesIcon size={17} />
+            : view.kind === 'deleted'
+              ? <ExactRecentlyDeletedIcon size={17} />
+              : view.kind === 'archive'
+                ? <ExactArchiveIcon size={17} />
+                : <LayoutGrid size={12} />;
 
     const showToast = (message: string) => {
         setToast(message);
@@ -2301,6 +2346,7 @@ export default function FocuzPassTab({
         <motion.div
             key={selected.id}
             className="vault-detail-page"
+            style={{ '--vault-detail-tone': selectedVault?.color || selected.markTone } as CSSProperties}
             initial={reduceMotion ? false : { opacity: 0, x: 12 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -8 }}
@@ -2309,7 +2355,7 @@ export default function FocuzPassTab({
             <div className="vault-detail-topbar">
                 <div className="vault-detail-location">
                     {selectedVault && <><CollectionMark color={selectedVault.color} icon={selectedVault.icon} size={13} /><strong>{selectedVault.name}</strong></>}
-                    <span><ShieldCheck size={13} /> Private <ChevronDown size={11} /></span>
+                    <span className="vault-detail-state"><i aria-hidden="true" /> On-device</span>
                 </div>
                 <div className="vault-detail-actions" onClick={(event) => event.stopPropagation()}>
                     {selected.deletedAt && <button type="button" onClick={() => void updateSelectedAction('restore')}><ArchiveRestore size={14} /> Restore</button>}
@@ -2438,7 +2484,10 @@ export default function FocuzPassTab({
             <div className={`vault-shell${navCollapsed ? ' is-nav-collapsed' : ''}`}>
                 <aside className="vault-nav">
                     <div className="vault-brand-row">
-                        <span>FocuzPass</span>
+                        <div className="vault-brand-lockup">
+                            <FocuzPassMark size={27} />
+                            <span><strong>FocuzPass</strong><small>Local focus vault</small></span>
+                        </div>
                         <button type="button" onClick={() => setNavCollapsed((collapsed) => !collapsed)} aria-label={navCollapsed ? 'Expand FocuzPass sidebar' : 'Collapse FocuzPass sidebar'} title={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
                             <ExactSidebarDrawerCloseIcon size={15} />
                         </button>
@@ -2464,8 +2513,8 @@ export default function FocuzPassTab({
                     </div>
 
                     <nav className="vault-primary-nav" aria-label="FocuzPass navigation">
-                        <button type="button" className={`vault-nav-item${view.kind === 'all' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'all' }); setTypeFilters([]); setQuery(''); setSelectedId(''); }}><ExactAllItemsIcon size={20} /><span className="vault-nav-label">All Items</span></button>
-                        <button type="button" className={`vault-nav-item${view.kind === 'favorites' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'favorites' }); setSelectedId(''); }}><ExactFavoritesIcon size={20} /><span className="vault-nav-label">Favorites</span></button>
+                        <button type="button" style={{ '--vault-nav-tone': '#93aeb7' } as CSSProperties} className={`vault-nav-item${view.kind === 'all' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'all' }); setTypeFilters([]); setQuery(''); setSelectedId(''); }}><ExactAllItemsIcon size={20} /><span className="vault-nav-label">All Items</span></button>
+                        <button type="button" style={{ '--vault-nav-tone': '#dc6602' } as CSSProperties} className={`vault-nav-item${view.kind === 'favorites' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'favorites' }); setSelectedId(''); }}><ExactFavoritesIcon size={20} /><span className="vault-nav-label">Favorites</span></button>
 
                         <section className="vault-nav-section" aria-label="Vaults">
                             <div className="vault-nav-heading">
@@ -2480,7 +2529,7 @@ export default function FocuzPassTab({
                             <div className={`vault-nav-section-items${vaultsOpen ? '' : ' is-collapsed'}`} aria-hidden={!vaultsOpen}>
                                 <div>
                                     {vaults.map((vault) => (
-                                        <button key={vault.id} type="button" tabIndex={vaultsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'vault' && view.id === vault.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'vault', id: vault.id }); setSelectedId(''); }}><CollectionMark color={vault.color} icon={vault.icon} size={20} /> <span className="vault-nav-label truncate">{vault.name}</span></button>
+                                        <button key={vault.id} type="button" tabIndex={vaultsOpen ? 0 : -1} style={{ '--vault-nav-tone': vault.color } as CSSProperties} className={`vault-nav-item${view.kind === 'vault' && view.id === vault.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'vault', id: vault.id }); setSelectedId(''); }}><CollectionMark color={vault.color} icon={vault.icon} size={20} /> <span className="vault-nav-label truncate">{vault.name}</span></button>
                                     ))}
                                 </div>
                             </div>
@@ -2499,7 +2548,7 @@ export default function FocuzPassTab({
                             <div className={`vault-nav-section-items${tagsOpen ? '' : ' is-collapsed'}`} aria-hidden={!tagsOpen}>
                                 <div>
                                     {tags.map((tag) => (
-                                        <button key={tag.id} type="button" tabIndex={tagsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'tag' && view.id === tag.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'tag', id: tag.id }); setSelectedId(''); }}><CollectionMark color={tag.color} icon={tag.icon} size={20} /> <span className="vault-nav-label truncate">{tag.name}</span></button>
+                                        <button key={tag.id} type="button" tabIndex={tagsOpen ? 0 : -1} style={{ '--vault-nav-tone': tag.color } as CSSProperties} className={`vault-nav-item${view.kind === 'tag' && view.id === tag.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'tag', id: tag.id }); setSelectedId(''); }}><CollectionMark color={tag.color} icon={tag.icon} size={20} /> <span className="vault-nav-label truncate">{tag.name}</span></button>
                                     ))}
                                 </div>
                             </div>
@@ -2507,8 +2556,8 @@ export default function FocuzPassTab({
                     </nav>
 
                     <div className="vault-nav-bottom">
-                        <button type="button" className={`vault-nav-item${view.kind === 'archive' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'archive' }); setSelectedId(''); }}><ExactArchiveIcon size={20} /><span className="vault-nav-label">Archive</span></button>
-                        <button type="button" className={`vault-nav-item${view.kind === 'deleted' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'deleted' }); setSelectedId(''); }}><ExactRecentlyDeletedIcon size={20} /><span className="vault-nav-label">Recently Deleted</span></button>
+                        <button type="button" style={{ '--vault-nav-tone': '#95a2aa' } as CSSProperties} className={`vault-nav-item${view.kind === 'archive' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'archive' }); setSelectedId(''); }}><ExactArchiveIcon size={20} /><span className="vault-nav-label">Archive</span></button>
+                        <button type="button" style={{ '--vault-nav-tone': '#e47463' } as CSSProperties} className={`vault-nav-item${view.kind === 'deleted' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'deleted' }); setSelectedId(''); }}><ExactRecentlyDeletedIcon size={20} /><span className="vault-nav-label">Recently Deleted</span></button>
                     </div>
                 </aside>
 
@@ -2519,7 +2568,8 @@ export default function FocuzPassTab({
                         <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search in ${viewTitle}`} />
                         {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={12} /></button>}
                     </label>
-                    <button type="button" className="vault-help" onClick={() => showToast('Use / to jump to search. Your vault stays on this device.')}>Help</button>
+                    <span className="vault-device-state"><i aria-hidden="true" /><span>On-device</span></span>
+                    <button type="button" className="vault-help" aria-label="FocuzPass privacy help" title="Privacy details" onClick={() => showToast('Use / to search. FocuzPass keeps your encrypted vault on this device.')}><ShieldCheck size={15} /></button>
                     <button type="button" onClick={() => setModal('picker')} className="vault-new-item"><Plus size={13} /> New Item</button>
                 </header>
 
@@ -2576,7 +2626,10 @@ export default function FocuzPassTab({
                 <div className="vault-content-grid">
                     <div className="vault-list">
                         <div className="vault-list-toolbar">
-                            <div className="vault-category-summary"><LayoutGrid size={11} /><span>All Categories</span></div>
+                            <div className="vault-category-summary">
+                                <span className="vault-view-orbit" style={{ '--vault-view-tone': viewAccent } as CSSProperties}>{viewMark}</span>
+                                <span><strong>{viewTitle}</strong><small>{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}</small></span>
+                            </div>
                             <div className="vault-list-actions">
                                 <button type="button" className={listSearchOpen ? 'is-active' : ''} onClick={() => { setListSearchOpen((open) => { const next = !open; if (next) window.setTimeout(() => listSearchRef.current?.focus(), 0); return next; }); setSortOpen(false); }} aria-label="Search this item list"><ListSearchIcon /></button>
                                 <button type="button" className={filtersOpen || activeFilterCount ? 'is-active' : ''} onClick={() => { setFiltersOpen(true); setSortOpen(false); }} aria-label={`Filter items${activeFilterCount ? `, ${activeFilterCount} active` : ''}`} aria-expanded={filtersOpen}><Funnel size={13} />{activeFilterCount > 0 && <small>{activeFilterCount}</small>}</button>
