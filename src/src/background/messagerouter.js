@@ -305,6 +305,22 @@ export function initMessageRouter() {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         (async () => {
             try {
+                if (msg?.type === 'FOCUZPASS_OVERLAY_RELAY') {
+                    const tabId = sender.tab?.id;
+                    if (tabId != null) {
+                        await chrome.tabs.sendMessage(
+                            tabId,
+                            {
+                                type: msg.payloadType,
+                                ...(msg.payload && typeof msg.payload === 'object' ? msg.payload : {}),
+                                sourceFrameId: sender.frameId,
+                            },
+                            { frameId: Number.isInteger(msg.frameId) ? msg.frameId : 0 },
+                        ).catch(() => undefined);
+                    }
+                    sendResponse({ ok: true });
+                    return;
+                }
                 if (isFocuzPassMessage(msg?.type)) {
                     sendResponse(await handleFocuzPassMessage(msg, sender));
                     return;

@@ -49,10 +49,14 @@ type PendingLogin = {
 
 type MessageResponse<T> = { ok: true; data: T } | { ok: false; error: string };
 
+type FillableControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+
 type FieldControl = {
     host: HTMLDivElement;
     shadow: ShadowRoot;
     button: HTMLButtonElement;
+    target: HTMLElement;
+    virtualRole?: FieldRole;
 };
 
 type ControlState = 'checking' | 'locked' | 'ready';
@@ -84,6 +88,12 @@ const SLIDERS_ICON = `
 
 const PLUS_ICON = `
 <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4v12M4 10h12"></path></svg>`;
+
+const FOCUZNOW_MARK_ICON = `
+<svg viewBox="0 0 20 20" aria-hidden="true" fill="none"><circle cx="10" cy="10" r="7.15" stroke="currentColor" stroke-width="1.7"></circle><circle cx="10" cy="10" r="2.85" fill="currentColor"></circle></svg>`;
+
+const IDENTITY_ICON = `
+<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"></circle><path d="M5.6 19.2c.7-3.1 3.3-5 6.4-5s5.7 1.9 6.4 5"></path></svg>`;
 
 const FIELD_STYLE = `
     :host { all: initial; color-scheme: dark; }
@@ -151,6 +161,8 @@ const PANEL_STYLE = `
     }
     .favicon { object-fit: contain; padding: 7px; }
     .mark { color: #aaa; font-size: 9px; font-weight: 800; letter-spacing: -.02em; }
+    .mark.is-identity { color: #e8e8ea; }
+    .mark.is-identity svg { width: 18px; height: 18px; }
     .account-copy { min-width: 0; flex: 1; }
     .account-title { display: block; color: #ededed; font-size: 11px; font-weight: 620; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .account-id { display: block; margin-top: 3px; color: #747479; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -243,9 +255,10 @@ const NEUTRAL_FIELD_STYLE = `
     .control-chevron svg { width: 13px; height: 13px; }
     button.is-open .control-chevron { transform: rotate(90deg); }
     .control-mark {
-        width: 17px; height: 17px; border-radius: 50%; color: #ffffff; background: #3975e9;
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,.34); font: 700 9px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+        width: 17px; height: 17px; border-radius: 50%; color: #f4f4f5; background: transparent;
+        box-shadow: none;
     }
+    .control-mark svg { width: 17px; height: 17px; display: block; }
     .control-lock { width: 17px; height: 17px; color: #e4e4e7; }
     .control-lock svg { width: 15px; height: 15px; }
 `;
@@ -279,6 +292,8 @@ const NEUTRAL_PANEL_STYLE = `
     }
     .favicon { object-fit: contain; padding: 7px; }
     .mark { color: #d6d7da; background: #34353a; font-size: 11px; }
+    .mark.is-identity { color: #e8e8ea; }
+    .mark.is-identity svg { width: 22px; height: 22px; }
     .mark.card-brand { width: 46px; height: 32px; border: 0; border-radius: 9px; color: #1833a4; background: linear-gradient(145deg,#f7f8fa,#cbd1d9); font-size: 8px; font-weight: 850; }
     .mark.card-brand.is-amex { color: #fff; background: linear-gradient(145deg,#45abe3,#1478b5); }
     .mark.card-brand.is-discover { color: #171719; background: linear-gradient(145deg,#fff,#dedee0); }
@@ -369,10 +384,52 @@ function closeIconButton(label: string) {
     return button;
 }
 
+function associatedLabelText(element: HTMLElement): string {
+    const parts: string[] = [];
+    const labelled = element.getAttribute('aria-labelledby');
+    if (labelled) {
+        for (const id of labelled.split(/\s+/)) {
+            const node = document.getElementById(id);
+            if (node?.textContent) parts.push(node.textContent);
+        }
+    }
+    const described = element.getAttribute('aria-describedby');
+    if (described) {
+        for (const id of described.split(/\s+/)) {
+            const node = document.getElementById(id);
+            if (node?.textContent) parts.push(node.textContent);
+        }
+    }
+    const labels = 'labels' in element ? (element as HTMLInputElement).labels : null;
+    if (labels) {
+        for (const label of Array.from(labels)) parts.push(label.textContent || '');
+    } else if (element.id) {
+        try {
+            const label = document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
+            if (label?.textContent) parts.push(label.textContent);
+        } catch {
+            /* invalid id */
+        }
+    }
+    const wrap = element.closest('label');
+    if (wrap?.textContent) parts.push(wrap.textContent);
+    return parts.join(' ');
+}
+
 function fieldDescriptor(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): string {
-    return `${element.name} ${element.id} ${element.getAttribute('autocomplete') || ''} ${element.getAttribute('placeholder') || ''} ${element.getAttribute('aria-label') || ''}`
-        .toLowerCase()
-        .replace(/[_-]+/g, ' ');
+    return [
+        element.name,
+        element.id,
+        element.getAttribute('autocomplete') || '',
+        element.getAttribute('placeholder') || '',
+        element.getAttribute('aria-label') || '',
+        element.getAttribute('title') || '',
+        element.getAttribute('inputmode') || '',
+        element.getAttribute('data-elements-stable-field-name') || '',
+        element.getAttribute('data-checkout') || '',
+        element.dataset.field || '',
+        associatedLabelText(element),
+    ].join(' ').toLowerCase().replace(/[_-]+/g, ' ');
 }
 
 function classifyField(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): FieldRole {
@@ -394,8 +451,16 @@ function classifyField(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     }
     const value = fieldDescriptor(element);
     if (/search|coupon|promo|discount|one time|otp|verification code|captcha/.test(value)) return 'unknown';
-    if (/card.?holder|name on card/.test(value)) return 'cardholder';
-    if (/card.?number|credit.?card|debit.?card|cc.?number/.test(value)) return 'card-number';
+    if (/card.?holder|name on card|name on the card/.test(value)) return 'cardholder';
+    if (/card.?number|credit.?card|debit.?card|cc.?number|pan\b|card no/.test(value)) return 'card-number';
+    if (
+        element instanceof HTMLInputElement
+        && (element.inputMode === 'numeric' || element.inputMode === 'decimal')
+        && (element.maxLength === 16 || element.maxLength === 19)
+        && !/zip|postal|cvv|cvc|phone|otp/.test(value)
+    ) {
+        return 'card-number';
+    }
     if (/expir|expiry|expiration|cc.?exp/.test(value) && /month|mm\b/.test(value)) return 'card-exp-month';
     if (/expir|expiry|expiration|cc.?exp/.test(value) && /year|yy/.test(value)) return 'card-exp-year';
     if (/expir|expiry|expiration|cc.?exp/.test(value)) return 'card-expiry';
@@ -420,16 +485,26 @@ function classifyField(element: HTMLInputElement | HTMLSelectElement | HTMLTextA
     return 'unknown';
 }
 
-function isVisibleInput(input: HTMLInputElement): boolean {
-    if (!input.isConnected || input.disabled || input.readOnly || classifyField(input) === 'unknown') return false;
-    if (['hidden', 'checkbox', 'radio', 'submit', 'button', 'reset', 'file', 'image', 'range', 'color'].includes(input.type)) return false;
-    if (!isElementVisuallyAvailable(input)) return false;
-    const rect = input.getBoundingClientRect();
-    return rect.width >= 80 && rect.height >= 22 && rect.bottom >= 0 && rect.top <= window.innerHeight;
+function isVisibleTarget(element: HTMLElement, role?: FieldRole): boolean {
+    if (!element.isConnected) return false;
+    if (element instanceof HTMLInputElement) {
+        if (element.disabled) return false;
+        if (['hidden', 'checkbox', 'radio', 'submit', 'button', 'reset', 'file', 'image', 'range', 'color'].includes(element.type)) return false;
+    }
+    if ((element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) && element.disabled) return false;
+    if (role === 'unknown') return false;
+    if (!isElementVisuallyAvailable(element)) return false;
+    const rect = element.getBoundingClientRect();
+    const minWidth = role === 'cvv' || role === 'card-exp-month' || role === 'card-exp-year' || role === 'card-expiry' ? 28 : 40;
+    return rect.width >= minWidth && rect.height >= 16 && rect.bottom >= 0 && rect.top <= window.innerHeight;
+}
+
+function isFillableControl(element: EventTarget | null): element is FillableControl {
+    return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement;
 }
 
 function isRenderableInput(input: HTMLInputElement): boolean {
-    if (!input.isConnected || input.disabled || input.readOnly) return false;
+    if (!input.isConnected || input.disabled) return false;
     if (!isElementVisuallyAvailable(input)) return false;
     const rect = input.getBoundingClientRect();
     return rect.width > 20 && rect.height > 16;
@@ -633,8 +708,39 @@ function relevantItemsForRole(items: AutofillItem[], role: FieldRole): AutofillI
     return items.filter((item) => item.type !== 'login');
 }
 
+function maskPersonName(value: string): string {
+    return value
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => (part.length <= 1 ? part : `${part[0]}${'•'.repeat(Math.min(part.length - 1, 5))}`))
+        .join(' ');
+}
+
+function maskEmail(value: string): string {
+    const [user, domain] = value.split('@');
+    if (!domain || !user) return maskPersonName(value);
+    return `${user[0] || '•'}•••@${domain}`;
+}
+
+function lastCardDigits(number?: string): string {
+    const digits = (number || '').replace(/\D/g, '');
+    return digits.slice(-4);
+}
+
+function isIdentityKind(item: AutofillItem): boolean {
+    return item.type === 'custom' && ['identity', 'driver_license', 'medical_record', 'membership', 'passport', 'social_security_number'].includes(item.kind || '');
+}
+
 function itemSubtitle(item: AutofillItem): string {
-    if (item.type === 'card') return item.cardNumber ? `Card ending ${item.cardNumber.replace(/\D/g, '').slice(-4)}` : 'Credit card';
+    if (item.type === 'card') {
+        const last4 = lastCardDigits(item.cardNumber);
+        return last4 ? `•••• ${last4}` : 'Credit card';
+    }
+    if (isIdentityKind(item)) {
+        const name = item.fields?.fullName || item.identity;
+        if (!name) return (item.kind || 'identity').replace(/_/g, ' ');
+        return name.includes('@') ? maskEmail(name) : maskPersonName(name);
+    }
     if (item.type === 'custom') return item.fields?.email || item.fields?.username || item.identity || (item.kind || 'item').replace(/_/g, ' ');
     return item.identity;
 }
@@ -681,9 +787,22 @@ async function runtimeSendMessage<T>(message: Record<string, unknown>): Promise<
     return response.data;
 }
 
+const PAYMENT_SLOT_SELECTOR = [
+    '.StripeElement',
+    '[data-stripe]',
+    'iframe[name^="__privateStripeFrame"]',
+    'iframe[src*="js.stripe.com"]',
+    'iframe[src*="hooks.stripe.com"]',
+    'iframe[title*="card number" i]',
+    'iframe[title*="secure card" i]',
+    'iframe[title*="credit card" i]',
+    'iframe[src*="paypal.com"]',
+    'iframe[src*="braintreegateway.com"]',
+].join(',');
+
 class FocuzPassPageOverlay {
-    private controls = new Map<HTMLInputElement, FieldControl>();
-    private activeInput: HTMLInputElement | null = null;
+    private controls = new Map<HTMLElement, FieldControl>();
+    private activeInput: FillableControl | null = null;
     private activeControl: FieldControl | null = null;
     private popoverHost: HTMLDivElement | null = null;
     private saveHost: HTMLDivElement | null = null;
@@ -693,6 +812,8 @@ class FocuzPassPageOverlay {
     private lastCaptures = new WeakMap<HTMLFormElement, number>();
     private observer: MutationObserver | null = null;
     private controlState: ControlState = 'checking';
+    private dismissedFor: HTMLElement | null = null;
+    private remoteSourceFrameId: number | null = null;
 
     constructor(private readonly send: FocuzPassOverlayTransport = runtimeSendMessage) {}
 
@@ -708,9 +829,11 @@ class FocuzPassPageOverlay {
             childList: true,
             subtree: true,
             attributes: true,
-            attributeFilter: ['type', 'disabled', 'readonly', 'autocomplete', 'name', 'id', 'placeholder', 'aria-label'],
+            attributeFilter: ['type', 'disabled', 'readonly', 'autocomplete', 'name', 'id', 'placeholder', 'aria-label', 'aria-labelledby'],
         });
 
+        document.addEventListener('focusin', this.handleFocusIn, true);
+        window.setInterval(() => this.scan(), 1200);
         document.addEventListener('submit', this.handleSubmit, true);
         document.addEventListener('click', this.handlePotentialSubmitClick, true);
         document.addEventListener('pointerdown', this.handleOutsidePointer, true);
@@ -730,24 +853,47 @@ class FocuzPassPageOverlay {
         this.scanTimer = window.setTimeout(() => this.scan(), 140);
     };
 
+    private collectFillable(): FillableControl[] {
+        return Array.from(document.querySelectorAll<FillableControl>('input, textarea, select'))
+            .filter((control) => {
+                if (control.closest(`[${FIELD_HOST_ATTR}]`) || control.closest('#focuzpass-popover-host')) return false;
+                return classifyField(control) !== 'unknown';
+            });
+    }
+
+    private collectPaymentSlots(): HTMLElement[] {
+        return Array.from(document.querySelectorAll<HTMLElement>(PAYMENT_SLOT_SELECTOR))
+            .map((node) => {
+                if (node instanceof HTMLIFrameElement) {
+                    return (node.closest('.StripeElement, [data-stripe], [class*="Stripe"], form, label, div') || node.parentElement || node) as HTMLElement;
+                }
+                return node;
+            })
+            .filter((node, index, all) => node && all.indexOf(node) === index);
+    }
+
     private scan() {
-        const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input'))
-            .filter((input) => classifyField(input) !== 'unknown' && !['hidden', 'checkbox', 'radio', 'submit', 'button', 'reset', 'file', 'image', 'range', 'color'].includes(input.type));
-        const live = new Set(inputs);
-        for (const [input, control] of this.controls) {
-            if (!live.has(input) || !input.isConnected) {
+        const fillable = this.collectFillable();
+        const slots = this.collectPaymentSlots();
+        const live = new Set<HTMLElement>([...fillable, ...slots]);
+        for (const [target, control] of this.controls) {
+            if (!live.has(target) || !target.isConnected) {
                 control.host.remove();
-                this.controls.delete(input);
+                this.controls.delete(target);
             }
         }
-        for (const input of inputs) {
-            if (input.closest(`[${FIELD_HOST_ATTR}]`) || this.controls.has(input)) continue;
-            this.attachField(input);
+        for (const field of fillable) {
+            if (this.controls.has(field)) continue;
+            this.attachTarget(field);
+        }
+        for (const slot of slots) {
+            if (this.controls.has(slot) || fillable.some((field) => slot.contains(field))) continue;
+            this.attachTarget(slot, 'card-number');
         }
         this.schedulePosition();
     }
 
-    private attachField(input: HTMLInputElement) {
+    private attachTarget(target: HTMLElement, virtualRole?: FieldRole) {
         const host = document.createElement('div');
         host.setAttribute(FIELD_HOST_ATTR, '');
         host.style.cssText = 'all:initial;position:fixed;z-index:2147483645;width:26px;height:26px;display:none;';
@@ -759,13 +905,27 @@ class FocuzPassPageOverlay {
         button.setAttribute('aria-label', 'Open FocuzPass');
         button.title = 'FocuzPass';
         button.addEventListener('pointerdown', (event) => event.preventDefault());
-        button.addEventListener('click', () => void this.toggle(input));
+        button.addEventListener('click', () => void this.toggle(target));
+        if (isFillableControl(target)) {
+            target.addEventListener('focus', () => this.openFromField(target));
+            target.addEventListener('blur', () => {
+                if (this.dismissedFor === target) this.dismissedFor = null;
+            });
+        }
         shadow.append(style, button);
         document.documentElement.appendChild(host);
-        const control = { host, shadow, button };
-        this.controls.set(input, control);
-        this.updateControl(input, control);
+        const control = { host, shadow, button, target, virtualRole };
+        this.controls.set(target, control);
+        this.updateControl(target, control);
     }
+
+    private handleFocusIn = (event: FocusEvent) => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) return;
+        if (classifyField(target) === 'unknown') return;
+        if (!this.controls.has(target)) this.attachTarget(target);
+        this.openFromField(target);
+    };
 
     private refreshControlState = async () => {
         try {
@@ -782,14 +942,14 @@ class FocuzPassPageOverlay {
         for (const [input, control] of this.controls) this.updateControl(input, control);
     }
 
-    private updateControl(input: HTMLInputElement, control: FieldControl) {
-        const open = Boolean(this.popoverHost && this.activeInput === input);
+    private updateControl(_input: HTMLElement, control: FieldControl) {
+        const open = Boolean(this.popoverHost && this.activeControl === control);
         const ready = this.controlState === 'ready';
         control.button.className = `${ready ? 'is-ready' : 'is-locked'}${open ? ' is-open' : ''}`;
         control.button.setAttribute('aria-expanded', String(open));
         control.button.setAttribute('aria-label', ready ? 'Show matching FocuzPass items' : 'Unlock FocuzPass');
         control.button.innerHTML = ready
-            ? `<span class="control-chevron">${CHEVRON_ICON}</span><span class="control-mark" aria-hidden="true">F</span>`
+            ? `<span class="control-chevron">${CHEVRON_ICON}</span><span class="control-mark" aria-hidden="true">${FOCUZNOW_MARK_ICON}</span>`
             : `<span class="control-lock">${LOCK_ICON}</span>`;
     }
 
@@ -802,12 +962,13 @@ class FocuzPassPageOverlay {
     };
 
     private positionControls() {
-        for (const [input, control] of this.controls) {
-            if (!isVisibleInput(input)) {
+        for (const [target, control] of this.controls) {
+            const role = control.virtualRole || (isFillableControl(target) ? classifyField(target) : 'card-number');
+            if (!isVisibleTarget(target, role)) {
                 control.host.style.display = 'none';
                 continue;
             }
-            const rect = input.getBoundingClientRect();
+            const rect = target.getBoundingClientRect();
             const size = Math.max(22, Math.min(28, rect.height - 6));
             const width = this.controlState === 'ready' ? Math.max(38, size + 13) : size;
             control.host.style.width = `${width}px`;
@@ -819,14 +980,41 @@ class FocuzPassPageOverlay {
         if (this.popoverHost && this.activeInput) this.positionPopover();
     }
 
-    private async toggle(input: HTMLInputElement) {
-        if (this.popoverHost && this.activeInput === input) {
-            this.closePopover();
+    private shouldProxyPopover() {
+        return window !== window.top && (window.innerHeight < 220 || window.innerWidth < 280);
+    }
+
+    private openFromField(target: HTMLElement) {
+        if (this.dismissedFor === target) return;
+        if (this.popoverHost && this.activeControl?.target === target) return;
+        void this.openPopover(target);
+    }
+
+    private async toggle(target: HTMLElement) {
+        if (this.popoverHost && this.activeControl?.target === target) {
+            this.closePopover({ dismissed: true });
+            return;
+        }
+        void this.openPopover(target);
+    }
+
+    private async openPopover(target: HTMLElement) {
+        if (this.popoverHost && this.activeControl?.target === target) return;
+        if (this.shouldProxyPopover()) {
+            void chrome.runtime.sendMessage({
+                type: 'FOCUZPASS_OVERLAY_RELAY',
+                payloadType: 'FOCUZPASS_OVERLAY_OPEN',
+                frameId: 0,
+                payload: {
+                    role: this.controls.get(target)?.virtualRole || (isFillableControl(target) ? classifyField(target) : 'card-number'),
+                },
+            }).catch(() => undefined);
             return;
         }
         this.closePopover();
-        this.activeInput = input;
-        this.activeControl = this.controls.get(input) || null;
+        this.dismissedFor = null;
+        this.activeInput = isFillableControl(target) ? target : null;
+        this.activeControl = this.controls.get(target) || null;
         this.createPopover();
         this.updateControls();
         this.renderLoading();
@@ -888,9 +1076,10 @@ class FocuzPassPageOverlay {
             this.renderGate('Set up your vault', 'Create a master password before saving or filling logins.', 'Set up FocuzPass');
             return;
         }
-        const role = this.activeInput ? classifyField(this.activeInput) : 'unknown';
+        const role = this.activeControl?.virtualRole
+            || (this.activeInput ? classifyField(this.activeInput) : 'card-number');
         const matches = relevantItemsForRole(context.items || context.matches, role)
-            .filter((item) => Boolean(valueForControl(this.activeInput!, item)));
+            .filter((item) => !this.activeInput || Boolean(valueForControl(this.activeInput, item)));
         if (matches.length === 0) {
             this.renderEmpty(context.domain, role);
             return;
@@ -932,9 +1121,13 @@ class FocuzPassPageOverlay {
             const row = createElement('div', 'account-row');
             const button = createElement('button', 'account');
             button.type = 'button';
-            button.setAttribute('aria-label', `Fill ${match.identity} for ${match.title}`);
+            button.setAttribute('aria-label', `Fill ${match.title} (${itemSubtitle(match)})`);
             const brand = match.type === 'card' ? paymentBrand(match.cardNumber) : '';
-            const mark = createElement('span', `mark${brand ? ` card-brand is-${brand}` : ''}`, brand ? (brand === 'card' ? 'CARD' : brand.toUpperCase()) : match.mark || siteMark(match.title));
+            const mark = createElement('span', `mark${brand ? ` card-brand is-${brand}` : ''}${isIdentityKind(match) ? ' is-identity' : ''}`, brand ? (brand === 'card' ? 'CARD' : brand.toUpperCase()) : match.mark || siteMark(match.title));
+            if (isIdentityKind(match)) {
+                mark.replaceChildren();
+                appendIcon(mark, IDENTITY_ICON);
+            }
             if (favicon && match.type === 'login') {
                 const image = createElement('img', 'favicon');
                 image.alt = '';
@@ -999,9 +1192,18 @@ class FocuzPassPageOverlay {
     }
 
     private fillMatch(match: AutofillItem) {
+        if (this.remoteSourceFrameId != null) {
+            void chrome.runtime.sendMessage({
+                type: 'FOCUZPASS_OVERLAY_RELAY',
+                payloadType: 'FOCUZPASS_OVERLAY_FILL',
+                frameId: this.remoteSourceFrameId,
+                payload: { item: match },
+            }).catch(() => undefined);
+            this.closePopover();
+            return;
+        }
         const activeInput = this.activeInput;
-        if (!activeInput) return;
-        const scope = activeInput.form || activeInput.closest('form') || activeInput.closest('[role="dialog"], main, section, article') || document;
+        const scope = (activeInput && (activeInput.form || activeInput.closest('form') || activeInput.closest('[role="dialog"], main, section, article'))) || document;
         const controls = Array.from(scope.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea'));
         for (const control of controls) {
             if (control instanceof HTMLInputElement && (!isRenderableInput(control) || ['hidden', 'checkbox', 'radio', 'submit', 'button', 'file'].includes(control.type))) continue;
@@ -1021,18 +1223,18 @@ class FocuzPassPageOverlay {
             const passwordInput = controls.find((control): control is HTMLInputElement => control instanceof HTMLInputElement && classifyField(control) === 'password');
             if (passwordInput) fillRelatedPasswordConfirmation(passwordInput, match.password);
         }
-        activeInput.focus({ preventScroll: true });
+        activeInput?.focus({ preventScroll: true });
         void this.send<null>({ type: 'FOCUZPASS_MARK_USED', id: match.id }).catch(() => undefined);
         this.closePopover();
-        if (match.type === 'login') window.queueMicrotask(() => {
+        if (match.type === 'login' && activeInput) window.queueMicrotask(() => {
             const passwordInput = controls.find((control): control is HTMLInputElement => control instanceof HTMLInputElement && classifyField(control) === 'password');
-            submitFilledLogin(passwordInput || activeInput);
+            submitFilledLogin(passwordInput || (activeInput instanceof HTMLInputElement ? activeInput : passwordInput!));
         });
     }
 
     private async generateAndFill() {
         const passwordInput = this.activeInput;
-        if (!passwordInput) return;
+        if (!(passwordInput instanceof HTMLInputElement)) return;
         try {
             const password = await this.send<string>({ type: 'FOCUZPASS_GENERATE', length: 20 });
             setInputValue(passwordInput, password);
@@ -1045,8 +1247,10 @@ class FocuzPassPageOverlay {
     }
 
     private positionPopover() {
-        if (!this.popoverHost || !this.activeInput) return;
-        const rect = this.activeInput.getBoundingClientRect();
+        if (!this.popoverHost) return;
+        const anchor = this.activeControl?.target || this.activeInput;
+        if (!anchor) return;
+        const rect = anchor.getBoundingClientRect();
         const width = Math.min(392, window.innerWidth - 16);
         this.popoverHost.style.width = `${width}px`;
         const panelHeight = Math.min(this.popoverHost.offsetHeight || 116, window.innerHeight - 16);
@@ -1059,12 +1263,15 @@ class FocuzPassPageOverlay {
         this.popoverHost.style.top = `${top}px`;
     }
 
-    private closePopover() {
+    private closePopover(opts?: { dismissed?: boolean }) {
+        const current = this.activeControl?.target || this.activeInput;
         this.contextRequest += 1;
         this.popoverHost?.remove();
         this.popoverHost = null;
         this.activeInput = null;
         this.activeControl = null;
+        if (opts?.dismissed) this.dismissedFor = current;
+        this.remoteSourceFrameId = null;
         this.updateControls();
     }
 
@@ -1072,6 +1279,8 @@ class FocuzPassPageOverlay {
         const target = event.target as Node | null;
         if (!this.popoverHost || !target) return;
         if (target === this.popoverHost || this.popoverHost.contains(target)) return;
+        if (this.activeControl?.target && (target === this.activeControl.target || this.activeControl.target.contains(target))) return;
+        if (this.activeInput && (target === this.activeInput || this.activeInput.contains(target))) return;
         for (const control of this.controls.values()) {
             if (target === control.host || control.host.contains(target)) return;
         }
@@ -1080,8 +1289,8 @@ class FocuzPassPageOverlay {
 
     private handleKeydown = (event: KeyboardEvent) => {
         if (event.key !== 'Escape' || !this.popoverHost) return;
-        const returnFocus = this.activeControl?.button;
-        this.closePopover();
+        const returnFocus = this.activeInput || this.activeControl?.button;
+        this.closePopover({ dismissed: true });
         returnFocus?.focus();
     };
 
@@ -1142,11 +1351,28 @@ class FocuzPassPageOverlay {
         this.checkPendingSoon();
     };
 
-    private handleRuntimeMessage = (message: { type?: string }) => {
-        if (message?.type !== 'FOCUZPASS_LOCKED') return;
-        this.controlState = 'locked';
-        this.closePopover();
-        this.updateControls();
+    private handleRuntimeMessage = (message: { type?: string; role?: FieldRole; item?: AutofillItem; sourceFrameId?: number }) => {
+        if (message?.type === 'FOCUZPASS_LOCKED') {
+            this.controlState = 'locked';
+            this.closePopover();
+            this.updateControls();
+            return;
+        }
+        if (message?.type === 'FOCUZPASS_OVERLAY_OPEN' && window === window.top) {
+            this.remoteSourceFrameId = Number.isInteger(message.sourceFrameId) ? Number(message.sourceFrameId) : null;
+            const slot = this.collectPaymentSlots()[0];
+            if (slot) {
+                if (!this.controls.has(slot)) this.attachTarget(slot, message.role || 'card-number');
+                void this.openPopover(slot);
+            }
+            return;
+        }
+        if (message?.type === 'FOCUZPASS_OVERLAY_FILL' && message.item) {
+            this.activeInput = document.activeElement && isFillableControl(document.activeElement)
+                ? document.activeElement
+                : this.collectFillable()[0] || null;
+            this.fillMatch(message.item);
+        }
     };
 
     private async checkPending() {

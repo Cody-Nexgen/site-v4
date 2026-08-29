@@ -90,6 +90,9 @@ export async function fetchPublicFocusProfile(
 }
 
 export function publicProfileUrl(username: string): string {
-    const base = 'https://focuznow.com';
-    return `${base}/u/${encodeURIComponent(username)}`;
+    const handle = encodeURIComponent(username);
+    if (typeof window !== 'undefined' && window.location.protocol.startsWith('http')) {
+        return `${window.location.origin}/u/${handle}`;
+    }
+    return `https://focuznow.com/u/${handle}`;
 }

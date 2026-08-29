@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, UserPlus, Users, Trophy } from 'lucide-react';
+import { Check, Loader2, Trophy, UserPlus, Users, X } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
+import { publicProfileUrl } from '../lib/progressionApi';
 import {
     getFriendsWeeklyLeaderboard,
+    leaderboardFromFriends,
     listMyFriends,
     respondFriendRequest,
     sendFriendRequest,
@@ -17,11 +19,9 @@ import {
 } from '../lib/profileAvatar';
 
 const CARD_CLASS =
-    'surface-card rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-surface-raised)]';
+    'surface-card rounded-2xl bg-[var(--dashboard-surface-raised)]';
 const PRIMARY_BTN_CLASS =
     'px-4 py-2 rounded-xl bg-[var(--dashboard-text)] text-[var(--dashboard-bg)] text-xs font-semibold hover:opacity-90';
-const GHOST_BTN_CLASS =
-    'px-4 py-2 rounded-xl bg-[var(--dashboard-interactive)] text-[var(--dashboard-text-secondary)] text-xs font-semibold hover:bg-[var(--dashboard-interactive-hover)]';
 
 function Avatar({ url, name }: { url: string | null; name: string }) {
     const initial = name.charAt(0).toUpperCase() || '?';
@@ -29,12 +29,42 @@ function Avatar({ url, name }: { url: string | null; name: string }) {
     return <div className={PROFILE_AVATAR_FALLBACK_CLASS}>{initial}</div>;
 }
 
+function openPublicProfile(username: string) {
+    const url = publicProfileUrl(username);
+    if (typeof window === 'undefined') return;
+    if (window.location.protocol.startsWith('http')) {
+        window.location.assign(url);
+        return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function FriendRow({ friend }: { friend: FriendEntry }) {
     const endsAt = friend.sessionEndsAt ? new Date(friend.sessionEndsAt) : null;
     const focusing = friend.isFocusing && endsAt && endsAt.getTime() > Date.now();
+    const canOpen = friend.publicProfileEnabled && friend.username.length >= 3;
 
     return (
-        <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--dashboard-interactive)]">
+        <div
+            className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                canOpen
+                    ? 'cursor-pointer hover:bg-[var(--dashboard-interactive)]'
+                    : 'hover:bg-[var(--dashboard-interactive)]'
+            }`}
+            role={canOpen ? 'link' : undefined}
+            tabIndex={canOpen ? 0 : undefined}
+            onClick={() => {
+                if (canOpen) openPublicProfile(friend.username);
+            }}
+            onKeyDown={(event) => {
+                if (!canOpen) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openPublicProfile(friend.username);
+                }
+            }}
+            title={canOpen ? `Open @${friend.username}'s public focus profile` : undefined}
+        >
             <div className="relative shrink-0">
                 <Avatar url={friend.avatarUrl} name={friend.displayName} />
                 {focusing && (
@@ -45,6 +75,7 @@ function FriendRow({ friend }: { friend: FriendEntry }) {
                 <p className="truncate text-sm font-medium text-[var(--dashboard-text)]">{friend.displayName}</p>
                 <p className="truncate text-xs text-[var(--dashboard-text-muted)]">
                     @{friend.username} · Lv <span className="tabular-nums">{friend.level}</span>
+                    {canOpen ? ' · Public profile' : ''}
                 </p>
             </div>
             <div className="shrink-0 text-right">
@@ -88,13 +119,19 @@ export default function FriendsTab() {
             listMyFriends(supabase, tokens),
             getFriendsWeeklyLeaderboard(supabase, tokens),
         ]);
+        const nextFriends = friendsRes.ok ? friendsRes.friends : [];
+        const friendNames = new Set(nextFriends.map((friend) => friend.username));
         if (friendsRes.ok) {
-            setFriends(friendsRes.friends);
+            setFriends(nextFriends);
             setPending(friendsRes.pending);
         } else {
             setError(friendsRes.error ?? 'Could not load friends');
         }
-        if (lbRes.ok) setLeaderboard(lbRes.leaderboard);
+        const rpcBoard = lbRes.ok ? lbRes.leaderboard.filter((entry) => entry.isMe || friendNames.has(entry.username)) : [];
+        setLeaderboard(rpcBoard.length > 0 ? rpcBoard : leaderboardFromFriends(nextFriends));
+        if (!lbRes.ok && !friendsRes.ok) {
+            setError(lbRes.error ?? friendsRes.error ?? 'Could not load social data');
+        }
         setLoading(false);
     }, [session, tokens]);
 
@@ -177,24 +214,14 @@ export default function FriendsTab() {
                 {notice && <p className="mt-2 text-xs text-emerald-500">{notice}</p>}
             </div>
 
-            <div className={CARD_CLASS}>
-                <div className="flex items-center gap-2 px-4 pb-2 pt-4">
-                    <h3 className="text-sm font-semibold text-[var(--dashboard-text)]">Incoming requests</h3>
-                    {pending.length > 0 && (
+            {pending.length > 0 && (
+                <div className={CARD_CLASS}>
+                    <div className="flex items-center gap-2 px-4 pb-2 pt-4">
+                        <h3 className="text-sm font-semibold text-[var(--dashboard-text)]">Incoming requests</h3>
                         <span className="min-w-[1.25rem] rounded-full bg-[var(--dashboard-text)] px-1.5 py-0.5 text-center text-[10px] font-bold tabular-nums text-[var(--dashboard-bg)]">
                             {pending.length}
                         </span>
-                    )}
-                </div>
-                {loading ? (
-                    <div className="flex justify-center py-8">
-                        <Loader2 className="animate-spin text-[var(--dashboard-text-muted)]" size={18} />
                     </div>
-                ) : pending.length === 0 ? (
-                    <p className="px-4 pb-4 text-xs text-[var(--dashboard-text-muted)]">
-                        When someone adds you, Accept / Decline show up here.
-                    </p>
-                ) : (
                     <div className="divide-y divide-[var(--dashboard-border)]">
                         {pending.map((p) => (
                             <div
@@ -209,22 +236,24 @@ export default function FriendsTab() {
                                 <button
                                     type="button"
                                     onClick={() => void handleRespond(p.friendshipId, true)}
-                                    className={`${PRIMARY_BTN_CLASS} shrink-0`}
+                                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                                    aria-label={`Accept request from ${p.displayName}`}
                                 >
-                                    Accept
+                                    <Check size={16} strokeWidth={2.5} />
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => void handleRespond(p.friendshipId, false)}
-                                    className={`${GHOST_BTN_CLASS} shrink-0 text-red-400 hover:text-red-300`}
+                                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                                    aria-label={`Decline request from ${p.displayName}`}
                                 >
-                                    Decline
+                                    <X size={16} strokeWidth={2.5} />
                                 </button>
                             </div>
                         ))}
                     </div>
-                )}
-            </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
                 <div className={CARD_CLASS}>
@@ -257,9 +286,13 @@ export default function FriendsTab() {
                 <div className={CARD_CLASS}>
                     <div className="px-4 pb-2 pt-4">
                         <h3 className="text-sm font-semibold text-[var(--dashboard-text)]">Weekly leaderboard</h3>
-                        <p className="mt-0.5 text-xs text-[var(--dashboard-text-muted)]">Focus minutes this week</p>
+                        <p className="mt-0.5 text-xs text-[var(--dashboard-text-muted)]">Focus minutes this week · friends only</p>
                     </div>
-                    {leaderboard.length === 0 ? (
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="animate-spin text-[var(--dashboard-text-muted)]" size={20} />
+                        </div>
+                    ) : leaderboard.length === 0 ? (
                         <div className="flex flex-col items-center px-6 py-12 text-center">
                             <Trophy size={24} className="text-[var(--dashboard-text-muted)]" />
                             <p className="mt-3 text-sm text-[var(--dashboard-text-muted)]">

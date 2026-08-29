@@ -23,3 +23,53 @@ html[data-dashboard-theme="light"] .focuz-dashboard {
   background: var(--dashboard-bg, var(--fz-bg, #f7f7f8));
   color: var(--dashboard-text, var(--fz-text, #18181b));
 }
+
+/*
+ * The marketing page used to load Tailwind Play CDN, which paints a second
+ * white rim on every card/input. Match the extension dashboard: no global
+ * outline, and form controls keep only the token border the components set.
+ */
+html.focuz-web-dashboard,
+html.focuz-web-dashboard body,
+html.focuz-web-dashboard #root {
+  outline: none;
+}
+
+html.focuz-web-dashboard *,
+html.focuz-web-dashboard *::before,
+html.focuz-web-dashboard *::after {
+  outline-color: transparent;
+}
+
+html.focuz-web-dashboard .focuz-dashboard :where(button, input, textarea, select):focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.28);
+  outline-offset: 1px;
+}
+
+html.focuz-web-dashboard[data-dashboard-theme="light"] .focuz-dashboard :where(button, input, textarea, select):focus-visible {
+  outline-color: rgba(24, 24, 27, 0.38);
+}
+
+html.focuz-web-dashboard .focuz-dashboard :where(input, textarea, select) {
+  outline: none;
+  box-shadow: none;
+}
+
+html.focuz-web-dashboard .focuz-dashboard .surface-card,
+html.focuz-web-dashboard .focuz-dashboard .glass-edge-card,
+html.focuz-web-dashboard .focuz-dashboard .vault-shell,
+html.focuz-web-dashboard .focuz-dashboard .vault-generator,
+html.focuz-web-dashboard .focuz-dashboard .vault-detail,
+html.focuz-web-dashboard .focuz-dashboard .vault-companion-card,
+html.focuz-web-dashboard .focuz-dashboard .vault-field input,
+html.focuz-web-dashboard .focuz-dashboard .vault-field textarea,
+html.focuz-web-dashboard .focuz-dashboard .vault-search input {
+  box-shadow: none;
+}
+
+html.focuz-web-dashboard .focuz-pass input,
+html.focuz-web-dashboard .focuz-pass textarea,
+html.focuz-web-dashboard .focuz-pass select {
+  outline: none;
+  appearance: none;
+}

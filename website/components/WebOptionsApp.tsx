@@ -29,6 +29,7 @@ export default function WebOptionsApp({ onLogout }: Props) {
         const { bindSiteSupabaseClient } = await import('@focuz/lib/supabase');
         const { initializeDashboardColorMode } = await import('@focuz/lib/themes');
 
+        document.documentElement.classList.add('focuz-web-dashboard');
         installWebChromeShim();
         bindSiteSupabaseClient(siteSupabase as never, {
           url: supabaseUrl,

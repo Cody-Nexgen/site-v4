@@ -86,7 +86,17 @@
                 "<all_urls>"
             ],
             "js": [
-                "src/content/focuzPassOverlayEntry.ts",
+                "src/content/focuzPassOverlayEntry.ts"
+            ],
+            "run_at": "document_idle",
+            "all_frames": true,
+            "match_about_blank": true
+        },
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
                 "src/content/draggableTimer.ts",
                 "src/content/inAppBlock.ts"
             ],

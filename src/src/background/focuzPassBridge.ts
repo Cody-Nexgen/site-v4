@@ -332,5 +332,6 @@ export function isFocuzPassMessage(type: unknown): boolean {
     return typeof type === 'string'
         && type.startsWith('FOCUZPASS_')
         && type !== 'FOCUZPASS_LOCKED'
-        && type !== 'FOCUZPASS_ACCESS_CHANGED';
+        && type !== 'FOCUZPASS_ACCESS_CHANGED'
+        && !type.startsWith('FOCUZPASS_OVERLAY_');
 }

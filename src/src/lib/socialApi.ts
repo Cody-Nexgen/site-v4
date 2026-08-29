@@ -11,6 +11,7 @@ export type FriendEntry = {
     sessionEndsAt: string | null;
     weeklyFocusMinutes: number;
     level: number;
+    publicProfileEnabled: boolean;
 };
 
 export type PendingFriendRequest = {
@@ -19,6 +20,68 @@ export type PendingFriendRequest = {
     displayName: string;
     avatarUrl: string | null;
 };
+
+function asRecord(item: unknown): Record<string, unknown> {
+    return item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+}
+
+function asBool(value: unknown): boolean {
+    return value === true || value === 'true' || value === 1;
+}
+
+function normalizeFriends(raw: unknown): FriendEntry[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((item) => {
+            const row = asRecord(item);
+            const userId = String(row.userId ?? row.user_id ?? '');
+            const username = String(row.username ?? '').replace(/^@/, '');
+            if (!userId && !username) return null;
+            return {
+                userId,
+                username: username || 'user',
+                displayName: String(row.displayName ?? row.display_name ?? username ?? 'FocuzNow user'),
+                avatarUrl: (row.avatarUrl ?? row.avatar_url ?? null) as string | null,
+                streak: Number(row.streak ?? 0) || 0,
+                isFocusing: asBool(row.isFocusing ?? row.is_focusing),
+                sessionEndsAt: (row.sessionEndsAt ?? row.session_ends_at ?? null) as string | null,
+                weeklyFocusMinutes: Number(row.weeklyFocusMinutes ?? row.weekly_focus_minutes ?? 0) || 0,
+                level: Number(row.level ?? 1) || 1,
+                publicProfileEnabled: asBool(row.publicProfileEnabled ?? row.public_profile_enabled),
+            };
+        })
+        .filter((item): item is FriendEntry => item != null);
+}
+
+function normalizeLeaderboard(raw: unknown): LeaderboardEntry[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((item) => {
+            const row = asRecord(item);
+            const username = String(row.username ?? '').replace(/^@/, '');
+            if (!username) return null;
+            return {
+                username,
+                displayName: String(row.displayName ?? row.display_name ?? username),
+                avatarUrl: (row.avatarUrl ?? row.avatar_url ?? null) as string | null,
+                weeklyFocusMinutes: Number(row.weeklyFocusMinutes ?? row.weekly_focus_minutes ?? 0) || 0,
+                isMe: asBool(row.isMe ?? row.is_me),
+            };
+        })
+        .filter((item): item is LeaderboardEntry => item != null);
+}
+
+export function leaderboardFromFriends(friends: FriendEntry[]): LeaderboardEntry[] {
+    return friends
+        .map((friend) => ({
+            username: friend.username,
+            displayName: friend.displayName,
+            avatarUrl: friend.avatarUrl,
+            weeklyFocusMinutes: friend.weeklyFocusMinutes,
+            isMe: false,
+        }))
+        .sort((a, b) => b.weeklyFocusMinutes - a.weeklyFocusMinutes || a.displayName.localeCompare(b.displayName));
+}
 
 function normalizePending(raw: unknown): PendingFriendRequest[] {
     if (!Array.isArray(raw)) return [];
@@ -92,7 +155,7 @@ export async function listMyFriends(
     if (!row?.ok) return { ok: false, friends: [], pending: [], error: row?.error ?? 'LOAD_FAILED' };
     return {
         ok: true,
-        friends: row.friends ?? [],
+        friends: normalizeFriends(row.friends),
         pending: normalizePending(row.pending),
     };
 }
@@ -107,7 +170,7 @@ export async function getFriendsWeeklyLeaderboard(
     if (error) return { ok: false, leaderboard: [], error: error.message };
     const row = data as { ok?: boolean; leaderboard?: LeaderboardEntry[]; error?: string } | null;
     if (!row?.ok) return { ok: false, leaderboard: [], error: row?.error ?? 'LOAD_FAILED' };
-    return { ok: true, leaderboard: row.leaderboard ?? [] };
+    return { ok: true, leaderboard: normalizeLeaderboard(row.leaderboard) };
 }
 
 export async function heartbeatFocusSession(
