@@ -900,9 +900,22 @@ function itemValues(item: AutofillItem): { roles: Partial<Record<FieldRole, stri
     return { roles, fields };
 }
 
+/**
+ * An "email" field on a sign-in form (one with a password field, not a signup form) takes whatever
+ * the account signs in with, so a saved login whose username isn't an email still matches and fills.
+ */
+function fillRole(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): FieldRole {
+    const role = classifyField(control);
+    if (role !== 'email' || !(control instanceof HTMLInputElement)) return role;
+    const form = control.form || control.closest('form');
+    const password = form ? passwordInputFor(form) : null;
+    if (!form || !password || isAccountCreationForm(form, password)) return role;
+    return 'username';
+}
+
 function valueForControl(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, item: AutofillItem): string {
     const { roles, fields } = itemValues(item);
-    const role = classifyField(control);
+    const role = fillRole(control);
     if (roles[role]) return roles[role] || '';
     const descriptor = normalizedKey(fieldDescriptor(control));
     const direct = Object.entries(fields).find(([key]) => {
@@ -1075,10 +1088,16 @@ function debugPerf(label: string, startMark: string) {
     }
 }
 
-/** Session suppression for auto-open — per-origin since sessionStorage is origin-scoped. */
+/**
+ * Closing the panel quiets auto-open on this page for a while. It used to quiet the whole site for
+ * the rest of the tab's session, so one Esc on a site meant the panel never opened there again.
+ */
+const DISMISS_MS = 30 * 60_000;
+
 function readDismissed(): boolean {
     try {
-        return window.sessionStorage.getItem(DISMISS_KEY) === '1';
+        const saved = JSON.parse(window.sessionStorage.getItem(DISMISS_KEY) || 'null') as { path?: unknown; at?: unknown } | null;
+        return Boolean(saved && saved.path === location.pathname && typeof saved.at === 'number' && Date.now() - saved.at < DISMISS_MS);
     } catch {
         return false;
     }
@@ -1086,7 +1105,7 @@ function readDismissed(): boolean {
 
 function writeDismissed() {
     try {
-        window.sessionStorage.setItem(DISMISS_KEY, '1');
+        window.sessionStorage.setItem(DISMISS_KEY, JSON.stringify({ path: location.pathname, at: Date.now() }));
     } catch {
         /* ignore */
     }
@@ -1600,7 +1619,7 @@ class FocuzPassPageOverlay {
     private matchesFor(target: HTMLElement, context: PageContext | null): AutofillItem[] {
         if (!context || context.state !== 'ready') return [];
         const role = this.controls.get(target)?.virtualRole
-            || (isFillableControl(target) ? classifyField(target) : 'card-number');
+            || (isFillableControl(target) ? fillRole(target) : 'card-number');
         return relevantItemsForRole(context.items || context.matches, role)
             .filter((item) => !isFillableControl(target) || Boolean(valueForControl(target as FillableControl, item)));
     }
@@ -1886,7 +1905,7 @@ class FocuzPassPageOverlay {
             return;
         }
         const role = this.activeControl?.virtualRole
-            || (this.activeInput ? classifyField(this.activeInput) : 'card-number');
+            || (this.activeInput ? fillRole(this.activeInput) : 'card-number');
         const matches = relevantItemsForRole(context.items || context.matches, role)
             .filter((item) => !this.activeInput || Boolean(valueForControl(this.activeInput, item)));
         // A page waiting for a passkey sign-in: FocuzPass's passkeys for it go first.

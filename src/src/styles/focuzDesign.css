@@ -2738,6 +2738,8 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 }
 
 .focuz-pass-ready .vault-category-summary svg { color: var(--fz-text-2); }
+.focuz-pass-ready .vault-category-summary > span:first-of-type { overflow: hidden; color: var(--fz-text-1); text-overflow: ellipsis; white-space: nowrap; }
+.focuz-pass-ready .vault-list-count { color: var(--fz-text-4); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .focuz-pass-ready .vault-list-actions > button { position: relative; }
 .focuz-pass-ready .vault-list-actions > button > small {
     position: absolute;
@@ -2822,16 +2824,15 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
     display: grid;
     height: 28px;
     flex: none;
-    grid-template-columns: 34px 42px minmax(200px, 1.6fr) minmax(100px, 0.65fr) minmax(110px, 0.75fr) minmax(90px, 0.6fr) 24px;
+    grid-template-columns: 34px 42px minmax(200px, 1fr) clamp(100px, 12%, 150px) clamp(110px, 14%, 180px) clamp(90px, 11%, 140px) 24px;
     align-items: center;
     gap: 10px;
-    border-block: 1px solid var(--fz-border);
+    border-bottom: 1px solid var(--fz-border);
     padding: 0 16px;
     color: var(--fz-text-4);
-    font-size: 9px;
-    font-weight: 650;
-    letter-spacing: 0.055em;
-    
+    font-size: 10.5px;
+    font-weight: 560;
+    letter-spacing: 0.01em;
 }
 
 .focuz-pass-ready .vault-library-layout .vault-list-scroll {
@@ -2840,7 +2841,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 
 .focuz-pass-ready .vault-library-layout .vault-row {
     display: grid;
-    grid-template-columns: 34px 42px minmax(200px, 1.6fr) minmax(100px, 0.65fr) minmax(110px, 0.75fr) minmax(90px, 0.6fr) 24px;
+    grid-template-columns: 34px 42px minmax(200px, 1fr) clamp(100px, 12%, 150px) clamp(110px, 14%, 180px) clamp(90px, 11%, 140px) 24px;
     align-items: center;
     gap: 10px;
 }
@@ -2957,6 +2958,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
     }
 
     .vault-library-columns { padding-inline: 10px; }
+    .focuz-pass-ready .vault-list-count { display: none; }
     .focuz-pass-ready .vault-library-layout .vault-list-scroll { padding-inline: 8px; }
 }
 
@@ -3011,6 +3013,20 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 .vault-command-menu__identity strong { overflow: hidden; color: var(--fz-text-1); font-size: 11.5px; font-weight: 640; letter-spacing: -0.015em; text-overflow: ellipsis; white-space: nowrap; }
 .vault-command-menu__identity small { overflow: hidden; color: var(--fz-text-4); font-size: 9px; font-weight: 480; text-overflow: ellipsis; white-space: nowrap; }
 .vault-command-menu__identity > svg { color: var(--fz-text-4); }
+
+/* Help menu: the short "who can read your vault" note. */
+.vault-help-privacy {
+    display: grid;
+    max-width: 280px;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 9px;
+    padding: 6px 10px 7px;
+}
+.vault-help-privacy > svg { margin-top: 1px; color: var(--fz-text-3); }
+.vault-help-privacy > span { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.vault-help-privacy strong { color: var(--fz-text-1); font-size: 12px; font-weight: 600; letter-spacing: -0.01em; }
+.vault-help-privacy small { color: var(--fz-text-3); font-size: 11px; line-height: 1.45; }
+.focuz-pass-ready .vault-help.is-active { color: var(--fz-text-1); }
 
 .vault-command-menu__group,
 .vault-command-menu__vaults {
@@ -3300,6 +3316,11 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 
 .vault-editor-field .vault-address-autocomplete { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 6px; margin-top: 2px; color: var(--fz-text-2); }
 .vault-editor-field .vault-address-autocomplete > input { padding-top: 0; }
+.vault-editor-field .vault-address-menu { left: -26px; width: min(420px, calc(100vw - 90px)); }
+.vault-address-menu-heading { padding: 4px 8px 6px; color: var(--fz-text-4); font-size: 10.5px; font-weight: 560; }
+.vault-editor-field .vault-address-menu > button { grid-template-columns: 16px minmax(0, 1fr); }
+.vault-editor-field .vault-address-menu > button > svg { color: var(--fz-text-3); }
+.vault-editor-field .vault-address-menu > button.is-active { background: var(--fz-bg-active); color: var(--fz-text-1); }
 
 @media (max-width: 760px) {
     .focuz-pass-ready .vault-toolbar .vault-back-button span { display: none; }
@@ -3995,8 +4016,8 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 }
 
 .focuz-pass-ready .vault-list-toolbar {
-    height: 45px;
-    padding: 0 12px 0 15px;
+    height: 40px;
+    padding: 0 12px 0 16px;
 }
 
 .focuz-pass-ready .vault-category-button {

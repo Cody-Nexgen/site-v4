@@ -34,20 +34,31 @@ function isLight(hex: string) {
     return 0.299 * r + 0.587 * g + 0.114 * b > 170;
 }
 
-export function SourceMark({ source, size = 36 }: { source: ImportSource; size?: number }) {
+/** White layers cut shapes out of a mark; in one colour they take the tile's colour instead. */
+function isWhite(fill: string) {
+    return /^(white|#fff|#ffffff)$/i.test(fill.trim());
+}
+
+/**
+ * An app's mark. In the picker grid it's a one-colour glyph on a neutral tile (a full grid of brand
+ * colours turned into a rainbow next to FocuzNow's own tiles); once one app is chosen, its brand
+ * colour shows. The outline is a theme token so white and black tiles show in both themes.
+ */
+export function SourceMark({ source, size = 36, tone = 'brand' }: { source: ImportSource; size?: number; tone?: 'brand' | 'mono' }) {
     const mark = source.mark ? BRAND_MARKS[source.mark] : undefined;
-    const ring = 'inset 0 0 0 1px oklch(1 0 0 / 0.1)';
+    const ring = 'inset 0 0 0 1px var(--fz-border-strong)';
     if (mark) {
+        const mono = tone === 'mono';
         return (
             <span
                 aria-hidden
-                className="flex shrink-0 items-center justify-center"
-                style={{ width: size, height: size, borderRadius: size * 0.26, background: mark.color, boxShadow: ring }}
+                className={`flex shrink-0 items-center justify-center${mono ? ' bg-[var(--fz-bg-active)] text-[var(--fz-text-2)] transition-colors group-hover:text-[var(--fz-text-1)]' : ''}`}
+                style={{ width: size, height: size, borderRadius: size * 0.26, background: mono ? undefined : mark.color, boxShadow: ring }}
             >
-                <svg viewBox={mark.viewBox ?? '0 0 24 24'} width={size * 0.54} height={size * 0.54} fill={isLight(mark.color) ? '#16161a' : '#fff'}>
+                <svg viewBox={mark.viewBox ?? '0 0 24 24'} width={size * 0.54} height={size * 0.54} fill={mono ? 'currentColor' : isLight(mark.color) ? '#16161a' : '#fff'}>
                     {mark.layers
                         ? mark.layers.map((layer, i) => (
-                              <path key={i} d={layer.d} fill={layer.fill} fillRule={layer.evenOdd ? 'evenodd' : undefined} clipRule={layer.evenOdd ? 'evenodd' : undefined} />
+                              <path key={i} d={layer.d} fill={mono ? (isWhite(layer.fill) ? 'var(--fz-bg-active)' : 'currentColor') : layer.fill} fillRule={layer.evenOdd ? 'evenodd' : undefined} clipRule={layer.evenOdd ? 'evenodd' : undefined} />
                           ))
                         : <path d={mark.path} />}
                 </svg>
@@ -58,7 +69,7 @@ export function SourceMark({ source, size = 36 }: { source: ImportSource; size?:
         <span
             aria-hidden
             className="flex shrink-0 items-center justify-center bg-[var(--fz-bg-active)] font-semibold tracking-[-0.02em] text-[var(--fz-text-2)]"
-            style={{ width: size, height: size, borderRadius: size * 0.26, fontSize: size * (source.letters && source.letters.length > 2 ? 0.26 : 0.34), boxShadow: 'inset 0 0 0 1px var(--fz-border-strong)' }}
+            style={{ width: size, height: size, borderRadius: size * 0.26, fontSize: size * (source.letters && source.letters.length > 2 ? 0.26 : 0.34), boxShadow: ring }}
         >
             {source.letters}
         </span>
@@ -252,7 +263,7 @@ export function ImportPasswords({
                                     onClick={() => setStep({ kind: 'guide', source })}
                                     className="group flex items-center gap-3 rounded-[10px] border border-[var(--fz-border)] bg-[var(--fz-bg-panel)] p-2.5 text-left transition-colors hover:border-[var(--fz-border-strong)] hover:bg-[var(--fz-bg-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fz-focus-ring)]"
                                 >
-                                    <SourceMark source={source} />
+                                    <SourceMark source={source} tone="mono" />
                                     <span className="min-w-0">
                                         <span className="block truncate text-[13.5px] font-medium text-[var(--fz-text-1)]">{source.name}</span>
                                         <span className="block truncate text-[12px] text-[var(--fz-text-4)]">{source.format}</span>

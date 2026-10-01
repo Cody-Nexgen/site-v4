@@ -727,16 +727,6 @@ function VaultProfileAvatar({ avatarUrl, fallbackUrl, name }: { avatarUrl?: stri
     );
 }
 
-function ListSearchIcon({ size = 16 }: { size?: number }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path d="M2.5 4h1M2.5 8h1M6 4h3.5M6 8h2" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" />
-            <circle cx="11.4" cy="10.6" r="3.15" stroke="currentColor" strokeWidth="1.55" />
-            <path d="m13.75 13 2 2" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" />
-        </svg>
-    );
-}
-
 function SortItemsIcon({ size = 16 }: { size?: number }) {
     return (
         <svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -1394,26 +1384,106 @@ function InternationalPhoneInput({ value, onChange, onBlur, invalid }: {
     );
 }
 
-function AddressAutocompleteInput({ value, onChange, onBlur, invalid }: {
+/** An address already saved in another identity item, offered while typing a new one. */
+type SavedAddress = { label: string; parts: Record<string, string> };
+
+const ADDRESS_PART_KEYS = ['addressLine1', 'addressLine2', 'city', 'region', 'postalCode', 'country', 'countryCode'] as const;
+
+/** Addresses from the vault's own identity items. Nothing typed here leaves this device. */
+function savedAddressesFrom(items: VaultItem[], excludeId?: string): SavedAddress[] {
+    const seen = new Set<string>();
+    const out: SavedAddress[] = [];
+    for (const item of items) {
+        if (item.id === excludeId || item.type !== 'custom' || item.kind !== 'identity' || item.deletedAt) continue;
+        const fields = item.fields || {};
+        const label = (fields.address || [fields.addressLine1, fields.addressLine2, fields.city, fields.region, fields.postalCode, fields.country].filter(Boolean).join(', ')).trim();
+        const key = label.toLowerCase();
+        if (!label || seen.has(key)) continue;
+        seen.add(key);
+        const parts: Record<string, string> = {};
+        for (const part of ADDRESS_PART_KEYS) parts[part] = fields[part] || '';
+        out.push({ label, parts });
+    }
+    return out;
+}
+
+function AddressAutocompleteInput({ value, onChange, onBlur, invalid, saved = [] }: {
     value: string;
-    onChange: (value: string) => void;
+    onChange: (value: string, parts?: Record<string, string>) => void;
     onBlur: () => void;
     invalid?: boolean;
+    saved?: SavedAddress[];
 }) {
+    const [open, setOpen] = useState(false);
+    const [active, setActive] = useState(0);
+    const typed = value.trim().toLowerCase();
+    const matches = saved
+        .filter((address) => address.label.toLowerCase() !== typed && (!typed || address.label.toLowerCase().includes(typed)))
+        .slice(0, 5);
+    const showing = open && matches.length > 0;
+    const choose = (address: SavedAddress) => {
+        onChange(address.label, address.parts);
+        setOpen(false);
+    };
     return (
         <div className="vault-address-autocomplete">
             <MapPin size={14} />
             <input
                 value={value}
-                onChange={(event) => onChange(event.target.value)}
-                onBlur={onBlur}
+                onChange={(event) => {
+                    onChange(event.target.value);
+                    setOpen(true);
+                    setActive(0);
+                }}
+                onFocus={() => setOpen(true)}
+                onBlur={() => {
+                    setOpen(false);
+                    onBlur();
+                }}
+                onKeyDown={(event) => {
+                    if (!showing) return;
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        const step = event.key === 'ArrowDown' ? 1 : -1;
+                        setActive((current) => (current + step + matches.length) % matches.length);
+                    } else if (event.key === 'Enter') {
+                        event.preventDefault();
+                        choose(matches[Math.min(active, matches.length - 1)]);
+                    } else if (event.key === 'Escape') {
+                        event.stopPropagation();
+                        setOpen(false);
+                    }
+                }}
                 name="street-address"
-                placeholder="Type or choose a saved address…"
+                placeholder={saved.length ? 'Type or choose a saved address…' : 'Street, city, postal code, country'}
                 autoComplete="street-address"
                 autoCapitalize="words"
                 spellCheck={false}
+                role="combobox"
+                aria-expanded={showing}
+                aria-autocomplete="list"
                 aria-invalid={invalid}
             />
+            <AnimatePresence>{showing && (
+                <motion.div className="vault-phone-country-menu vault-address-menu" role="listbox" initial={{ opacity: 0, y: -5, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.99 }}>
+                    <p className="vault-address-menu-heading">Saved addresses</p>
+                    {matches.map((address, index) => (
+                        <button
+                            key={address.label}
+                            type="button"
+                            role="option"
+                            aria-selected={index === active}
+                            className={index === active ? 'is-active' : ''}
+                            // Keep focus in the field, so picking doesn't blur it first.
+                            onMouseDown={(event) => event.preventDefault()}
+                            onMouseEnter={() => setActive(index)}
+                            onClick={() => choose(address)}
+                        >
+                            <MapPin size={13} /><strong>{address.label}</strong>
+                        </button>
+                    ))}
+                </motion.div>
+            )}</AnimatePresence>
         </div>
     );
 }
@@ -1429,9 +1499,10 @@ function valuesForItem(item: VaultItem | undefined, kind: EditableItemKind) {
     return fields;
 }
 
-function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, onClose, onSave, onCreateTag, busy }: {
+function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, savedAddresses, onClose, onSave, onCreateTag, busy }: {
     kind: EditableItemKind;
     item?: VaultItem;
+    savedAddresses?: SavedAddress[];
     vaults: VaultCollection[];
     tags: VaultTag[];
     defaultVaultId?: string;
@@ -1590,7 +1661,7 @@ function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, onClose, on
                                             ) : isPhone ? (
                                                 <InternationalPhoneInput value={values[field.key] || ''} onChange={(value) => setValue(field, value)} onBlur={() => validateField(field)} invalid={Boolean(fieldErrors[field.key])} />
                                             ) : isAddress ? (
-                                                <AddressAutocompleteInput value={values.address || ''} onChange={setAddressValue} onBlur={() => validateField(field)} invalid={Boolean(fieldErrors[field.key])} />
+                                                <AddressAutocompleteInput value={values.address || ''} onChange={setAddressValue} onBlur={() => validateField(field)} invalid={Boolean(fieldErrors[field.key])} saved={savedAddresses} />
                                             ) : (
                                                 <div className="relative">
                                                     <input type={inputTypeForField(kind, field)} inputMode={inputModeForField(kind, field)} value={values[field.key] || ''} onChange={(event) => setValue(field, event.target.value)} onBlur={() => validateField(field)} placeholder={field.placeholder} autoComplete={autocompleteForField(kind, field)} aria-invalid={Boolean(fieldErrors[field.key])} />
@@ -1889,7 +1960,6 @@ export default function FocuzPassTab({
     }, [boot]);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [sortOpen, setSortOpen] = useState(false);
-    const [listSearchOpen, setListSearchOpen] = useState(false);
     const [sortMode, setSortMode] = useState<VaultSort>('custom');
     const [createdFilter, setCreatedFilter] = useState<CreatedFilter>('any');
     const [createdFrom, setCreatedFrom] = useState('');
@@ -1907,8 +1977,14 @@ export default function FocuzPassTab({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [toast, setToast] = useState('');
+    const showToast = (message: string) => {
+        setToast(message);
+        window.setTimeout(() => setToast(''), 2200);
+    };
+
     const searchRef = useRef<HTMLInputElement>(null);
-    const listSearchRef = useRef<HTMLInputElement>(null);
+    const helpRef = useRef<HTMLButtonElement>(null);
+    const [helpOpen, setHelpOpen] = useState(false);
     const accessLaunchRef = useRef<BootState | null>(null);
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
@@ -2253,6 +2329,10 @@ export default function FocuzPassTab({
         ? items.find((item) => item.type === 'passkey' && !item.deletedAt && !item.archivedAt && item.domain?.toLowerCase() === selected.domain?.toLowerCase() && item.identity.toLowerCase() === selected.identity.toLowerCase())
         : undefined;
     const selectedVault = selected ? vaults.find((vault) => vault.id === selected.vaultId) : undefined;
+    // Only fields that have something in them show; empty ones just aren't listed.
+    const filledCustomFields = selected?.type === 'custom' && selected.kind
+        ? ITEM_DEFINITIONS[selected.kind].fields.filter((field) => Boolean(selected.fields[field.key]?.trim()))
+        : [];
     const viewTitle = view.kind === 'favorites'
         ? 'Favorites'
         : view.kind === 'archive'
@@ -2264,11 +2344,6 @@ export default function FocuzPassTab({
               : view.kind === 'tag'
                 ? tags.find((tag) => tag.id === view.id)?.name || 'Tag'
                 : 'All Items';
-
-    const showToast = (message: string) => {
-        setToast(message);
-        window.setTimeout(() => setToast(''), 2200);
-    };
 
     const saveItem = async (draft: ItemDraft, options: { closeModal?: boolean; toastMessage?: string; throwOnError?: boolean } = {}) => {
         setBusy(true);
@@ -2482,18 +2557,18 @@ export default function FocuzPassTab({
                     <div className="vault-detail-heading"><ItemMark item={selected} large /><h2>{selected.title}</h2></div>
                     {selected.type === 'login' && (
                         <>
-                            <div className="vault-credential-card">
-                                <DetailField label="Username" value={selected.identity || 'Not added'} onCopy={selected.identity ? () => copyText(selected.identity, setCopied, 'identity') : undefined} copied={copied === 'identity'} />
+                            {(selected.identity || selected.password || associatedPasskey) && <div className="vault-credential-card">
+                                {selected.identity && <DetailField label="Username" value={selected.identity} onCopy={() => copyText(selected.identity, setCopied, 'identity')} copied={copied === 'identity'} />}
                                 {associatedPasskey && <div className="vault-passkey-row"><div><span>Passkey</span><strong>Created {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(associatedPasskey.sortDate))}</strong></div><Fingerprint size={19} /></div>}
-                                <DetailField label="Password" value={selected.password || ''} secret reveal={revealed} onToggleReveal={() => setRevealed((value) => !value)} onCopy={selected.password ? () => copyText(selected.password || '', setCopied, 'password') : undefined} copied={copied === 'password'} />
-                            </div>
+                                {selected.password && <DetailField label="Password" value={selected.password} secret reveal={revealed} onToggleReveal={() => setRevealed((value) => !value)} onCopy={() => copyText(selected.password || '', setCopied, 'password')} copied={copied === 'password'} />}
+                            </div>}
                             {selected.strength && <div className={`vault-password-health is-${selected.strength}`}><span>Password strength</span><strong>{selected.strength === 'okay' ? 'Fair' : selected.strength}</strong><i /></div>}
                             {selected.domain && <a className="vault-website-link" href={selected.domain.includes('://') ? selected.domain : `https://${selected.domain}`} target="_blank" rel="noreferrer"><span>Website</span><strong>{selected.domain}</strong></a>}
                         </>
                     )}
-                    {selected.type === 'card' && <div className="vault-credential-card"><DetailField label="Cardholder" value={selected.identity || 'Not added'} onCopy={selected.identity ? () => copyText(selected.identity, setCopied, 'identity') : undefined} copied={copied === 'identity'} /><DetailField label="Card number" value={selected.cardNumber || ''} secret reveal={revealed} onToggleReveal={() => setRevealed((value) => !value)} onCopy={selected.cardNumber ? () => copyText(selected.cardNumber || '', setCopied, 'card') : undefined} copied={copied === 'card'} /><DetailField label="Expiry" value={selected.expiry || 'Not added'} />{selected.cvv && <DetailField label="Security code" value={selected.cvv} secret reveal={revealed} onToggleReveal={() => setRevealed((value) => !value)} onCopy={() => copyText(selected.cvv || '', setCopied, 'cvv')} copied={copied === 'cvv'} />}</div>}
-                    {selected.type === 'custom' && selected.kind && <div className="vault-credential-card">{ITEM_DEFINITIONS[selected.kind].fields.map((field) => <DetailField key={field.key} label={field.label} value={selected.fields[field.key] || 'Not added'} secret={isSensitiveField(field) && Boolean(selected.fields[field.key])} reveal={revealed} onToggleReveal={isSensitiveField(field) && selected.fields[field.key] ? () => setRevealed((value) => !value) : undefined} onCopy={selected.fields[field.key] ? () => copyText(selected.fields[field.key]!, setCopied, field.key) : undefined} copied={copied === field.key} />)}</div>}
-                    {selected.type === 'passkey' && <div className="vault-credential-card"><DetailField label="Username" value={selected.identity || 'Not added'} /><DetailField label="Passkey" value={selected.credentialId || 'Browser-managed credential'} /></div>}
+                    {selected.type === 'card' && (selected.identity || selected.cardNumber || selected.expiry || selected.cvv) && <div className="vault-credential-card">{selected.identity && <DetailField label="Cardholder" value={selected.identity} onCopy={() => copyText(selected.identity, setCopied, 'identity')} copied={copied === 'identity'} />}{selected.cardNumber && <DetailField label="Card number" value={selected.cardNumber} secret reveal={revealed} onToggleReveal={() => setRevealed((value) => !value)} onCopy={() => copyText(selected.cardNumber || '', setCopied, 'card')} copied={copied === 'card'} />}{selected.expiry && <DetailField label="Expiry" value={selected.expiry} />}{selected.cvv && <DetailField label="Security code" value={selected.cvv} secret reveal={revealed} onToggleReveal={() => setRevealed((value) => !value)} onCopy={() => copyText(selected.cvv || '', setCopied, 'cvv')} copied={copied === 'cvv'} />}</div>}
+                    {selected.type === 'custom' && selected.kind && filledCustomFields.length > 0 && <div className="vault-credential-card">{filledCustomFields.map((field) => <DetailField key={field.key} label={field.label} value={selected.fields[field.key]!} secret={isSensitiveField(field)} reveal={revealed} onToggleReveal={isSensitiveField(field) ? () => setRevealed((value) => !value) : undefined} onCopy={() => copyText(selected.fields[field.key]!, setCopied, field.key)} copied={copied === field.key} />)}</div>}
+                    {selected.type === 'passkey' && <div className="vault-credential-card">{selected.identity && <DetailField label="Username" value={selected.identity} />}<DetailField label="Passkey" value={selected.credentialId || 'Browser-managed credential'} /></div>}
                     {selected.note && <div className="vault-detail-note"><span>Notes</span><p>{selected.note}</p></div>}
                     {selected.tagIds.length > 0 && <div className="vault-detail-tags"><span>Tags</span><div>{selected.tagIds.map((tagId) => { const tag = tags.find((candidate) => candidate.id === tagId); return tag ? <span key={tag.id} className="vault-detail-tag" style={{ '--tag-tone': tag.color } as CSSProperties}><button type="button" className="vault-detail-tag-link" onClick={() => { setView({ kind: 'tag', id: tag.id }); setSelectedId(''); }}><ExactTagIcon size={12} color={tag.color} /> {tag.name}</button>{selected.type !== 'passkey' && <button type="button" className="vault-detail-tag-remove" onClick={() => void removeSelectedTag(tag.id)} disabled={busy} aria-label={`Remove ${tag.name} tag`}><X size={11} /></button>}</span> : null; })}</div></div>}
                 </div>
@@ -2668,7 +2743,42 @@ export default function FocuzPassTab({
                         <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search in ${viewTitle}`} />
                         {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={12} /></button>}
                     </label>
-                    <button type="button" className="vault-help" onClick={() => showToast('Use / to jump to search. Your vault stays on this device.')}>Help</button>
+                    <button ref={helpRef} type="button" className={`vault-help${helpOpen ? ' is-active' : ''}`} aria-haspopup="menu" aria-expanded={helpOpen} onClick={() => setHelpOpen((open) => !open)}>Help</button>
+                    <Menu
+                        open={helpOpen}
+                        onClose={() => setHelpOpen(false)}
+                        anchor={helpRef}
+                        align="end"
+                        minWidth={260}
+                        items={[
+                            { type: 'label', id: 'shortcuts', label: 'Shortcuts' },
+                            { id: 'search', label: 'Search your vault', icon: <Search size={14} />, shortcut: '/', onSelect: () => searchRef.current?.focus() },
+                            { id: 'new', label: 'New item', icon: <Plus size={14} />, onSelect: () => setModal('picker') },
+                            { type: 'separator', id: 'sep-start' },
+                            { type: 'label', id: 'start', label: 'Get your logins in' },
+                            { id: 'import', label: 'Import from another password manager', icon: <Download size={14} />, onSelect: () => setImportOpen(true) },
+                            { id: 'transfer', label: 'Move logins from another device', icon: <QrCode size={14} />, onSelect: () => setTransferOpen(true) },
+                            { id: 'cloud', label: 'Sync across devices', icon: <Cloud size={14} />, onSelect: () => { setCloudPrompt(false); setCloudOpen(true); } },
+                            ...(!webVault ? [{ id: 'passkeys', label: 'Passkeys', icon: <Fingerprint size={14} />, onSelect: () => setPasskeysOpen(true) } satisfies MenuItem] : []),
+                            { type: 'separator', id: 'sep-privacy' },
+                            {
+                                type: 'custom',
+                                id: 'privacy',
+                                node: (
+                                    <div className="vault-help-privacy">
+                                        <ShieldCheck size={14} aria-hidden="true" />
+                                        <span>
+                                            <strong>Only you can open your vault</strong>
+                                            <small>Items are encrypted on this device with your master password. With Cloud sync on, FocuzNow only stores encrypted copies it can't read.</small>
+                                        </span>
+                                    </div>
+                                ),
+                            },
+                            { type: 'separator', id: 'sep-support' },
+                            { id: 'lock', label: 'Lock FocuzPass', icon: <Lock size={14} />, onSelect: () => void handleLock() },
+                            { id: 'support', label: 'Contact support', icon: <Mail size={14} />, onSelect: () => window.open('mailto:support@focuznow.com?subject=FocuzPass%20help', '_blank', 'noopener') },
+                        ]}
+                    />
                     <button type="button" onClick={() => setTransferOpen(true)} className="vault-new-item"><QrCode size={13} /> Transfer</button>
                     <button type="button" onClick={() => setImportOpen(true)} className="vault-new-item"><Download size={13} /> Import</button>
                     <button type="button" onClick={() => setModal('picker')} className="vault-new-item"><Plus size={13} /> New item</button>
@@ -2717,9 +2827,11 @@ export default function FocuzPassTab({
                 <div className="vault-content-grid vault-library-layout">
                     <div className="vault-list">
                         <div className="vault-list-toolbar">
-                            <div className="vault-category-summary"><LayoutGrid size={11} /><span>All categories</span></div>
+                            <div className="vault-category-summary">
+                                <span>{viewTitle}</span>
+                                <span className="vault-list-count">{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}{activeFilterCount > 0 || query.trim() ? ' · filtered' : ''}</span>
+                            </div>
                             <div className="vault-list-actions">
-                                <button type="button" className={listSearchOpen ? 'is-active' : ''} onClick={() => { setListSearchOpen((open) => { const next = !open; if (next) window.setTimeout(() => listSearchRef.current?.focus(), 0); return next; }); setSortOpen(false); }} aria-label="Search this item list"><ListSearchIcon /></button>
                                 <button type="button" className={filtersOpen || activeFilterCount ? 'is-active' : ''} onClick={() => { setFiltersOpen(true); setSortOpen(false); }} aria-label={`Filter items${activeFilterCount ? `, ${activeFilterCount} active` : ''}`} aria-expanded={filtersOpen}><Funnel size={13} />{activeFilterCount > 0 && <small>{activeFilterCount}</small>}</button>
                                 <div className="relative">
                                     <button type="button" className={sortOpen ? 'is-active' : ''} onClick={() => { setSortOpen((open) => !open); setFiltersOpen(false); }} aria-label="Sort items" aria-expanded={sortOpen}><SortItemsIcon /></button>
@@ -2730,8 +2842,6 @@ export default function FocuzPassTab({
                                 </div>
                             </div>
                         </div>
-
-                        <AnimatePresence initial={false}>{listSearchOpen && <motion.label className="vault-list-inline-search" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}><Search size={12} /><input ref={listSearchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search names, websites, fields…" />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear list search"><X size={11} /></button>}</motion.label>}</AnimatePresence>
 
                         {cloudPrompt && (
                             <div className="mx-3 mb-1 mt-2 flex items-center gap-2.5 rounded-[10px] border border-[var(--fz-border)] bg-[var(--fz-bg-panel)] px-3 py-2 text-[12.5px] text-[var(--fz-text-2)]" role="status">
@@ -2875,7 +2985,7 @@ export default function FocuzPassTab({
 
             <AnimatePresence>
                 {modal === 'picker' && <ItemPickerModal onClose={() => setModal(null)} onSelect={(kind) => { setEditingId(null); setEditorKind(kind); setModal('editor'); }} />}
-                {modal === 'editor' && <ItemEditorModal kind={editorKind} item={editingId ? items.find((item) => item.id === editingId) : undefined} vaults={vaults} tags={tags} defaultVaultId={view.kind === 'vault' ? view.id : undefined} onClose={() => { setModal(null); setEditingId(null); }} onSave={(draft) => saveItem(draft, { throwOnError: true })} onCreateTag={createTagForEditor} busy={busy} />}
+                {modal === 'editor' && <ItemEditorModal kind={editorKind} item={editingId ? items.find((item) => item.id === editingId) : undefined} savedAddresses={editorKind === 'identity' ? savedAddressesFrom(items, editingId || undefined) : undefined} vaults={vaults} tags={tags} defaultVaultId={view.kind === 'vault' ? view.id : undefined} onClose={() => { setModal(null); setEditingId(null); }} onSave={(draft) => saveItem(draft, { throwOnError: true })} onCreateTag={createTagForEditor} busy={busy} />}
                 <ImportPasswords key="import" open={importOpen} onClose={() => setImportOpen(false)} vaults={vaults} onImported={loadUnlocked} />
                 <CloudSync key="cloud-sync" open={cloudOpen} onClose={() => setCloudOpen(false)} />
                 <PasskeySettings key="passkeys" open={passkeysOpen} onClose={() => setPasskeysOpen(false)} />
