@@ -388,13 +388,8 @@ function siteGuess(op: 'create' | 'get', options: Record<string, unknown>, frame
 
 async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) {
     const { id, op, options } = request;
-    const started = performance.now();
-    const steps: string[] = [];
-    const step = (label: string) => steps.push(`${label} ${((performance.now() - started) / 1000).toFixed(1)}s`);
     const reply = (result: Record<string, unknown>) => {
         request.post({ type: RESPONSE, id, ...result });
-        step(result.credential ? 'done' : result.fallback ? 'browser' : 'refused');
-        console.info(`[FocuzPass] passkey ${op === 'create' ? 'save' : 'sign-in'} · ${steps.join(' · ')}`);
     };
     // Which frame asked goes to the service worker, which checks the site against that origin.
     const from = request.frameOrigin ? { frameOrigin: request.frameOrigin } : {};
@@ -434,7 +429,6 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
     // A sleeping service worker can take a while to answer: show that FocuzPass is on it, with the
     // way out, instead of nothing.
     const checking = window.setTimeout(() => {
-        step('checking');
         void card.show({ title, subtitle: 'Checking FocuzPass…', busy: 'Checking', secondary: 'Use another device' });
     }, CHECKING_DELAY_MS);
     const leave = (then: () => void) => {
@@ -449,7 +443,6 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
         window.clearTimeout(checking);
         if ('choice' in first) return leave(() => answer(first.choice));
         pre = first.pre;
-        step('checked');
         if (pre.state === 'locked') {
             const site = pre.rpId || guess;
             void card.show({ title: op === 'create' ? saveTitle(site) : signInTitle(site), subtitle: 'Unlock FocuzPass to use your passkeys', primary: 'Unlock FocuzPass', secondary: 'Use another device' });
@@ -461,7 +454,6 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
             if ('choice' in unlocked) return leave(() => answer(unlocked.choice));
             if (!unlocked.ok) return leave(fallback);
             pre = await preflight();
-            step('unlocked');
         }
     } catch {
         return leave(fallback);
@@ -488,7 +480,6 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
             void card.show({ title: saveTitle(site), subtitle, primary: 'Save passkey', secondary: 'Use another device' });
             const choice = await card.next();
             if (choice !== 'primary') return leave(() => answer(choice));
-            step('chosen');
             void card.show({ title: saveTitle(site), subtitle, busy: 'Saving…' });
             const result = await send<Answer>({ type: 'FOCUZPASS_PASSKEY_CREATE', options, ...from });
             reply(result);
@@ -512,7 +503,6 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
         const choice = await card.next();
         const credentialId = choice === 'primary' && one ? one.credentialId : typeof choice === 'object' ? choice.account : null;
         if (!credentialId) return leave(() => answer(choice));
-        step('chosen');
         void card.show({ title: signInTitle(site), subtitle: 'With a passkey saved in FocuzPass', busy: 'Signing in…' });
         reply(await send<Answer>({ type: 'FOCUZPASS_PASSKEY_GET', options, credentialId, ...from }));
         card.close();

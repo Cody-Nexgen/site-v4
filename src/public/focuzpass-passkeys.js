@@ -19,7 +19,7 @@
 (() => {
     'use strict';
     const STATE = '__focuzPassPasskeyScript';
-    const VERSION = 6;
+    const VERSION = 7;
     const previous = window[STATE];
     if ((previous && previous.version >= VERSION) || !navigator.credentials || typeof PublicKeyCredential === 'undefined') return;
 
@@ -216,21 +216,8 @@
             // Stopping it takes the browser (and Windows) a moment; asking again straight away can get
             // the new request cancelled with it.
             const stopped = stopSuggestions();
-            const started = performance.now();
-            const state = `active=${navigator.userActivation ? navigator.userActivation.isActive : '?'} focus=${document.hasFocus()} ${document.visibilityState} suggestions=${stopped ? 'stopped' : 'none'}`;
             const pause = stopped ? new Promise((r) => window.setTimeout(r, 400)) : Promise.resolve();
-            return pause.then(fallback).then(
-                (credential) => {
-                    console.info(`[FocuzPass] the browser's own passkeys answered after ${Math.round(performance.now() - started)}ms (${state})`);
-                    return credential;
-                },
-                (error) => {
-                    const options = (lastOptions && lastOptions.publicKey) || {};
-                    const allowed = (options.allowCredentials || []).map((c) => (c.transports || []).join('+') || 'any').join(', ');
-                    console.info(`[FocuzPass] the browser's own passkeys refused after ${Math.round(performance.now() - started)}ms (${state}; allow: ${allowed || 'none'}; uv: ${options.userVerification}; mediation: ${lastOptions && lastOptions.mediation}): ${error && error.name}: ${error && error.message}`);
-                    throw error;
-                },
-            );
+            return pause.then(fallback);
         }
         if (result.error) {
             const name = ERROR_NAMES.includes(result.error.name) ? result.error.name : 'NotAllowedError';
@@ -240,7 +227,6 @@
     };
 
     const create = function create(options) {
-        lastOptions = options;
         if (!options || !options.publicKey || !allowedHere('publickey-credentials-create')) return nativeCreate(options);
         let payload;
         try {
@@ -315,9 +301,7 @@
             );
         });
 
-    let lastOptions = null;
     const get = function get(options) {
-        lastOptions = options;
         if (!options || !options.publicKey || options.mediation === 'immediate' || !allowedHere('publickey-credentials-get')) return nativeGet(options);
         let payload;
         try {
