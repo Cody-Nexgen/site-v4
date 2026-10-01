@@ -475,9 +475,13 @@ export function registerFocuzPassListener() {
                 .catch(() => sendResponse({ ok: false, error: 'Frame unreachable' }));
             return true;
         }
-        // Keep-awake ping from pages with login fields: answer at once, touch nothing.
+        // Keep-awake ping from pages with login fields or passkey support: answer at once, and if
+        // this worker was restarted while the vault was unlocked, bring the vault back now (from
+        // this session's storage) so a passkey or autofill request doesn't wait for it later.
+        // Nothing is sent back: the page only learns "ok".
         if (msg?.type === 'FOCUZPASS_PING') {
             sendResponse({ ok: true, data: null });
+            void vault.restoreFromSession().catch(() => undefined);
             return false;
         }
         if (!isFocuzPassMessage(msg?.type)) return false;

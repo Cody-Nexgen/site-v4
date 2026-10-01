@@ -2828,7 +2828,12 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
     align-items: center;
     gap: 10px;
     border-bottom: 1px solid var(--fz-border);
-    padding: 0 16px;
+    /* Same box as the rows under it: list padding (12px) + row padding (4px left, 7px right), and
+       the same scrollbar room, so the percentage-sized columns come out the same width. */
+    overflow: hidden;
+    padding: 0 19px 0 16px;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
     color: var(--fz-text-4);
     font-size: 10.5px;
     font-weight: 560;
@@ -2837,6 +2842,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 
 .focuz-pass-ready .vault-library-layout .vault-list-scroll {
     padding-right: 12px;
+    scrollbar-gutter: stable;
 }
 
 .focuz-pass-ready .vault-library-layout .vault-row {
@@ -2957,7 +2963,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
         display: none;
     }
 
-    .vault-library-columns { padding-inline: 10px; }
+    .vault-library-columns { padding: 0 15px 0 12px; }
     .focuz-pass-ready .vault-list-count { display: none; }
     .focuz-pass-ready .vault-library-layout .vault-list-scroll { padding-inline: 8px; }
 }
@@ -3013,6 +3019,12 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 .vault-command-menu__identity strong { overflow: hidden; color: var(--fz-text-1); font-size: 11.5px; font-weight: 640; letter-spacing: -0.015em; text-overflow: ellipsis; white-space: nowrap; }
 .vault-command-menu__identity small { overflow: hidden; color: var(--fz-text-4); font-size: 9px; font-weight: 480; text-overflow: ellipsis; white-space: nowrap; }
 .vault-command-menu__identity > svg { color: var(--fz-text-4); }
+
+/* Filter menu: scrolls when the screen is short; the exact-date range sits inline. */
+.vault-filter-menu { max-height: min(560px, calc(100vh - 16px)); overflow-y: auto; padding: 4px; scrollbar-width: thin; }
+.vault-filter-menu-range { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; padding: 2px 8px 6px; color: var(--fz-text-4); font-size: 11.5px; }
+.vault-filter-menu-range input { min-width: 0; height: 28px; border: 1px solid var(--fz-border); border-radius: 6px; background: var(--fz-bg-panel); padding: 0 6px; color: var(--fz-text-2); font-size: 12px; color-scheme: light dark; }
+.vault-filter-menu-range input:focus { border-color: var(--fz-border-strong); outline: none; }
 
 /* Help menu: the short "who can read your vault" note. */
 .vault-help-privacy {
@@ -6132,4 +6144,47 @@ html[data-dashboard-theme="light"] .fz-cmdk {
     border: 0;
     background: #fff;
     box-shadow: none;
+}
+
+/* FocuzPass toolbar buttons (2026-10-01): one height and radius, a quiet ghost style for Help,
+   and a filled primary for New item, matching the menus they open. */
+.focuz-pass-ready .vault-toolbar .vault-help,
+.focuz-pass-ready .vault-toolbar .vault-new-item {
+    display: inline-flex;
+    height: 32px;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 0 12px;
+    font-size: 12.5px;
+    font-weight: 550;
+    letter-spacing: -0.005em;
+    box-shadow: none;
+    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.focuz-pass-ready .vault-toolbar .vault-help {
+    background: transparent;
+    padding: 0 10px;
+    color: var(--fz-text-3);
+}
+.focuz-pass-ready .vault-toolbar .vault-help:hover,
+.focuz-pass-ready .vault-toolbar .vault-help.is-active {
+    background: var(--fz-bg-hover);
+    color: var(--fz-text-1);
+}
+.focuz-pass-ready .vault-toolbar .vault-new-item.is-primary {
+    background: var(--fz-text-1);
+    color: var(--fz-bg);
+}
+.focuz-pass-ready .vault-toolbar .vault-new-item.is-primary:hover { opacity: 0.9; }
+.focuz-pass-ready .vault-toolbar .vault-help:active,
+.focuz-pass-ready .vault-toolbar .vault-new-item:active { transform: scale(0.97); }
+.focuz-pass-ready .vault-toolbar .vault-help:focus-visible,
+.focuz-pass-ready .vault-toolbar .vault-new-item:focus-visible { outline: 2px solid var(--fz-focus-ring, var(--fz-accent)); outline-offset: 2px; }
+.focuz-pass-ready .vault-profile.is-open { background: var(--fz-bg-active); }
+@media (prefers-reduced-motion: reduce) {
+    .focuz-pass-ready .vault-toolbar .vault-help:active,
+    .focuz-pass-ready .vault-toolbar .vault-new-item:active { transform: none; }
 }

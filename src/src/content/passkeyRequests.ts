@@ -438,9 +438,13 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
     };
 
     let pre: Preflight;
+    const checkStarted = performance.now();
     try {
         const first = await Promise.race([preflight().then((value) => ({ pre: value })), card.next().then((choice) => ({ choice }))]);
         window.clearTimeout(checking);
+        // Diagnostic while the speed fix is confirmed; remove once the owner says it's quick.
+        const checkMs = Math.round(performance.now() - checkStarted);
+        if (checkMs > 400) console.info(`[FocuzPass] passkey check took ${checkMs} ms`);
         if ('choice' in first) return leave(() => answer(first.choice));
         pre = first.pre;
         if (pre.state === 'locked') {
@@ -468,8 +472,10 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
         if (op === 'create') {
             const subtitle = `${pre.userName || 'Your account'} · ${pre.synced ? 'Syncs to your devices' : 'Saved on this device'}`;
             if (pre.excluded) {
-                void card.show({ title: 'This passkey is already in FocuzPass', subtitle: `${pre.userName || 'This account'} · ${site}`, primary: 'OK' });
-                await card.next();
+                // Saving one somewhere else too (Windows Hello, a phone, a security key) is still allowed.
+                void card.show({ title: 'This passkey is already in FocuzPass', subtitle: `${pre.userName || 'This account'} · ${site}`, primary: 'OK', secondary: 'Save to another device' });
+                const choice = await card.next();
+                if (choice === 'secondary') return leave(fallback);
                 return leave(() => reply({ error: { name: 'InvalidStateError', message: 'A passkey for this account is already saved in FocuzPass.' } }));
             }
             if (pre.lapse) {
@@ -552,6 +558,13 @@ function extensionAlive(): boolean {
 export function initPasskeyRequests(send: FocuzPassOverlayTransport = runtimeSendMessage, alive: () => boolean = extensionAlive) {
     if (window.top !== window) return;
     const seen = new Set<string>();
+    // Pressing a button ("Sign in with a passkey") comes a moment before the site asks: wake the
+    // worker then, in case the browser put it to sleep since the page loaded.
+    window.addEventListener('pointerdown', (event) => {
+        if (!alive()) return;
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest('button, a, [role="button"], input[type="submit"], input[type="button"]')) wakeWorker(5_000);
+    }, { capture: true, passive: true });
     window.addEventListener('message', (event) => {
         if (!alive()) return;
         const fromPage = event.source === window && event.origin === window.location.origin;

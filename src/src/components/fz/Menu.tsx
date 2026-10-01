@@ -14,7 +14,7 @@ import { DUR, EASE, reducedMotion } from '../../lib/motion';
 import { IconCheck, IconChevronRight, IconDot } from './icons';
 
 export type MenuItem =
-    | { type?: 'item'; id: string; label: ReactNode; icon?: ReactNode; shortcut?: string; checked?: boolean; disabled?: boolean; danger?: boolean; onSelect?: () => void; submenu?: MenuItem[] }
+    | { type?: 'item'; id: string; label: ReactNode; icon?: ReactNode; shortcut?: string; checked?: boolean; disabled?: boolean; danger?: boolean; onSelect?: () => void; submenu?: MenuItem[]; /** Stay open after selecting (checkbox-style toggles). */ keepOpen?: boolean }
     | { type: 'separator'; id: string }
     | { type: 'label'; id: string; label: ReactNode }
     | { type: 'custom'; id: string; node: ReactNode };
@@ -102,7 +102,7 @@ function MenuList({
                                     return;
                                 }
                                 item.onSelect?.();
-                                onCloseAll();
+                                if (!item.keepOpen) onCloseAll();
                             }}
                             onMouseEnter={() => {
                                 focusItem(item.id);

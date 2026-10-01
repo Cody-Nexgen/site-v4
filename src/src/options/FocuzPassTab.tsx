@@ -36,6 +36,7 @@ import {
     Braces,
     Briefcase,
     Check,
+    CircleHelp,
     ChevronDown,
     Copy,
     CopyPlus,
@@ -88,7 +89,6 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type CSSP
 import ModalPortal from '../components/ModalPortal';
 import { Toast } from '../components/fz/Toast';
 import { Dialog } from '../components/fz/Dialog';
-import { Sheet } from '../components/fz/Sheet';
 import { Menu, type MenuItem } from '../components/fz/Menu';
 import { Button } from '../components/fz/Button';
 import {
@@ -1984,6 +1984,9 @@ export default function FocuzPassTab({
 
     const searchRef = useRef<HTMLInputElement>(null);
     const helpRef = useRef<HTMLButtonElement>(null);
+    const profileRef = useRef<HTMLButtonElement>(null);
+    const filterRef = useRef<HTMLButtonElement>(null);
+    const sortRef = useRef<HTMLButtonElement>(null);
     const [helpOpen, setHelpOpen] = useState(false);
     const accessLaunchRef = useRef<BootState | null>(null);
     const sensors = useSensors(
@@ -2666,25 +2669,32 @@ export default function FocuzPassTab({
                     </div>
 
                     <div className="vault-profile-wrap">
-                        <button type="button" className="vault-profile" onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen}>
+                        <button ref={profileRef} type="button" className={`vault-profile${profileOpen ? ' is-open' : ''}`} onClick={() => setProfileOpen((open) => !open)} aria-haspopup="menu" aria-expanded={profileOpen}>
                             <VaultProfileAvatar avatarUrl={avatarUrl} fallbackUrl={avatarFallbackUrl} name={username || accountName} />
                             <span className="vault-profile-copy">
                                 <strong className="truncate">{username}</strong>
                                 <small className="truncate">{accountName}</small>
                             </span>
                         </button>
-                        <AnimatePresence>
-                            {profileOpen && (
-                                <motion.div className="vault-profile-menu" initial={{ opacity: 0, y: -3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }}>
-                                    <button type="button" onClick={() => void handleLock()}><Lock size={13} /> Lock vault</button>
-                                    <button type="button" onClick={() => { setProfileOpen(false); setChangePasswordOpen(true); }}><KeyRound size={13} /> Change master password</button>
-                                    <button type="button" onClick={() => { setProfileOpen(false); setCloudPrompt(false); setCloudOpen(true); }}><Cloud size={13} /> Cloud sync</button>
-                                    {!webVault && <button type="button" onClick={() => { setProfileOpen(false); setPasskeysOpen(true); }}><Fingerprint size={13} /> Passkeys</button>}
-                                    {onExit && <button type="button" onClick={onExit}><PanelLeft size={13} /> FocuzNow dashboard</button>}
-                                    <span>Locks in {formatRemaining(status?.remainingMs)}</span>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                        <Menu
+                            open={profileOpen}
+                            onClose={() => setProfileOpen(false)}
+                            anchor={profileRef}
+                            minWidth={250}
+                            items={[
+                                { type: 'label', id: 'add', label: 'Add logins' },
+                                { id: 'import', label: 'Import passwords', icon: <Download size={14} />, onSelect: () => setImportOpen(true) },
+                                { id: 'transfer', label: 'Transfer between devices', icon: <QrCode size={14} />, onSelect: () => setTransferOpen(true) },
+                                { type: 'separator', id: 'sep-settings' },
+                                { type: 'label', id: 'settings', label: 'Settings' },
+                                { id: 'cloud', label: 'Cloud sync', icon: <Cloud size={14} />, onSelect: () => { setCloudPrompt(false); setCloudOpen(true); } },
+                                ...(!webVault ? [{ id: 'passkeys', label: 'Passkeys', icon: <Fingerprint size={14} />, onSelect: () => setPasskeysOpen(true) } satisfies MenuItem] : []),
+                                { id: 'password', label: 'Change master password', icon: <KeyRound size={14} />, onSelect: () => setChangePasswordOpen(true) },
+                                { type: 'separator', id: 'sep-exit' },
+                                ...(onExit ? [{ id: 'dashboard', label: 'FocuzNow dashboard', icon: <PanelLeft size={14} />, onSelect: onExit } satisfies MenuItem] : []),
+                                { id: 'lock', label: 'Lock FocuzPass', icon: <Lock size={14} />, shortcut: status?.remainingMs != null ? `in ${formatRemaining(status.remainingMs)}` : undefined, onSelect: () => void handleLock() },
+                            ]}
+                        />
                     </div>
 
                     <nav className="vault-primary-nav" aria-label="FocuzPass navigation">
@@ -2743,7 +2753,7 @@ export default function FocuzPassTab({
                         <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search in ${viewTitle}`} />
                         {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={12} /></button>}
                     </label>
-                    <button ref={helpRef} type="button" className={`vault-help${helpOpen ? ' is-active' : ''}`} aria-haspopup="menu" aria-expanded={helpOpen} onClick={() => setHelpOpen((open) => !open)}>Help</button>
+                    <button ref={helpRef} type="button" className={`vault-help${helpOpen ? ' is-active' : ''}`} aria-haspopup="menu" aria-expanded={helpOpen} onClick={() => setHelpOpen((open) => !open)}><CircleHelp size={14} /><span>Help</span></button>
                     <Menu
                         open={helpOpen}
                         onClose={() => setHelpOpen(false)}
@@ -2779,50 +2789,9 @@ export default function FocuzPassTab({
                             { id: 'support', label: 'Contact support', icon: <Mail size={14} />, onSelect: () => window.open('mailto:support@focuznow.com?subject=FocuzPass%20help', '_blank', 'noopener') },
                         ]}
                     />
-                    <button type="button" onClick={() => setTransferOpen(true)} className="vault-new-item"><QrCode size={13} /> Transfer</button>
-                    <button type="button" onClick={() => setImportOpen(true)} className="vault-new-item"><Download size={13} /> Import</button>
-                    <button type="button" onClick={() => setModal('picker')} className="vault-new-item"><Plus size={13} /> New item</button>
+                    <button type="button" onClick={() => setModal('picker')} className="vault-new-item is-primary"><Plus size={14} /> New item</button>
                 </header>
 
-                <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} side="left" title={`Filter ${viewTitle}`} className="vault-filter-sheet">
-                    <div className="vault-filter-drawer-scroll">
-                                        <section>
-                                            <div className="vault-filter-drawer-heading"><div><strong>Item type</strong><small>Select one or more</small></div>{typeFilters.length > 0 && <button type="button" onClick={() => setTypeFilters([])}>Clear</button>}</div>
-                                            <div className="vault-filter-checkbox-grid">
-                                                {FILTERS.filter((option) => option.id !== 'all' && option.id !== 'risk').map((option) => {
-                                                    const FilterIcon = option.icon;
-                                                    const checked = typeFilters.includes(option.id);
-                                                    return (
-                                                        <button key={option.id} type="button" role="checkbox" aria-checked={checked} className={checked ? 'is-checked' : ''} onClick={() => toggleTypeFilter(option.id)}>
-                                                            <span className="vault-filter-checkbox">{checked && <Check size={11} />}</span><FilterIcon size={14} /><span>{option.label}</span><small>{countForFilter(option.id)}</small>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </section>
-                                        <section>
-                                            <div className="vault-filter-drawer-heading"><div><strong>Created</strong><small>Choose a quick range or exact dates</small></div></div>
-                                            <div className="vault-filter-radio-list">
-                                                {([['any', 'Any time'], ['7d', 'Past 7 days'], ['30d', 'Past 30 days'], ['90d', 'Past 90 days'], ['year', 'This year']] as [CreatedFilter, string][]).map(([value, label]) => (
-                                                    <button key={value} type="button" role="radio" aria-checked={createdFilter === value && !createdFrom && !createdTo} className={createdFilter === value && !createdFrom && !createdTo ? 'is-checked' : ''} onClick={() => { setCreatedFilter(value); setCreatedFrom(''); setCreatedTo(''); }}>
-                                                        <span>{createdFilter === value && !createdFrom && !createdTo && <i />}</span>{label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <div className="vault-filter-date-range">
-                                                <label><span>From</span><input type="date" value={createdFrom} onChange={(event) => { setCreatedFrom(event.target.value); setCreatedFilter('any'); }} /></label>
-                                                <i>to</i>
-                                                <label><span>To</span><input type="date" value={createdTo} min={createdFrom || undefined} onChange={(event) => { setCreatedTo(event.target.value); setCreatedFilter('any'); }} /></label>
-                                            </div>
-                                        </section>
-                                        <section>
-                                            <div className="vault-filter-drawer-heading"><div><strong>More filters</strong><small>Narrow this view further</small></div></div>
-                                            <button type="button" role="checkbox" aria-checked={favoritesOnly} className={`vault-filter-wide-check${favoritesOnly ? ' is-checked' : ''}`} onClick={() => setFavoritesOnly((current) => !current)}><span className="vault-filter-checkbox">{favoritesOnly && <Check size={11} />}</span><ExactFavoritesIcon size={15} /><div><strong>Favorites only</strong><small>Show starred items</small></div></button>
-                                            <button type="button" role="checkbox" aria-checked={riskOnly} className={`vault-filter-wide-check${riskOnly ? ' is-checked' : ''}`} onClick={() => setRiskOnly((current) => !current)}><span className="vault-filter-checkbox">{riskOnly && <Check size={11} />}</span><ShieldCheck size={15} /><div><strong>Security review</strong><small>Weak or reused credentials</small></div></button>
-                                        </section>
-                    </div>
-                    <footer className="vault-filter-sheet-footer"><button type="button" onClick={() => { setTypeFilters([]); setCreatedFilter('any'); setCreatedFrom(''); setCreatedTo(''); setFavoritesOnly(false); setRiskOnly(false); }}>Clear all</button><button type="button" className="is-primary" onClick={() => setFiltersOpen(false)}>Show {filteredItems.length} items</button></footer>
-                </Sheet>
 
                 <div className="vault-content-grid vault-library-layout">
                     <div className="vault-list">
@@ -2832,14 +2801,69 @@ export default function FocuzPassTab({
                                 <span className="vault-list-count">{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}{activeFilterCount > 0 || query.trim() ? ' · filtered' : ''}</span>
                             </div>
                             <div className="vault-list-actions">
-                                <button type="button" className={filtersOpen || activeFilterCount ? 'is-active' : ''} onClick={() => { setFiltersOpen(true); setSortOpen(false); }} aria-label={`Filter items${activeFilterCount ? `, ${activeFilterCount} active` : ''}`} aria-expanded={filtersOpen}><Funnel size={13} />{activeFilterCount > 0 && <small>{activeFilterCount}</small>}</button>
-                                <div className="relative">
-                                    <button type="button" className={sortOpen ? 'is-active' : ''} onClick={() => { setSortOpen((open) => !open); setFiltersOpen(false); }} aria-label="Sort items" aria-expanded={sortOpen}><SortItemsIcon /></button>
-                                    <AnimatePresence>{sortOpen && <motion.div className="vault-sort-menu" initial={{ opacity: 0, y: -5, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.99 }}>
-                                        <div className="vault-sort-menu-heading"><span>Sort by</span><small>{SORT_OPTIONS.find((option) => option.id === sortMode)?.label}</small></div>
-                                        {SORT_OPTIONS.map((option) => <button key={option.id} type="button" className={sortMode === option.id ? 'is-active' : ''} onClick={() => { setSortMode(option.id); setSortOpen(false); }}><span className="vault-sort-radio">{sortMode === option.id && <i />}</span><span><strong>{option.label}</strong><small>{option.description}</small></span>{option.id === 'custom' && <GripVertical size={13} />}</button>)}
-                                    </motion.div>}</AnimatePresence>
-                                </div>
+                                <button ref={filterRef} type="button" className={filtersOpen || activeFilterCount ? 'is-active' : ''} onClick={() => { setFiltersOpen((open) => !open); setSortOpen(false); }} aria-label={`Filter items${activeFilterCount ? `, ${activeFilterCount} active` : ''}`} aria-haspopup="menu" aria-expanded={filtersOpen}><Funnel size={13} />{activeFilterCount > 0 && <small>{activeFilterCount}</small>}</button>
+                                <Menu
+                                    open={filtersOpen}
+                                    onClose={() => setFiltersOpen(false)}
+                                    anchor={filterRef}
+                                    align="end"
+                                    minWidth={260}
+                                    className="vault-filter-menu"
+                                    items={[
+                                        { type: 'label', id: 'types', label: 'Item type' },
+                                        ...FILTERS.filter((option) => option.id !== 'all' && option.id !== 'risk').map((option) => ({
+                                            id: `type-${option.id}`,
+                                            label: option.label,
+                                            checked: typeFilters.includes(option.id),
+                                            shortcut: String(countForFilter(option.id)),
+                                            keepOpen: true,
+                                            onSelect: () => toggleTypeFilter(option.id),
+                                        } satisfies MenuItem)),
+                                        { type: 'separator', id: 'sep-added' },
+                                        { type: 'label', id: 'added', label: 'Added' },
+                                        ...([['any', 'Any time'], ['7d', 'Past 7 days'], ['30d', 'Past 30 days'], ['90d', 'Past 90 days'], ['year', 'This year']] as [CreatedFilter, string][]).map(([value, label]) => ({
+                                            id: `added-${value}`,
+                                            label,
+                                            checked: createdFilter === value && !createdFrom && !createdTo,
+                                            keepOpen: true,
+                                            onSelect: () => { setCreatedFilter(value); setCreatedFrom(''); setCreatedTo(''); },
+                                        } satisfies MenuItem)),
+                                        {
+                                            type: 'custom',
+                                            id: 'added-range',
+                                            node: (
+                                                <div className="vault-filter-menu-range">
+                                                    <input type="date" aria-label="Added from" value={createdFrom} onChange={(event) => { setCreatedFrom(event.target.value); setCreatedFilter('any'); }} />
+                                                    <span>to</span>
+                                                    <input type="date" aria-label="Added until" value={createdTo} min={createdFrom || undefined} onChange={(event) => { setCreatedTo(event.target.value); setCreatedFilter('any'); }} />
+                                                </div>
+                                            ),
+                                        },
+                                        { type: 'separator', id: 'sep-more' },
+                                        { id: 'favorites', label: 'Favorites only', checked: favoritesOnly, keepOpen: true, onSelect: () => setFavoritesOnly((current) => !current) },
+                                        { id: 'risk', label: 'Needs a security review', checked: riskOnly, keepOpen: true, onSelect: () => setRiskOnly((current) => !current) },
+                                        { type: 'separator', id: 'sep-clear' },
+                                        { id: 'clear', label: 'Clear all filters', icon: <X size={14} />, disabled: activeFilterCount === 0, keepOpen: true, onSelect: () => { setTypeFilters([]); setCreatedFilter('any'); setCreatedFrom(''); setCreatedTo(''); setFavoritesOnly(false); setRiskOnly(false); } },
+                                    ]}
+                                />
+                                <button ref={sortRef} type="button" className={sortOpen ? 'is-active' : ''} onClick={() => { setSortOpen((open) => !open); setFiltersOpen(false); }} aria-label="Sort items" aria-haspopup="menu" aria-expanded={sortOpen}><SortItemsIcon /></button>
+                                <Menu
+                                    open={sortOpen}
+                                    onClose={() => setSortOpen(false)}
+                                    anchor={sortRef}
+                                    align="end"
+                                    minWidth={220}
+                                    items={[
+                                        { type: 'label', id: 'sort', label: 'Sort by' },
+                                        ...SORT_OPTIONS.map((option) => ({
+                                            id: option.id,
+                                            label: option.label,
+                                            checked: sortMode === option.id,
+                                            shortcut: option.id === 'custom' ? 'Drag' : undefined,
+                                            onSelect: () => setSortMode(option.id),
+                                        } satisfies MenuItem)),
+                                    ]}
+                                />
                             </div>
                         </div>
 
