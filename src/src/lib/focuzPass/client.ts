@@ -2,6 +2,7 @@
 
 import { getPlatform, isWebPlatform } from '../platform';
 import { extensionPresent, sendExtensionRpc } from '../platform/webPlatform';
+import { extensionContextGone, extensionReloadedError, isContextInvalidatedError } from './extensionReload';
 import { importFingerprint } from './vaultCore';
 import type { CloudAccountState, CloudStatus, VaultExportPackage } from './types';
 import type {
@@ -105,7 +106,13 @@ async function send<T>(message: Record<string, unknown>): Promise<T> {
         }
         response = (await sendExtensionRpc<MessageResponse<T>>(message as never, timeoutMs)) as MessageResponse<T>;
     } else {
-        response = (await chrome.runtime.sendMessage(message)) as MessageResponse<T>;
+        if (extensionContextGone()) throw extensionReloadedError();
+        try {
+            response = (await chrome.runtime.sendMessage(message)) as MessageResponse<T>;
+        } catch (error) {
+            if (isContextInvalidatedError(error) || extensionContextGone()) throw extensionReloadedError();
+            throw error;
+        }
     }
 
     if (!response || response.ok !== true) {

@@ -5,6 +5,7 @@ import { EmbedApp } from './EmbedApp';
 import { applyDashboardColorMode, initializeDashboardColorMode } from '../lib/themes';
 import { isTrustedSiteOrigin } from '../lib/trustedOrigins';
 import { readHostToEmbed } from '../lib/focuzPass/embed';
+import { reloadWhenExtensionReloaded } from '../lib/focuzPass/extensionReload';
 
 /**
  * FocuzPass for the FocuzNow website, as a frame of this extension page. The code comes from
@@ -28,6 +29,9 @@ const themeParam = params.get('theme');
 // A code from a focuznow.com/pwcode#CODE link: read once, then out of the frame's history.
 const linkCode = window.location.hash.replace(/^#/, '') || undefined;
 if (linkCode) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+// Left open across an extension reload or update: reload into the new copy (in this frame only).
+reloadWhenExtensionReloaded();
 
 if (themeParam === 'light' || themeParam === 'dark') applyDashboardColorMode(themeParam);
 else void initializeDashboardColorMode();

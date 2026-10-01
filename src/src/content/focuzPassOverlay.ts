@@ -1035,6 +1035,16 @@ async function runtimeSendMessage<T>(message: Record<string, unknown>): Promise<
     }
 }
 
+/** Fire-and-forget message. In a copy cut off by an extension reload, sendMessage throws synchronously. */
+function postRuntimeMessage(message: Record<string, unknown>) {
+    try {
+        if (!chrome.runtime?.id) return;
+        void chrome.runtime.sendMessage(message).catch(() => undefined);
+    } catch {
+        /* extension reloaded; nothing to tell */
+    }
+}
+
 const PAYMENT_SLOT_SELECTOR = [
     '.StripeElement',
     '[data-stripe]',
@@ -1694,14 +1704,14 @@ class FocuzPassPageOverlay {
     private async openPopover(target: HTMLElement) {
         if (this.popoverHost && this.activeControl?.target === target && !this.signupSuggestedFor) return;
         if (this.shouldProxyPopover()) {
-            void chrome.runtime.sendMessage({
+            postRuntimeMessage({
                 type: 'FOCUZPASS_OVERLAY_RELAY',
                 payloadType: 'FOCUZPASS_OVERLAY_OPEN',
                 frameId: 0,
                 payload: {
                     role: this.controls.get(target)?.virtualRole || (isFillableControl(target) ? classifyField(target) : 'card-number'),
                 },
-            }).catch(() => undefined);
+            });
             return;
         }
         this.preparePopover(target);
@@ -2004,6 +2014,10 @@ class FocuzPassPageOverlay {
 
     private renderError(message: string, retry?: () => void, title = 'Couldn’t reach FocuzPass') {
         if (!this.popoverHost) return;
+        if (!chrome.runtime?.id) {
+            this.renderExtensionReloaded();
+            return;
+        }
         this.keyboardItems = [];
         this.renderPanel(title, null, (body) => {
             body.appendChild(this.note('alert', title, message, 'error'));
@@ -2033,6 +2047,10 @@ class FocuzPassPageOverlay {
      * swaps straight to your saved logins (it used to close and go stale).
      */
     private openUnlockWindow() {
+        if (!chrome.runtime?.id) {
+            this.renderExtensionReloaded();
+            return;
+        }
         void this.send<null>({ type: 'FOCUZPASS_OPEN_ACCESS_WINDOW' }).catch(() => undefined);
         if (!this.popoverHost) return;
         this.keyboardItems = [];
@@ -2047,6 +2065,21 @@ class FocuzPassPageOverlay {
         this.startUnlockWatch();
     }
 
+    /** This copy was cut off by an extension reload or update: only a page reload reconnects it. */
+    private renderExtensionReloaded() {
+        if (!this.popoverHost) return;
+        this.stopUnlockWatch();
+        this.keyboardItems = [];
+        this.renderPanel('FocuzNow was updated', null, (body) => {
+            body.appendChild(this.note('rotateCw', 'Reload this page to use FocuzPass', 'FocuzNow was updated or reloaded while this page was open, so this page lost its connection to it.'));
+            const actions = createElement('div', 'note-actions');
+            const reload = textButton('primary', 'Reload page', 'rotateCw');
+            reload.addEventListener('click', () => window.location.reload());
+            actions.appendChild(reload);
+            body.appendChild(actions);
+        });
+    }
+
     private startUnlockWatch() {
         this.stopUnlockWatch();
         const startedAt = Date.now();
@@ -2056,6 +2089,10 @@ class FocuzPassPageOverlay {
                 return;
             }
             if (document.visibilityState !== 'visible') return;
+            if (!chrome.runtime?.id) {
+                this.renderExtensionReloaded();
+                return;
+            }
             void this.sendTimed<VaultStatus>({ type: 'FOCUZPASS_STATUS' }).then((status) => {
                 if (status.configured && status.unlocked) void this.onAccessChanged();
             }).catch(() => undefined);
@@ -2077,18 +2114,18 @@ class FocuzPassPageOverlay {
     }
 
     private openDashboard() {
-        void chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS', tab: 'focuzpass' });
+        postRuntimeMessage({ type: 'OPEN_OPTIONS', tab: 'focuzpass' });
         this.closePopover();
     }
 
     private fillMatch(match: AutofillItem) {
         if (this.remoteSourceFrameId != null) {
-            void chrome.runtime.sendMessage({
+            postRuntimeMessage({
                 type: 'FOCUZPASS_OVERLAY_RELAY',
                 payloadType: 'FOCUZPASS_OVERLAY_FILL',
                 frameId: this.remoteSourceFrameId,
                 payload: { item: match },
-            }).catch(() => undefined);
+            });
             this.closePopover();
             return;
         }
@@ -2539,7 +2576,7 @@ class FocuzPassPageOverlay {
                 notNow.addEventListener('click', () => void this.dismissPending());
                 const open = textButton('primary', 'Open FocuzPass', 'arrowRight', true);
                 open.addEventListener('click', () => {
-                    void chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS', tab: 'focuzpass' });
+                    postRuntimeMessage({ type: 'OPEN_OPTIONS', tab: 'focuzpass' });
                 });
                 actions.replaceChildren(notNow, open);
             }

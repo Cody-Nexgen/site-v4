@@ -13,6 +13,7 @@ import {
     type VaultStatus,
 } from '../lib/focuzPass/client';
 import type { CloudAccountState } from '../lib/focuzPass/types';
+import { reloadWhenExtensionReloaded } from '../lib/focuzPass/extensionReload';
 import { initializeDashboardColorMode } from '../lib/themes';
 import './unlock.css';
 
@@ -218,4 +219,5 @@ function AccessWindow() {
 
 // Match the dashboard's light/dark mode (cached value applies synchronously, before first paint).
 void initializeDashboardColorMode();
+reloadWhenExtensionReloaded();
 createRoot(document.getElementById('root')!).render(<AccessWindow />);

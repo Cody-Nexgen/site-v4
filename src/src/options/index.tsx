@@ -4,8 +4,10 @@ import OptionsApp from './OptionsApp';
 import '../index.css'; // Import global styles (stored in src/index.css)
 import { installDevConsole } from '../lib/devConsole';
 import { initializeDashboardColorMode } from '../lib/themes';
+import { reloadWhenExtensionReloaded } from '../lib/focuzPass/extensionReload';
 
 installDevConsole();
+reloadWhenExtensionReloaded();
 void initializeDashboardColorMode();
 
 // The blocked-site view has to be reachable from any page (sites and frames get redirected to it),
