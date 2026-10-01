@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { CoachMarkdown } from './CoachMarkdown';
 import {
     BarChart3,
     BookOpen,
@@ -224,7 +223,7 @@ export function CoachDocViewer({
                     />
                 ) : (
                     <article className="coach-doc-body coach-stream-body mx-auto max-w-[680px] px-8 pb-16 pt-8 text-[14.5px] leading-[1.7] text-[var(--fz-text-2)]">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.markdown}</ReactMarkdown>
+                        <CoachMarkdown>{doc.markdown}</CoachMarkdown>
                     </article>
                 )}
             </div>

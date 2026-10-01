@@ -41,6 +41,10 @@ echo Getting %BRANCH% from GitHub...
 git fetch origin "%BRANCH%"
 if errorlevel 1 goto :failed
 
+rem Note the package list before updating, to reinstall packages only when it changes.
+set "LOCK_BEFORE="
+for /f "delims=" %%L in ('git rev-parse HEAD:src/package-lock.json 2^>nul') do set "LOCK_BEFORE=%%L"
+
 git merge --ff-only FETCH_HEAD
 if errorlevel 1 (
     echo.
@@ -49,10 +53,16 @@ if errorlevel 1 (
     goto :failed
 )
 
+set "LOCK_AFTER="
+for /f "delims=" %%L in ('git rev-parse HEAD:src/package-lock.json 2^>nul') do set "LOCK_AFTER=%%L"
+
 cd src
-if not exist node_modules (
+set "NEED_INSTALL="
+if not exist node_modules set "NEED_INSTALL=1"
+if not "%LOCK_BEFORE%"=="%LOCK_AFTER%" set "NEED_INSTALL=1"
+if defined NEED_INSTALL (
     echo.
-    echo Installing packages for the first time...
+    echo Installing packages...
     call npm install
     if errorlevel 1 goto :failed
 )

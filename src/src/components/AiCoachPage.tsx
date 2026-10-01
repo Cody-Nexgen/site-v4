@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CoachMarkdown } from './coach/CoachMarkdown';
 import { AnimatePresence, motion } from 'framer-motion';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import {
     Check,
     ChevronDown,
@@ -178,7 +177,7 @@ function CoachStreamBody({
                             key={i}
                             className={`coach-stream-body prose prose-invert prose-sm max-w-none prose-p:my-1 ${streaming && last ? 'streaming' : ''}`}
                         >
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{seg.text}</ReactMarkdown>
+                            <CoachMarkdown>{seg.text}</CoachMarkdown>
                         </div>
                     );
                 }

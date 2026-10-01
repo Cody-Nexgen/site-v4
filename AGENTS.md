@@ -21,7 +21,7 @@ Read this first, then `docs/focuzpass-cloud-plan.md` (the FocuzPass Cloud plan a
 ```
 node node_modules/typescript/bin/tsc -b
 node node_modules/eslint/bin/eslint.js <files>
-node ./scripts/run-tests.mjs            # unit tests (180 passing); `npm test` fails under cmd
+node ./scripts/run-tests.mjs            # unit tests (184 passing); `npm test` fails under cmd
 node node_modules/vite/bin/vite.js build   # writes src/dist; the owner then reloads it in vivaldi://extensions
 ```
 Known lint errors that aren't ours: `vaultCore.ts` `inboxPublicJwk` (`_d`, `_ops`, `_ext`), two in `FocuzPassTab.tsx`.
@@ -50,5 +50,6 @@ FocuzPass acts as a passkey provider inside the browser:
    - The server is `supabase/functions/_shared/aiCoachChat.ts` (`CoachModelId`, `COACH_MODELS`) and `supabase/functions/ai-coach-chat/index.ts` (the default model). After changing them, run `supabase functions deploy ai-coach-chat`.
    - The UI lists models in `src/src/lib/aiCoachModels.ts`, plus references in `AiCoachPage.tsx`, `lib/coach/demoCoach.ts` and its test, `options/ListsTab.tsx`, `options/legacy/LegacyListsTab.tsx`, and `website/components/ui/error-modal.tsx`.
    - **Since 2026-09-30 the AI goes through Vertex AI (express mode):** `GEMINI_API_BASE = https://aiplatform.googleapis.com/v1/publishers/google` in `_shared/geminiAi.ts`. The Supabase secret `GEMINI_API_KEY` holds the Vertex API key (sent as `x-goog-api-key`). `ai-coach-chat` and `extract-image-text` are deployed with it. The owner chose Gemini 2.5 Flash (regular) and 2.5 Pro (think) to fit the $8/month price.
+   - **2026-10-01: the coach is a general assistant now.** `COACH_SYSTEM_PROMPT` tells it to answer anything (with productivity as its specialty), add at most one optional FocuzNow offer, and use full Markdown + LaTeX. **It needs `supabase functions deploy ai-coach-chat` to take effect.** Replies render through `components/coach/CoachMarkdown.tsx`: GFM plus `remark-math`/`rehype-katex`/`katex` (owner approved these dependencies on 2026-10-01). `lib/coach/mathText.ts` escapes dollar amounts so "$5" isn't treated as math, and opens a one-line `$$…$$` into a display equation.
    - Think mode sends `thinkingConfig.thinkingBudget` (`_shared/geminiAi.ts`). Gemini 3 models use `thinkingLevel`, so switch to that if a Gemini 3 model rejects it.
 7. Not started: the web vault on its own origin (needs a deploy); a new master password reaching other devices (phase 6); FocuzPass for Windows (phase 8, undecided).
