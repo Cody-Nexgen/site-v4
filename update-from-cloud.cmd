@@ -60,6 +60,11 @@ cd src
 set "NEED_INSTALL="
 if not exist node_modules set "NEED_INSTALL=1"
 if not "%LOCK_BEFORE%"=="%LOCK_AFTER%" set "NEED_INSTALL=1"
+rem Also when a package the project lists isn't installed (an earlier update may have skipped it).
+if not defined NEED_INSTALL (
+    call npm ls --depth=0 >nul 2>&1
+    if errorlevel 1 set "NEED_INSTALL=1"
+)
 if defined NEED_INSTALL (
     echo.
     echo Installing packages...
