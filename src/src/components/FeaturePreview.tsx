@@ -45,7 +45,7 @@ const SLIDES = [
         eyebrow: 'Scheduling',
         title: 'Focus Calendar',
         description:
-            'Drag focus blocks onto your week, sync Google Calendar, and auto-block distractions during sessions.',
+            'Drag focus blocks onto your week, share booking links, and auto-block distractions during sessions.',
         icon: CalendarDays,
         iconClass: 'text-sky-400 bg-sky-500/10 ring-sky-500/20',
         preview: (
@@ -57,7 +57,7 @@ const SLIDES = [
             >
                 <motion.div className="grid grid-cols-7 gap-1 mb-2">
                     {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                        <div key={i} className="text-[9px] font-medium text-neutral-600 text-center py-0.5">
+                        <div key={i} className="text-[11px] font-medium text-neutral-600 text-center py-0.5">
                             {d}
                         </div>
                     ))}
@@ -66,11 +66,11 @@ const SLIDES = [
                     {Array.from({ length: 7 }).map((_, i) => (
                         <div
                             key={i}
-                            className={`h-7 rounded-md ${i >= 2 && i <= 4 ? 'bg-violet-500/40 ring-1 ring-violet-400/30' : 'bg-white/[0.04]'}`}
+                            className={`h-7 rounded-lg ${i >= 2 && i <= 4 ? 'bg-blue-500/40 ring-1 ring-blue-400/30' : 'bg-white/4'}`}
                         />
                     ))}
                 </div>
-                <p className="mt-2.5 text-[10px] text-neutral-500 text-center">Wed · Deep work 9:00–12:00</p>
+                <p className="mt-2.5 text-[11px] text-neutral-500 text-center">Wed · Deep work 9:00–12:00</p>
             </motion.div>
         ),
     },
@@ -79,9 +79,9 @@ const SLIDES = [
         tint: 'violet' as const,
         eyebrow: 'Navigation',
         title: 'Command Palette',
-        description: 'Press ⌘K to jump anywhere—sessions, blocklist, calendar, or AI Coach—in one keystroke.',
+        description: 'Press Alt+K to jump anywhere—sessions, blocklist, calendar, or AI Coach—in one keystroke.',
         icon: Command,
-        iconClass: 'text-violet-400 bg-violet-500/10 ring-violet-500/20',
+        iconClass: 'text-blue-400 bg-blue-500/10 ring-blue-500/20',
         preview: (
             <motion.div
                 className="focuz-preview-frame overflow-hidden"
@@ -89,7 +89,7 @@ const SLIDES = [
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35 }}
             >
-                <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-2.5 bg-white/[0.02]">
+                <div className="flex items-center gap-2 border-b border-white/8 px-3 py-2.5 bg-white/4">
                     <Command size={13} className="text-neutral-500 shrink-0" />
                     <span className="text-xs text-neutral-400">Go to calendar…</span>
                 </div>
@@ -101,7 +101,7 @@ const SLIDES = [
                     ].map((row) => (
                         <div
                             key={row.label}
-                            className={`px-3 py-2 text-xs ${row.active ? 'bg-violet-500/15 text-violet-200' : 'text-neutral-500'}`}
+                            className={`px-3 py-2 text-xs ${row.active ? 'bg-blue-500/15 text-blue-200' : 'text-neutral-500'}`}
                         >
                             {row.label}
                         </div>
@@ -138,7 +138,7 @@ export function FeaturePreview({ onComplete }: FeaturePreviewProps) {
 
                 <div className="h-0.5 w-full rounded-full bg-neutral-800/80 mb-6 overflow-hidden">
                     <motion.div
-                        className="h-full bg-violet-500 rounded-full"
+                        className="h-full bg-blue-500 rounded-full"
                         animate={{ width: `${((step + 1) / SLIDES.length) * 100}%` }}
                         transition={{ duration: 0.3, ease: 'easeOut' }}
                     />
@@ -157,7 +157,7 @@ export function FeaturePreview({ onComplete }: FeaturePreviewProps) {
 
                         <div className="flex items-start gap-3">
                             <div
-                                className={`shrink-0 w-10 h-10 rounded-xl ring-1 flex items-center justify-center ${slide.iconClass}`}
+                                className={`shrink-0 w-10 h-10 rounded-lg ring-1 flex items-center justify-center ${slide.iconClass}`}
                             >
                                 <Icon size={20} strokeWidth={2} />
                             </div>

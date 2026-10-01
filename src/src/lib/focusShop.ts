@@ -42,13 +42,13 @@ export const SHOP_ITEMS: ShopItem[] = [
     },
     {
         id: 'frame_gold',
-        name: 'Gilt',
-        description: 'Warm metal edge for your level mark.',
+        name: 'Halo',
+        description: 'A clean bright rim for your level mark.',
         type: 'frame',
         cost: 300,
-        mark: 'GILT',
+        mark: 'HALO',
         cssClass: 'focus-frame-gold',
-        swatch: '#c4a35a',
+        swatch: '#d4d4d8',
     },
     {
         id: 'badge_sprout',

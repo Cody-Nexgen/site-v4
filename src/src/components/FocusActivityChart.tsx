@@ -18,10 +18,10 @@ function scoreForDay(day: DayStat): number {
 }
 
 function levelColor(score: number, hasData: boolean): string {
-    if (!hasData) return 'bg-white/[0.04]';
+    if (!hasData) return 'bg-white/4';
     if (score >= 85) return 'bg-emerald-500';
     if (score >= 70) return 'bg-emerald-500/70';
-    if (score >= 50) return 'bg-purple-500/60';
+    if (score >= 50) return 'bg-blue-500/60';
     if (score >= 30) return 'bg-amber-500/50';
     return 'bg-red-500/40';
 }
@@ -63,7 +63,7 @@ export function FocusActivityChart({ stats, weeks = 12, className = '' }: Props)
             <div className="inline-flex gap-[3px] min-w-0">
                 <div className="flex flex-col gap-[3px] pt-0.5 shrink-0">
                     {dayLabels.map((label, i) => (
-                        <span key={i} className="h-[11px] text-[9px] text-neutral-600 leading-[11px] w-3">
+                        <span key={i} className="h-[11px] text-[11px] text-neutral-600 leading-[11px] w-3">
                             {label}
                         </span>
                     ))}
@@ -76,20 +76,20 @@ export function FocusActivityChart({ stats, weeks = 12, className = '' }: Props)
                                     <div
                                         key={ri}
                                         title={`${cell.date.toLocaleDateString()} — Focus: ${cell.hasData ? cell.score : '—'}`}
-                                        className={`w-[11px] h-[11px] rounded-[2px] ${levelColor(cell.score, cell.hasData)}`}
+                                        className={`w-[11px] h-[11px] rounded-sm ${levelColor(cell.score, cell.hasData)}`}
                                     />
                                 ) : (
-                                    <div key={ri} className="w-[11px] h-[11px] rounded-[2px] bg-white/[0.02]" />
+                                    <div key={ri} className="w-[11px] h-[11px] rounded-sm bg-white/4" />
                                 ),
                             )}
                         </div>
                     ))}
                 </div>
             </div>
-            <div className="flex items-center gap-1.5 mt-3 text-[9px] text-neutral-600">
+            <div className="flex items-center gap-1.5 mt-3 text-[11px] text-neutral-600">
                 <span>Less focus</span>
-                {['bg-white/[0.04]', 'bg-red-500/40', 'bg-amber-500/50', 'bg-purple-500/60', 'bg-emerald-500'].map((c) => (
-                    <div key={c} className={`w-[11px] h-[11px] rounded-[2px] ${c}`} />
+                {['bg-white/4', 'bg-red-500/40', 'bg-amber-500/50', 'bg-blue-500/60', 'bg-emerald-500'].map((c) => (
+                    <div key={c} className={`w-[11px] h-[11px] rounded-sm ${c}`} />
                 ))}
                 <span>More focus</span>
             </div>

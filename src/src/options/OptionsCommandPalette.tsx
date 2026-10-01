@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useAuthStore } from '../lib/store';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
     BarChart3,
     Calendar,
     Check,
-    Clock,
     FlaskConical,
+    KeyRound,
     LayoutGrid,
     ListTodo,
     Search,
@@ -13,6 +14,7 @@ import {
     Shield,
     Sparkles,
     Target,
+    Timer,
     Trees,
     Trophy,
     User,
@@ -20,6 +22,7 @@ import {
     ShoppingBag,
 } from 'lucide-react';
 import { isDevModeEnabled, toggleDevMode } from '../lib/devMode';
+import { PALETTE_SHORTCUT_LABEL } from '../lib/shortcuts';
 import { WORKSPACE_NAV } from '../lib/workspaceNav';
 
 export type PaletteNavTarget = {
@@ -34,9 +37,10 @@ const NAV_TARGETS: PaletteNavTarget[] = WORKSPACE_NAV.flatMap((section) =>
 
 const NAV_ICONS: Record<string, typeof LayoutGrid> = {
     overview: LayoutGrid,
+    focuzpass: KeyRound,
     calendar: Calendar,
     lists: ListTodo,
-    sessions: Clock,
+    sessions: Timer,
     blocklist: Shield,
     habits: Target,
     progress: Trophy,
@@ -55,11 +59,30 @@ const NAV_ICONS: Record<string, typeof LayoutGrid> = {
 type Command = {
     id: string;
     label: string;
+    /** Short detail shown on the right, like a duration. */
     meta?: string;
-    section: 'Actions' | 'Navigation';
+    section: 'Actions' | 'Go to';
     icon: typeof LayoutGrid;
     run: () => void;
 };
+
+const EASE = [0.16, 1, 0.3, 1] as const;
+
+function Highlight({ label, query }: { label: string; query: string }) {
+    const q = query.trim().toLowerCase();
+    if (!q) return <>{label}</>;
+    const idx = label.toLowerCase().indexOf(q);
+    if (idx === -1) return <>{label}</>;
+    return (
+        <>
+            {label.slice(0, idx)}
+            <span className="text-[var(--cmdk-text-1)] underline decoration-[var(--cmdk-text-4)] underline-offset-[3px]">
+                {label.slice(idx, idx + q.length)}
+            </span>
+            {label.slice(idx + q.length)}
+        </>
+    );
+}
 
 type Props = {
     open: boolean;
@@ -69,12 +92,16 @@ type Props = {
     onFeedback?: (message: string) => void;
 };
 
+/** The dashboard's command palette, styled like focuznow.com's (see .fz-cmdk in focuzDesign.css). */
 export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onFeedback }: Props) {
     const [query, setQuery] = useState('');
     const [selected, setSelected] = useState(0);
     const [todoPrompt, setTodoPrompt] = useState(false);
     const [todoSuccess, setTodoSuccess] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
+    /** True when the arrow keys moved the highlight (only then do we scroll it into view). */
+    const keyboardMove = useRef(false);
+    const listId = useId();
 
     const commands = useMemo<Command[]>(() => {
         const q = query.trim().toLowerCase();
@@ -86,9 +113,8 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
                 t.tab.includes(q),
         ).map((t) => ({
             id: `nav-${t.tab}`,
-            label: `Go to ${t.label}`,
-            meta: t.group,
-            section: 'Navigation' as const,
+            label: t.label,
+            section: 'Go to' as const,
             icon: NAV_ICONS[t.tab] || LayoutGrid,
             run: () => onNavigate(t.tab),
         }));
@@ -96,10 +122,10 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
         const actions: Command[] = [
             {
                 id: 'focus',
-                label: 'Start focus session',
-                meta: '25m',
+                label: 'Start a focus session',
+                meta: '25 min',
                 section: 'Actions',
-                icon: Target,
+                icon: Timer,
                 run: () => {
                     chrome.runtime.sendMessage({ type: 'START_SESSION', duration: 25 }, () => {
                         onFeedback?.('Focus session started (25m)');
@@ -108,10 +134,9 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
             },
             {
                 id: 'todo',
-                label: 'Add to-do',
-                meta: 'Task',
+                label: 'Add a to-do',
                 section: 'Actions',
-                icon: Target,
+                icon: ListTodo,
                 run: () => {
                     setTodoPrompt(true);
                     setQuery('');
@@ -122,7 +147,6 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
             actions.push({
                 id: 'ai',
                 label: 'Open AI coach',
-                meta: 'Coach',
                 section: 'Actions',
                 icon: Sparkles,
                 run: onOpenAi,
@@ -133,7 +157,7 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
             actions.push({
                 id: 'devmodetest',
                 label: '/devmodetest',
-                meta: isDevModeEnabled() ? 'Disable dev testing mode' : 'Enable dev testing mode',
+                meta: isDevModeEnabled() ? 'Turn off' : 'Turn on',
                 section: 'Actions',
                 icon: FlaskConical,
                 run: () => {
@@ -147,8 +171,8 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
             });
         }
 
-        const all = [...actions, ...nav];
-        return all.filter((a) => !q || a.label.toLowerCase().includes(q) || a.meta?.toLowerCase().includes(q));
+        const matching = actions.filter((a) => !q || a.label.toLowerCase().includes(q) || a.meta?.toLowerCase().includes(q));
+        return [...matching, ...nav];
     }, [query, onNavigate, onOpenAi, onFeedback]);
 
     const submitTodo = () => {
@@ -164,12 +188,18 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
             }
             setTodoSuccess(true);
             setQuery('');
+            void useAuthStore.getState().fetchEngineState();
             window.setTimeout(() => {
                 setTodoSuccess(false);
                 setTodoPrompt(false);
                 setSelected(0);
             }, 900);
         });
+    };
+
+    const runCommand = (cmd: Command) => {
+        cmd.run();
+        if (cmd.id !== 'todo') onClose();
     };
 
     useEffect(() => {
@@ -185,10 +215,22 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
     }, [open]);
 
     useEffect(() => {
+        if (todoPrompt) inputRef.current?.focus();
+    }, [todoPrompt]);
+
+    useEffect(() => {
         if (!todoPrompt && !todoSuccess) {
             setSelected((i) => Math.min(i, Math.max(0, commands.length - 1)));
         }
     }, [commands.length, todoPrompt, todoSuccess]);
+
+    // Keep the highlighted row in view while arrowing through a long list. Not for the mouse:
+    // scrolling under the pointer would highlight the next row, scroll again, and run away.
+    useEffect(() => {
+        if (!open || !keyboardMove.current) return;
+        keyboardMove.current = false;
+        document.getElementById(`${listId}-${selected}`)?.scrollIntoView({ block: 'nearest' });
+    }, [open, selected, listId]);
 
     useEffect(() => {
         if (!open) return;
@@ -212,49 +254,52 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
             }
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
+                keyboardMove.current = true;
                 setSelected((i) => (i + 1) % Math.max(1, commands.length));
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
+                keyboardMove.current = true;
                 setSelected((i) => (i - 1 + commands.length) % Math.max(1, commands.length));
             } else if (e.key === 'Enter' && commands[selected]) {
                 e.preventDefault();
-                const cmd = commands[selected];
-                if (cmd.id === 'todo') {
-                    cmd.run();
-                } else {
-                    cmd.run();
-                    onClose();
-                }
+                runCommand(commands[selected]);
             }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [open, commands, selected, onClose, todoPrompt, todoSuccess, query]);
 
+    let lastSection = '';
+
     return (
         <AnimatePresence>
             {open && (
                 <motion.div
-                    className="fixed inset-0 z-[300] flex items-start justify-center pt-[12vh] px-4 bg-black/70"
+                    className="fz-cmdk fixed inset-0 z-[60] flex items-start justify-center px-4 pt-[16vh]"
+                    style={{ background: 'var(--cmdk-scrim)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    onClick={onClose}
+                    transition={{ duration: 0.2 }}
+                    onMouseDown={(e) => e.target === e.currentTarget && onClose()}
                 >
                     <motion.div
-                        className="w-full max-w-[560px] bg-[#141416] border border-white/[0.09] rounded-lg overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.55)]"
-                        initial={{ opacity: 0, scale: 0.97, y: -6 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.97, y: -6 }}
-                        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                        onClick={(e) => e.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Command palette"
+                        className="w-full max-w-[560px] overflow-hidden rounded-[18px]"
+                        style={{ background: 'var(--cmdk-panel)', boxShadow: '0 0 0 1px var(--cmdk-ring), var(--cmdk-shadow)' }}
+                        initial={{ opacity: 0, y: -10, scale: 0.97, filter: 'blur(6px)' }}
+                        animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98, filter: 'blur(4px)' }}
+                        transition={{ duration: 0.32, ease: EASE }}
                     >
-                        <div
-                            className={`m-2 px-3 py-2.5 bg-white/[0.025] border rounded-md flex items-center gap-2.5 ${
-                                todoPrompt ? 'border-white/[0.14]' : 'border-white/[0.07]'
-                            }`}
-                        >
-                            <Search size={18} className="text-neutral-600 flex-shrink-0" />
+                        <div className="flex items-center gap-3 px-5" style={{ boxShadow: 'inset 0 -1px 0 var(--cmdk-line)' }}>
+                            {todoPrompt ? (
+                                <ListTodo size={17} className="shrink-0 text-[var(--cmdk-text-3)]" />
+                            ) : (
+                                <Search size={17} className="shrink-0 text-[var(--cmdk-text-3)]" />
+                            )}
                             <input
                                 ref={inputRef}
                                 value={query}
@@ -262,86 +307,84 @@ export function OptionsCommandPalette({ open, onClose, onNavigate, onOpenAi, onF
                                     setQuery(e.target.value);
                                     if (!todoPrompt) setSelected(0);
                                 }}
-                                placeholder={
-                                    todoPrompt ? 'What do you need to do?' : 'Type a command or search…'
-                                }
-                                className="flex-1 bg-transparent border-none outline-none text-neutral-200 text-sm font-normal placeholder:text-neutral-600"
+                                placeholder={todoPrompt ? 'What do you need to do?' : 'Search or run a command'}
+                                className="fz-cmdk-input h-[58px] min-w-0 flex-1 bg-transparent text-[16px] text-[var(--cmdk-text-1)] outline-none placeholder:text-[var(--cmdk-text-4)]"
                                 spellCheck={false}
                                 autoComplete="off"
+                                role="combobox"
+                                aria-expanded={!todoPrompt}
+                                aria-controls={listId}
+                                aria-activedescendant={!todoPrompt && commands[selected] ? `${listId}-${selected}` : undefined}
                             />
+                            <span className="fz-cmdk-kbd">esc</span>
                         </div>
 
-                        {todoPrompt && !todoSuccess && (
-                            <p className="px-4 pb-2 text-xs font-medium text-neutral-500">
-                                Add to-do — press Enter to save
+                        {todoSuccess ? (
+                            <div className="flex flex-col items-center justify-center gap-3 py-10">
+                                <motion.span
+                                    className="flex size-12 items-center justify-center rounded-full text-[var(--cmdk-success)]"
+                                    style={{ boxShadow: 'inset 0 0 0 1px currentColor' }}
+                                    initial={{ scale: 0.6, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ duration: 0.32, ease: EASE }}
+                                >
+                                    <Check size={22} strokeWidth={2.5} />
+                                </motion.span>
+                                <p className="text-[14.5px] font-medium text-[var(--cmdk-text-1)]">To-do added</p>
+                            </div>
+                        ) : todoPrompt ? (
+                            <p className="px-5 py-4 text-[13px] text-[var(--cmdk-text-3)]">
+                                Type it, then press <span className="fz-cmdk-kbd">↵</span> to add it to today.
                             </p>
-                        )}
-
-                        <div className="max-h-[360px] overflow-y-auto pb-3">
-                            {todoSuccess ? (
-                                <div className="flex flex-col items-center justify-center py-10 gap-3 animate-fade-in-up">
-                                    <div className="w-14 h-14 rounded-full bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400">
-                                        <Check size={28} strokeWidth={2.5} />
+                        ) : (
+                            <div id={listId} role="listbox" className="max-h-[360px] overflow-y-auto p-2">
+                                {commands.length === 0 && (
+                                    <div className="px-3 py-8 text-center text-[14px] text-[var(--cmdk-text-3)]">
+                                        No commands match “{query}”.
                                     </div>
-                                    <p className="text-sm font-bold text-white">To-do added</p>
-                                </div>
-                            ) : todoPrompt ? null : commands.length === 0 ? (
-                                <p className="text-center text-neutral-600 text-sm py-10">No matches</p>
-                            ) : (
-                                (['Actions', 'Navigation'] as const).map((section) => {
-                                    const sectionCmds = commands.filter((c) => c.section === section);
-                                    if (!sectionCmds.length) return null;
+                                )}
+                                {commands.map((cmd, i) => {
+                                    const Icon = cmd.icon;
+                                    const header = cmd.section !== lastSection ? cmd.section : null;
+                                    lastSection = cmd.section;
+                                    const isSelected = i === selected;
                                     return (
-                                        <div key={section}>
-                                            <p className="text-[10px] font-medium text-neutral-600 px-4 py-2">
-                                                {section}
-                                            </p>
-                                            {sectionCmds.map((cmd) => {
-                                                const i = commands.indexOf(cmd);
-                                                const Icon = cmd.icon;
-                                                return (
-                                                    <button
-                                                        key={cmd.id}
-                                                        type="button"
-                                                        onMouseEnter={() => setSelected(i)}
-                                                        onClick={() => {
-                                                            if (cmd.id === 'todo') {
-                                                                cmd.run();
-                                                            } else {
-                                                                cmd.run();
-                                                                onClose();
-                                                            }
-                                                        }}
-                                                        className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${
-                                                            i === selected
-                                                                ? 'bg-white/[0.08] text-white'
-                                                                : 'text-neutral-400 hover:bg-white/[0.03]'
-                                                        }`}
-                                                    >
-                                                        <Icon
-                                                            size={18}
-                                                            className={
-                                                                i === selected
-                                                                    ? 'text-neutral-200'
-                                                                    : 'text-neutral-600'
-                                                            }
-                                                        />
-                                                        <div className="flex-1 min-w-0">
-                                                            <span className="text-sm font-medium block">
-                                                                {cmd.label}
-                                                            </span>
-                                                            <span className="text-[11px] text-neutral-600">
-                                                                {cmd.meta || section}
-                                                            </span>
-                                                        </div>
-                                                        <kbd className="kbd">↵</kbd>
-                                                    </button>
-                                                );
-                                            })}
+                                        <div key={cmd.id}>
+                                            {header && (
+                                                <div className="px-3 pb-1.5 pt-2.5 text-[12px] font-[540] text-[var(--cmdk-text-4)]">{header}</div>
+                                            )}
+                                            <div
+                                                id={`${listId}-${i}`}
+                                                role="option"
+                                                aria-selected={isSelected}
+                                                onMouseMove={() => i !== selected && setSelected(i)}
+                                                onClick={() => runCommand(cmd)}
+                                                className="flex cursor-pointer items-center gap-3 rounded-[10px] px-3 py-2.5 text-[14.5px] transition-colors duration-150"
+                                                style={{
+                                                    background: isSelected ? 'var(--cmdk-selected)' : 'transparent',
+                                                    color: isSelected ? 'var(--cmdk-text-1)' : 'var(--cmdk-text-2)',
+                                                }}
+                                            >
+                                                <Icon size={16} className="shrink-0" />
+                                                <span className="min-w-0 flex-1 truncate">
+                                                    <Highlight label={cmd.label} query={query} />
+                                                </span>
+                                                {cmd.meta && <span className="text-[12.5px] text-[var(--cmdk-text-4)]">{cmd.meta}</span>}
+                                                <span className="fz-cmdk-kbd" style={{ visibility: isSelected ? 'visible' : 'hidden' }}>
+                                                    ↵
+                                                </span>
+                                            </div>
                                         </div>
                                     );
-                                })
-                            )}
+                                })}
+                            </div>
+                        )}
+
+                        <div
+                            className="flex items-center gap-2 px-5 py-3 text-[12.5px] text-[var(--cmdk-text-4)]"
+                            style={{ boxShadow: 'inset 0 1px 0 var(--cmdk-line)' }}
+                        >
+                            <span className="fz-cmdk-kbd">{PALETTE_SHORTCUT_LABEL}</span> opens this on every site too.
                         </div>
                     </motion.div>
                 </motion.div>

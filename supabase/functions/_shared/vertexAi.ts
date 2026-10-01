@@ -36,13 +36,14 @@ function* textFromVertexChunk(parsed: Record<string, unknown>): Generator<string
     }
 }
 
-export async function vertexGenerate(opts: {
+export async function vertexGenerateWithMeta(opts: {
     model: string;
     systemInstruction: string;
     contents: VertexContent[];
     maxOutputTokens?: number;
     temperature?: number;
-}): Promise<string> {
+    thinkingBudget?: number;
+}): Promise<{ text: string; finishReason?: string }> {
     const { projectId, location } = getVertexConfig();
     const token = await getGoogleAccessTokenFromServiceAccount(
         Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON')!,
@@ -60,6 +61,9 @@ export async function vertexGenerate(opts: {
             generationConfig: {
                 temperature: opts.temperature ?? 0.55,
                 maxOutputTokens: opts.maxOutputTokens ?? 2048,
+                ...(opts.thinkingBudget !== undefined
+                    ? { thinkingConfig: { thinkingBudget: opts.thinkingBudget } }
+                    : {}),
             },
         }),
     });
@@ -71,9 +75,23 @@ export async function vertexGenerate(opts: {
         );
     }
 
-    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    const candidate = data.candidates?.[0] ?? {};
+    const parts = candidate.content?.parts ?? [];
     const text = parts.map((p: { text?: string }) => p.text || '').join('').trim();
+    const finishReason = candidate.finishReason as string | undefined;
     if (!text) throw new Error('Empty response from Vertex AI');
+    return { text, finishReason };
+}
+
+export async function vertexGenerate(opts: {
+    model: string;
+    systemInstruction: string;
+    contents: VertexContent[];
+    maxOutputTokens?: number;
+    temperature?: number;
+    thinkingBudget?: number;
+}): Promise<string> {
+    const { text } = await vertexGenerateWithMeta(opts);
     return text;
 }
 
@@ -84,6 +102,7 @@ export async function* vertexStreamGenerate(opts: {
     contents: VertexContent[];
     maxOutputTokens?: number;
     temperature?: number;
+    thinkingBudget?: number;
 }): AsyncGenerator<string> {
     const { projectId, location } = getVertexConfig();
     const token = await getGoogleAccessTokenFromServiceAccount(
@@ -102,6 +121,9 @@ export async function* vertexStreamGenerate(opts: {
             generationConfig: {
                 temperature: opts.temperature ?? 0.55,
                 maxOutputTokens: opts.maxOutputTokens ?? 2048,
+                ...(opts.thinkingBudget !== undefined
+                    ? { thinkingConfig: { thinkingBudget: opts.thinkingBudget } }
+                    : {}),
             },
         }),
     });

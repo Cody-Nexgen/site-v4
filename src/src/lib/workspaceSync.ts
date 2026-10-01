@@ -34,7 +34,7 @@ export const SYNCABLE_WORKSPACE_KEYS = [
     'savedQuotes',
     'dashboardLayout',
     'proDashboardVisuals',
-    'notionJournalingEnabled',
+    'pageVersions',
     '_localMutationAt',
     'allowlistMode',
     // Cloud-managed dashboard data (not live blocking/history stats)
@@ -62,6 +62,28 @@ export const WEB_DASHBOARD_URL = 'https://focuznow.com/app';
 export const WEB_APP_FALLBACK_URL = 'https://focuznow.com/app';
 export const WEB_CALENDAR_URL = 'https://focuznow.com/calendar';
 export const WEB_APP_ORIGIN = 'https://focuznow.com';
+/** Local website dev server (`npm run dev --prefix website`). */
+export const LOCAL_WEB_APP_ORIGIN = 'http://localhost:3000';
+
+/**
+ * True for an unpacked (locally loaded) extension build. Store installs always
+ * carry `update_url` in their manifest; unpacked builds never do.
+ */
+export function isUnpackedExtension(): boolean {
+    try {
+        if (typeof chrome === 'undefined' || !chrome.runtime?.id || typeof chrome.runtime.getManifest !== 'function') {
+            return false;
+        }
+        return !('update_url' in chrome.runtime.getManifest());
+    } catch {
+        return false;
+    }
+}
+
+/** Where web tabs open: the local site for unpacked dev builds, production otherwise. */
+function webAppOrigin(): string {
+    return isUnpackedExtension() ? LOCAL_WEB_APP_ORIGIN : WEB_APP_ORIGIN;
+}
 export const SETUP_STORAGE_KEY = 'focuznow-setup-v1';
 export const SIDEBAR_COLLAPSED_KEY = 'focuznow-sidebar-collapsed-v1';
 
@@ -104,6 +126,10 @@ export function isExtensionHelperTab(tab: string): boolean {
 export function shouldOpenTabOnWeb(tab: string): boolean {
     // Local-only vault — never hand FocuzPass off to the website.
     if (tab === 'focuzpass') return false;
+    // Preview harness escape hatch (sidebar-preview ?coachDemo=1 / ?stayExtension=1).
+    if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__FOCUZ_STAY_EXTENSION__) {
+        return false;
+    }
     try {
         if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
             return !isExtensionHelperTab(tab);
@@ -116,15 +142,15 @@ export function shouldOpenTabOnWeb(tab: string): boolean {
 
 export function webDashboardUrl(path = '/'): string {
     try {
-        return new URL(path, WEB_APP_ORIGIN).href;
+        return new URL(path, webAppOrigin()).href;
     } catch {
-        return `${WEB_APP_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
+        return `${webAppOrigin()}${path.startsWith('/') ? path : `/${path}`}`;
     }
 }
 
 export function webAppTabUrl(tab?: string): string {
     const query = tab ? `?tab=${encodeURIComponent(tab)}` : '';
-    return `${WEB_DASHBOARD_URL}${query}`;
+    return `${webAppOrigin()}/app${query}`;
 }
 
 export function openWebDashboard(tab?: string): void {

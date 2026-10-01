@@ -1,5 +1,6 @@
 import type { Platform, PlatformMessage } from './types';
 import { pickSyncableWorkspaceState } from '../workspaceSync';
+import { WEB_EXTENSION_RPC_TYPES } from '../webBridgeProtocol';
 
 const LS_PREFIX = 'focuznow.web.storage.';
 const CHANGE_EVENT = 'focuznow-web-storage-changed';
@@ -79,18 +80,53 @@ async function storageSet(items: Record<string, unknown>, opts?: { syncCloud?: b
 
     // Only upsert after intentional mutations — never during cloud hydrate / stats pull.
     if (opts?.syncCloud === false) return;
+    if ('blockEngineState' in items && items.blockEngineState) scheduleCloudUpsert();
+}
 
+/*
+ * Cloud upsert runs in the background, coalesced: the UI (a to-do tick, a toggle) never
+ * waits on the network. Like the extension's syncSettingsInBackground.
+ */
+const CLOUD_UPSERT_DELAY_MS = 800;
+let cloudTimer: ReturnType<typeof setTimeout> | undefined;
+let cloudInFlight = false;
+let cloudAgain = false;
+
+function scheduleCloudUpsert() {
+    if (typeof window === 'undefined') return;
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(() => void runCloudUpsert(), CLOUD_UPSERT_DELAY_MS);
+}
+
+async function runCloudUpsert() {
+    cloudTimer = undefined;
+    if (cloudInFlight) {
+        cloudAgain = true;
+        return;
+    }
+    cloudInFlight = true;
     try {
-        if (!('blockEngineState' in items)) return;
-        const engine = items.blockEngineState as Record<string, unknown> | undefined;
-        if (engine && typeof window !== 'undefined') {
-            const { supabase } = await import('../supabase');
-            const syncable = pickSyncableWorkspaceState(engine);
-            await supabase.rpc('upsert_my_workspace_state', { p_state: syncable });
-        }
+        const { supabase } = await import('../supabase');
+        await supabase.rpc('upsert_my_workspace_state', { p_state: pickSyncableWorkspaceState(getEngineState()) });
     } catch {
         /* offline / unauthenticated */
+    } finally {
+        cloudInFlight = false;
+        if (cloudAgain) {
+            cloudAgain = false;
+            scheduleCloudUpsert();
+        }
     }
+}
+
+// Leaving the page: send a pending upsert now instead of dropping it.
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && cloudTimer !== undefined) {
+            clearTimeout(cloudTimer);
+            void runCloudUpsert();
+        }
+    });
 }
 
 async function storageRemove(keys: string | string[]) {
@@ -198,29 +234,40 @@ const PROGRESSION_MESSAGE_TYPES = new Set([
     'SET_PUBLIC_PROFILE',
 ]);
 
-const EXTENSION_RPC_TYPES = new Set([
-    'START_SESSION',
-    'TIMER_START',
-    'TIMER_CANCEL',
-    'BLOCK_DOMAIN',
-    'CATEGORY_TOGGLE',
-    'ADD_BLOCK',
-    'REMOVE_BLOCK',
-    'REMOVE_BLOCK_SOURCE',
-    'ADD_ALLOWED_SITE',
-    'REMOVE_ALLOWED_SITE',
-    'GET_CATEGORY_STATES',
-    'UPDATE_ENGINE_SETTINGS',
-    'START_NUCLEAR',
-    'SCHEDULE_ADD',
-    'SCHEDULE_REMOVE',
-    'EXPORT_LOCAL_STATS',
-]);
-
+// The page bridge only forwards these (see webBridgeProtocol).
 function shouldUseExtensionRpc(type: string | undefined): boolean {
     if (!type) return false;
     if (type.startsWith('FUTURE_SELF_')) return true;
-    return EXTENSION_RPC_TYPES.has(type);
+    return WEB_EXTENSION_RPC_TYPES.has(type);
+}
+
+export type FocuzPassEmbedLookup = { kind: 'ready'; embedUrl: string } | { kind: 'outdated' } | { kind: 'missing' };
+
+/**
+ * Where the extension's FocuzPass frame lives, asked through the page bridge. "outdated": an
+ * extension from before FocuzPass moved into a frame. The bridge can install a moment after the
+ * page starts, so keep asking for a little while.
+ */
+export function findFocuzPassEmbed(timeoutMs = 3000): Promise<FocuzPassEmbedLookup> {
+    if (typeof window === 'undefined') return Promise.resolve({ kind: 'missing' });
+    return new Promise((resolve) => {
+        const finish = (result: FocuzPassEmbedLookup) => {
+            window.clearInterval(ping);
+            window.clearTimeout(timer);
+            window.removeEventListener('message', onMessage);
+            resolve(result);
+        };
+        const onMessage = (event: MessageEvent) => {
+            if (event.source !== window || event.data?.type !== 'FOCUZNOW_EXTENSION_PONG') return;
+            const url = event.data.focuzPassEmbedUrl;
+            finish(typeof url === 'string' && url.startsWith('chrome-extension://') ? { kind: 'ready', embedUrl: url } : { kind: 'outdated' });
+        };
+        window.addEventListener('message', onMessage);
+        const send = () => window.postMessage({ type: 'FOCUZNOW_WEB_PING' }, window.location.origin);
+        const ping = window.setInterval(send, 250);
+        const timer = window.setTimeout(() => finish({ kind: 'missing' }), timeoutMs);
+        send();
+    });
 }
 
 export function extensionPresent(): boolean {
@@ -242,14 +289,20 @@ export function sendExtensionRpc<T = unknown>(message: PlatformMessage, timeoutM
     }
     return new Promise((resolve) => {
         const requestId = `rpc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const timeout = window.setTimeout(() => {
+        let provisional: Record<string, unknown> | null = null;
+        let provisionalTimer = 0;
+        const finish = (payload: Record<string, unknown>) => {
+            window.clearTimeout(timeout);
+            window.clearTimeout(provisionalTimer);
             window.removeEventListener('message', onMessage);
-            resolve({
+            resolve(payload as T);
+        };
+        const timeout = window.setTimeout(() => {
+            finish(provisional || {
                 ok: false,
                 needsExtension: true,
-                error:
-                    'Extension did not respond to RPC. Rebuild/reload the FocuzNow extension (v1.0.1+), then hard-refresh this page.',
-            } as T);
+                error: 'The FocuzNow extension didn’t respond in time. It may still be starting up — try again in a moment.',
+            });
         }, timeoutMs);
 
         const onMessage = (event: MessageEvent) => {
@@ -257,10 +310,18 @@ export function sendExtensionRpc<T = unknown>(message: PlatformMessage, timeoutM
             if (event.source !== window && event.origin !== window.location.origin) return;
             const data = event.data;
             if (!data || data.type !== 'FOCUZNOW_EXTENSION_RPC_RESULT' || data.requestId !== requestId) return;
-            window.clearTimeout(timeout);
-            window.removeEventListener('message', onMessage);
             const { type: _t, requestId: _r, ...payload } = data as Record<string, unknown>;
-            resolve(payload as T);
+            // A bridge orphaned by an extension reload answers instantly with an error.
+            // Give a freshly injected bridge a moment to answer properly first.
+            const orphaned = payload.orphaned === true || /context unavailable/i.test(String(payload.error || ''));
+            if (orphaned) {
+                if (!provisional) {
+                    provisional = payload;
+                    provisionalTimer = window.setTimeout(() => finish(provisional!), 2500);
+                }
+                return;
+            }
+            finish(payload);
         };
 
         window.addEventListener('message', onMessage);
@@ -288,6 +349,19 @@ function applyEngineSettingsPatch(patch: Record<string, unknown>): Record<string
 async function handleMessage(message: PlatformMessage): Promise<unknown> {
     const type = message.type;
     if (!type) return { ok: false };
+
+    // Quick to-do (command palette): the extension handles ADD_TODO itself; on the
+    // web it becomes a planner update so it goes through the same local-first path.
+    if (type === 'ADD_TODO') {
+        const title = String((message as { title?: unknown }).title ?? '').trim();
+        if (!title) return { ok: false };
+        const planner = Array.isArray(getEngineState().dailyPlanner) ? (getEngineState().dailyPlanner as unknown[]) : [];
+        const res = (await handleMessage({
+            type: 'UPDATE_ENGINE_SETTINGS',
+            settings: { dailyPlanner: [...planner, { id: Date.now(), time: 'Anytime', task: title, done: false }] },
+        })) as { ok?: boolean; state?: Record<string, unknown> };
+        return { ok: res?.ok !== false, title, state: res?.state };
+    }
 
     // Apply settings locally first so the web UI never depends on a slow/failed extension RPC.
     if (type === 'UPDATE_ENGINE_SETTINGS') {
@@ -510,7 +584,20 @@ export function installWebChromeShim() {
         },
     };
 
-    g.chrome = chromeShim as unknown as typeof chrome;
+    // The site is externally_connectable, so Chrome re-binds its own `chrome.runtime`
+    // onto this object whenever the extension installs or reloads. That native
+    // runtime has no onMessage/storage, which crashed the app on the next render.
+    // Lock the shim's members so those re-binds are ignored.
+    const locked: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(chromeShim)) {
+        Object.defineProperty(locked, key, {
+            get: () => value,
+            set: () => undefined,
+            enumerable: true,
+            configurable: false,
+        });
+    }
+    g.chrome = locked as unknown as typeof chrome;
 }
 
 export async function hydrateWebWorkspaceFromCloud() {

@@ -6,9 +6,9 @@ import { useProDashboardVisuals } from '../../lib/proDashboard';
 type Size = 'lg' | 'md' | 'sm';
 
 const SIZE: Record<Size, { box: string; icon: number; dot: string; radius: string }> = {
-    lg: { box: 'w-10 h-10 min-w-10 min-h-10', icon: 18, dot: 'w-2 h-2', radius: 'rounded-md' },
-    md: { box: 'w-8 h-8 min-w-8 min-h-8', icon: 15, dot: 'w-1.5 h-1.5', radius: 'rounded-md' },
-    sm: { box: 'w-6 h-6 min-w-6 min-h-6', icon: 12, dot: 'w-1.5 h-1.5', radius: 'rounded-[4px]' },
+    lg: { box: 'w-10 h-10 min-w-10 min-h-10', icon: 18, dot: 'w-2 h-2', radius: 'rounded-full' },
+    md: { box: 'w-8 h-8 min-w-8 min-h-8', icon: 15, dot: 'w-1.5 h-1.5', radius: 'rounded-full' },
+    sm: { box: 'w-6 h-6 min-w-6 min-h-6', icon: 12, dot: 'w-1.5 h-1.5', radius: 'rounded-full' },
 };
 
 /** Checkmark that traces itself in with a real stroke-draw animation, instead of just fading/popping. */
@@ -79,10 +79,21 @@ export function HabitCheckInButton({
             whileTap={!checked && !disabled ? { scale: 0.88 } : undefined}
             className={`pro-habit-check-btn ${s.box} ${s.radius} shrink-0 inline-flex items-center justify-center relative border transition-colors duration-200
                 ${checked
-                    ? 'is-checked bg-neutral-200 text-neutral-950 border-neutral-200'
-                    : 'bg-white/[0.025] text-neutral-600 hover:bg-white/[0.06] hover:text-neutral-400 border-white/[0.09]'}`}
+                    ? 'is-checked border-[var(--fz-accent)] text-[var(--fz-accent-fg)]'
+                    : 'bg-transparent text-neutral-600 hover:bg-white/6 hover:text-neutral-400 border-white/16'}`}
             aria-pressed={checked}
         >
+            {checked && (
+                <motion.span
+                    className="absolute inset-0 rounded-full"
+                    style={{ backgroundColor: 'var(--fz-accent)' }}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    aria-hidden
+                />
+            )}
+            <span className="relative z-10 inline-flex items-center justify-center">
             {spinning && !checked ? (
                 proTheme ? (
                     <span className="pro-habit-spinner-ring" aria-hidden />
@@ -94,6 +105,7 @@ export function HabitCheckInButton({
             ) : (
                 <span className={`${s.dot} rounded-full bg-neutral-700`} aria-hidden />
             )}
+            </span>
         </motion.button>
     );
 }
@@ -123,11 +135,11 @@ export function HabitDayCell({
             title={title}
             disabled={locked}
             onClick={() => void handleClick()}
-            className={`flex-1 h-8 rounded-[4px] border transition-colors
-                ${checked ? 'bg-neutral-300 border-neutral-300' : 'bg-white/[0.035] border-transparent hover:bg-white/[0.07]'}
-                ${isToday && !checked ? 'border-white/[0.2]' : ''}
+            className={`flex-1 h-8 rounded-sm border transition-colors
+                ${checked ? 'bg-neutral-300 border-neutral-300' : 'bg-white/4 border-transparent hover:bg-white/6'}
+                ${isToday && !checked ? 'border-white/16' : ''}
                 ${locked ? 'cursor-default' : 'cursor-pointer'}
-                ${!isToday && !checked ? 'opacity-40 hover:bg-white/[0.035]' : ''}`}
+                ${!isToday && !checked ? 'opacity-40 hover:bg-white/4' : ''}`}
         />
     );
 }

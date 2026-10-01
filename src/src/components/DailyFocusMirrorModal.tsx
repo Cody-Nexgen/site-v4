@@ -1,4 +1,24 @@
+import { useEffect, useState } from 'react';
 import type { FutureSelfMirror } from '../lib/futureSelfTypes';
+import { Dialog } from './fz/Dialog';
+import { Button } from './fz/Button';
+
+function CountUp({ value }: { value: number }) {
+    const [n, setN] = useState(0);
+    useEffect(() => {
+        let raf = 0;
+        const start = performance.now();
+        const dur = 600;
+        const tick = (t: number) => {
+            const p = Math.min(1, (t - start) / dur);
+            setN(Math.round(value * (1 - Math.pow(1 - p, 3))));
+            if (p < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [value]);
+    return <>{n}</>;
+}
 
 export function DailyFocusMirrorModal({
     mirror,
@@ -7,36 +27,44 @@ export function DailyFocusMirrorModal({
     mirror: FutureSelfMirror | null;
     onClose: () => void;
 }) {
-    if (!mirror) return null;
-    const percent = mirror.plannedMinutes > 0
+    const percent = mirror && mirror.plannedMinutes > 0
         ? Math.min(100, Math.round((mirror.completedMinutes / mirror.plannedMinutes) * 100))
         : 0;
     return (
-        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
-            <div className="w-full max-w-lg rounded-2xl border border-purple-500/25 bg-[#111114] p-7 text-white shadow-2xl">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-purple-400">Daily Focus Mirror · {mirror.date}</p>
-                <h2 className="mt-2 text-2xl font-semibold">Yesterday, reflected honestly.</h2>
-                <p className="mt-2 text-sm text-neutral-400">{mirror.contractGoal}</p>
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                        <div className="text-2xl font-semibold">{mirror.completedMinutes}<span className="text-sm text-neutral-500"> / {mirror.plannedMinutes} min</span></div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-neutral-500">Focus completed · {percent}%</div>
+        <Dialog
+            open={mirror !== null}
+            onClose={onClose}
+            title="Daily focus mirror"
+            size="md"
+            footer={<Button variant="primary" onClick={onClose} className="w-full">Close</Button>}
+        >
+            {mirror && (
+                <div>
+                    <p className="text-meta text-[var(--fz-text-3)]">{mirror.date}</p>
+                    <p className="mt-1 text-title-2">Yesterday, reflected honestly.</p>
+                    <p className="mt-2 text-body-sm text-[var(--fz-text-3)]">{mirror.contractGoal}</p>
+                    <div className="mt-5 grid grid-cols-3 gap-3">
+                        <div className="rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] p-3.5">
+                            <div className="text-stat text-[var(--fz-text-1)]">
+                                <CountUp value={mirror.completedMinutes} />
+                                <span className="text-meta"> / {mirror.plannedMinutes}m</span>
+                            </div>
+                            <div className="mt-1 text-meta text-[var(--fz-text-4)]">Focus completed · {percent}%</div>
+                        </div>
+                        <div className="rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] p-3.5">
+                            <div className="text-stat text-[var(--fz-text-1)]"><CountUp value={mirror.projectedDelayDays} /></div>
+                            <div className="mt-1 text-meta text-[var(--fz-text-4)]">Projected delay days</div>
+                        </div>
+                        <div className="rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] p-3.5">
+                            <div className="truncate text-stat text-[var(--fz-text-1)]" style={{ fontSize: 20 }}>{mirror.biggestDistraction || 'None'}</div>
+                            <div className="mt-1 text-meta text-[var(--fz-text-4)]">Biggest distraction</div>
+                        </div>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                        <div className="text-2xl font-semibold">{mirror.projectedDelayDays}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-neutral-500">Projected pace delay days</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                        <div className="truncate text-lg font-semibold">{mirror.biggestDistraction || 'None'}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-neutral-500">Biggest distraction</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                        <div className="text-lg font-semibold">{mirror.overrideCount} overrides · {mirror.blockCount} blocks</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-neutral-500">{mirror.promiseCount} broken promises</div>
-                    </div>
+                    <p className="mt-3 text-meta text-[var(--fz-text-4)]">
+                        {mirror.overrideCount} overrides · {mirror.blockCount} blocks · {mirror.promiseCount} broken promises
+                    </p>
                 </div>
-                <button onClick={onClose} className="mt-6 w-full rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black">Carry the lesson forward</button>
-            </div>
-        </div>
+            )}
+        </Dialog>
     );
 }

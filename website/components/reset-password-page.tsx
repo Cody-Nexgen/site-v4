@@ -134,7 +134,7 @@ export default function ResetPasswordPage({ onSuccess }: Props) {
         <GlassCard className="p-8">
           {done ? (
             <div className="text-center space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
+              <div className="w-14 h-14 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
                 <IconCheck size={28} className="text-emerald-400" />
               </div>
               <h1 className="text-2xl font-black text-white">Password updated</h1>
@@ -170,7 +170,7 @@ export default function ResetPasswordPage({ onSuccess }: Props) {
                     <div
                       key={i}
                       className={`h-1 flex-1 rounded-full transition-colors ${
-                        strength >= i ? "bg-purple-500" : "bg-white/10"
+                        strength >= i ? "bg-blue-500" : "bg-white/10"
                       }`}
                     />
                   ))}

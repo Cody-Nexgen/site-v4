@@ -5,19 +5,24 @@ interface GlassCardProps extends HTMLMotionProps<'div'> {
     variant?: 'default' | 'hover' | 'interactive';
 }
 
+/**
+ * Flat surface card. Named GlassCard for history only — the glass is gone.
+ * One elevation, one hairline border, no backdrop blur and no glow, so the
+ * marketing/auth screens read the same as the app they lead into.
+ */
 export function GlassCard({ className, variant = 'default', children, ...props }: GlassCardProps) {
     const variants = {
-        default: "bg-zinc-900/40 backdrop-blur-xl border border-white/10 shadow-xl",
-        hover: "bg-zinc-900/40 backdrop-blur-xl border border-white/10 shadow-xl hover:bg-zinc-800/50 hover:border-white/20 transition-colors duration-300",
-        interactive: "bg-zinc-900/40 backdrop-blur-xl border border-white/10 shadow-xl cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+        default: "bg-[#141416] border border-white/8",
+        hover: "bg-[#141416] border border-white/8 hover:bg-[#1c1c1f] hover:border-white/16 transition-colors duration-200",
+        interactive: "bg-[#141416] border border-white/8 cursor-pointer hover:bg-[#1c1c1f] hover:border-white/16 transition-colors duration-200"
     };
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={cn("rounded-2xl overflow-hidden", variants[variant], className)}
+            exit={{ opacity: 0, y: -8 }}
+            className={cn("rounded-lg overflow-hidden", variants[variant], className)}
             {...props}
         >
             {children}

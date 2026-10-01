@@ -111,7 +111,6 @@ export default function BetaLoginPage({ mode, onBack, onSuccess }: BetaLoginPage
       />
 
       <div className="w-full flex flex-col justify-center items-center p-6 sm:p-12 overflow-y-auto relative">
-        <div className="absolute top-[-20%] right-[-20%] w-[80%] h-[60%] bg-purple-900/10 blur-[100px] pointer-events-none" />
 
         <div className="w-full max-w-md relative z-10">
           <button
@@ -130,7 +129,7 @@ export default function BetaLoginPage({ mode, onBack, onSuccess }: BetaLoginPage
               </p>
               <button
                 onClick={onBack}
-                className="text-purple-400 hover:text-purple-300 text-sm underline underline-offset-4"
+                className="text-blue-400 hover:text-blue-300 text-sm underline underline-offset-4"
               >
                 Return to beta page
               </button>
@@ -201,7 +200,7 @@ export default function BetaLoginPage({ mode, onBack, onSuccess }: BetaLoginPage
                 {isLogin ? "Need to apply? " : "Already have an account? "}
                 <button
                   onClick={() => setIsLogin(!isLogin)}
-                  className="text-purple-400 hover:text-purple-300 font-medium underline underline-offset-4"
+                  className="text-blue-400 hover:text-blue-300 font-medium underline underline-offset-4"
                 >
                   {isLogin ? "Sign up" : "Log in"}
                 </button>

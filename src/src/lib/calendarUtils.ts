@@ -6,8 +6,8 @@ export const HOURS_PER_DAY = 24;
 /** Solid preset colors only (no alpha in picker). */
 export const EVENT_COLOR_PRESETS = [
     '#38bdf8',
-    '#6366f1',
-    '#a855f7',
+    '#3b82f6',
+    '#5ea2ff',
     '#ec4899',
     '#f43f5e',
     '#f97316',
@@ -24,8 +24,8 @@ const HOLIDAY_PALETTE = [
     '#22c55e',
     '#14b8a6',
     '#3b82f6',
-    '#6366f1',
-    '#a855f7',
+    '#3b82f6',
+    '#5ea2ff',
     '#ec4899',
     '#06b6d4',
 ];
@@ -107,7 +107,7 @@ export function eventCardFill(hex: string, alpha = 0.22): string {
     return `rgba(${r},${g},${b},${alpha})`;
 }
 
-export function normalizeHexColor(input: string, fallback = '#6366f1'): string {
+export function normalizeHexColor(input: string, fallback = '#3b82f6'): string {
     const v = input.trim();
     if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toLowerCase();
     if (/^#[0-9a-fA-F]{3}$/.test(v)) {

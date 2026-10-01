@@ -1,79 +1,40 @@
-// Content script to listen for session sync from web app
-import { installWebExtensionBridge } from './webBridge';
+// Content script for the FocuzNow website: session sync + "open the extension" requests.
+import { installWebExtensionBridge, isTrustedSitePage } from './webBridge';
 
-console.log('[Content Script] FocuzNow content script loaded on:', window.location.href);
 installWebExtensionBridge();
+// The manifest also runs this on the site's local dev ports; a Web Store install ignores those.
+const trustedSite = isTrustedSitePage();
 
-// Listen for messages from the web app
-window.addEventListener("message", (event) => {
-    // Only accept messages from same origin
-    if (event.origin !== window.location.origin) {
+function sendToExtension(message: Record<string, unknown>) {
+    // After an extension reload this script is orphaned; a fresh copy is injected
+    // and handles messages, so stay quiet here.
+    if (!chrome.runtime?.id) return;
+    chrome.runtime.sendMessage(message).catch(() => undefined);
+}
+
+// Messages from the web app (same window, same origin only).
+window.addEventListener('message', (event) => {
+    if (!trustedSite) return;
+    if (event.source !== window || event.origin !== window.location.origin) return;
+    const data = event.data;
+    if (!data || typeof data !== 'object') return;
+
+    if (data.type === 'FOCUZNOW_SESSION_SYNC') {
+        if (data.session) sendToExtension({ type: 'SYNC_SESSION', session: data.session });
         return;
     }
 
-    // Check if this is a FocuzNow session sync message
-    if (event.data.type === "FOCUZNOW_SESSION_SYNC" || event.data.session) {
-        console.log('[Content Script] ✓ Received FOCUZNOW_SESSION_SYNC message!');
-
-        // Check if extension context is valid
-        if (!chrome.runtime?.id) {
-            console.error('[Content Script] Extension context invalid. The extension might have been reloaded. Please refresh the page.');
-            return;
-        }
-
-        // Forward the session to the background script
-        try {
-            chrome.runtime.sendMessage({
-                type: 'SYNC_SESSION',
-                session: event.data.session
-            });
-        } catch (error) {
-            console.error('[Content Script] Exception sending message:', error);
-        }
-        return;
-    }
-
-    // Check for Unblock Request from Blocked Page
-    if (event.data.type === 'REQUEST_UNBLOCK_FROM_PAGE') {
-        if (!chrome.runtime?.id) return;
-        try {
-            chrome.runtime.sendMessage({
-                type: 'REQUEST_UNBLOCK',
-                url: event.data.url
-            });
-        } catch (e) {
-            console.error('[Content Script] Failed to send unblock request:', e);
-        }
-        return;
-    }
-
-    // Check for Open Extension Options Request
-    if (event.data.type === 'OPEN_EXTENSION_OPTIONS') {
-        if (!chrome.runtime?.id) return;
+    if (data.type === 'OPEN_EXTENSION_OPTIONS') {
+        const w = window as unknown as { __fnOpenOptionsAt?: number };
         const now = Date.now();
-        const last = (window as unknown as { __fnOpenOptionsAt?: number }).__fnOpenOptionsAt ?? 0;
-        if (now - last < 3000) return;
-        (window as unknown as { __fnOpenOptionsAt: number }).__fnOpenOptionsAt = now;
-        try {
-            chrome.runtime.sendMessage({
-                type: 'OPEN_OPTIONS',
-                tab: event.data.tab,
-            });
-        } catch (e) {
-            console.error('[Content Script] Failed to send open options request:', e);
-        }
-        return;
+        if (now - (w.__fnOpenOptionsAt ?? 0) < 3000) return;
+        w.__fnOpenOptionsAt = now;
+        sendToExtension({ type: 'OPEN_OPTIONS', tab: data.tab });
     }
 });
 
-// Check for payment success page
-if (window.location.pathname === '/payment_success') {
-    const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('session_id');
-    if (sessionId && chrome.runtime?.id) {
-        chrome.runtime.sendMessage({
-            type: 'PAYMENT_SUCCESS',
-            sessionId
-        });
-    }
+// Payment success page → let the extension celebrate the upgrade.
+if (trustedSite && window.location.pathname === '/payment_success') {
+    const sessionId = new URLSearchParams(window.location.search).get('session_id');
+    if (sessionId) sendToExtension({ type: 'PAYMENT_SUCCESS', sessionId });
 }

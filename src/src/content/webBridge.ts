@@ -5,21 +5,20 @@
  * pick up RPC if either script is updated).
  */
 
+import { holdExtensionAnchor, releaseExtensionAnchor } from './extensionAnchor';
+import { isTrustedSiteOrigin } from '../lib/trustedOrigins';
+import { isWebBridgeType } from '../lib/webBridgeProtocol';
+import { EMBED_PAGE } from '../lib/focuzPass/embed';
+
 const BRIDGE_FLAG = '__focuznowWebBridgeInstalled';
 
-function isDashboardHost(hostname: string): boolean {
-    return (
-        hostname === 'focuznow.com' ||
-        hostname === 'www.focuznow.com' ||
-        hostname === 'dashboard.focuznow.com' ||
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1'
-    );
+/** The FocuzNow site's own top frame (its local dev servers only on unpacked installs). */
+export function isTrustedSitePage(): boolean {
+    return typeof window !== 'undefined' && window.top === window && isTrustedSiteOrigin(window.location.origin);
 }
 
 export function installWebExtensionBridge(): void {
-    if (typeof window === 'undefined') return;
-    if (!isDashboardHost(window.location.hostname)) return;
+    if (!isTrustedSitePage()) return;
 
     const w = window as unknown as Record<string, unknown>;
     if (w[BRIDGE_FLAG]) return;
@@ -28,11 +27,27 @@ export function installWebExtensionBridge(): void {
     document.documentElement.setAttribute('data-focuznow-extension', 'true');
     document.documentElement.setAttribute('data-focuznow-bridge', 'rpc-v1');
 
-    window.addEventListener('message', (event) => {
+    // Dashboard requests (FocuzPass, blocking toggles) go to the worker; keep the
+    // extension at normal priority while a FocuzNow tab is on screen.
+    const syncAnchor = () => {
+        if (document.visibilityState === 'visible') holdExtensionAnchor('dashboard-bridge');
+        else releaseExtensionAnchor('dashboard-bridge');
+    };
+    syncAnchor();
+    document.addEventListener('visibilitychange', syncAnchor);
+
+    const onMessage = (event: MessageEvent) => {
         if (event.source !== window) return;
         if (event.origin !== window.location.origin) return;
         const data = event.data;
         if (!data || typeof data !== 'object') return;
+
+        // A fresh bridge (re-injected after an extension reload) announced itself.
+        // If this one was orphaned by that reload, step aside so it can't answer first.
+        if (data.type === 'FOCUZNOW_EXTENSION_READY') {
+            if (!chrome.runtime?.id) window.removeEventListener('message', onMessage);
+            return;
+        }
 
         if (data.type === 'FOCUZNOW_WEB_PING') {
             window.postMessage(
@@ -40,6 +55,8 @@ export function installWebExtensionBridge(): void {
                     type: 'FOCUZNOW_EXTENSION_PONG',
                     bridge: 'rpc-v1',
                     extensionId: chrome.runtime?.id || null,
+                    // FocuzPass on the site is a frame of this page (the site never gets vault contents).
+                    focuzPassEmbedUrl: chrome.runtime?.id ? chrome.runtime.getURL(EMBED_PAGE) : null,
                 },
                 '*',
             );
@@ -49,6 +66,11 @@ export function installWebExtensionBridge(): void {
         if (data.type === 'FOCUZNOW_EXTENSION_RPC') {
             const requestId = data.requestId;
             const message = data.message;
+            if (!isWebBridgeType(message?.type)) {
+                // Only what the dashboard needs goes through; the account session and the rest stay inside.
+                window.postMessage({ type: 'FOCUZNOW_EXTENSION_RPC_RESULT', requestId, ok: false, error: 'Not available from a web page' }, '*');
+                return;
+            }
             if (!chrome.runtime?.id) {
                 window.postMessage(
                     {
@@ -56,6 +78,9 @@ export function installWebExtensionBridge(): void {
                         requestId,
                         ok: false,
                         needsExtension: true,
+                        // Orphaned by an extension reload — the page waits briefly for a
+                        // freshly injected bridge before trusting this answer.
+                        orphaned: true,
                         error: 'Extension context unavailable. Reload the page.',
                     },
                     '*',
@@ -107,7 +132,8 @@ export function installWebExtensionBridge(): void {
                 console.error('[FocuzNow Bridge] Failed to export stats:', e);
             }
         }
-    });
+    };
+    window.addEventListener('message', onMessage);
 
     window.postMessage(
         {

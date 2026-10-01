@@ -34,6 +34,9 @@ verify_jwt = true
 [functions.create-portal-session]
 verify_jwt = true
 
+[functions.friends-manage]
+verify_jwt = true
+
 [functions.scheduling-booking-notify]
 verify_jwt = false
 

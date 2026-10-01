@@ -1,0 +1,11 @@
+/.env*
+/.tmp-deploy
+/*.png
+/src/.backups
+/src/dist
+/src/dist.zip
+/src/node_modules
+/website/node_modules
+/website/dist
+/dashboard
+/docs

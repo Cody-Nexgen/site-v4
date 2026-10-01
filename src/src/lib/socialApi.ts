@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { attachSupabaseSession } from './profileApi';
+import { invokeAuthedFunction } from './supabaseFunctions';
 
 export type FriendEntry = {
     userId: string;
@@ -112,13 +113,14 @@ export async function sendFriendRequest(
     supabase: SupabaseClient,
     username: string,
     tokens?: { access_token: string; refresh_token: string } | null,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; autoAccepted?: boolean }> {
     const auth = await attachSupabaseSession(supabase, tokens);
     if (!auth.ok) return { ok: false, error: 'NOT_AUTHENTICATED' };
     const { data, error } = await supabase.rpc('send_friend_request', { p_username: username });
     if (error) return { ok: false, error: error.message };
-    const row = data as { ok?: boolean; error?: string } | null;
-    return row?.ok ? { ok: true } : { ok: false, error: row?.error ?? 'REQUEST_FAILED' };
+    const row = data as { ok?: boolean; error?: string; auto_accepted?: boolean } | null;
+    // auto_accepted: they had already asked us, so this made you friends.
+    return row?.ok ? { ok: true, autoAccepted: !!row.auto_accepted } : { ok: false, error: row?.error ?? 'REQUEST_FAILED' };
 }
 
 export async function respondFriendRequest(
@@ -171,6 +173,40 @@ export async function getFriendsWeeklyLeaderboard(
     const row = data as { ok?: boolean; leaderboard?: LeaderboardEntry[]; error?: string } | null;
     if (!row?.ok) return { ok: false, leaderboard: [], error: row?.error ?? 'LOAD_FAILED' };
     return { ok: true, leaderboard: normalizeLeaderboard(row.leaderboard) };
+}
+
+export type SentFriendRequest = {
+    friendshipId: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    sentAt: string | null;
+};
+
+type ManageResponse = { ok?: boolean; error?: string; sent?: SentFriendRequest[] };
+
+async function manageFriends(accessToken: string, body: Record<string, unknown>) {
+    const { data, error } = await invokeAuthedFunction<ManageResponse>('friends-manage', accessToken, body);
+    if (error) return { ok: false as const, error: error.message || 'REQUEST_FAILED', data: null };
+    if (!data?.ok) return { ok: false as const, error: data?.error ?? 'REQUEST_FAILED', data: null };
+    return { ok: true as const, data };
+}
+
+/** Pending requests the signed-in user has sent and nobody has answered yet. */
+export async function listSentRequests(accessToken: string): Promise<{ ok: boolean; sent: SentFriendRequest[]; error?: string }> {
+    const res = await manageFriends(accessToken, { action: 'sent' });
+    if (!res.ok) return { ok: false, sent: [], error: res.error };
+    return { ok: true, sent: Array.isArray(res.data.sent) ? res.data.sent : [] };
+}
+
+export async function cancelFriendRequest(accessToken: string, friendshipId: string): Promise<{ ok: boolean; error?: string }> {
+    const res = await manageFriends(accessToken, { action: 'cancel', friendshipId });
+    return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
+export async function removeFriend(accessToken: string, userId: string): Promise<{ ok: boolean; error?: string }> {
+    const res = await manageFriends(accessToken, { action: 'remove', userId });
+    return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
 export async function heartbeatFocusSession(

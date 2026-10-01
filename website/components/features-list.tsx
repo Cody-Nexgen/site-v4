@@ -60,7 +60,7 @@ export default function FeaturesList() {
             <motion.div
               layoutId={`card-${active.title}-${id}`}
               ref={ref}
-              className="w-full max-w-[500px] h-full md:h-fit md:max-h-[90%] flex flex-col bg-white dark:bg-neutral-900 sm:rounded-3xl overflow-hidden border border-neutral-200 dark:border-neutral-800"
+              className="w-full max-w-[500px] h-full md:h-fit md:max-h-[90%] flex flex-col bg-white dark:bg-neutral-900 sm:rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-800"
             >
               <motion.div layoutId={`image-${active.title}-${id}`}>
                 <img
@@ -92,7 +92,7 @@ export default function FeaturesList() {
                   <motion.a
                     layoutId={`button-${active.title}-${id}`}
                     href="#"
-                    className="px-4 py-3 text-sm rounded-full font-bold bg-indigo-500 text-white"
+                    className="px-4 py-3 text-sm rounded-full font-bold bg-blue-500 text-white"
                   >
                     {active.ctaText}
                   </motion.a>
@@ -121,7 +121,7 @@ export default function FeaturesList() {
             layoutId={`card-${card.title}-${id}`}
             key={`card-${card.title}-${id}`}
             onClick={() => setActive(card)}
-            className="p-4 flex flex-col md:flex-row justify-between items-center hover:bg-neutral-50 dark:hover:bg-neutral-800/50 rounded-xl cursor-pointer border border-transparent hover:border-neutral-200 dark:hover:border-neutral-800 transition-colors"
+            className="p-4 flex flex-col md:flex-row justify-between items-center hover:bg-neutral-50 dark:hover:bg-neutral-800/50 rounded-lg cursor-pointer border border-transparent hover:border-neutral-200 dark:hover:border-neutral-800 transition-colors"
           >
             <div className="flex gap-4 flex-col md:flex-row ">
               <motion.div layoutId={`image-${card.title}-${id}`}>
@@ -150,7 +150,7 @@ export default function FeaturesList() {
             </div>
             <motion.button
               layoutId={`button-${card.title}-${id}`}
-              className="px-4 py-2 text-sm rounded-full font-bold bg-neutral-100 dark:bg-neutral-800 hover:bg-indigo-500 hover:text-white text-black dark:text-white mt-4 md:mt-0 transition-colors"
+              className="px-4 py-2 text-sm rounded-full font-bold bg-neutral-100 dark:bg-neutral-800 hover:bg-blue-500 hover:text-white text-black dark:text-white mt-4 md:mt-0 transition-colors"
             >
               {card.ctaText}
             </motion.button>

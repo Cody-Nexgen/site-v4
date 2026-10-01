@@ -16,7 +16,7 @@ type Props = {
 
 export default function HostProfile({ link, size = 'md' }: Props) {
     const { displayName, username, avatarUrl } = hostProfileFromLink(link);
-    const avatarClass = size === 'lg' ? 'w-14 h-14 rounded-2xl text-base' : 'w-11 h-11 rounded-2xl text-sm';
+    const avatarClass = size === 'lg' ? 'w-14 h-14 rounded-lg text-base' : 'w-11 h-11 rounded-lg text-sm';
 
     return (
         <div className="flex items-center gap-3 mb-6">
@@ -24,11 +24,11 @@ export default function HostProfile({ link, size = 'md' }: Props) {
                 <img
                     src={avatarUrl}
                     alt=""
-                    className={`${avatarClass} object-cover shadow-lg shadow-violet-900/20 border border-white/10`}
+                    className={`${avatarClass} object-cover shadow-lg shadow-blue-900/20 border border-white/8`}
                 />
             ) : (
                 <div
-                    className={`${avatarClass} bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center font-black shadow-lg shadow-violet-900/30`}
+                    className={`${avatarClass} bg-gradient-to-br from-blue-600 to-blue-600 flex items-center justify-center font-black shadow-lg shadow-blue-900/30`}
                 >
                     {getInitials(displayName)}
                 </div>

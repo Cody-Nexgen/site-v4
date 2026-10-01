@@ -11,23 +11,28 @@ interface NeonButtonProps extends Omit<HTMLMotionProps<'button'>, 'children'> {
     glowColor?: string;
 }
 
+/**
+ * Flat button. Named NeonButton for history only — the neon is gone.
+ * Three real variants plus danger; primary is the single accent, and nothing
+ * glows, shimmers or scales on hover.
+ */
 export function NeonButton({
     className,
     variant = 'primary',
     size = 'md',
     loading = false,
-    glowColor,
+    glowColor: _glowColor,
     children,
     disabled,
     ...props
 }: NeonButtonProps) {
-    const baseStyles = "relative inline-flex items-center justify-center rounded-xl font-medium transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none overflow-hidden group";
+    const baseStyles = "relative inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5ea2ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]";
 
     const variants = {
-        primary: "bg-white text-black hover:bg-zinc-200 shadow-[0_0_20px_-5px_rgba(255,255,255,0.5)] hover:shadow-[0_0_30px_-5px_rgba(255,255,255,0.7)]",
-        secondary: "bg-zinc-900/50 text-white border border-white/10 hover:bg-white/10 hover:border-white/20 backdrop-blur-md",
-        ghost: "bg-transparent text-zinc-400 hover:text-white hover:bg-white/5",
-        danger: "bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40 shadow-[0_0_20px_-5px_rgba(239,68,68,0.2)]"
+        primary: "bg-[#5ea2ff] text-[#04121f] hover:bg-[#7db4ff]",
+        secondary: "bg-white/6 text-white border border-white/8 hover:bg-white/10 hover:border-white/16",
+        ghost: "bg-transparent text-neutral-400 hover:text-white hover:bg-white/6",
+        danger: "bg-transparent text-[#f87171] border border-[#f87171]/30 hover:bg-[#f87171]/10 hover:border-[#f87171]/50"
     };
 
     const sizes = {
@@ -39,21 +44,11 @@ export function NeonButton({
 
     return (
         <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
             className={cn(baseStyles, variants[variant], sizes[size], className)}
             disabled={disabled || loading}
-            style={glowColor ? { '--glow-color': glowColor } as any : undefined}
             {...props}
         >
-            {/* Glow Effect Background */}
-            {variant === 'primary' && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer" />
-            )}
-
-            {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {children}
         </motion.button>
     );

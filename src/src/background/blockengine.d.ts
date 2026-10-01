@@ -1,4 +1,5 @@
 export function initBlockEngine(): Promise<void>;
+export function whenEngineReady(): Promise<void>;
 export function blockDomainManual(domain: string): Promise<void>;
 export function unblockDomainManual(domain: string): Promise<void>;
 export function blockRegexManual(pattern: string): Promise<void>;

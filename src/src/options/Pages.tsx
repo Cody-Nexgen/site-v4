@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { useAuthStore } from '../lib/store';
+import { useAuthStore, type EngineState } from '../lib/store';
 import { dispatchFocusComplete } from '../lib/proDashboard';
 import {
     POMODORO_RUNTIME_KEY,
@@ -12,16 +12,26 @@ import {
     type PomodoroRuntime,
 } from '../lib/pomodoroRuntime';
 import { GlassCard } from './OptionsApp';
-import CalendarView from './CalendarView';
 import { 
     Play, Pause, RefreshCw, Plus,
     Trash, Check, Ban, Globe, Zap, X,
     AlertTriangle, TrendingDown, Lightbulb,
-    ShieldCheck, Loader2, ChevronDown,
+    ShieldOff, Loader2, ChevronDown,
+    Users, Dices, Newspaper, ShoppingBag, Tv, Gamepad2, Heart,
+    Sparkles, MoreHorizontal, type LucideIcon,
+    Flame, Repeat, Pencil, RotateCcw,
 } from 'lucide-react';
+import { SegmentedControl } from '../components/fz/SegmentedControl';
+import { Banner } from '../components/fz/Banner';
+import { Chip } from '../components/fz/Chip';
+import { Dialog } from '../components/fz/Dialog';
+import { Button } from '../components/fz/Button';
+import { EmptyState } from '../components/fz/EmptyState';
+import { IconButton } from '../components/fz/IconButton';
+import { Kbd } from '../components/fz/Kbd';
+import { Menu } from '../components/fz/Menu';
+import { Switch } from '../components/fz/Switch';
 import { HabitCheckInButton } from '../components/pro-dashboard/HabitCheckInButton';
-import { IconCalendarStats } from '@tabler/icons-react';
-import { SemiDonutChart, semiDonutMetrics } from '../lib/semiDonutChart';
 import { capDayScreenMs } from '../lib/screenTimeCap';
 import { ChallengeModal, randomFocusPhrase } from '../lib/unblockChallenge';
 import { sendProgressionMessage } from '../hooks/useFocusProgression';
@@ -30,7 +40,10 @@ import { FocusActivityChart } from '../components/FocusActivityChart';
 import { detectProcrastinationPatterns } from '../lib/procrastinationPatterns';
 import { detectOverridePatterns, type EmergencyOverrideEntry } from '../lib/emergencyOverride';
 import { computeFocusScore, focusScoreColor, computeAllTimeFocusScore } from '../lib/focusScore';
+import { pluralize } from '../lib/utils';
 import { NuclearConfirmModal } from '../components/NuclearConfirmModal';
+import SmartYouTubeModal from '../components/SmartYouTubeModal';
+import { normalizeSmartYouTube, type SmartYouTubeSettings } from '../lib/youtubeSmartMode';
 import {
     SAFE_BLOCK_CATEGORIES,
     SAFE_BLOCK_CATEGORY_KEYS,
@@ -40,20 +53,6 @@ import {
 import { FutureSelfContractModal } from '../components/FutureSelfContractModal';
 import type { FutureSelfContract } from '../lib/futureSelfTypes';
 import { invokeAuthedFunction } from '../lib/supabaseFunctions';
-
-export const InboxTab = () => (
-    <div className="space-y-6 animate-fade-in-up max-w-[1200px] mx-auto">
-        <div>
-            <p className="focuz-section-label">Workspace</p>
-            <h1 className="text-3xl font-semibold text-white tracking-tight">Inbox</h1>
-            <p className="text-sm text-neutral-500 mt-1">Captured thoughts and incoming integrations.</p>
-        </div>
-        <GlassCard className="p-8 flex flex-col items-center justify-center h-64 text-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">Empty inbox</span>
-            <span className="text-sm text-neutral-400">All captured thoughts and incoming integrations will appear here.</span>
-        </GlassCard>
-    </div>
-);
 
 function FocusScoreBarGraph({ points }: { points: { date: string; score: number }[] }) {
     const [hovered, setHovered] = useState<number | null>(null);
@@ -91,7 +90,7 @@ function FocusScoreBarGraph({ points }: { points: { date: string; score: number 
                 style={{ maxWidth: (maxGraphHeight * width) / height, aspectRatio: `${width} / ${height}`, maxHeight: maxGraphHeight }}
             >
                 <div
-                    className="absolute right-1 top-0 z-20 flex rounded-lg border border-white/[0.08] bg-black/50 p-0.5 shadow-sm backdrop-blur"
+                    className="absolute right-1 top-0 z-20 flex rounded-lg border border-white/8 bg-black/50 p-0.5 shadow-sm backdrop-blur"
                     role="group"
                     aria-label="Focus score chart type"
                 >
@@ -101,8 +100,8 @@ function FocusScoreBarGraph({ points }: { points: { date: string; score: number 
                             type="button"
                             onClick={() => setChartMode(mode)}
                             aria-pressed={chartMode === mode}
-                            className={`rounded-md px-2 py-1 text-[10px] font-semibold capitalize transition-colors ${
-                                chartMode === mode ? 'bg-white/[0.12] text-white' : 'text-neutral-500 hover:text-neutral-300'
+                            className={`rounded-lg px-2 py-1 text-[11px] font-[460] capitalize transition-colors ${
+                                chartMode === mode ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-300'
                             }`}
                         >
                             {mode}
@@ -123,7 +122,7 @@ function FocusScoreBarGraph({ points }: { points: { date: string; score: number 
                     {[0, 25, 50, 75, 100].map((v) => (
                         <g key={v}>
                             <line x1={padX} y1={getY(v)} x2={width - padX} y2={getY(v)} stroke="white" strokeOpacity="0.05" />
-                            <text x={4} y={getY(v) + 4} className="text-[10px] fill-neutral-600 font-medium">{v}</text>
+                            <text x={4} y={getY(v) + 4} className="text-[11px] fill-neutral-600 font-medium">{v}</text>
                         </g>
                     ))}
                     {chartMode === 'line' && points.length > 0 && (
@@ -193,7 +192,7 @@ function FocusScoreBarGraph({ points }: { points: { date: string; score: number 
                                         cy={y}
                                         r={active ? 5.5 : 3.5}
                                         fill="#0a0a0a"
-                                        stroke={active ? '#fff' : focusScoreColor(p.score)}
+                                        stroke={active ? '#fff' : 'var(--fz-text-4)'}
                                         strokeWidth="2"
                                         vectorEffect="non-scaling-stroke"
                                         className="transition-all duration-150"
@@ -210,7 +209,7 @@ function FocusScoreBarGraph({ points }: { points: { date: string; score: number 
                                         {p.score}
                                     </text>
                                 )}
-                                <text x={chartMode === 'bar' ? x + barW / 2 : pointX} y={height - 8} textAnchor="middle" className="text-[10px] fill-neutral-600 font-medium">
+                                <text x={chartMode === 'bar' ? x + barW / 2 : pointX} y={height - 8} textAnchor="middle" className="text-[11px] fill-neutral-600 font-medium">
                                     {new Date(p.date).toLocaleDateString('en-US', { weekday: 'short' })}
                                 </text>
                             </g>
@@ -256,8 +255,8 @@ export const PatternsTab = () => {
 
     const severityStyle = {
         high: 'border-red-500/30 bg-red-500/10',
-        medium: 'border-amber-500/30 bg-amber-500/10',
-        low: 'border-blue-500/30 bg-blue-500/10',
+        medium: 'border-[var(--fz-warning)]/30 bg-[var(--fz-warning-soft)]',
+        low: 'border-[var(--fz-accent)] bg-[var(--fz-accent-soft)]',
     };
 
     const formatTime = (ms: number) => {
@@ -267,50 +266,45 @@ export const PatternsTab = () => {
     };
 
     return (
-        <div className="space-y-8 animate-fade-in-up max-w-[1200px] mx-auto pb-20">
-            <div>
-                <p className="focuz-section-label">Insights</p>
-                <h1 className="text-3xl font-semibold text-white tracking-tight">Patterns</h1>
-                <p className="text-sm text-neutral-500 mt-1">Activity trends and focus insights — all computed locally.</p>
-            </div>
+        <div className="space-y-6 animate-fade-in-up">
 
             {/* Activity heatmap */}
             <GlassCard className="p-5">
                 <h3 className="font-semibold text-white text-sm mb-1">Focus activity</h3>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-4">Last 12 weeks · darker green = higher focuz score</p>
+                <p className="text-[11px] font-[460] text-neutral-500 mb-4">Last 12 weeks · brighter = higher focuz score</p>
                 <FocusActivityChart stats={allStats} weeks={12} />
             </GlassCard>
 
             {/* Weekly stats row */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Today&apos;s score</span>
+                    <span className="text-[11px] font-[460] text-neutral-500">Today&apos;s score</span>
                     <p className="text-2xl font-semibold tabular-nums mt-1" style={{ color: focusScoreColor(focusResult.score) }}>{focusResult.score}</p>
                     <p className="text-xs text-neutral-500">{focusResult.label}</p>
                 </GlassCard>
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">All-time score</span>
+                    <span className="text-[11px] font-[460] text-neutral-500">All-time score</span>
                     <p className="text-2xl font-semibold tabular-nums mt-1" style={{ color: focusScoreColor(allTime.score) }}>{allTime.score}</p>
-                    <p className="text-xs text-neutral-500">{allTime.daysCounted > 0 ? `Avg · ${allTime.daysCounted} days` : 'No data yet'}</p>
+                    <p className="text-xs text-neutral-500">{allTime.daysCounted > 0 ? `Avg · ${pluralize(allTime.daysCounted, 'day')}` : 'No data yet'}</p>
                 </GlassCard>
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Usage today</span>
+                    <span className="text-[11px] font-[460] text-neutral-500">Usage today</span>
                     <p className="text-2xl font-semibold tabular-nums text-white mt-1">{formatTime(todayData?.total ?? 0)}</p>
                 </GlassCard>
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Blocks today</span>
+                    <span className="text-[11px] font-[460] text-neutral-500">Blocks today</span>
                     <p className="text-2xl font-semibold tabular-nums text-white mt-1">{engineState.blockedToday ?? 0}</p>
                 </GlassCard>
                 <GlassCard className="p-5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Activity streak</span>
-                    <p className="text-2xl font-semibold tabular-nums text-purple-400 mt-1">{streak}<span className="text-sm text-neutral-500 ml-1">d</span></p>
+                    <span className="text-[11px] font-[460] text-neutral-500">Activity streak</span>
+                    <p className="text-2xl font-semibold tabular-nums text-[var(--fz-accent)] mt-1">{streak}<span className="text-sm text-neutral-500 ml-1">d</span></p>
                 </GlassCard>
             </div>
 
             {/* Weekly focus score graph */}
             <GlassCard className="p-5">
                 <h3 className="font-semibold text-white text-sm mb-1">Weekly focuz scores</h3>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-4">Last 7 days · 0–100</p>
+                <p className="text-[11px] font-[460] text-neutral-500 mb-4">Last 7 days · 0–100</p>
                 {weekScores.length === 0 ? (
                     <p className="text-sm text-neutral-600 py-10 text-center">Not enough data yet — scores appear after a day of use.</p>
                 ) : (
@@ -327,8 +321,8 @@ export const PatternsTab = () => {
                 {patterns.length === 0 ? (
                     <GlassCard className="p-10">
                         <div className="flex flex-col items-center justify-center text-center gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-purple-500/[0.12] flex items-center justify-center">
-                                <Lightbulb size={22} className="text-purple-400" />
+                            <div className="w-12 h-12 rounded-lg bg-[var(--fz-accent-soft)] flex items-center justify-center">
+                                <Lightbulb size={22} className="text-[var(--fz-accent)]" />
                             </div>
                             <p className="text-white font-semibold">No patterns detected yet</p>
                             <p className="text-neutral-500 text-sm leading-relaxed max-w-xs">
@@ -345,18 +339,18 @@ export const PatternsTab = () => {
                                     {p.severity === 'high' ? (
                                         <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
                                     ) : (
-                                        <TrendingDown size={18} className="text-amber-400 shrink-0 mt-0.5" />
+                                        <TrendingDown size={18} className="text-[var(--fz-warning)] shrink-0 mt-0.5" />
                                     )}
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 mb-2 flex-wrap">
                                             <h4 className="font-semibold text-white">{p.title}</h4>
-                                            <span className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-white/5 text-neutral-400">
+                                            <span className="text-[11px] font-[460] px-2 py-0.5 rounded bg-white/6 text-neutral-400">
                                                 {p.severity}
                                             </span>
                                         </div>
                                         <p className="text-sm text-neutral-400 mb-3 leading-relaxed">{p.detail}</p>
-                                        <p className="text-sm text-purple-300/90 leading-relaxed">
-                                            <span className="font-semibold text-purple-400 block mb-1">Try this</span>
+                                        <p className="text-sm text-[var(--fz-accent)] leading-relaxed">
+                                            <span className="font-[460] text-[var(--fz-accent)] block mb-1">Try this</span>
                                             {p.suggestion}
                                         </p>
                                     </div>
@@ -387,246 +381,291 @@ export const PatternsTab = () => {
     );
 };
 
-export const ExportsTab = () => (
-    <div className="space-y-6 animate-fade-in-up max-w-[1200px] mx-auto">
-        <div>
-            <p className="focuz-section-label">Insights</p>
-            <h1 className="text-3xl font-semibold text-white tracking-tight">Exports</h1>
-            <p className="text-sm text-neutral-500 mt-1">Download your focus data.</p>
-        </div>
-        <GlassCard className="p-8 flex flex-col items-center justify-center h-64 text-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">Export data</span>
-            <span className="text-sm text-neutral-400">CSV and JSON exports will be available here soon.</span>
-        </GlassCard>
-    </div>
-);
+type Habit = { id: number; name: string; streak: number; checkins: string[]; lastCheckin?: string };
 
-// Removed standalone NotesTab - merged into SessionsTab
+/** Habit ids are creation timestamps (kept for existing data). */
+const newHabitId = () => Date.now();
 
-const HABITS_TIP_KEY = 'focuznow_hide_habits_tip';
+const HABIT_SUGGESTIONS = ['Meditate', 'Read 20 pages', 'Deep work block', 'Exercise', 'No phone first hour'];
+const HEAT_DAYS = 14;
 
-export const HabitsTab = () => {
-    const { engineState, fetchEngineState } = useAuthStore();
-    const habits = engineState.habits || [];
+/** Consecutive days checked, ending today (or yesterday, if today isn't done yet). */
+function currentStreak(checkins: string[] = []): number {
+    const done = new Set(checkins);
+    const d = new Date();
+    if (!done.has(d.toDateString())) d.setDate(d.getDate() - 1);
+    let n = 0;
+    while (done.has(d.toDateString())) {
+        n += 1;
+        d.setDate(d.getDate() - 1);
+    }
+    return n;
+}
+
+function lastDays(count: number): Date[] {
+    return Array.from({ length: count }, (_, i) => {
+        const d = new Date();
+        d.setHours(12, 0, 0, 0);
+        d.setDate(d.getDate() - (count - 1 - i));
+        return d;
+    });
+}
+
+function HabitHeatStrip({ checkins }: { checkins: string[] }) {
+    const done = new Set(checkins);
+    const days = lastDays(HEAT_DAYS);
     const todayStr = new Date().toDateString();
-    const [showTip, setShowTip] = useState(() => !localStorage.getItem(HABITS_TIP_KEY));
-    const [habitModalOpen, setHabitModalOpen] = useState(false);
-
-    const addHabitByName = async (name: string) => {
-        const updated = [...habits, { id: Date.now(), name, streak: 0, checkins: [], lastCheckin: '' }];
-        await new Promise<void>(r =>
-            chrome.runtime.sendMessage(
-                { type: 'UPDATE_ENGINE_SETTINGS', settings: { habits: updated } },
-                () => r(),
-            ),
-        );
-        fetchEngineState();
-    };
-
-    const checkInHabit = async (id: number) => {
-        const updated = habits.map((h: any) => {
-            if (h.id !== id) return h;
-            if (h.checkins?.includes(todayStr)) return h;
-            
-            // Check if streak continues (was it checked in yesterday?)
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toDateString();
-            const continues = h.lastCheckin === yesterdayStr || h.streak === 0;
-            
-            return { 
-                ...h, 
-                checkins: [...(h.checkins || []), todayStr], 
-                streak: continues ? (h.streak || 0) + 1 : 1,
-                lastCheckin: todayStr
-            };
-        });
-        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { habits: updated } }, () => r()));
-        await fetchEngineState();
-        await sendProgressionMessage({ type: 'PROGRESSION_HABIT_CHECKIN', habitId: id });
-        useAuthStore.getState().recalculateStreak();
-    };
-
-    const removeHabit = async (id: number) => {
-        if (!confirm('Remove this habit? Your streak will be lost.')) return;
-        const updated = habits.filter((h: any) => h.id !== id);
-        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { habits: updated } }, () => r()));
-        fetchEngineState();
-    };
-
     return (
-        <div className="space-y-6 animate-fade-in-up max-w-[1200px] mx-auto">
-            {showTip && (
-                <GlassCard className="p-4 border-purple-500/20 bg-purple-950/20 relative">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            localStorage.setItem(HABITS_TIP_KEY, '1');
-                            setShowTip(false);
-                        }}
-                        className="absolute top-3 right-3 w-7 h-7 rounded-lg text-neutral-500 hover:text-white hover:bg-white/10 text-sm font-semibold transition-colors duration-150"
-                        aria-label="Dismiss tip"
-                    >
-                        ×
-                    </button>
-                    <p className="text-sm text-neutral-300 leading-relaxed pr-8">
-                        <span className="font-semibold text-white">How to track:</span> Add a habit, then tap the large check-in button each day. Your streak grows when you check in on consecutive days. You can also check in from the Dashboard habits grid.
-                    </p>
-                </GlassCard>
-            )}
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                    <p className="focuz-section-label">Progress</p>
-                    <h1 className="text-3xl font-semibold text-white tracking-tight">Habits</h1>
-                    <p className="text-sm text-neutral-500 mt-1">Build discipline through consistency.</p>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => setHabitModalOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors duration-150 flex items-center gap-1.5"
-                >
-                    <Plus size={14} />
-                    <span>New habit</span>
-                </button>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-4">
-                {habits.length === 0 ? (
-                    <GlassCard className="p-16 flex flex-col items-center justify-center text-center mx-auto max-w-lg">
-                        <div className="w-16 h-16 min-w-[4rem] min-h-[4rem] shrink-0 bg-white/5 rounded-2xl flex items-center justify-center mb-4 mx-auto">
-                            <IconCalendarStats size={32} className="text-neutral-500 shrink-0" stroke={1.5} />
-                        </div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">No active habits</p>
-                        <p className="text-neutral-500 text-sm mt-2 max-w-xs">Start your first streak by adding a habit above.</p>
-                    </GlassCard>
-                ) : (
-                    habits.map((h: any) => {
-                        const checkedToday = h.checkins?.includes(todayStr);
-                        return (
-                            <GlassCard key={h.id} className="p-5 group">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-6">
-                                        <HabitCheckInButton
-                                            checked={checkedToday}
-                                            onCheckIn={() => checkInHabit(h.id)}
-                                        />
-                                        <div>
-                                            <p className={`text-lg font-semibold transition-colors duration-150 ${checkedToday ? 'text-purple-400' : 'text-white'}`}>{h.name}</p>
-                                            <div className="flex items-center space-x-3 mt-1">
-                                                <div className="flex items-center space-x-1">
-                                                    <Zap size={12} className={h.streak > 0 ? 'text-orange-400' : 'text-neutral-600'} />
-                                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">{h.streak || 0} day streak</span>
-                                                </div>
-                                                <span className="text-neutral-800">•</span>
-                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">
-                                                    {checkedToday ? 'Completed today' : 'Pending check-in'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center space-x-6">
-                                        {/* Simple Heatmap dots */}
-                                        <div className="hidden sm:flex space-x-1.5">
-                                            {Array.from({ length: 14 }).map((_, i) => {
-                                                const d = new Date();
-                                                d.setDate(d.getDate() - (13 - i));
-                                                const ds = d.toDateString();
-                                                const checked = h.checkins?.includes(ds);
-                                                return (
-                                                    <div 
-                                                        key={i} 
-                                                        className={`w-3 h-3 rounded-[3px] transition-colors duration-150
-                                                            ${checked ? 'bg-purple-500' : 'bg-white/5'}`}
-                                                        title={ds}
-                                                    />
-                                                );
-                                            })}
-                                        </div>
-                                        <button onClick={() => removeHabit(h.id)} className="p-3 text-neutral-600 hover:text-red-400 transition-colors duration-150 opacity-0 group-hover:opacity-100 bg-white/[0.06] hover:bg-red-400/10 rounded-xl">
-                                            <Trash size={18} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </GlassCard>
-                        );
-                    })
-                )}
-            </div>
-            <HabitNameModal
-                open={habitModalOpen}
-                onClose={() => setHabitModalOpen(false)}
-                onSubmit={addHabitByName}
-            />
+        <div className="hidden items-center gap-[5px] md:flex" aria-label={`Last ${HEAT_DAYS} days`}>
+            {days.map((d) => {
+                const key = d.toDateString();
+                const on = done.has(key);
+                return (
+                    <span
+                        key={key}
+                        title={`${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}${on ? ' · done' : ''}`}
+                        className={`size-3 rounded-[3px] ${
+                            on ? 'bg-[var(--fz-text-1)]' : 'bg-[var(--fz-bg-active)]'
+                        } ${key === todayStr ? 'ring-1 ring-[var(--fz-border-strong)] ring-offset-1 ring-offset-[var(--fz-bg-raised)]' : ''}`}
+                    />
+                );
+            })}
         </div>
     );
-};
+}
 
-export const TasksTab = () => {
-    const { engineState, fetchEngineState } = useAuthStore();
-    const planner = engineState.dailyPlanner || [];
-    const [newPlanTime, setNewPlanTime] = useState('09:00');
-    const [newPlanTask, setNewPlanTask] = useState('');
+export const HabitsTab = () => {
+    const { engineState } = useAuthStore();
+    const habits: Habit[] = engineState.habits || [];
+    const todayStr = new Date().toDateString();
+    const [nameModal, setNameModal] = useState<{ habit?: Habit } | null>(null);
+    const [removing, setRemoving] = useState<Habit | null>(null);
+    const [error, setError] = useState('');
 
-    const addPlanItem = async () => {
-        if (!newPlanTask.trim()) return;
-        const updated = [...planner, { id: Date.now(), time: newPlanTime, task: newPlanTask, done: false }].sort((a: any, b: any) => a.time.localeCompare(b.time));
-        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } }, () => r()));
-        setNewPlanTask('');
-        fetchEngineState();
+    /** Save instantly on screen; roll back if the save is refused. */
+    const saveHabits = async (updated: Habit[]) => {
+        const before = useAuthStore.getState().engineState;
+        useAuthStore.setState({ engineState: { ...before, habits: updated } });
+        const resp = await new Promise<{ ok?: boolean; error?: string; state?: EngineState }>((resolve) =>
+            chrome.runtime.sendMessage(
+                { type: 'UPDATE_ENGINE_SETTINGS', settings: { habits: updated } },
+                (r) => resolve(r || { ok: false, error: chrome.runtime.lastError?.message }),
+            ),
+        );
+        if (resp.ok === false) {
+            useAuthStore.setState({ engineState: before });
+            setError(resp.error || 'Could not save your habits.');
+            return false;
+        }
+        setError('');
+        if (resp.state && typeof resp.state === 'object') {
+            useAuthStore.setState({ engineState: { ...useAuthStore.getState().engineState, ...resp.state } });
+        }
+        return true;
     };
 
-    const togglePlanItem = async (id: number) => {
-        const updated = planner.map((p: any) => p.id === id ? { ...p, done: !p.done } : p);
-        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } }, () => r()));
-        fetchEngineState();
+    const addHabit = async (name: string) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        await saveHabits([...habits, { id: newHabitId(), name: trimmed, streak: 0, checkins: [], lastCheckin: '' }]);
     };
 
-    const removePlanItem = async (id: number) => {
-        const updated = planner.filter((p: any) => p.id !== id);
-        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } }, () => r()));
-        fetchEngineState();
+    const renameHabit = async (id: number, name: string) => {
+        await saveHabits(habits.map((h) => (h.id === id ? { ...h, name: name.trim() } : h)));
     };
+
+    const checkIn = async (id: number) => {
+        const updated = habits.map((h) => {
+            if (h.id !== id || h.checkins?.includes(todayStr)) return h;
+            const checkins = [...(h.checkins || []), todayStr];
+            return { ...h, checkins, streak: currentStreak(checkins), lastCheckin: todayStr };
+        });
+        if (!(await saveHabits(updated))) return;
+        await sendProgressionMessage({ type: 'PROGRESSION_HABIT_CHECKIN', habitId: id });
+        void useAuthStore.getState().recalculateStreak();
+    };
+
+    const undoToday = async (id: number) => {
+        await saveHabits(
+            habits.map((h) => {
+                if (h.id !== id) return h;
+                const checkins = (h.checkins || []).filter((d) => d !== todayStr);
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                return {
+                    ...h,
+                    checkins,
+                    streak: currentStreak(checkins),
+                    lastCheckin: checkins.includes(yesterday.toDateString()) ? yesterday.toDateString() : '',
+                };
+            }),
+        );
+        void useAuthStore.getState().recalculateStreak();
+    };
+
+    const doneToday = habits.filter((h) => h.checkins?.includes(todayStr)).length;
+    const bestStreak = habits.reduce((m, h) => Math.max(m, currentStreak(h.checkins)), 0);
+    const week = lastDays(7).map((d) => d.toDateString());
+    const weekDone = habits.reduce((n, h) => n + week.filter((d) => h.checkins?.includes(d)).length, 0);
+    const weekPct = habits.length ? Math.round((weekDone / (habits.length * 7)) * 100) : 0;
+    const todayPct = habits.length ? (doneToday / habits.length) * 100 : 0;
 
     return (
-        <div className="space-y-6 animate-fade-in-up max-w-[1400px] mx-auto">
-            <div>
-                <p className="focuz-section-label">Workspace</p>
-                <h1 className="text-3xl font-semibold text-white tracking-tight">Tasks & Planning</h1>
-                <p className="text-sm text-neutral-500 mt-1">Plan your day and keep it on schedule.</p>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
-                <GlassCard className="p-5 h-[750px] flex flex-col">
-                    <div className="flex space-x-3 mb-6">
-                        <input type="time" value={newPlanTime} onChange={e => setNewPlanTime(e.target.value)}
-                            className="bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500 transition-colors duration-150 w-32" />
-                        <input value={newPlanTask} onChange={e => setNewPlanTask(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPlanItem()}
-                            placeholder="What needs to get done?"
-                            className="flex-1 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500 transition-colors duration-150 min-w-0" />
-                        <button onClick={addPlanItem} className="px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors duration-150 whitespace-nowrap">Add</button>
-                    </div>
-                    
-                    <div className="space-y-3 flex-1 overflow-y-auto pr-2 scrollbar-hide">
-                        {planner.map((p: any) => (
-                            <div key={p.id} className="flex items-center space-x-4 p-4 bg-[#111] border border-white/5 rounded-xl group hover:border-white/10 transition-colors duration-150">
-                                <button onClick={() => togglePlanItem(p.id)} className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors duration-150 flex-shrink-0 ${p.done ? 'bg-purple-500' : 'bg-white/10'}`}>
-                                    {p.done && <Check size={14} className="text-white" />}
-                                </button>
-                                <span className="text-xs font-semibold text-purple-400 tabular-nums w-12 flex-shrink-0">{p.time}</span>
-                                <span className={`flex-1 text-sm font-medium truncate ${p.done ? 'line-through text-neutral-500' : 'text-white'}`}>{p.task}</span>
-                                <button onClick={() => removePlanItem(p.id)} className="opacity-0 group-hover:opacity-100 text-neutral-600 hover:text-red-400 transition-colors duration-150 flex-shrink-0"><Trash size={16} /></button>
-                            </div>
-                        ))}
-                        {planner.length === 0 && <p className="text-neutral-600 text-sm text-center py-8">Plan your day. Add tasks above.</p>}
-                    </div>
-                </GlassCard>
+        <div className="space-y-4 animate-fade-in-up">
+            {error && (
+                <Banner tone="danger" onDismiss={() => setError('')}>
+                    {error}
+                </Banner>
+            )}
 
-                {/* Calendar Integrated */}
-                <div className="h-[750px]">
-                    <CalendarView />
-                </div>
-            </div>
+            {habits.length === 0 ? (
+                <GlassCard>
+                    <EmptyState
+                        className="py-16"
+                        icon={<Repeat size={15} />}
+                        title="Start your first habit"
+                        description="Pick something small you can do every day. Check it off here or from your Dashboard — a day in a row grows your streak."
+                        action={
+                            <div className="mt-2 flex max-w-[460px] flex-col items-center gap-4">
+                                <div className="flex flex-wrap justify-center gap-2">
+                                    {HABIT_SUGGESTIONS.map((s) => (
+                                        <Chip key={s} icon={<Plus size={12} />} onClick={() => void addHabit(s)}>
+                                            {s}
+                                        </Chip>
+                                    ))}
+                                </div>
+                                <Button variant="primary" iconLeft={<Plus size={14} />} onClick={() => setNameModal({})}>
+                                    New habit
+                                </Button>
+                            </div>
+                        }
+                    />
+                </GlassCard>
+            ) : (
+                <>
+                    {/* Today at a glance */}
+                    <GlassCard className="p-5">
+                        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+                            <div>
+                                <p className="text-meta">
+                                    Today · {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                                </p>
+                                <p className="mt-1 text-[26px] font-semibold leading-8 tracking-[-0.02em] tabular-nums text-[var(--fz-text-1)]">
+                                    {doneToday} of {habits.length}
+                                    <span className="ml-2 text-[15px] font-medium tracking-normal text-[var(--fz-text-3)]">
+                                        {doneToday === habits.length ? 'all done' : 'done'}
+                                    </span>
+                                </p>
+                            </div>
+                            <div className="flex items-end gap-8">
+                                <div>
+                                    <p className="text-meta">Best streak</p>
+                                    <p className="mt-1 text-[17px] font-semibold tabular-nums text-[var(--fz-text-1)]">
+                                        {bestStreak} {bestStreak === 1 ? 'day' : 'days'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-meta">Last 7 days</p>
+                                    <p className="mt-1 text-[17px] font-semibold tabular-nums text-[var(--fz-text-1)]">{weekPct}%</p>
+                                </div>
+                                <Button variant="primary" iconLeft={<Plus size={14} />} onClick={() => setNameModal({})}>
+                                    New habit
+                                </Button>
+                            </div>
+                        </div>
+                        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[var(--fz-bg-active)]">
+                            <div
+                                className="h-full rounded-full bg-[var(--fz-text-1)] transition-[width] duration-500 ease-out"
+                                style={{ width: `${todayPct}%` }}
+                            />
+                        </div>
+                    </GlassCard>
+
+                    {/* The list */}
+                    <GlassCard>
+                        <div className="flex items-center justify-between px-5 pb-3 pt-4">
+                            <h3 className="text-[14px] font-semibold text-[var(--fz-text-1)]">Your habits</h3>
+                            <span className="text-meta hidden md:block">Last {HEAT_DAYS} days</span>
+                        </div>
+                        <div className="divide-y divide-[var(--fz-border)] border-t border-[var(--fz-border)]">
+                            {habits.map((h) => {
+                                const checkedToday = !!h.checkins?.includes(todayStr);
+                                const streak = currentStreak(h.checkins);
+                                return (
+                                    <div key={h.id} className="flex items-center gap-4 px-5 py-3">
+                                        <HabitCheckInButton size="md" checked={checkedToday} onCheckIn={() => checkIn(h.id)} />
+                                        <div className="min-w-0 flex-1">
+                                            <p
+                                                className={`truncate text-[14px] font-medium ${
+                                                    checkedToday ? 'text-[var(--fz-text-2)]' : 'text-[var(--fz-text-1)]'
+                                                }`}
+                                            >
+                                                {h.name}
+                                            </p>
+                                            <p className="text-meta mt-0.5 flex items-center gap-1.5">
+                                                <Flame
+                                                    size={12}
+                                                    className={streak > 0 ? 'text-[var(--fz-text-2)]' : 'text-[var(--fz-text-4)]'}
+                                                />
+                                                {streak > 0 ? `${streak}-day streak` : 'No streak yet'}
+                                                <span className="text-[var(--fz-text-4)]">·</span>
+                                                {checkedToday ? 'Done today' : 'Not yet today'}
+                                            </p>
+                                        </div>
+                                        <HabitHeatStrip checkins={h.checkins || []} />
+                                        <BulkMenu
+                                            label={`Options for ${h.name}`}
+                                            items={[
+                                                { id: 'rename', label: 'Rename', icon: <Pencil size={13} />, onSelect: () => setNameModal({ habit: h }) },
+                                                ...(checkedToday
+                                                    ? [{ id: 'undo', label: 'Undo today’s check-in', icon: <RotateCcw size={13} />, onSelect: () => void undoToday(h.id) }]
+                                                    : []),
+                                                { id: 'delete', label: 'Delete', icon: <Trash size={13} />, danger: true, onSelect: () => setRemoving(h) },
+                                            ]}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </GlassCard>
+                </>
+            )}
+
+            <HabitNameModal
+                open={!!nameModal}
+                initialName={nameModal?.habit?.name}
+                title={nameModal?.habit ? 'Rename habit' : 'New habit'}
+                submitLabel={nameModal?.habit ? 'Save' : 'Add habit'}
+                onClose={() => setNameModal(null)}
+                onSubmit={(name) => (nameModal?.habit ? renameHabit(nameModal.habit.id, name) : addHabit(name))}
+            />
+            <Dialog
+                open={!!removing}
+                onClose={() => setRemoving(null)}
+                size="sm"
+                title={removing ? `Delete “${removing.name}”?` : 'Delete habit?'}
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setRemoving(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="danger-solid"
+                            onClick={() => {
+                                const target = removing;
+                                setRemoving(null);
+                                if (target) void saveHabits(habits.filter((x) => x.id !== target.id));
+                            }}
+                        >
+                            Delete habit
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-body-sm text-[var(--fz-text-3)]">
+                    Its streak and check-in history will be gone. This can’t be undone.
+                </p>
+            </Dialog>
         </div>
     );
 };
@@ -649,6 +688,8 @@ export const SessionsTab = () => {
     const [runtime, setRuntime] = useState<PomodoroRuntime | null>(null);
     const [futureSelfEnabled, setFutureSelfEnabled] = useState(false);
     const [futureSelfModalOpen, setFutureSelfModalOpen] = useState(false);
+    /** "Custom" chosen explicitly (keeps it selected even when the minutes happen to match a preset). */
+    const [customPicked, setCustomPicked] = useState(false);
 
     useEffect(() => {
         void chrome.runtime
@@ -832,6 +873,8 @@ export const SessionsTab = () => {
         { label: 'Classic', focus: 25, rest: 5 },
         { label: 'Deep', focus: 50, rest: 10 },
     ];
+    const matchingPreset = sessionPresets.find((p) => pomoTiming.focusMin === p.focus && pomoTiming.breakMin === p.rest)?.label;
+    const presetValue = customPicked || !matchingPreset ? 'Custom' : matchingPreset;
     const completedToday = defaultPomo.sessionsCompleted ?? 0;
     const segmentSeconds = Math.max(
         1,
@@ -857,12 +900,7 @@ export const SessionsTab = () => {
     };
 
     return (
-        <div className="mx-auto max-w-[980px] animate-fade-in-up space-y-5">
-            <div className="text-center">
-                <p className="focuz-section-label">Focus</p>
-                <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--dashboard-text)]">Pomodoro</h1>
-                <p className="mt-1 text-sm text-[var(--dashboard-text-muted)]">Choose a rhythm, start the clock, and stay with one thing.</p>
-            </div>
+        <div className="space-y-6 animate-fade-in-up">
             {pomoNotice && (
                 <div role="status" className="mx-auto max-w-xl rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-2.5 text-center text-sm font-medium text-emerald-400">
                     {pomoNotice}
@@ -871,11 +909,13 @@ export const SessionsTab = () => {
             
             <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
                 <GlassCard className="flex min-h-[500px] w-full flex-col items-center justify-center p-7 sm:p-9">
-                    <span className={`mx-auto mb-5 self-center rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                        isBreak ? 'bg-emerald-500/10 text-emerald-400' : 'bg-purple-500/10 text-purple-400'
-                    }`}>
-                        {isBreak ? 'Recovery Break' : pomoRunning ? 'Focus In Progress' : 'Ready To Focus'}
-                    </span>
+                    <div className="mb-5 flex w-full justify-center">
+                        <span className={`rounded-full px-3 py-1 text-[11px] font-[460] ${
+                            isBreak ? 'bg-emerald-500/10 text-emerald-400' : 'bg-[var(--fz-accent-soft)] text-[var(--fz-accent)]'
+                        }`}>
+                            {isBreak ? 'Recovery break' : pomoRunning ? 'Focus in progress' : 'Ready to focus'}
+                        </span>
+                    </div>
 
                     <div className="flex w-full items-center justify-center">
                         <div className="relative h-64 w-64 shrink-0 sm:h-72 sm:w-72">
@@ -884,14 +924,14 @@ export const SessionsTab = () => {
                                 viewBox="0 0 200 200"
                                 aria-hidden
                             >
-                                <circle cx="100" cy="100" r="82" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="7" />
+                                <circle cx="100" cy="100" r="82" fill="none" stroke="rgba(255, 255, 255, 0.08)" strokeWidth="4" />
                                 <circle
                                     cx="100"
                                     cy="100"
                                     r="82"
                                     fill="none"
-                                    stroke={isBreak ? '#22c55e' : '#a855f7'}
-                                    strokeWidth="7"
+                                    stroke={isBreak ? '#22c55e' : 'var(--fz-accent)'}
+                                    strokeWidth="4"
                                     strokeLinecap="round"
                                     strokeDasharray={`${2 * Math.PI * 82}`}
                                     strokeDashoffset={`${2 * Math.PI * 82 * (1 - Math.min(1, pomoTimeLeft / segmentSeconds))}`}
@@ -899,10 +939,10 @@ export const SessionsTab = () => {
                                 />
                             </svg>
                             <div className="pointer-events-none absolute inset-[18%] flex flex-col items-center justify-center text-center">
-                                <span className="text-5xl font-semibold leading-none tracking-[-0.04em] text-[var(--dashboard-text)] tabular-nums">
+                                <span className="text-[64px] leading-none tracking-[-0.04em] text-[var(--dashboard-text)] tabular-nums" style={{ fontWeight: 560 }}>
                                     {formatTime(pomoTimeLeft)}
                                 </span>
-                                <span className="mt-3 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--dashboard-text-muted)]">
+                                <span className="mt-3 text-[11px] font-medium  text-[var(--dashboard-text-muted)]">
                                     {pomoTiming.focusMin} min focus · {pomoTiming.breakMin} min rest
                                 </span>
                             </div>
@@ -935,8 +975,8 @@ export const SessionsTab = () => {
                                 }
                             })();
                         }}
-                            className={`flex min-w-32 items-center justify-center gap-2 rounded-md px-6 py-2.5 text-sm font-medium transition-colors ${pomoRunning ? 'border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] text-[var(--dashboard-text)] hover:bg-[var(--dashboard-interactive-hover)]' : 'bg-[var(--dashboard-text)] text-[var(--dashboard-bg)] opacity-95 hover:opacity-100'}`}>
-                            {pomoRunning ? <><Pause size={16} /><span>Pause</span></> : <><Play size={16} /><span>Start Focus</span></>}
+                            className={`flex min-w-32 items-center justify-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-colors ${pomoRunning ? 'border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] text-[var(--dashboard-text)] hover:bg-[var(--dashboard-interactive-hover)]' : 'bg-[var(--dashboard-text)] text-[var(--dashboard-bg)] opacity-95 hover:opacity-100'}`}>
+                            {pomoRunning ? <><Pause size={16} /><span>Pause</span></> : <><Play size={16} /><span>Start focus</span></>}
                         </button>
                         <button onClick={() => {
                             if (runtime?.futureSelfContractId) {
@@ -946,7 +986,7 @@ export const SessionsTab = () => {
                         }}
                             aria-label="Reset session"
                             title="Reset session"
-                            className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] text-[var(--dashboard-text-muted)] transition-colors hover:bg-[var(--dashboard-interactive-hover)] hover:text-[var(--dashboard-text)]">
+                            className="flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] text-[var(--dashboard-text-muted)] transition-colors hover:bg-[var(--dashboard-interactive-hover)] hover:text-[var(--dashboard-text)]">
                             <RefreshCw size={16} />
                         </button>
                     </div>
@@ -957,7 +997,7 @@ export const SessionsTab = () => {
                             <div>
                                 <div className="flex items-center gap-2">
                                     <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Future Self Mode</h2>
-                                    <span className="rounded bg-purple-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-purple-400">Pro</span>
+                                    <span className="rounded bg-[var(--fz-accent-soft)] px-1.5 py-0.5 text-[11px] font-[460] text-[var(--fz-accent)]">Pro</span>
                                 </div>
                                 <p className="mt-1 text-xs text-[var(--dashboard-text-muted)]">Make this Pomodoro a deliberate promise.</p>
                             </div>
@@ -979,7 +1019,7 @@ export const SessionsTab = () => {
                                         return next;
                                     });
                                 }}
-                                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${futureSelfEnabled ? 'bg-purple-600' : 'bg-white/10'}`}
+                                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${futureSelfEnabled ? 'bg-[var(--fz-accent)]' : 'bg-white/10'}`}
                             >
                                 <span
                                     className={`pointer-events-none absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
@@ -990,70 +1030,48 @@ export const SessionsTab = () => {
                         </div>
                     </GlassCard>
                     <GlassCard className="p-4">
-                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Session Presets</h2>
+                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Session presets</h2>
                         <p className="mt-0.5 text-xs text-[var(--dashboard-text-muted)]">Set your focus cadence.</p>
-                        <div className="mt-3 space-y-1.5">
-                            {sessionPresets.map((preset) => {
-                                const selected = pomoTiming.focusMin === preset.focus && pomoTiming.breakMin === preset.rest;
-                                return (
-                                    <button
-                                        key={preset.label}
-                                        type="button"
-                                        disabled={pomoRunning}
-                                        onClick={() => void updatePomodoroSettings(preset.focus, preset.rest)}
-                                        className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                                            selected
-                                                ? 'border-purple-500/35 bg-purple-500/10'
-                                                : 'border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] hover:bg-[var(--dashboard-interactive-hover)]'
-                                        }`}
-                                    >
-                                        <span className="text-xs font-medium text-[var(--dashboard-text)]">{preset.label}</span>
-                                        <span className="text-[11px] text-[var(--dashboard-text-muted)]">{preset.focus} / {preset.rest} min</span>
-                                    </button>
-                                );
-                            })}
+                        <div className="mt-3">
+                            <SegmentedControl
+                                className="w-full"
+                                idPrefix="pomo-preset"
+                                value={presetValue}
+                                onChange={(v) => {
+                                    const preset = sessionPresets.find((p) => p.label === v);
+                                    setCustomPicked(!preset);
+                                    if (preset) void updatePomodoroSettings(preset.focus, preset.rest);
+                                }}
+                                options={[
+                                    ...sessionPresets.map((p) => ({ value: p.label, label: p.label })),
+                                    { value: 'Custom' as const, label: 'Custom' },
+                                ]}
+                            />
+                            {presetValue === 'Custom' ? (
+                                <CustomPomodoroTiming
+                                    key={`${pomoTiming.focusMin}-${pomoTiming.breakMin}`}
+                                    focusMin={pomoTiming.focusMin}
+                                    breakMin={pomoTiming.breakMin}
+                                    onCommit={(f, b) => void updatePomodoroSettings(f, b)}
+                                />
+                            ) : null}
+                            <p className="mt-2 text-[11px] text-[var(--dashboard-text-muted)]">
+                                {pomoTiming.focusMin} min focus · {pomoTiming.breakMin} min break
+                                {pomoRunning ? ' · applies to the next session' : ''}
+                            </p>
                         </div>
                     </GlassCard>
                     <GlassCard className="p-4">
                         <div className="flex items-end justify-between border-b border-[var(--dashboard-border)] pb-3">
                             <div>
-                                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--dashboard-text-muted)]">Today</p>
+                                <p className="text-[11px] font-medium  text-[var(--dashboard-text-muted)]">Today</p>
                                 <p className="mt-1 text-2xl font-semibold text-[var(--dashboard-text)] tabular-nums">{completedToday}</p>
                             </div>
                             <p className="pb-1 text-xs text-[var(--dashboard-text-muted)]">completed sessions</p>
                         </div>
                         <div className="flex items-center justify-between pt-3">
                             <span className="text-xs text-[var(--dashboard-text-muted)]">Current streak</span>
-                            <span className="text-xs font-medium text-[var(--dashboard-text)]">{dashboardStreak} days</span>
-                        </div>
-                    </GlassCard>
-                    <GlassCard className="p-4">
-                        <h2 className="text-sm font-medium text-[var(--dashboard-text)]">Custom Timing</h2>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                            <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--dashboard-text-muted)]">
-                                Focus
-                                <input
-                                    type="number"
-                                    min="0.5"
-                                    max="120"
-                                    step="0.5"
-                                    value={pomoTiming.focusMin}
-                                    onChange={(event) => void updatePomodoroSettings(parseFloat(event.target.value) || 25, pomoTiming.breakMin)}
-                                    className="mt-1.5 w-full rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] px-2 py-2 text-center text-xs text-[var(--dashboard-text)] outline-none"
-                                />
-                            </label>
-                            <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--dashboard-text-muted)]">
-                                Break
-                                <input
-                                    type="number"
-                                    min="0.5"
-                                    max="60"
-                                    step="0.5"
-                                    value={pomoTiming.breakMin}
-                                    onChange={(event) => void updatePomodoroSettings(pomoTiming.focusMin, parseFloat(event.target.value) || 5)}
-                                    className="mt-1.5 w-full rounded-md border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] px-2 py-2 text-center text-xs text-[var(--dashboard-text)] outline-none"
-                                />
-                            </label>
+                            <span className="text-xs font-medium text-[var(--dashboard-text)]">{dashboardStreak} {dashboardStreak === 1 ? 'day' : 'days'}</span>
                         </div>
                     </GlassCard>
                 </div>
@@ -1070,11 +1088,79 @@ export const SessionsTab = () => {
     );
 };
 
+/** Focus / break minutes for the Custom preset; saved on Enter or when a field loses focus. */
+function CustomPomodoroTiming({
+    focusMin,
+    breakMin,
+    onCommit,
+}: {
+    focusMin: number;
+    breakMin: number;
+    onCommit: (focusMin: number, breakMin: number) => void;
+}) {
+    const [focus, setFocus] = useState(String(focusMin));
+    const [rest, setRest] = useState(String(breakMin));
+    const clamp = (raw: string, min: number, max: number, fallback: number) => {
+        const n = Math.round(parseFloat(raw) * 2) / 2;
+        return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+    };
+    const commit = () => {
+        const f = clamp(focus, 1, 180, focusMin);
+        const b = clamp(rest, 1, 60, breakMin);
+        setFocus(String(f));
+        setRest(String(b));
+        if (f !== focusMin || b !== breakMin) onCommit(f, b);
+    };
+    const field = (label: string, value: string, set: (v: string) => void, max: number) => (
+        <label className="text-[11px] font-medium text-[var(--dashboard-text-muted)]">
+            {label}
+            <span className="mt-1.5 flex items-center rounded-lg border border-[var(--dashboard-border)] bg-[var(--dashboard-interactive)] pr-2.5 focus-within:border-[var(--fz-border-strong)]">
+                <input
+                    type="number"
+                    inputMode="decimal"
+                    min={1}
+                    max={max}
+                    step={0.5}
+                    value={value}
+                    onChange={(e) => set(e.target.value)}
+                    onBlur={commit}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    }}
+                    className="w-full min-w-0 bg-transparent px-2.5 py-2 text-xs tabular-nums text-[var(--dashboard-text)] outline-none"
+                />
+                <span className="text-[11px] text-[var(--dashboard-text-muted)]">min</span>
+            </span>
+        </label>
+    );
+    return (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+            {field('Focus', focus, setFocus, 180)}
+            {field('Break', rest, setRest, 60)}
+        </div>
+    );
+}
+
 function looksLikeDomainOrUrl(value: string): boolean {
     const trimmed = value.trim();
     if (!trimmed) return false;
     if (/^https?:\/\//i.test(trimmed)) return true;
     return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d+)?(\/\S*)?$/i.test(trimmed);
+}
+
+/** Same shape the block engine stores: lowercase host (no www.) plus any path. */
+function normalizeSite(value: string): string {
+    let v = value.trim().toLowerCase();
+    if (!v) return '';
+    try {
+        if (v.includes('://')) {
+            const u = new URL(v);
+            v = u.hostname + (u.pathname && u.pathname !== '/' ? u.pathname : '');
+        }
+    } catch {
+        /* keep the raw text */
+    }
+    return v.replace(/^www\./, '').replace(/\/+$/, '');
 }
 
 async function resolveSiteViaAI(
@@ -1092,6 +1178,71 @@ async function resolveSiteViaAI(
     } catch {
         return null;
     }
+}
+
+const noun = (n: number, singular: string, plural = `${singular}s`) => (n === 1 ? singular : plural);
+
+const CATEGORY_ICONS: Record<SafeBlockCategoryKey, LucideIcon> = {
+    social: Users,
+    gambling: Dices,
+    news: Newspaper,
+    shopping: ShoppingBag,
+    streaming: Tv,
+    gaming: Gamepad2,
+    dating: Heart,
+};
+
+/** Site favicon in a small tile; falls back to the first letter. */
+function SiteIcon({ domain, size = 'md' }: { domain: string; size?: 'sm' | 'md' }) {
+    const [failed, setFailed] = useState(false);
+    const host = domain.replace(/^https?:\/\//, '').split('/')[0];
+    return (
+        <span
+            className={`flex shrink-0 items-center justify-center overflow-hidden rounded-md border border-[var(--fz-border)] bg-[var(--fz-bg-hover)] text-[11px] font-semibold uppercase text-[var(--fz-text-3)] ${
+                size === 'sm' ? 'size-6' : 'size-7'
+            }`}
+        >
+            {failed ? (
+                host.charAt(0)
+            ) : (
+                <img
+                    src={`https://www.google.com/s2/favicons?domain=${host}&sz=64`}
+                    alt=""
+                    className={size === 'sm' ? 'size-3.5' : 'size-4'}
+                    onError={() => setFailed(true)}
+                />
+            )}
+        </span>
+    );
+}
+
+/** "…" button with a small menu — keeps bulk actions out of the way. */
+function BulkMenu({
+    label,
+    items,
+    disabled,
+    pending,
+}: {
+    label: string;
+    items: { id: string; label: string; icon: ReactNode; onSelect: () => void; danger?: boolean }[];
+    disabled?: boolean;
+    pending?: boolean;
+}) {
+    const [open, setOpen] = useState(false);
+    const anchorRef = useRef<HTMLButtonElement>(null);
+    return (
+        <>
+            <IconButton
+                ref={anchorRef}
+                icon={pending ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={15} />}
+                tooltip={label}
+                disabled={disabled}
+                onClick={() => setOpen((o) => !o)}
+                className="-mr-1.5 -mt-0.5"
+            />
+            <Menu open={open} onClose={() => setOpen(false)} anchor={anchorRef} align="end" items={items} />
+        </>
+    );
 }
 
 export const BlocklistTab = () => {
@@ -1118,6 +1269,21 @@ export const BlocklistTab = () => {
     const [bulkActionPending, setBulkActionPending] = useState<string | null>(null);
     const [platformPending, setPlatformPending] = useState<string | null>(null);
     const [expandedBlockedCategories, setExpandedBlockedCategories] = useState<Partial<Record<SafeBlockCategoryKey, boolean>>>({});
+    const [smartYtOpen, setSmartYtOpen] = useState(false);
+    // Ticks while a lockdown runs so its countdown stays current.
+    const [nowMs, setNowMs] = useState(() => Date.now());
+    useEffect(() => {
+        if (!nuclearActive) return;
+        const t = window.setInterval(() => setNowMs(Date.now()), 15_000);
+        return () => window.clearInterval(t);
+    }, [nuclearActive]);
+    const patchSmartYouTube = async (next: SmartYouTubeSettings) => {
+        await sendEngineMessage({
+            type: 'UPDATE_ENGINE_SETTINGS',
+            settings: { inAppBlock: { ...engineState.inAppBlock, smartYouTube: next } },
+        });
+        await fetchEngineState();
+    };
 
     const blocklistCount = Object.keys(engineState.blocklist || {}).filter(
         (d) => engineState.blocklist[d],
@@ -1132,36 +1298,83 @@ export const BlocklistTab = () => {
         sourceId?: string;
     }>({ isOpen: false, domain: '', type: '', phrase: '' });
 
-    const executeAction = async (type: string, domain: string, action: 'add' | 'remove') => {
-        const response = await new Promise<{ ok?: boolean; error?: string }>((resolve) =>
-            chrome.runtime.sendMessage(
-                { type: `${action.toUpperCase()}_${type.toUpperCase()}`, domain: domain.trim() },
-                (resp) => resolve(resp || { ok: false, error: chrome.runtime.lastError?.message }),
+    /**
+     * Show a change the moment it's made, then settle on what the extension
+     * reports. Rolls back (and says why) if the extension refuses or never answers.
+     */
+    const mutateEngine = async (
+        message: Record<string, unknown>,
+        optimistic: (s: EngineState) => EngineState,
+        failure: string,
+    ): Promise<boolean> => {
+        const before = useAuthStore.getState().engineState;
+        useAuthStore.setState({ engineState: optimistic(before) });
+        const response = await new Promise<{ ok?: boolean; error?: string; state?: EngineState }>((resolve) =>
+            chrome.runtime.sendMessage(message, (resp) =>
+                resolve(resp || { ok: false, error: chrome.runtime.lastError?.message }),
             ),
         );
         if (response.ok === false) {
-            setBlockActionError(response.error || 'The blocking change could not be completed.');
-            return;
+            useAuthStore.setState({ engineState: before });
+            setBlockActionError(response.error || failure);
+            return false;
         }
         setBlockActionError('');
-        await fetchEngineState();
-        setChallengeState((prev) => ({ ...prev, isOpen: false }));
+        if (response.state && typeof response.state === 'object') {
+            useAuthStore.setState({ engineState: { ...useAuthStore.getState().engineState, ...response.state } });
+        } else {
+            await fetchEngineState();
+        }
+        return true;
+    };
+
+    const executeAction = async (type: string, domain: string, action: 'add' | 'remove') => {
+        const site = normalizeSite(domain);
+        if (!site) return;
+        const ok = await mutateEngine(
+            { type: `${action.toUpperCase()}_${type.toUpperCase()}`, domain: site },
+            (s) => {
+                if (type === 'block') {
+                    const blocklist = { ...s.blocklist };
+                    if (action === 'add') {
+                        const sources = new Set(blocklist[site]?.sources || []);
+                        sources.add('manual');
+                        blocklist[site] = { ...blocklist[site], sources: [...sources] };
+                        return { ...s, blocklist, allowedSites: (s.allowedSites || []).filter((d) => d !== site) };
+                    }
+                    delete blocklist[site];
+                    return { ...s, blocklist };
+                }
+                const allowed = (s.allowedSites || []).filter((d) => d !== site);
+                return { ...s, allowedSites: action === 'add' ? [...allowed, site] : allowed };
+            },
+            'The blocking change could not be completed.',
+        );
+        if (ok) setChallengeState((prev) => ({ ...prev, isOpen: false }));
     };
 
     const executeSourceRemoval = async (domain: string, source: string, sourceId?: string) => {
-        const response = await new Promise<{ ok?: boolean; error?: string }>((resolve) =>
-            chrome.runtime.sendMessage(
-                { type: 'REMOVE_BLOCK_SOURCE', domain, source, sourceId },
-                (resp) => resolve(resp || { ok: false, error: chrome.runtime.lastError?.message }),
-            ),
+        const ok = await mutateEngine(
+            { type: 'REMOVE_BLOCK_SOURCE', domain, source, sourceId },
+            (s) => {
+                const blocklist = { ...s.blocklist };
+                const entry = blocklist[domain];
+                // A timer/schedule can have several instances — only drop the source with the last one.
+                const siblings = sourceId && (source === 'timer' || source === 'schedule')
+                    ? ((source === 'timer' ? s.timers : s.schedules)?.[domain] || []).filter(
+                          (x: { id?: string }) => x.id !== sourceId,
+                      ).length
+                    : 0;
+                if (entry && siblings === 0) {
+                    const sources = entry.sources.filter((x) => x !== source);
+                    if (sources.length) blocklist[domain] = { ...entry, sources };
+                    else delete blocklist[domain];
+                }
+                return { ...s, blocklist };
+            },
+            `Could not remove the ${source} block.`,
         );
-        if (response.ok === false) {
-            setBlockActionError(response.error || `Could not remove the ${source} block.`);
-            return;
-        }
-        setBlockActionError('');
-        setChallengeState((prev) => ({ ...prev, isOpen: false }));
-        await fetchEngineState();
+        if (ok) setChallengeState((prev) => ({ ...prev, isOpen: false }));
     };
 
     const disableChallenge = async () => {
@@ -1215,18 +1428,11 @@ export const BlocklistTab = () => {
         if (categoryPending || engineState.nuclearState?.active) return;
         setCategoryPending(category);
         const enabled = !engineState.categoriesActive?.[category];
-        const response = await new Promise<{ ok?: boolean; error?: string }>((resolve) =>
-            chrome.runtime.sendMessage(
-                { type: 'CATEGORY_TOGGLE', category, enabled },
-                (resp) => resolve(resp || { ok: false, error: chrome.runtime.lastError?.message }),
-            ),
+        await mutateEngine(
+            { type: 'CATEGORY_TOGGLE', category, enabled },
+            (s) => ({ ...s, categoriesActive: { ...s.categoriesActive, [category]: enabled } }),
+            `Could not update ${SAFE_BLOCK_CATEGORY_LABELS[category]}.`,
         );
-        if (response.ok === false) {
-            setBlockActionError(response.error || `Could not update ${SAFE_BLOCK_CATEGORY_LABELS[category]}.`);
-        } else {
-            setBlockActionError('');
-            await fetchEngineState();
-        }
         setCategoryPending(null);
     };
 
@@ -1234,6 +1440,23 @@ export const BlocklistTab = () => {
         const rawValue = kind === 'block' ? newBlocked : newAllowed;
         const value = rawValue.trim();
         if (!value || resolvingField) return;
+        const clearInput = () => (kind === 'block' ? setNewBlocked('') : setNewAllowed(''));
+
+        // "youtube" → youtube.com. Anything else that isn't an address goes to the
+        // AI lookup for Pro (no Alt needed), or gets a clear hint — never a silent
+        // entry that blocks nothing.
+        if (!altKey && !looksLikeDomainOrUrl(value)) {
+            if (/^[a-z0-9-]+$/i.test(value)) {
+                clearInput();
+                await triggerAction(kind, `${value.toLowerCase()}.com`, 'add');
+                return;
+            }
+            if (!isPro) {
+                setBlockActionError(`"${value}" isn't a web address — try something like youtube.com.`);
+                return;
+            }
+            altKey = true;
+        }
 
         if (altKey && !looksLikeDomainOrUrl(value)) {
             if (!isPro) {
@@ -1252,13 +1475,13 @@ export const BlocklistTab = () => {
                 setBlockActionError(`Could not find a site for "${value}". Try typing the domain directly.`);
                 return;
             }
+            clearInput();
             await triggerAction(kind, resolved.domain, 'add');
-            if (kind === 'block') setNewBlocked(''); else setNewAllowed('');
             return;
         }
 
+        clearInput();
         await triggerAction(kind, value, 'add');
-        if (kind === 'block') setNewBlocked(''); else setNewAllowed('');
     };
 
     const sendEngineMessage = <T extends { ok?: boolean; error?: string } = { ok?: boolean; error?: string }>(
@@ -1343,11 +1566,11 @@ export const BlocklistTab = () => {
     };
 
     const platformKeys = [
-        { label: 'YouTube Shorts', key: 'youtubeShorts' as const, desc: 'Blocks /shorts URLs and Shorts feed' },
-        { label: 'YouTube', key: 'youtube' as const, desc: 'Blocks all of YouTube' },
-        { label: 'Instagram Reels', key: 'instagramReels' as const, desc: 'Blocks Instagram Reels' },
-        { label: 'Instagram', key: 'instagram' as const, desc: 'Blocks Instagram' },
-        { label: 'TikTok', key: 'tiktok' as const, desc: 'Blocks TikTok' },
+        { label: 'YouTube Shorts', key: 'youtubeShorts' as const, desc: 'Shorts feed and /shorts links', site: 'youtube.com' },
+        { label: 'YouTube', key: 'youtube' as const, desc: 'All of YouTube', site: 'youtube.com' },
+        { label: 'Instagram Reels', key: 'instagramReels' as const, desc: 'Reels tab and feed', site: 'instagram.com' },
+        { label: 'Instagram', key: 'instagram' as const, desc: 'All of Instagram', site: 'instagram.com' },
+        { label: 'TikTok', key: 'tiktok' as const, desc: 'All of TikTok', site: 'tiktok.com' },
     ];
 
     const togglePlatformBlock = async (key: (typeof platformKeys)[number]['key']) => {
@@ -1355,29 +1578,79 @@ export const BlocklistTab = () => {
         const current = engineState.inAppBlock || {};
         const nextOn = !current[key];
         setPlatformPending(key);
-        try {
-            const res = await sendEngineMessage({
-                type: 'UPDATE_ENGINE_SETTINGS',
-                settings: {
-                    inAppBlock: {
-                        ...current,
-                        [key]: nextOn,
-                    },
-                },
-            });
-            if (res.ok === false) {
-                setBlockActionError(res.error || `Could not update ${key}.`);
-                return;
-            }
-            setBlockActionError('');
-            await fetchEngineState();
-        } finally {
-            setPlatformPending(null);
-        }
+        const inAppBlock = { ...current, [key]: nextOn };
+        await mutateEngine(
+            { type: 'UPDATE_ENGINE_SETTINGS', settings: { inAppBlock } },
+            (s) => ({ ...s, inAppBlock }),
+            `Could not update ${key}.`,
+        );
+        setPlatformPending(null);
     };
 
+    const categoriesOn = SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]);
+    const platformsOn = platformKeys.filter(({ key }) => engineState.inAppBlock?.[key]).length;
+    const allowedSites: string[] = engineState.allowedSites || [];
+    const smartYouTube = normalizeSmartYouTube(engineState.inAppBlock?.smartYouTube);
+    const nuclearMinutesLeft = nuclearActive
+        ? Math.max(0, Math.ceil((engineState.nuclearState.endTime - nowMs) / 60000))
+        : 0;
+
+    const blockedSites = Object.entries(engineState.blocklist || {})
+        .map(([domain, entry]) => {
+            const sources: { source: string; id?: string; label: string }[] = (entry.sources || []).flatMap((source: string) => {
+                if (source === 'category') return [];
+                if (source === 'timer') {
+                    const timers = engineState.timers?.[domain] || [];
+                    return timers.length
+                        ? timers.map((timer: { id: string; endTime: number }) => ({
+                              source,
+                              id: timer.id as string,
+                              label: `Timer until ${new Date(timer.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+                          }))
+                        : [{ source, label: 'Timer' }];
+                }
+                if (source === 'schedule') {
+                    const schedules = engineState.schedules?.[domain] || [];
+                    const hm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                    return schedules.length
+                        ? schedules.map((s: { id: string; startHour: number; startMin: number; endHour: number; endMin: number }) => ({
+                              source,
+                              id: s.id as string,
+                              label: `Scheduled ${hm(s.startHour, s.startMin)}–${hm(s.endHour, s.endMin)}`,
+                          }))
+                        : [{ source, label: 'Schedule' }];
+                }
+                if (source === 'manual') return [{ source, label: 'Always' }];
+                if (source === 'ai') return [{ source, label: 'Added by AI Coach' }];
+                return [{ source, label: source.charAt(0).toUpperCase() + source.slice(1) }];
+            });
+            return { domain, sources };
+        })
+        .filter((site) => site.sources.length > 0)
+        .sort((a, b) => a.domain.localeCompare(b.domain));
+
+    const nothingBlocked = categoriesOn.length === 0 && blockedSites.length === 0;
+
+    const cardHeader = (title: string, meta?: ReactNode, action?: ReactNode) => (
+        <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
+            <div className="min-w-0">
+                <h3 className="text-[14px] font-semibold text-[var(--fz-text-1)]">{title}</h3>
+                {meta && <p className="text-meta mt-0.5">{meta}</p>}
+            </div>
+            {action}
+        </div>
+    );
+
+    const rowIcon = 'flex size-7 shrink-0 items-center justify-center rounded-md border border-[var(--fz-border)] bg-[var(--fz-bg-hover)] text-[var(--fz-text-3)]';
+
     return (
-        <div className="mx-auto w-full max-w-[1100px] space-y-4 animate-fade-in-up">
+        <div className="space-y-4 animate-fade-in-up">
+            <SmartYouTubeModal
+                open={smartYtOpen}
+                onClose={() => setSmartYtOpen(false)}
+                settings={smartYouTube}
+                onSave={patchSmartYouTube}
+            />
             <ChallengeModal
                 isOpen={challengeState.isOpen}
                 phrase={challengeState.phrase}
@@ -1388,439 +1661,403 @@ export const BlocklistTab = () => {
                     : executeAction(challengeState.type, challengeState.domain, 'remove')}
                 onDisableChallenge={disableChallenge}
             />
-            <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                    <p className="focuz-section-label">Focus</p>
-                    <h1 className="text-3xl font-semibold text-white tracking-tight">Site Management</h1>
-                    <p className="text-sm text-neutral-500 mt-1">Control what gets blocked and what stays reachable.</p>
-                </div>
-                <p className="text-[10px] text-neutral-600 max-w-xs text-right">
-                    Tip: hold{' '}
-                    <span className="rounded border border-white/15 bg-white/5 px-1 font-mono text-[10px] text-neutral-400">Alt</span>
-                    {' '}+ Enter for AI site lookup{!isPro ? ' (Pro)' : ''}.
-                </p>
-            </div>
-            {blockActionError && (
-                <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                    <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                    <span>{blockActionError}</span>
-                </div>
-            )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {quickActions.map((action) => {
-                    const Icon = action.icon;
-                    const pending = bulkActionPending === action.id;
-                    return (
-                        <button
-                            key={action.id}
-                            type="button"
-                            disabled={!!bulkActionPending || nuclearActive}
-                            onClick={() => void runQuickAction(action)}
-                            className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-neutral-300">
-                                {pending ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
-                            </span>
-                            <span className="text-[11px] font-semibold text-neutral-200 leading-snug">{action.label}</span>
-                        </button>
-                    );
-                })}
-            </div>
             {nuclearActive && (
-                <p className="text-xs text-amber-400/80">Quick actions and platform blockers are locked during Nuclear Lockdown.</p>
+                <Banner tone="warn" title={`Nuclear lockdown · ${nuclearMinutesLeft}m left`}>
+                    Your blocklist is locked until it ends — nothing on this page can be turned off.
+                </Banner>
+            )}
+            {blockActionError && !challengeState.isOpen && (
+                <Banner tone="danger" onDismiss={() => setBlockActionError('')}>
+                    {blockActionError}
+                </Banner>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <GlassCard className="p-4">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                        <div>
-                            <h3 className="font-semibold text-white text-sm">Block by Category</h3>
-                            <p className="text-[11px] text-neutral-500 mt-0.5">Curated site groups.</p>
-                        </div>
-                        <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-neutral-500">
-                            {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).length} on
-                        </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {SAFE_BLOCK_CATEGORY_KEYS.map((category) => {
-                            const active = !!engineState.categoriesActive?.[category];
-                            const pending = categoryPending === category;
-                            return (
-                                <button
-                                    key={category}
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={active}
-                                    disabled={categoryPending !== null || nuclearActive}
-                                    onClick={() => void toggleCategory(category)}
-                                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                                        active
-                                            ? 'border-purple-500/40 bg-purple-500/10'
-                                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20'
-                                    }`}
-                                >
-                                    <span>
-                                        <span className={`block text-sm font-semibold ${active ? 'text-purple-200' : 'text-neutral-200'}`}>
-                                            {SAFE_BLOCK_CATEGORY_LABELS[category]}
-                                        </span>
-                                        <span className="mt-0.5 block text-[10px] text-neutral-500">
-                                            {SAFE_BLOCK_CATEGORIES[category].length} sites
-                                            {pending ? ' · updating' : ''}
-                                        </span>
-                                    </span>
-                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${active ? 'bg-purple-500' : 'bg-neutral-700'}`}>
-                                        <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${active ? 'translate-x-4' : 'translate-x-0'}`} />
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </GlassCard>
-
-                <GlassCard className="p-4">
-                    <div className="mb-3">
-                        <h3 className="font-semibold text-white text-sm">Platform Blockers</h3>
-                        <p className="text-[11px] text-neutral-500 mt-0.5">In-app distractions on major platforms.</p>
-                    </div>
-                    <div className="space-y-1.5">
-                        {platformKeys.map(({ label, key, desc }) => {
-                            const on = !!engineState.inAppBlock?.[key];
-                            const pending = platformPending === key;
-                            return (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={on}
-                                    disabled={nuclearActive || !!platformPending}
-                                    title={desc}
-                                    onClick={() => void togglePlatformBlock(key)}
-                                    className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                                        on
-                                            ? 'border-red-500/35 bg-red-500/10'
-                                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20'
-                                    }`}
-                                >
-                                    <span>
-                                        <span className={`block text-sm font-semibold ${on ? 'text-red-300' : 'text-neutral-200'}`}>
-                                            {label}
-                                        </span>
-                                        <span className="mt-0.5 block text-[10px] text-neutral-500">
-                                            {pending ? 'Updating…' : desc}
-                                        </span>
-                                    </span>
-                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-red-500' : 'bg-neutral-700'}`}>
-                                        {pending
-                                            ? <Loader2 size={12} className="absolute inset-0 m-auto animate-spin text-white" />
-                                            : <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${on ? 'translate-x-4' : 'translate-x-0'}`} />}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </GlassCard>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <GlassCard className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold text-white text-sm">Blocked</h3>
-                        <Ban size={16} className="text-red-400" />
-                    </div>
-                    <p className="text-[10px] text-neutral-500 mb-3">
-                        Domains, subdomains, or paths (site.com/path)
-                    </p>
-                    <div className="flex gap-2 mb-2">
+            {/* Add a site — the main thing people come here to do */}
+            <GlassCard className="p-5">
+                <form
+                    className="flex items-center gap-2"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        void handleAddSite('block', false);
+                    }}
+                >
+                    <label className="relative flex min-w-0 flex-1 items-center">
+                        <Ban size={15} className="pointer-events-none absolute left-3 text-[var(--fz-text-4)]" />
                         <input
                             value={newBlocked}
-                            onChange={e => setNewBlocked(e.target.value)}
+                            onChange={(e) => setNewBlocked(e.target.value)}
                             disabled={resolvingField === 'block'}
-                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleAddSite('block', e.altKey); } }}
-                            placeholder="site.com or sub.site.com/path"
-                            className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 outline-none transition-colors duration-150 text-white disabled:opacity-50"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && e.altKey) {
+                                    e.preventDefault();
+                                    void handleAddSite('block', true);
+                                }
+                            }}
+                            placeholder="Block a site — youtube.com, reddit.com/r/all…"
+                            aria-label="Site to block"
+                            className="h-10 w-full rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-panel)] pl-9 pr-3 text-[14px] text-[var(--fz-text-1)] outline-none transition-colors placeholder:text-[var(--fz-text-4)] focus:border-[var(--fz-border-strong)] disabled:opacity-60"
                         />
-                        <button
-                            type="button"
-                            onClick={(e) => void handleAddSite('block', e.altKey)}
-                            disabled={resolvingField === 'block'}
-                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 disabled:opacity-60 flex items-center gap-1.5"
-                        >
-                            {resolvingField === 'block' ? <Loader2 size={13} className="animate-spin" /> : 'Add'}
-                        </button>
-                    </div>
-                    <div className="max-h-[22rem] space-y-1.5 overflow-y-auto scrollbar-hide">
-                        {SAFE_BLOCK_CATEGORY_KEYS.filter((key) => engineState.categoriesActive?.[key]).map((category) => {
-                            const expanded = !!expandedBlockedCategories[category];
-                            const sites = SAFE_BLOCK_CATEGORIES[category];
-                            return (
-                                <div
-                                    key={`cat-${category}`}
-                                    className="overflow-hidden rounded-xl border border-purple-500/25 bg-purple-500/[0.07]"
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={() => setExpandedBlockedCategories((prev) => ({
-                                            ...prev,
-                                            [category]: !prev[category],
-                                        }))}
-                                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
-                                    >
-                                        <span>
-                                            <span className="block text-sm font-semibold text-purple-100">
-                                                {SAFE_BLOCK_CATEGORY_LABELS[category]}
-                                            </span>
-                                            <span className="mt-0.5 block text-[10px] text-purple-200/60">
-                                                Category · {sites.length} sites
-                                            </span>
-                                        </span>
-                                        <span className="flex items-center gap-2">
-                                            {!nuclearActive && (
-                                                <span
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        void toggleCategory(category);
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter' || e.key === ' ') {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
-                                                            void toggleCategory(category);
-                                                        }
-                                                    }}
-                                                    className="rounded-md px-2 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-500/15"
-                                                >
-                                                    Remove
-                                                </span>
-                                            )}
-                                            <ChevronDown
-                                                size={14}
-                                                className={`text-purple-300/70 transition-transform ${expanded ? 'rotate-180' : ''}`}
-                                            />
-                                        </span>
-                                    </button>
-                                    {expanded && (
-                                        <div className="max-h-40 space-y-1 overflow-y-auto border-t border-purple-500/20 px-4 py-2.5">
-                                            {sites.map((domain) => (
-                                                <p key={domain} className="truncate text-[11px] text-neutral-400">{domain}</p>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                        {Object.entries(engineState.blocklist || {})
-                            .filter(([, entry]) => (entry.sources || []).some((s: string) => s !== 'category'))
-                            .map(([domain, entry]) => {
-                                const sourceItems: { source: string; id?: string; label: string }[] = entry.sources.flatMap((source: string) => {
-                                    if (source === 'category') return [];
-                                    if (source === 'timer') {
-                                        const timers = engineState.timers?.[domain] || [];
-                                        return timers.length
-                                            ? timers.map((timer: { id: string; endTime: number }) => ({
-                                                source,
-                                                id: timer.id as string,
-                                                label: `Timer · until ${new Date(timer.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-                                            }))
-                                            : [{ source, label: 'Timer' }];
-                                    }
-                                    if (source === 'schedule') {
-                                        const schedules = engineState.schedules?.[domain] || [];
-                                        return schedules.length
-                                            ? schedules.map((schedule: { id: string; startHour: number; startMin: number; endHour: number; endMin: number }) => ({
-                                                source,
-                                                id: schedule.id as string,
-                                                label: `Schedule · ${String(schedule.startHour).padStart(2, '0')}:${String(schedule.startMin).padStart(2, '0')}–${String(schedule.endHour).padStart(2, '0')}:${String(schedule.endMin).padStart(2, '0')}`,
-                                            }))
-                                            : [{ source, label: 'Schedule' }];
-                                    }
-                                    return [{
-                                        source,
-                                        label: source === 'manual' ? 'Manual' : source,
-                                    }];
-                                });
-                                if (!sourceItems.length) return null;
+                    </label>
+                    <Button type="submit" variant="primary" size="lg" loading={resolvingField === 'block'} disabled={!newBlocked.trim()}>
+                        Block
+                    </Button>
+                </form>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                    <p className="text-meta">
+                        <span className="font-medium text-[var(--fz-text-2)]">{blockedSites.length}</span> {noun(blockedSites.length, 'site')}
+                        <span className="mx-1.5 text-[var(--fz-text-4)]">·</span>
+                        <span className="font-medium text-[var(--fz-text-2)]">{categoriesOn.length}</span> {noun(categoriesOn.length, 'category', 'categories')}
+                        <span className="mx-1.5 text-[var(--fz-text-4)]">·</span>
+                        <span className="font-medium text-[var(--fz-text-2)]">{platformsOn}</span> {noun(platformsOn, 'platform')}
+                    </p>
+                    <p className="text-meta flex items-center gap-1.5">
+                        <Kbd>Alt</Kbd>
+                        <span className="text-[var(--fz-text-4)]">+</span>
+                        <Kbd>Enter</Kbd>
+                        <span>finds a site by name{isPro ? '' : ' (Pro)'}</span>
+                    </p>
+                </div>
+            </GlassCard>
 
-                                return (
-                                    <div key={domain} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 transition-colors duration-150 hover:border-white/15">
-                                        <span className="mb-1.5 block text-sm font-medium text-white">{domain}</span>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {sourceItems.map((item, index) => (
-                                                <span
-                                                    key={`${item.source}-${item.id || index}`}
-                                                    className={`inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] py-1 text-[10px] font-semibold text-neutral-400 ${nuclearActive ? 'px-2.5' : 'pl-2.5 pr-1'}`}
-                                                >
-                                                    {item.label}
-                                                    {!nuclearActive && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => triggerSourceRemoval(domain, item.source, item.id)}
-                                                            className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
-                                                            aria-label={`Remove ${item.label.toLowerCase()} block for ${domain}`}
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                    )}
+            <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+                <div className="space-y-4">
+                    {/* What's blocked right now */}
+                    <GlassCard>
+                        {cardHeader(
+                            'Blocked',
+                            nothingBlocked ? 'Nothing yet' : `${blockedSites.length} ${noun(blockedSites.length, 'site')} · ${categoriesOn.length} ${noun(categoriesOn.length, 'category', 'categories')}`,
+                        )}
+                        {nothingBlocked ? (
+                            <EmptyState
+                                className="pb-10 pt-4"
+                                icon={<ShieldOff size={15} />}
+                                title="Nothing is blocked yet"
+                                description="Block a site above, or switch on a category like Social media."
+                            />
+                        ) : (
+                            <div className="max-h-[560px] divide-y divide-[var(--fz-border)] overflow-y-auto border-t border-[var(--fz-border)] scrollbar-hide">
+                                {categoriesOn.map((category) => {
+                                    const Icon = CATEGORY_ICONS[category];
+                                    const expanded = !!expandedBlockedCategories[category];
+                                    const sites = SAFE_BLOCK_CATEGORIES[category];
+                                    return (
+                                        <div key={`cat-${category}`}>
+                                            <div className="group/row flex min-h-12 items-center gap-3 px-5 py-2">
+                                                <span className={rowIcon}>
+                                                    <Icon size={14} strokeWidth={1.75} />
                                                 </span>
-                                            ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExpandedBlockedCategories((prev) => ({ ...prev, [category]: !prev[category] }))}
+                                                    aria-expanded={expanded}
+                                                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                                                >
+                                                    <span className="min-w-0">
+                                                        <span className="block truncate text-[13px] font-medium text-[var(--fz-text-1)]">
+                                                            {SAFE_BLOCK_CATEGORY_LABELS[category]}
+                                                        </span>
+                                                        <span className="text-meta block">Category · {sites.length} sites</span>
+                                                    </span>
+                                                    <ChevronDown
+                                                        size={13}
+                                                        className={`shrink-0 text-[var(--fz-text-4)] transition-transform ${expanded ? 'rotate-180' : ''}`}
+                                                    />
+                                                </button>
+                                                {!nuclearActive && (
+                                                    <IconButton
+                                                        icon={<X size={14} />}
+                                                        tooltip={`Stop blocking ${SAFE_BLOCK_CATEGORY_LABELS[category]}`}
+                                                        onClick={() => void toggleCategory(category)}
+                                                        className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100"
+                                                    />
+                                                )}
+                                            </div>
+                                            {expanded && (
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-5 pb-3 pl-[60px] sm:grid-cols-3">
+                                                    {sites.map((domain) => (
+                                                        <span key={domain} className="truncate text-[12px] text-[var(--fz-text-3)]">
+                                                            {domain}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
+                                    );
+                                })}
+                                {blockedSites.map(({ domain, sources }) => (
+                                    <div key={domain} className="group/row flex min-h-12 items-center gap-3 px-5 py-2">
+                                        <SiteIcon domain={domain} />
+                                        <div className="min-w-0 flex-1">
+                                            <span className="block truncate text-[13px] font-medium text-[var(--fz-text-1)]">{domain}</span>
+                                            <span className="text-meta block truncate">{sources.map((s) => s.label).join(' · ')}</span>
+                                        </div>
+                                        {!nuclearActive && (
+                                            sources.length === 1 ? (
+                                                <IconButton
+                                                    icon={<X size={14} />}
+                                                    tooltip={`Unblock ${domain}`}
+                                                    onClick={() => triggerSourceRemoval(domain, sources[0].source, sources[0].id)}
+                                                    className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100"
+                                                />
+                                            ) : (
+                                                <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100">
+                                                    {sources.map((s, i) => (
+                                                        <button
+                                                            key={`${s.source}-${s.id || i}`}
+                                                            type="button"
+                                                            onClick={() => triggerSourceRemoval(domain, s.source, s.id)}
+                                                            className="flex h-6 items-center gap-1 rounded-md bg-[var(--fz-bg-hover)] pl-2 pr-1.5 text-[11.5px] text-[var(--fz-text-2)] transition-colors hover:bg-[var(--fz-bg-active)] hover:text-[var(--fz-text-1)]"
+                                                            aria-label={`Remove ${s.label.toLowerCase()} block for ${domain}`}
+                                                        >
+                                                            {s.label}
+                                                            <X size={11} />
+                                                        </button>
+                                                    ))}
+                                                </span>
+                                            )
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </GlassCard>
+
+                    {/* Always allowed */}
+                    <GlassCard>
+                        {cardHeader('Always allowed', 'Stay reachable even while blocks run')}
+                        <form
+                            className="flex gap-2 px-5"
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                void handleAddSite('allowed_site', false);
+                            }}
+                        >
+                            <input
+                                value={newAllowed}
+                                onChange={(e) => setNewAllowed(e.target.value)}
+                                disabled={resolvingField === 'allowed_site'}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && e.altKey) {
+                                        e.preventDefault();
+                                        void handleAddSite('allowed_site', true);
+                                    }
+                                }}
+                                placeholder="docs.google.com"
+                                aria-label="Site to always allow"
+                                className="h-8 min-w-0 flex-1 rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-panel)] px-2.5 text-[13px] text-[var(--fz-text-1)] outline-none transition-colors placeholder:text-[var(--fz-text-4)] focus:border-[var(--fz-border-strong)] disabled:opacity-60"
+                            />
+                            <Button type="submit" variant="secondary" loading={resolvingField === 'allowed_site'} disabled={!newAllowed.trim()}>
+                                Add
+                            </Button>
+                        </form>
+                        <div className="px-3 pb-2 pt-2">
+                            {allowedSites.length === 0 ? (
+                                <p className="text-meta px-2 py-3">No exceptions yet.</p>
+                            ) : (
+                                <div className="max-h-[240px] overflow-y-auto scrollbar-hide">
+                                    {allowedSites.map((domain) => (
+                                        <div key={domain} className="group/row flex h-10 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-[var(--fz-bg-hover)]">
+                                            <SiteIcon domain={domain} size="sm" />
+                                            <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--fz-text-1)]">{domain}</span>
+                                            <IconButton
+                                                icon={<X size={14} />}
+                                                tooltip={`Remove ${domain}`}
+                                                onClick={() => triggerAction('allowed_site', domain, 'remove')}
+                                                className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-3 border-t border-[var(--fz-border)] px-5 py-3">
+                            <span className="min-w-0 flex-1">
+                                <span className="block text-[13px] text-[var(--fz-text-1)]">Allowlist mode</span>
+                                <span className="text-meta block">
+                                    {allowedSites.length === 0
+                                        ? 'Add a site first — then everything else can be blocked'
+                                        : engineState.allowlistMode
+                                          ? 'On — only these sites work'
+                                          : 'Block every site except these'}
+                                </span>
+                            </span>
+                            <Switch
+                                checked={!!engineState.allowlistMode}
+                                disabled={allowedSites.length === 0 || nuclearActive}
+                                onCheckedChange={(next) => {
+                                    void mutateEngine(
+                                        { type: 'UPDATE_ENGINE_SETTINGS', settings: { allowlistMode: next } },
+                                        (s) => ({ ...s, allowlistMode: next }),
+                                        'Could not change allowlist mode.',
+                                    );
+                                }}
+                                aria-label="Allowlist mode"
+                            />
+                        </div>
+                    </GlassCard>
+
+                    {/* Nuclear lockdown */}
+                    <GlassCard>
+                        {cardHeader(
+                            'Nuclear lockdown',
+                            'Locks everything on your blocklist. It can’t be undone until the timer ends.',
+                            <Zap size={15} className="mt-0.5 shrink-0 text-[var(--fz-danger)]" />,
+                        )}
+                        {nuclearActive ? (
+                            <div className="px-5 pb-5">
+                                <div className="rounded-lg border border-[var(--fz-border)] bg-[var(--fz-danger-soft)] px-4 py-5 text-center">
+                                    <p className="text-[28px] font-semibold tabular-nums leading-none text-[var(--fz-text-1)]">
+                                        {nuclearMinutesLeft}m
+                                    </p>
+                                    <p className="text-meta mt-2">left in lockdown</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3 px-5 pb-5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <SegmentedControl
+                                        size="sm"
+                                        idPrefix="nuke-duration"
+                                        value={[15, 30, 60, 120].includes(nuclearDuration) ? String(nuclearDuration) : 'custom'}
+                                        onChange={(v) => {
+                                            if (v !== 'custom') setNuclearDuration(Number(v));
+                                        }}
+                                        options={[
+                                            { value: '15', label: '15m' },
+                                            { value: '30', label: '30m' },
+                                            { value: '60', label: '1h' },
+                                            { value: '120', label: '2h' },
+                                            ...(![15, 30, 60, 120].includes(nuclearDuration) ? [{ value: 'custom', label: 'Custom' }] : []),
+                                        ]}
+                                    />
+                                    <label className="flex h-8 items-center gap-1 rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-panel)] px-2.5">
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={nuclearDuration}
+                                            onChange={(e) => setNuclearDuration(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                            aria-label="Lockdown minutes"
+                                            className="w-10 bg-transparent text-[13px] tabular-nums text-[var(--fz-text-1)] outline-none"
+                                        />
+                                        <span className="text-meta">min</span>
+                                    </label>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-meta">
+                                        {blocklistCount === 0
+                                            ? 'Block at least one site first.'
+                                            : `Locks ${blocklistCount} ${noun(blocklistCount, 'site')} for ${nuclearDuration} min.`}
+                                    </p>
+                                    <Button
+                                        variant="danger-solid"
+                                        disabled={blocklistCount === 0}
+                                        onClick={() => setNukeModalOpen(true)}
+                                    >
+                                        Start lockdown
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </GlassCard>
+                </div>
+
+                <div className="space-y-4">
+                    {/* Categories */}
+                    <GlassCard>
+                        {cardHeader(
+                            'Categories',
+                            `${categoriesOn.length} of ${SAFE_BLOCK_CATEGORY_KEYS.length} on`,
+                            <BulkMenu
+                                label="Category actions"
+                                disabled={nuclearActive || !!bulkActionPending}
+                                pending={bulkActionPending === 'enable-categories' || bulkActionPending === 'disable-categories'}
+                                items={[
+                                    { id: 'enable-categories', label: 'Turn all on', icon: <Check size={13} />, onSelect: () => void runQuickAction(quickActions[0]) },
+                                    { id: 'disable-categories', label: 'Turn all off', icon: <X size={13} />, onSelect: () => void runQuickAction(quickActions[1]) },
+                                ]}
+                            />,
+                        )}
+                        <div className="px-3 pb-3">
+                            {SAFE_BLOCK_CATEGORY_KEYS.map((category) => {
+                                const Icon = CATEGORY_ICONS[category];
+                                const active = !!engineState.categoriesActive?.[category];
+                                return (
+                                    <div key={category} className="flex h-11 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-[var(--fz-bg-hover)]">
+                                        <Icon size={15} strokeWidth={1.75} className="shrink-0 text-[var(--fz-text-3)]" />
+                                        <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--fz-text-1)]">
+                                            {SAFE_BLOCK_CATEGORY_LABELS[category]}
+                                        </span>
+                                        <span className="text-meta shrink-0 tabular-nums">
+                                            {categoryPending === category ? 'Updating…' : `${SAFE_BLOCK_CATEGORIES[category].length} sites`}
+                                        </span>
+                                        <Switch
+                                            checked={active}
+                                            disabled={categoryPending !== null || nuclearActive}
+                                            onCheckedChange={() => void toggleCategory(category)}
+                                            aria-label={`Block ${SAFE_BLOCK_CATEGORY_LABELS[category]}`}
+                                        />
                                     </div>
                                 );
                             })}
-                        {!SAFE_BLOCK_CATEGORY_KEYS.some((key) => engineState.categoriesActive?.[key])
-                            && Object.values(engineState.blocklist || {}).every((entry) => !(entry.sources || []).some((s: string) => s !== 'category')) && (
-                            <p className="py-4 text-center text-sm text-neutral-600">No sites are currently blocked.</p>
-                        )}
-                    </div>
-                </GlassCard>
+                        </div>
+                    </GlassCard>
 
-                <GlassCard className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold text-white text-sm">Allowed</h3>
-                        <Globe size={16} className="text-emerald-400" />
-                    </div>
-                    <div className="mb-3 flex items-start gap-2 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] p-2.5">
-                        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-sky-400" />
-                        <div className="min-w-0 flex-1 space-y-1.5">
-                            <p className="text-[11px] leading-relaxed text-sky-200/80">
-                                <span className="font-semibold text-sky-300">Allowlist Mode</span> blocks every site except the ones listed here.
-                            </p>
-                            <label className="flex items-center justify-between gap-3 cursor-pointer">
-                                <span className="text-[11px] text-sky-100/90">
-                                    {engineState.allowlistMode ? 'On — only listed sites work' : 'Off — listed sites are exempt from your blocklist'}
-                                </span>
-                                <button
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={!!engineState.allowlistMode}
-                                    disabled={!(engineState.allowedSites || []).length || nuclearActive}
-                                    onClick={() => {
-                                        const next = !engineState.allowlistMode;
-                                        chrome.runtime.sendMessage(
-                                            { type: 'UPDATE_ENGINE_SETTINGS', settings: { allowlistMode: next } },
-                                            () => fetchEngineState(),
-                                        );
-                                    }}
-                                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
-                                        engineState.allowlistMode ? 'bg-sky-400' : 'bg-white/15'
-                                    }`}
-                                >
-                                    <span
-                                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                                            engineState.allowlistMode ? 'translate-x-4' : ''
-                                        }`}
+                    {/* Platforms */}
+                    <GlassCard>
+                        {cardHeader(
+                            'Platforms',
+                            'Feeds and short videos inside apps',
+                            <BulkMenu
+                                label="Platform actions"
+                                disabled={nuclearActive || !!bulkActionPending}
+                                pending={bulkActionPending === 'block-platforms' || bulkActionPending === 'unblock-platforms'}
+                                items={[
+                                    { id: 'block-platforms', label: 'Block all', icon: <Ban size={13} />, onSelect: () => void runQuickAction(quickActions[2]) },
+                                    { id: 'unblock-platforms', label: 'Unblock all', icon: <Globe size={13} />, onSelect: () => void runQuickAction(quickActions[3]) },
+                                ]}
+                            />,
+                        )}
+                        <div className="px-3 pb-3">
+                            {platformKeys.map(({ label, key, desc, site }) => (
+                                <div key={key} className="flex h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-[var(--fz-bg-hover)]">
+                                    <SiteIcon domain={site} size="sm" />
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-[13px] text-[var(--fz-text-1)]">{label}</span>
+                                        <span className="text-meta block truncate">{platformPending === key ? 'Updating…' : desc}</span>
+                                    </span>
+                                    <Switch
+                                        checked={!!engineState.inAppBlock?.[key]}
+                                        disabled={nuclearActive || !!platformPending}
+                                        onCheckedChange={() => void togglePlatformBlock(key)}
+                                        aria-label={`Block ${label}`}
                                     />
-                                </button>
-                            </label>
-                        </div>
-                    </div>
-                    <div className="flex gap-2 mb-2">
-                        <input
-                            value={newAllowed}
-                            onChange={e => setNewAllowed(e.target.value)}
-                            disabled={resolvingField === 'allowed_site'}
-                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleAddSite('allowed_site', e.altKey); } }}
-                            placeholder="trustedsite.com"
-                            className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-emerald-500 outline-none transition-colors duration-150 text-white disabled:opacity-50"
-                        />
-                        <button
-                            type="button"
-                            onClick={(e) => void handleAddSite('allowed_site', e.altKey)}
-                            disabled={resolvingField === 'allowed_site'}
-                            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 disabled:opacity-60 flex items-center gap-1.5"
-                        >
-                            {resolvingField === 'allowed_site' ? <Loader2 size={13} className="animate-spin" /> : 'Add'}
-                        </button>
-                    </div>
-                    <div className="space-y-1.5 max-h-[22rem] overflow-y-auto scrollbar-hide">
-                        {(engineState.allowedSites || []).map((domain: string) => (
-                            <div key={domain} className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-xl border border-white/[0.08] group hover:border-white/15 transition-colors duration-150">
-                                <span className="text-sm font-medium text-white truncate">{domain}</span>
-                                <button
-                                    type="button"
-                                    onClick={() => triggerAction('allowed_site', domain, 'remove')}
-                                    className="flex-shrink-0 p-1.5 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors relative z-10"
-                                    aria-label={`Remove ${domain}`}
-                                >
-                                    <X size={15} />
-                                </button>
-                            </div>
-                        ))}
-                        {(engineState.allowedSites || []).length === 0 && (
-                            <p className="py-4 text-center text-sm text-neutral-600">No allowed sites yet.</p>
-                        )}
-                    </div>
-                </GlassCard>
-            </div>
-
-            {/* Nuclear */}
-            <GlassCard className="p-4 border-red-500/20 bg-red-900/5">
-                <div className="flex items-center gap-2.5 mb-3 flex-wrap">
-                    <Zap size={18} className="text-red-500" />
-                    <h3 className="text-base font-semibold text-white">Nuclear Lockdown</h3>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-red-500/70">Irreversible</span>
-                </div>
-                
-                {nuclearActive ? (
-                    <div className="p-4 bg-red-600/15 border border-red-500/40 rounded-xl text-center">
-                        <span className="text-red-400 font-semibold text-sm">Nuclear Lockdown Active</span>
-                        <div className="text-3xl font-semibold tabular-nums text-white mt-2">
-                            {Math.max(0, Math.ceil((engineState.nuclearState.endTime - Date.now()) / 60000))}m remaining
-                        </div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400/60 mt-3">Un-cancellable by design</p>
-                    </div>
-                ) : (
-                    <>
-                        <p className="text-sm text-neutral-400 mb-3 max-w-2xl leading-relaxed">
-                            Locks every site on your blocklist for the chosen duration. You cannot unblock until it ends.
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {[15, 30, 60, 120].map((m) => (
-                                <button
-                                    key={m}
-                                    type="button"
-                                    onClick={() => setNuclearDuration(m)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 ${
-                                        nuclearDuration === m
-                                            ? 'bg-white text-black'
-                                            : 'bg-white/[0.06] text-neutral-300 hover:bg-white/10'
-                                    }`}
-                                >
-                                    {m}m
-                                </button>
+                                </div>
                             ))}
-                            <div className="flex items-center rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 w-28">
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={nuclearDuration}
-                                    onChange={(e) => setNuclearDuration(parseInt(e.target.value, 10) || 1)}
-                                    className="bg-transparent text-white font-semibold tabular-nums text-sm outline-none w-full"
-                                />
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 ml-1">min</span>
+                            <div className="mt-1 flex h-12 items-center gap-3 border-t border-[var(--fz-border)] px-2 pt-1">
+                                <Sparkles size={15} strokeWidth={1.75} className="shrink-0 text-[var(--fz-text-3)]" />
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-[13px] text-[var(--fz-text-1)]">Smart YouTube</span>
+                                    <span className="text-meta block truncate">
+                                        {smartYouTube.enabled
+                                            ? `On · ${smartYouTube.blockedCategoryIds.length} video ${noun(smartYouTube.blockedCategoryIds.length, 'type')} blocked`
+                                            : 'Block videos by topic, keep the useful ones'}
+                                    </span>
+                                </span>
+                                <Button variant="ghost" size="sm" onClick={() => setSmartYtOpen(true)}>
+                                    {smartYouTube.enabled ? 'Edit' : 'Set up'}
+                                </Button>
                             </div>
-                            <button
-                                type="button"
-                                disabled={blocklistCount === 0}
-                                onClick={() => setNukeModalOpen(true)}
-                                className="ml-auto px-5 py-2 rounded-xl text-sm font-semibold transition-colors duration-150 bg-red-500 text-white hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500"
-                            >
-                                Activate Lockdown
-                            </button>
                         </div>
-                        {blocklistCount === 0 && (
-                            <p className="text-xs text-amber-500/80 mt-2">Add sites to your blocklist first.</p>
-                        )}
-                    </>
-                )}
-            </GlassCard>
+                    </GlassCard>
+                </div>
+            </div>
 
             <NuclearConfirmModal
                 open={nukeModalOpen}
                 durationMin={nuclearDuration}
                 blocklistCount={blocklistCount}
+                onDurationChange={setNuclearDuration}
                 onClose={() => setNukeModalOpen(false)}
                 onConfirm={async () => {
                     setNukeModalOpen(false);
@@ -1830,7 +2067,7 @@ export const BlocklistTab = () => {
                         duration: nuclearDuration,
                     });
                     if (response?.ok === false) {
-                        setBlockActionError(response.error || 'Nuclear Lockdown could not be started.');
+                        setBlockActionError(response.error || 'Nuclear lockdown could not be started.');
                         return;
                     }
                     setBlockActionError('');
@@ -1841,440 +2078,5 @@ export const BlocklistTab = () => {
     );
 };
 
-export const StatisticsTab = () => {
-    const { last7DaysStats } = useAuthStore();
-    const [selectedSite, setSelectedSite] = useState<string | null>(null);
-    const [hoveredDateIdx, setHoveredDateIdx] = useState<number | null>(null);
-    const [tooltip, setTooltip] = useState<{ site: string; time: number; pct: number; x: number; y: number } | null>(null);
-    const donutHostRef = useRef<HTMLDivElement>(null);
-    const graphContainerRef = useRef<HTMLDivElement>(null);
-    const [graphContainerWidth, setGraphContainerWidth] = useState(640);
-    const [activityChartMode, setActivityChartMode] = useState<'bar' | 'line'>('line');
-
-    useEffect(() => {
-        const el = graphContainerRef.current;
-        if (!el) return;
-        const obs = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                setGraphContainerWidth(entry.contentRect.width || 640);
-            }
-        });
-        obs.observe(el);
-        setGraphContainerWidth(el.clientWidth || 640);
-        return () => obs.disconnect();
-    }, []);
-
-    const tooltipPosition = (clientX: number, clientY: number) => {
-        const host = donutHostRef.current;
-        if (!host) return { x: clientX, y: clientY };
-        const rect = host.getBoundingClientRect();
-        return { x: clientX - rect.left + 14, y: clientY - rect.top - 10 };
-    };
-    const allStats: any[] = last7DaysStats || [];
-    const [windowEnd, setWindowEnd] = useState<number>(-1);
-
-    const resolvedEnd = windowEnd === -1 ? Math.max(0, allStats.length - 1) : Math.min(windowEnd, allStats.length - 1);
-    const resolvedStart = Math.max(0, resolvedEnd - 6);
-    const chartData = allStats.slice(resolvedStart, resolvedEnd + 1);
-
-    const canGoBack = resolvedStart > 0;
-    const canGoForward = resolvedEnd < allStats.length - 1;
-
-    const [selectedDateIdx, setSelectedDateIdx] = useState<number>(6);
-    const selectedIdxClamped = Math.min(selectedDateIdx, Math.max(0, chartData.length - 1));
-
-    useEffect(() => {
-        setSelectedDateIdx(chartData.length - 1);
-    }, [resolvedStart, resolvedEnd]);
-
-    useEffect(() => {
-        setSelectedSite(null);
-        setTooltip(null);
-    }, [selectedIdxClamped, resolvedEnd]);
-
-    const maxTime = Math.max(...chartData.map((s: any) => s.total || 0), 1);
-
-    const activeData = chartData[selectedIdxClamped] || { total: 0, sites: {}, date: new Date().toISOString() };
-    const sitesArr = Object.entries(activeData.sites || {})
-        .filter(([, time]) => (time as number) > 0)
-        .sort(([, a]: any, [, b]: any) => b - a)
-        .slice(0, 8);
-
-    const formatTime = (ms: number) => {
-        const capped = capDayScreenMs(ms || 0, { date: activeData.date });
-        const mins = Math.round(capped / 60000);
-        if (mins < 60) return `${mins}m`;
-        return `${Math.min(24, mins / 60).toFixed(1)}h`;
-    };
-
-    const colors = ['#a855f7', '#3b82f6', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#6366f1'];
-
-    const sitesTotalMs = sitesArr.reduce((sum, [, time]) => sum + (time as number), 0);
-    const dayTotalMs = capDayScreenMs(Math.max(activeData.total || 0, sitesTotalMs), { date: activeData.date });
-    const totalMs = Math.max(dayTotalMs, 1);
-    let cumPct = 0;
-    const slices = sitesArr.map(([site, time]: any, i) => {
-        const pct = (time as number) / totalMs;
-        const startPct = cumPct * 100;
-        cumPct += pct;
-        const endPct = cumPct * 100;
-        return {
-            site,
-            time: time as number,
-            pct: Math.round(pct * 100),
-            startPct,
-            endPct,
-            color: colors[i % colors.length],
-        };
-    });
-    if (sitesArr.length > 0 && cumPct < 0.999) {
-        const otherMs = totalMs - sitesTotalMs;
-        slices.push({
-            site: '__other__',
-            time: otherMs,
-            pct: Math.round((1 - cumPct) * 100),
-            startPct: cumPct * 100,
-            endPct: 100,
-            color: 'rgba(255,255,255,0.12)',
-        });
-    }
-
-    const graphWidth = Math.max(graphContainerWidth, 200);
-    const graphHeight = 200;
-    const padX = 28;
-    const padTop = 20;
-    const padBottom = 48;
-    const plotW = graphWidth - padX * 2;
-    const plotH = graphHeight - padTop - padBottom;
-    const barGap = 10;
-    const barW = Math.max(20, (plotW - barGap * (chartData.length - 1)) / Math.max(1, chartData.length));
-    const getActivityPointX = (index: number) => padX + (index * plotW / Math.max(1, chartData.length - 1));
-    const getActivityY = (total: number) => padTop + plotH - ((total || 0) / maxTime) * plotH;
-    // Straight segments — avoid cubic/pathLength clipping that stopped mid-week.
-    const activityLinePath = chartData
-        .map((day, index: number) => `${index === 0 ? 'M' : 'L'} ${getActivityPointX(index)} ${getActivityY(day.total)}`)
-        .join(' ');
-
-    return (
-        <div className="space-y-6 animate-fade-in-up w-full">
-            <div>
-                <p className="focuz-section-label">Insights</p>
-                <h1 className="text-3xl font-semibold text-white tracking-tight">Statistics & Analytics</h1>
-                <p className="text-sm text-neutral-500 mt-1">Where your time went, day by day.</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* BAR GRAPH */}
-                <GlassCard className="p-5 flex flex-col bg-black/20" style={{ height: '420px' }}>
-                    <div className="flex items-start justify-between gap-4 mb-1">
-                        <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-600">Screen time</p>
-                            <div className="mt-1 flex items-baseline gap-2">
-                                <h3 className="font-semibold text-white text-sm">Weekly Activity</h3>
-                                <span className="text-xs tabular-nums text-neutral-500">{formatTime(activeData.total)}</span>
-                            </div>
-                            <p className="mt-1 text-[11px] text-neutral-500">Select a day to update the breakdown</p>
-                        </div>
-                        <div className="flex flex-wrap justify-end gap-2">
-                            <div className="flex rounded-lg border border-white/[0.08] bg-black/30 p-0.5" role="group" aria-label="Weekly activity chart type">
-                                {(['bar', 'line'] as const).map((mode) => (
-                                    <button
-                                        key={mode}
-                                        type="button"
-                                        onClick={() => setActivityChartMode(mode)}
-                                        aria-pressed={activityChartMode === mode}
-                                        className={`rounded-md px-2 py-1 text-[10px] font-semibold capitalize transition-colors ${
-                                            activityChartMode === mode ? 'bg-white/[0.12] text-white' : 'text-neutral-500 hover:text-neutral-300'
-                                        }`}
-                                    >
-                                        {mode}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="flex items-center gap-1 rounded-lg border border-white/[0.07] bg-white/[0.025] p-0.5">
-                                <button
-                                    type="button"
-                                    onClick={() => setWindowEnd(resolvedEnd - 7)}
-                                    disabled={!canGoBack}
-                                    aria-label="Previous week"
-                                    className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/[0.07] disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-150 text-neutral-400 text-sm"
-                                >‹</button>
-                                <span className="h-4 w-px bg-white/[0.07]" />
-                                <button
-                                    type="button"
-                                    onClick={() => setWindowEnd(Math.min(resolvedEnd + 7, allStats.length - 1))}
-                                    disabled={!canGoForward}
-                                    aria-label="Next week"
-                                    className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/[0.07] disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-150 text-neutral-400 text-sm"
-                                >›</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div ref={graphContainerRef} className="flex-1 relative w-full mt-3 min-h-[260px]">
-                        <svg
-                            viewBox={`0 0 ${graphWidth} ${graphHeight}`}
-                            className="w-full h-full max-h-[280px]"
-                            preserveAspectRatio="xMidYMid meet"
-                        >
-                            <defs>
-                                <linearGradient id="weekly-activity-bar" x1="0%" y1="0%" x2="0%" y2="100%">
-                                    <stop offset="0%" stopColor="#e5e5e5" />
-                                    <stop offset="100%" stopColor="#737373" />
-                                </linearGradient>
-                                <linearGradient id="weekly-activity-area" x1="0%" y1="0%" x2="0%" y2="100%">
-                                    <stop offset="0%" stopColor="#e5e5e5" stopOpacity="0.18" />
-                                    <stop offset="100%" stopColor="#e5e5e5" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                            {[0, 0.25, 0.5, 0.75, 1].map(f => {
-                                const y = padTop + plotH - f * plotH;
-                                return (
-                                    <g key={f}>
-                                        <line
-                                            x1={padX} y1={y}
-                                            x2={graphWidth - padX} y2={y}
-                                            stroke={f === 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.055)'}
-                                            strokeWidth="1"
-                                            strokeDasharray={f === 0 ? undefined : '2 5'}
-                                        />
-                                        <text x={padX - 5} y={y + 3} textAnchor="end" fill="#525252" fontSize="9" fontWeight="500">
-                                            {formatTime(maxTime * f)}
-                                        </text>
-                                    </g>
-                                );
-                            })}
-
-                            {activityChartMode === 'line' && activityLinePath && (
-                                <>
-                                    <path
-                                        d={`${activityLinePath} L ${getActivityPointX(chartData.length - 1)} ${padTop + plotH} L ${getActivityPointX(0)} ${padTop + plotH} Z`}
-                                        fill="url(#weekly-activity-area)"
-                                    />
-                                    <path
-                                        d={activityLinePath}
-                                        fill="none"
-                                        stroke="#d4d4d4"
-                                        strokeWidth="2.5"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        vectorEffect="non-scaling-stroke"
-                                        style={{ strokeDasharray: 'none' }}
-                                    />
-                                </>
-                            )}
-
-                            {chartData.map((day: any, i: number) => {
-                                const x = padX + i * (barW + barGap);
-                                const h = Math.max(day.total > 0 ? 4 : 0, (day.total / maxTime) * plotH);
-                                const y = padTop + plotH - h;
-                                const pointX = getActivityPointX(i);
-                                const pointY = getActivityY(day.total);
-                                const sel = i === selectedIdxClamped;
-                                const hovered = i === hoveredDateIdx;
-                                return (
-                                    <g
-                                        key={day.date || i}
-                                        onClick={() => setSelectedDateIdx(i)}
-                                        onMouseEnter={() => setHoveredDateIdx(i)}
-                                        onMouseLeave={() => setHoveredDateIdx(null)}
-                                        onFocus={() => setHoveredDateIdx(i)}
-                                        onBlur={() => setHoveredDateIdx(null)}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Enter' || event.key === ' ') {
-                                                event.preventDefault();
-                                                setSelectedDateIdx(i);
-                                            }
-                                        }}
-                                        className="cursor-pointer outline-none"
-                                        tabIndex={0}
-                                        role="button"
-                                        aria-pressed={sel}
-                                        aria-label={`${new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}: ${formatTime(day.total)}`}
-                                    >
-                                        <rect
-                                            x={activityChartMode === 'bar' ? x : pointX - Math.max(20, plotW / Math.max(1, chartData.length) / 2)}
-                                            y={padTop}
-                                            width={activityChartMode === 'bar' ? barW : Math.max(40, plotW / Math.max(1, chartData.length))}
-                                            height={plotH}
-                                            fill="transparent"
-                                        />
-                                        {(hovered || sel) && (
-                                            <rect
-                                                x={(activityChartMode === 'bar' ? x : pointX - Math.max(20, plotW / Math.max(1, chartData.length) / 2)) - 3}
-                                                y={padTop - 4}
-                                                width={(activityChartMode === 'bar' ? barW : Math.max(40, plotW / Math.max(1, chartData.length))) + 6}
-                                                height={plotH + 30}
-                                                rx={8}
-                                                fill="white"
-                                                fillOpacity={sel ? 0.045 : 0.025}
-                                            />
-                                        )}
-                                        {activityChartMode === 'bar' ? (
-                                            <motion.rect
-                                                x={x}
-                                                width={barW}
-                                                rx={Math.min(6, barW / 2)}
-                                                fill={sel ? '#f5f5f5' : 'url(#weekly-activity-bar)'}
-                                                opacity={sel ? 1 : hovered ? 0.88 : 0.58}
-                                                initial={{ y: padTop + plotH, height: 0 }}
-                                                animate={{ y, height: h }}
-                                                transition={{ duration: 0.48, delay: i * 0.045, ease: 'easeOut' }}
-                                            />
-                                        ) : (
-                                            <circle
-                                                cx={pointX}
-                                                cy={pointY}
-                                                r={sel || hovered ? 5 : 3.5}
-                                                fill="#0a0a0a"
-                                                stroke={sel ? '#fff' : '#a3a3a3'}
-                                                strokeWidth="2"
-                                                vectorEffect="non-scaling-stroke"
-                                            />
-                                        )}
-                                        {day.total > 0 && (
-                                            <text
-                                                x={activityChartMode === 'bar' ? x + barW / 2 : pointX}
-                                                y={Math.max(12, (activityChartMode === 'bar' ? y : pointY) - 6)}
-                                                textAnchor="middle"
-                                                fill={sel ? '#fff' : hovered ? '#d4d4d4' : '#737373'}
-                                                fontSize="10"
-                                                fontWeight="600"
-                                                opacity={activityChartMode === 'bar' || sel || hovered ? 1 : 0}
-                                                className="transition-opacity duration-150"
-                                            >
-                                                {formatTime(day.total)}
-                                            </text>
-                                        )}
-                                        <text
-                                            x={activityChartMode === 'bar' ? x + barW / 2 : pointX} y={graphHeight - padBottom + 22}
-                                            textAnchor="middle"
-                                            fill={sel ? '#f5f5f5' : hovered ? '#a3a3a3' : '#525252'}
-                                            fontSize="11"
-                                            fontWeight={sel ? '650' : '500'}
-                                        >
-                                            {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                                        </text>
-                                    </g>
-                                );
-                            })}
-                        </svg>
-                    </div>
-                </GlassCard>
-
-                {/* HALF PIE CHART */}
-                <GlassCard className="p-5 flex flex-col relative" style={{ minHeight: '420px' }}>
-                    <div className="mb-2">
-                        <h3 className="font-semibold text-white text-sm">Date Breakdown</h3>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">
-                            {new Date(activeData.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                        </p>
-                    </div>
-
-                    <div className="relative flex flex-col items-center w-full pt-1 pb-1">
-                        <div
-                            ref={donutHostRef}
-                            className="relative shrink-0"
-                            style={{ width: semiDonutMetrics.vbW, height: semiDonutMetrics.vbH }}
-                        >
-                        <SemiDonutChart
-                            className="w-full flex justify-center"
-                            slices={slices}
-                            totalLabel={formatTime(dayTotalMs)}
-                            onSliceClick={setSelectedSite}
-                            onSliceHover={(slice, clientX, clientY) => {
-                                if (!slice) {
-                                    setTooltip(null);
-                                    return;
-                                }
-                                const pos = tooltipPosition(clientX, clientY);
-                                setSelectedSite(slice.site);
-                                setTooltip({
-                                    site: slice.site,
-                                    time: slice.time,
-                                    pct: slice.pct,
-                                    x: pos.x,
-                                    y: pos.y,
-                                });
-                            }}
-                        />
-                        {tooltip && (
-                            <div
-                                className="absolute z-20 glass-edge-card p-3 shadow-xl pointer-events-none min-w-[180px]"
-                                style={{
-                                    left: tooltip.x,
-                                    top: tooltip.y,
-                                    transform: 'translateY(-100%)',
-                                }}
-                            >
-                                <div className="flex items-center space-x-2 mb-2">
-                                    <img src={`https://s2.googleusercontent.com/s2/favicons?domain=${tooltip.site}&sz=32`} className="w-5 h-5 rounded" alt="" />
-                                    <span className="text-white font-semibold text-xs truncate max-w-[110px]">{tooltip.site}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-neutral-400 text-xs">{formatTime(tooltip.time)}</span>
-                                    <span className="text-purple-400 font-semibold tabular-nums text-sm">{tooltip.pct}%</span>
-                                </div>
-                            </div>
-                        )}
-                        </div>
-                        {slices.length === 0 && (
-                            <p className="text-neutral-500 text-xs font-semibold mt-2">No usage this day</p>
-                        )}
-                    </div>
-
-                    <div className="mt-3 border-t border-white/5 pt-3 mb-2">
-                        {selectedSite ? (
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3 min-w-0">
-                                    <img src={`https://s2.googleusercontent.com/s2/favicons?domain=${selectedSite}&sz=64`} alt="" className="w-10 h-10 rounded-lg bg-white/5 p-1 flex-shrink-0" />
-                                    <div className="min-w-0">
-                                        <p className="text-base font-semibold text-white truncate">{selectedSite}</p>
-                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Selected</p>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-end flex-shrink-0 ml-2">
-                                    <span className="text-2xl font-semibold tabular-nums text-purple-400">
-                                        {slices.find((s) => s.site === selectedSite)?.pct ?? 0}%
-                                    </span>
-                                    <span className="text-xs text-neutral-500">
-                                        {formatTime(slices.find((s) => s.site === selectedSite)?.time ?? 0)}
-                                    </span>
-                                </div>
-                            </div>
-                        ) : (
-                            <p className="text-center text-neutral-600 text-xs py-2">Hover or click a slice for details</p>
-                        )}
-                    </div>
-
-                    {/* Legend */}
-                    <div className="space-y-1.5 overflow-y-auto flex-1" style={{ maxHeight: '220px' }}>
-                        {slices.length === 0 ? (
-                            <p className="text-neutral-600 text-xs text-center py-4">No data for this day.</p>
-                        ) : slices.filter((s) => s.site !== '__other__').map((slice, i) => (
-                            <div
-                                key={i}
-                                className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${selectedSite === slice.site ? 'bg-white/8 ring-1 ring-purple-500/20' : 'hover:bg-white/[0.03]'}`}
-                                onClick={() => setSelectedSite(slice.site)}
-                            >
-                                <div className="flex items-center space-x-2.5 min-w-0">
-                                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: slice.color }} />
-                                    <img src={`https://s2.googleusercontent.com/s2/favicons?domain=${slice.site}&sz=32`} className="w-5 h-5 rounded flex-shrink-0" alt="" />
-                                    <span className="text-xs text-white truncate">{slice.site}</span>
-                                </div>
-                                <div className="flex items-center space-x-3 flex-shrink-0 ml-2">
-                                    <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                                        <div className="h-full rounded-full transition-all" style={{ width: `${slice.pct}%`, background: slice.color }} />
-                                    </div>
-                                    <span className="text-[10px] text-neutral-500 tabular-nums w-10 text-right">{formatTime(slice.time)}</span>
-                                    <span className="text-[10px] font-semibold text-purple-400 tabular-nums w-7 text-right">{slice.pct}%</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </GlassCard>
-            </div>
-        </div>
-    );
-};
-
+/** Stats lives in its own file now; OptionsApp still imports it from here. */
+export { default as StatisticsTab } from './StatsTab';

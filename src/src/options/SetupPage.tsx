@@ -28,13 +28,13 @@ const SETUP_TUTORIAL_KEY = 'focuznow-setup-tutorial';
 function StepIllustration({ kind }: { kind: StepId }) {
     if (kind === 'account') {
         return (
-            <div className="relative mx-auto flex h-40 w-full max-w-sm items-center justify-center rounded-2xl bg-[#1a2332] px-6">
-                <div className="w-full rounded-xl border border-white/10 bg-[#0f141c] p-4 shadow-inner">
-                    <div className="mb-2 h-2 w-16 rounded-full bg-white/15" />
+            <div className="relative mx-auto flex h-40 w-full max-w-sm items-center justify-center rounded-lg bg-raised px-6">
+                <div className="w-full rounded-lg border border-white/8 bg-surface p-4 shadow-inner">
+                    <div className="mb-2 h-2 w-16 rounded-full bg-white/10" />
                     <div className="flex items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 py-2.5">
                         <KeyRound size={16} className="text-sky-300" />
-                        <div className="h-2 flex-1 rounded-full bg-white/20" />
-                        <span className="text-[10px] font-semibold text-sky-200">•••</span>
+                        <div className="h-2 flex-1 rounded-full bg-white/10" />
+                        <span className="text-[11px] font-semibold text-sky-200">•••</span>
                     </div>
                 </div>
                 <div className="absolute -right-1 top-8 flex h-9 w-9 items-center justify-center rounded-full bg-sky-500 text-white shadow-lg shadow-sky-500/30">
@@ -45,12 +45,12 @@ function StepIllustration({ kind }: { kind: StepId }) {
     }
     if (kind === 'pin') {
         return (
-            <div className="relative mx-auto flex h-40 w-full max-w-sm items-center justify-center rounded-2xl bg-[#1a2332] px-6">
+            <div className="relative mx-auto flex h-40 w-full max-w-sm items-center justify-center rounded-lg bg-raised px-6">
                 <div className="flex items-end gap-2">
-                    <div className="flex h-12 w-28 items-center justify-center rounded-t-xl border border-white/10 bg-[#121820] text-[10px] text-neutral-500">
+                    <div className="flex h-12 w-28 items-center justify-center rounded-t-lg border border-white/8 bg-surface text-[11px] text-neutral-500">
                         Toolbar
                     </div>
-                    <div className="flex h-14 w-14 -translate-y-1 items-center justify-center rounded-2xl border border-sky-400/40 bg-sky-500/15 shadow-lg shadow-sky-500/20">
+                    <div className="flex h-14 w-14 -translate-y-1 items-center justify-center rounded-lg border border-sky-400/40 bg-sky-500/15 shadow-lg shadow-sky-500/20">
                         <Pin size={20} className="text-sky-300" />
                     </div>
                 </div>
@@ -58,11 +58,11 @@ function StepIllustration({ kind }: { kind: StepId }) {
         );
     }
     return (
-        <div className="relative mx-auto flex h-40 w-full max-w-sm items-center justify-center rounded-2xl bg-[#1a2332] px-6">
-            <div className="flex w-full max-w-[240px] flex-col gap-2 rounded-xl border border-white/10 bg-[#0f141c] p-4">
+        <div className="relative mx-auto flex h-40 w-full max-w-sm items-center justify-center rounded-lg bg-raised px-6">
+            <div className="flex w-full max-w-[240px] flex-col gap-2 rounded-lg border border-white/8 bg-surface p-4">
                 <div className="flex items-center gap-2">
                     <Ban size={14} className="text-rose-300" />
-                    <div className="h-2 flex-1 rounded-full bg-white/15" />
+                    <div className="h-2 flex-1 rounded-full bg-white/10" />
                 </div>
                 <div className="h-2 w-3/4 rounded-full bg-white/10" />
                 <div className="mt-1 h-8 rounded-lg bg-emerald-500/15 ring-1 ring-emerald-400/30" />
@@ -177,7 +177,7 @@ export default function SetupPage({
     };
 
     return (
-        <div className="focuz-setup fixed inset-0 z-[210] flex min-h-screen items-center justify-center bg-[#0a0b10] p-4 sm:p-8">
+        <div className="focuz-setup fixed inset-0 z-[210] flex min-h-screen items-center justify-center bg-page p-4 sm:p-8">
             <div
                 className="pointer-events-none absolute inset-0"
                 style={{
@@ -195,11 +195,11 @@ export default function SetupPage({
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: -10, scale: 0.98 }}
                             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                            className="overflow-hidden rounded-3xl border border-white/10 bg-[#14151c]/92 shadow-[0_40px_100px_-28px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
+                            className="overflow-hidden rounded-lg border border-white/8 bg-surface/92 shadow-[0_40px_100px_-28px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
                         >
-                            <div className="bg-gradient-to-br from-sky-600 via-indigo-600 to-violet-700 px-8 pb-8 pt-8 sm:px-10 sm:pt-10">
-                                <Brand size="sm" className="mb-8 [&_p]:text-white [&_div]:border-white/20 [&_div]:bg-white/15" />
-                                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2rem]">
+                            <div className="bg-gradient-to-br from-sky-600 via-blue-600 to-blue-700 px-8 pb-8 pt-8 sm:px-10 sm:pt-10">
+                                <Brand size="sm" className="mb-8 [&_p]:text-white [&_div]:border-white/16 [&_div]:bg-white/10" />
+                                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-2xl">
                                     Welcome to FocuzNow
                                 </h1>
                                 <p className="mt-3 max-w-md text-sm leading-relaxed text-white/80">
@@ -209,7 +209,7 @@ export default function SetupPage({
                                 <button
                                     type="button"
                                     onClick={() => setPhase('checklist')}
-                                    className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3.5 text-sm font-semibold text-slate-900 transition hover:bg-sky-50"
+                                    className="mt-8 flex w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-3.5 text-sm font-semibold text-slate-900 transition hover:bg-sky-50"
                                 >
                                     Continue setup
                                     <ChevronRight size={16} className="opacity-70" />
@@ -222,7 +222,7 @@ export default function SetupPage({
                                     Skip for now
                                 </button>
                             </div>
-                            <div className="border-t border-white/5 bg-[#101118] px-8 py-6 sm:px-10">
+                            <div className="border-t border-white/8 bg-surface px-8 py-6 sm:px-10">
                                 <StepIllustration kind="account" />
                                 <p className="mt-4 text-center text-xs text-neutral-500">
                                     Modern setup · high-radius SaaS · synced web dashboard
@@ -236,7 +236,7 @@ export default function SetupPage({
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: -10, scale: 0.98 }}
                             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                            className="rounded-3xl border border-white/10 bg-[#16171f] p-5 shadow-[0_40px_100px_-28px_rgba(0,0,0,0.85)] sm:p-6"
+                            className="rounded-lg border border-white/8 bg-surface p-5 shadow-[0_40px_100px_-28px_rgba(0,0,0,0.85)] sm:p-6"
                         >
                             <div className="mb-5 flex items-start justify-between gap-3">
                                 <h2 className="text-xl font-semibold tracking-tight text-white">Start setup</h2>
@@ -256,12 +256,12 @@ export default function SetupPage({
                                         <div
                                             key={item.id}
                                             className={[
-                                                'overflow-hidden rounded-2xl border transition-colors',
+                                                'overflow-hidden rounded-lg border transition-colors',
                                                 item.done
                                                     ? 'border-emerald-500/55 bg-emerald-500/[0.04]'
                                                     : expanded
-                                                      ? 'border-white/12 bg-[#1c1d27]'
-                                                      : 'border-white/[0.08] bg-[#1a1b24]',
+                                                      ? 'border-white/16 bg-raised'
+                                                      : 'border-white/8 bg-raised',
                                             ].join(' ')}
                                         >
                                             <button
@@ -274,7 +274,7 @@ export default function SetupPage({
                                                         'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border',
                                                         item.done
                                                             ? 'border-emerald-400 bg-emerald-500 text-white'
-                                                            : 'border-white/25 bg-transparent text-transparent',
+                                                            : 'border-white/16 bg-transparent text-transparent',
                                                     ].join(' ')}
                                                 >
                                                     {item.done ? <Check size={13} strokeWidth={3} /> : null}
@@ -303,7 +303,7 @@ export default function SetupPage({
                                                         transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                                                         className="overflow-hidden"
                                                     >
-                                                        <div className="space-y-4 border-t border-white/[0.06] px-4 pb-4 pt-3">
+                                                        <div className="space-y-4 border-t border-white/8 px-4 pb-4 pt-3">
                                                             <StepIllustration kind={item.id} />
                                                             <p className="text-sm leading-relaxed text-neutral-300">
                                                                 {item.description}
@@ -313,7 +313,7 @@ export default function SetupPage({
                                                                     <button
                                                                         type="button"
                                                                         onClick={item.onSecondary}
-                                                                        className="rounded-xl bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-neutral-300 transition hover:bg-white/[0.1]"
+                                                                        className="rounded-lg bg-white/6 px-4 py-2.5 text-sm font-medium text-neutral-300 transition hover:bg-white/10"
                                                                     >
                                                                         {item.secondaryLabel}
                                                                     </button>
@@ -322,7 +322,7 @@ export default function SetupPage({
                                                                     <button
                                                                         type="button"
                                                                         onClick={item.onPrimary}
-                                                                        className="rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400"
+                                                                        className="rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400"
                                                                     >
                                                                         {item.primaryLabel}
                                                                     </button>
@@ -342,10 +342,10 @@ export default function SetupPage({
                                 disabled={!allDone}
                                 onClick={finish}
                                 className={[
-                                    'mt-6 flex w-full items-center justify-center rounded-2xl px-4 py-3.5 text-sm font-semibold transition',
+                                    'mt-6 flex w-full items-center justify-center rounded-lg px-4 py-3.5 text-sm font-semibold transition',
                                     allDone
                                         ? 'bg-sky-500 text-white hover:bg-sky-400'
-                                        : 'cursor-not-allowed bg-white/[0.06] text-neutral-500',
+                                        : 'cursor-not-allowed bg-white/6 text-neutral-500',
                                 ].join(' ')}
                             >
                                 {allDone ? 'Finish setup' : 'Complete all steps to finish'}

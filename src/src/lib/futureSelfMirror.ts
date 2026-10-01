@@ -21,10 +21,10 @@ export function completedMinutesForContract(state: FutureSelfState, contractId: 
         .reduce((total, event) => total + Math.max(0, event.minutes || 0), 0);
 }
 
-export function summarizeActiveContract(state: FutureSelfState): FutureSelfBlockedSummary | null {
+export function summarizeActiveContract(state: FutureSelfState, now = Date.now()): FutureSelfBlockedSummary | null {
     const contract = state.activeContract;
     if (!contract || state.modeEnabled !== true) return null;
-    const today = localDateKey();
+    const today = localDateKey(now);
     // After the calendar day ends, stop Future Self blocking until they start again.
     const engagedToday =
         localDateKey(contract.startedAt) === today ||
@@ -110,9 +110,9 @@ export function ensureMirrorForPreviousDay(state: FutureSelfState, now = Date.no
     };
 }
 
-export function nextUnshownMirror(state: FutureSelfState): FutureSelfMirror | null {
+export function nextUnshownMirror(state: FutureSelfState, now = Date.now()): FutureSelfMirror | null {
     if (state.modeEnabled !== true) return null;
-    const previous = new Date();
+    const previous = new Date(now);
     previous.setDate(previous.getDate() - 1);
     const yesterday = localDateKey(previous.getTime());
     // Only surface yesterday's mirror — never a backlog of old ones.

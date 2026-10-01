@@ -22,12 +22,12 @@ export function CoachActionPreview({ action }: { action: CoachAction }) {
     switch (action.action_type) {
         case 'timer':
             return card(
-                <Clock size={16} className="text-purple-400" />,
+                <Clock size={16} className="text-blue-400" />,
                 'Timer started',
                 <p className="text-neutral-400">
                     {d.domain} · {d.minutes} min
                 </p>,
-                'bg-purple-900/30 border-purple-500/30',
+                'bg-blue-900/30 border-blue-500/30',
             );
         case 'block':
             return card(
@@ -83,10 +83,10 @@ export function CoachActionPreview({ action }: { action: CoachAction }) {
             );
         case 'theme':
             return card(
-                <Palette size={16} className="text-violet-400" />,
+                <Palette size={16} className="text-blue-400" />,
                 'Theme',
                 <p className="text-neutral-400">{d.theme}</p>,
-                'bg-violet-900/30 border-violet-500/30',
+                'bg-blue-900/30 border-blue-500/30',
             );
         case 'calendar_open':
             return card(

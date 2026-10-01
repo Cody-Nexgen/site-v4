@@ -112,7 +112,7 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
         return (
             <div className="min-h-screen bg-black text-white flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-neutral-400">Loading subscription details...</p>
                 </div>
             </div>
@@ -134,7 +134,7 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
                 </div>
 
                 {/* Current Plan Card */}
-                <div className="bg-neutral-900 border border-neutral-800 rounded-3xl mb-6">
+                <div className="bg-neutral-900 border border-neutral-800 rounded-lg mb-6">
                     <div className="p-6 border-b border-neutral-800">
                         <div className="flex items-center gap-2 mb-2">
                             <IconCreditCard className="w-5 h-5" />
@@ -149,7 +149,7 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
                                 <p className="text-sm text-neutral-400">Plan</p>
                                 <p className="text-2xl font-bold">
                                     {isPro ? (
-                                        <span className="text-purple-400">Pro</span>
+                                        <span className="text-blue-400">Pro</span>
                                     ) : (
                                         <span className="text-neutral-300">Free</span>
                                     )}
@@ -213,13 +213,13 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
                                 <>
                                     <button
                                         onClick={handleChangePaymentMethod}
-                                        className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-semibold transition-colors"
+                                        className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold transition-colors"
                                     >
                                         Change Payment Method
                                     </button>
                                     <button
                                         onClick={() => setShowCancelModal(true)}
-                                        className="flex-1 px-6 py-3 border border-red-500/20 text-red-400 hover:bg-red-900/10 hover:text-red-300 rounded-xl font-semibold transition-colors"
+                                        className="flex-1 px-6 py-3 border border-red-500/20 text-red-400 hover:bg-red-900/10 hover:text-red-300 rounded-lg font-semibold transition-colors"
                                     >
                                         Cancel Subscription
                                     </button>
@@ -228,7 +228,7 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
                             {!isPro && (
                                 <button
                                     onClick={() => void handleOpenCheckout()}
-                                    className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-semibold transition-colors"
+                                    className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold transition-colors"
                                 >
                                     Upgrade to Pro
                                 </button>
@@ -238,7 +238,7 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
                 </div>
 
                 {/* Features Comparison */}
-                <div className="bg-neutral-900 border border-neutral-800 rounded-3xl">
+                <div className="bg-neutral-900 border border-neutral-800 rounded-lg">
                     <div className="p-6 border-b border-neutral-800">
                         <h2 className="text-xl font-bold">Plan Features</h2>
                     </div>
@@ -265,7 +265,7 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
 
                             {/* Pro Plan */}
                             <div>
-                                <h3 className="font-semibold mb-3 text-purple-400">Pro Plan</h3>
+                                <h3 className="font-semibold mb-3 text-blue-400">Pro Plan</h3>
                                 <ul className="space-y-2">
                                     {[
                                         'Everything in Free',
@@ -275,7 +275,7 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
                                         'Priority support'
                                     ].map((feature, i) => (
                                         <li key={i} className="flex items-center gap-2 text-sm text-neutral-300">
-                                            <IconCheck className="w-4 h-4 text-purple-500" />
+                                            <IconCheck className="w-4 h-4 text-blue-500" />
                                             {feature}
                                         </li>
                                     ))}
@@ -289,7 +289,7 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
             {/* Cancel Confirmation Modal */}
             {showCancelModal && (
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl">
+                    <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-lg">
                         <div className="p-6 border-b border-neutral-800">
                             <h2 className="text-xl font-bold">Cancel Subscription?</h2>
                             <p className="text-neutral-400 text-sm mt-1">
@@ -307,14 +307,14 @@ export default function ManageSubscriptionPage({ session, onBack }: ManageSubscr
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setShowCancelModal(false)}
-                                    className="flex-1 px-6 py-3 border border-neutral-700 hover:bg-neutral-800 rounded-xl font-semibold transition-colors"
+                                    className="flex-1 px-6 py-3 border border-neutral-700 hover:bg-neutral-800 rounded-lg font-semibold transition-colors"
                                     disabled={canceling}
                                 >
                                     Keep Subscription
                                 </button>
                                 <button
                                     onClick={handleCancelSubscription}
-                                    className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-semibold transition-colors disabled:opacity-50"
+                                    className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-500 rounded-lg font-semibold transition-colors disabled:opacity-50"
                                     disabled={canceling}
                                 >
                                     {canceling ? 'Canceling...' : 'Yes, Cancel'}

@@ -1,5 +1,4 @@
 // Content Script: Draggable Timer Overlay + Pomodoro Widget
-console.log('[Content Script] Draggable Timer logic loaded.');
 
 const POMO_KEY = 'pomodoroRuntimeV1';
 
@@ -63,7 +62,7 @@ function createCloseBtn(onClose: () => void): HTMLButtonElement {
         height: 18px;
         border: none;
         border-radius: 50%;
-        background: rgba(255,255,255,0.15);
+        background: rgba(255, 255, 255, 0.16);
         color: rgba(255,255,255,0.7);
         font-size: 14px;
         line-height: 1;
@@ -80,7 +79,7 @@ function createCloseBtn(onClose: () => void): HTMLButtonElement {
         btn.style.color = '#fff';
     };
     btn.onmouseleave = () => {
-        btn.style.background = 'rgba(255,255,255,0.15)';
+        btn.style.background = 'rgba(255, 255, 255, 0.16)';
         btn.style.color = 'rgba(255,255,255,0.7)';
     };
     btn.onclick = (e) => {
@@ -131,10 +130,9 @@ function initPomodoroWidget() {
     let dragIx = 0;
     let dragIy = 0;
     const applyShell = (isBreak: boolean) => {
-        const border = isBreak ? 'rgba(34,197,94,0.4)' : 'rgba(168,85,247,0.4)';
-        const glow = isBreak ? 'rgba(34,197,94,0.15)' : 'rgba(168,85,247,0.15)';
+        const border = isBreak ? 'oklch(0.72 0.14 150 / 0.4)' : 'oklch(0.955 0.003 275 / 0.07)';
         widget.style.borderColor = border;
-        widget.style.boxShadow = `0 8px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06), 0 0 24px ${glow}`;
+        widget.style.boxShadow = '0 0 0 1px oklch(0 0 0 / 0.2), 0 8px 24px -4px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3)';
     };
 
     widget.style.cssText = `
@@ -145,16 +143,16 @@ function initPomodoroWidget() {
         width: fit-content;
         max-width: min(180px, 90vw);
         box-sizing: border-box;
-        background: rgba(10, 10, 10, 0.88);
+        background: oklch(0.225 0.006 275 / 0.94);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(168,85,247,0.4);
-        color: white;
+        border: 1px solid oklch(0.955 0.003 275 / 0.07);
+        color: oklch(0.955 0.003 275);
         padding: 10px 12px 12px;
-        border-radius: 20px;
-        font-family: system-ui, -apple-system, sans-serif;
+        border-radius: 12px;
+        font-family: "Inter Variable", Inter, system-ui, -apple-system, sans-serif;
         user-select: none;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06), 0 0 24px rgba(168,85,247,0.15);
+        box-shadow: 0 0 0 1px oklch(0 0 0 / 0.2), 0 8px 24px -4px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
         transition: border-color 0.4s ease, box-shadow 0.4s ease;
         transform: translate3d(0px, 0px, 0);
     `;
@@ -171,8 +169,8 @@ function initPomodoroWidget() {
 
     const labelEl = document.createElement('div');
     labelEl.style.cssText =
-        'font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; opacity: 0.45; margin-bottom: 6px; text-align: center;';
-    labelEl.textContent = 'Focus Session';
+        'font-size: 11px; font-weight: 560; color: oklch(0.675 0.005 275); margin-bottom: 6px; text-align: center;';
+    labelEl.textContent = 'Focus session';
 
     const ringWrap = document.createElement('div');
     ringWrap.style.cssText = 'position: relative; width: 88px; height: 88px; margin: 0 auto 8px;';
@@ -189,7 +187,7 @@ function initPomodoroWidget() {
     track.setAttribute('cy', '44');
     track.setAttribute('r', '38');
     track.setAttribute('fill', 'none');
-    track.setAttribute('stroke', 'rgba(255,255,255,0.08)');
+    track.setAttribute('stroke', 'oklch(0.955 0.003 275 / 0.08)');
     track.setAttribute('stroke-width', '4');
 
     const progress = document.createElementNS(svgNS, 'circle');
@@ -197,7 +195,7 @@ function initPomodoroWidget() {
     progress.setAttribute('cy', '44');
     progress.setAttribute('r', '38');
     progress.setAttribute('fill', 'none');
-    progress.setAttribute('stroke', '#a855f7');
+    progress.setAttribute('stroke', 'oklch(0.68 0.15 255)');
     progress.setAttribute('stroke-width', '4');
     progress.setAttribute('stroke-linecap', 'round');
     const circum = 2 * Math.PI * 38;
@@ -209,7 +207,7 @@ function initPomodoroWidget() {
 
     const timeEl = document.createElement('div');
     timeEl.style.cssText =
-        'position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; letter-spacing: -0.02em; tabular-nums;';
+        'position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 560; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;';
     timeEl.textContent = '25:00';
     ringWrap.appendChild(timeEl);
 
@@ -222,31 +220,30 @@ function initPomodoroWidget() {
         min-width: 64px;
         padding: 6px 10px;
         border: none;
-        border-radius: 10px;
-        background: #a855f7;
-        color: white;
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
+        border-radius: 8px;
+        background: oklch(0.68 0.15 255);
+        color: oklch(0.17 0.02 255);
+        font-size: 11px;
+        font-weight: 560;
         cursor: pointer;
         transition: background 0.15s, transform 0.1s;
     `;
-    actionBtn.textContent = 'START';
+    actionBtn.textContent = 'Start';
 
     const stopBtn = document.createElement('button');
     stopBtn.type = 'button';
     stopBtn.style.cssText = `
         padding: 6px 10px;
         border: none;
-        border-radius: 10px;
-        background: rgba(255,255,255,0.08);
-        color: rgba(255,255,255,0.6);
-        font-size: 10px;
-        font-weight: 700;
+        border-radius: 8px;
+        background: oklch(0.955 0.003 275 / 0.08);
+        color: oklch(0.765 0.005 275);
+        font-size: 11px;
+        font-weight: 560;
         cursor: pointer;
         transition: background 0.15s;
     `;
-    stopBtn.textContent = 'RESET';
+    stopBtn.textContent = 'Reset';
 
     btnRow.appendChild(actionBtn);
     btnRow.appendChild(stopBtn);
@@ -329,56 +326,80 @@ function initPomodoroWidget() {
         });
     };
 
+    // Render from a cached runtime + settings. Storage is read once here and then
+    // only when it changes — it used to be read twice a second from every tab.
+    let rtCache: {
+        running?: boolean;
+        paused?: boolean;
+        endAt?: number | null;
+        timeLeftSec?: number;
+        isBreak?: boolean;
+        segmentTotalSec?: number;
+        futureSelfContractId?: string;
+    } | null = null;
+    let settingsCache: { focusMin: number; breakMin: number } = { focusMin: 25, breakMin: 5 };
+
     const update = () => {
-        readPomoRuntime((rt) => {
-            getPomoSettings((settings) => {
-                const focusMin = settings.focusMin || 25;
-                const breakMin = settings.breakMin || 5;
-                const defaultSec = Math.round(
-                    ((rt?.isBreak ? breakMin : focusMin) || focusMin) * 60,
-                );
+        const rt = rtCache;
+        const focusMin = settingsCache.focusMin || 25;
+        const breakMin = settingsCache.breakMin || 5;
+        const defaultSec = Math.round(
+            ((rt?.isBreak ? breakMin : focusMin) || focusMin) * 60,
+        );
 
-                if (!rt || (!rt.running && !rt.paused)) {
-                    labelEl.textContent = 'Pomodoro';
-                    timeEl.textContent = fmtTime(defaultSec);
-                    progress.setAttribute('stroke', '#555');
-                    progress.setAttribute('stroke-dashoffset', String(circum));
-                    actionBtn.textContent = 'START';
-                    actionBtn.style.background = '#a855f7';
-                    applyShell(false);
-                    return;
-                }
+        if (!rt || (!rt.running && !rt.paused)) {
+            labelEl.textContent = 'Pomodoro';
+            timeEl.textContent = fmtTime(defaultSec);
+            progress.setAttribute('stroke', 'oklch(0.955 0.003 275 / 0.25)');
+            progress.setAttribute('stroke-dashoffset', String(circum));
+            actionBtn.textContent = 'Start';
+            actionBtn.style.background = 'oklch(0.68 0.15 255)';
+            applyShell(false);
+            return;
+        }
 
-                const left = computeTimeLeft(rt);
-                const total = rt.segmentTotalSec || defaultSec;
-                const pct = total > 0 ? Math.min(1, (total - left) / total) : 0;
-                const color = rt.isBreak ? '#22c55e' : '#a855f7';
+        const left = computeTimeLeft(rt);
+        const total = rt.segmentTotalSec || defaultSec;
+        const pct = total > 0 ? Math.min(1, (total - left) / total) : 0;
+        const color = rt.isBreak ? 'oklch(0.72 0.14 150)' : 'oklch(0.68 0.15 255)';
 
-                labelEl.textContent = rt.isBreak
-                    ? 'Break Time'
-                    : rt.futureSelfContractId
-                        ? 'Future Self'
-                        : 'Focus Session';
-                timeEl.textContent = fmtTime(left);
-                progress.setAttribute('stroke', color);
-                progress.setAttribute('stroke-dashoffset', String(circum * (1 - pct)));
-                applyShell(!!rt.isBreak);
+        labelEl.textContent = rt.isBreak
+            ? 'Break time'
+            : rt.futureSelfContractId
+                ? 'Future Self'
+                : 'Focus session';
+        timeEl.textContent = fmtTime(left);
+        progress.setAttribute('stroke', color);
+        progress.setAttribute('stroke-dashoffset', String(circum * (1 - pct)));
+        applyShell(!!rt.isBreak);
 
-                if (rt.running && !rt.paused) {
-                    actionBtn.textContent = 'PAUSE';
-                    actionBtn.style.background = 'rgba(255,255,255,0.12)';
-                } else {
-                    actionBtn.textContent = 'START';
-                    actionBtn.style.background = color;
-                }
-            });
-        });
+        if (rt.running && !rt.paused) {
+            actionBtn.textContent = 'Pause';
+            actionBtn.style.background = 'oklch(0.955 0.003 275 / 0.08)';
+            actionBtn.style.color = 'oklch(0.955 0.003 275)';
+        } else {
+            actionBtn.textContent = 'Start';
+            actionBtn.style.background = color;
+            actionBtn.style.color = 'oklch(0.17 0.02 255)';
+        }
     };
 
-    update();
-    setInterval(update, 1000);
+    readPomoRuntime((rt) => {
+        rtCache = rt;
+        getPomoSettings((settings) => {
+            settingsCache = settings;
+            update();
+        });
+    });
+    setInterval(() => {
+        if (document.visibilityState === 'visible') update();
+    }, 1000);
     chrome.storage.onChanged.addListener((changes: Record<string, any>, area: string) => {
-        if (area === 'local' && changes[POMO_KEY]) update();
+        if (area !== 'local') return;
+        if (changes[POMO_KEY]) rtCache = changes[POMO_KEY].newValue ?? null;
+        const nextSettings = changes.blockEngineState?.newValue?.pomodoroSettings;
+        if (nextSettings) settingsCache = nextSettings;
+        if (changes[POMO_KEY] || nextSettings) update();
     });
 }
 
@@ -386,78 +407,118 @@ function initDraggableTimer() {
     if (document.getElementById('focuznow-draggable-timer')) return;
 
     const domain = window.location.hostname;
+    const POS_KEY = `focuznow_timer_pos_${domain}`;
+    const COLLAPSED_KEY = `focuznow_timer_collapsed_${domain}`;
     let scale = parseFloat(localStorage.getItem(`focuznow_timer_scale_${domain}`) || '1.0');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     const timerContainer = document.createElement('div');
     timerContainer.id = 'focuznow-draggable-timer';
+    timerContainer.setAttribute('role', 'status');
+    timerContainer.setAttribute('aria-label', 'Time on this site');
 
-    let xOffset = 0;
-    let yOffset = 0;
+    // Position = top-left of the pill in viewport coords; snapped to a corner
+    // on release. Persisted per-site in chrome.storage.local.
+    let posX = window.innerWidth - 140;
+    let posY = 20;
+    let collapsed = false;
+
+    const applyTransform = (animate: boolean) => {
+        timerContainer.style.transition = animate && !reduceMotion
+            ? 'transform 320ms cubic-bezier(0.22, 1.2, 0.36, 1), opacity 220ms ease'
+            : 'opacity 220ms ease';
+        timerContainer.style.transform = `translate3d(${posX}px, ${posY}px, 0) scale(${scale})`;
+    };
 
     const applyStyles = () => {
         timerContainer.style.cssText = `
             position: fixed;
             z-index: 2147483647;
-            top: 20px;
-            right: 20px;
+            top: 0;
+            left: 0;
             width: fit-content;
             max-width: min(320px, 90vw);
             box-sizing: border-box;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 9999px;
-            font-family: system-ui, -apple-system, sans-serif;
-            font-size: 14px;
-            font-weight: 700;
+            background: oklch(0.225 0.006 275 / 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid oklch(0.955 0.003 275 / 0.07);
+            color: oklch(0.955 0.003 275);
+            padding: 7px 12px;
+            border-radius: 12px;
+            font-family: "Inter Variable", Inter, system-ui, -apple-system, sans-serif;
+            font-size: 15px;
+            font-weight: 560;
+            font-variant-numeric: tabular-nums;
             cursor: grab;
             user-select: none;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 0 1px oklch(0 0 0 / 0.2), 0 8px 24px -4px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
             display: flex;
             flex-direction: row;
             align-items: center;
-            justify-content: flex-end;
             gap: 0;
-            transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease;
-            transform: translate3d(${xOffset}px, ${yOffset}px, 0) scale(${scale});
+            transform-origin: top left;
+            touch-action: none;
         `;
+        applyTransform(false);
+    };
+
+    const persistPosition = () => {
+        chrome.storage.local.set({ [POS_KEY]: { x: posX, y: posY } });
+    };
+
+    const snapToCorner = (velX: number, velY: number) => {
+        // Project the release point along the drag velocity, then snap to the
+        // nearest viewport corner with spring easing.
+        const projectedX = posX + velX * 120;
+        const projectedY = posY + velY * 120;
+        const rect = timerContainer.getBoundingClientRect();
+        const margin = 12;
+        const w = rect.width / scale;
+        const h = rect.height / scale;
+        const targetX = projectedX + w / 2 < window.innerWidth / 2
+            ? margin
+            : window.innerWidth - w - margin;
+        const targetY = projectedY + h / 2 < window.innerHeight / 2
+            ? margin
+            : window.innerHeight - h - margin;
+        posX = targetX;
+        posY = targetY;
+        applyTransform(true);
+        persistPosition();
     };
 
     const closeBtn = createCloseBtn(() => {
         siteTimerDismissed = true;
         removeDraggableTimer();
     });
-    timerContainer.appendChild(closeBtn);
 
-    const iconStr = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
+    const iconStr = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: oklch(0.675 0.005 275)"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
 
     const controls = document.createElement('div');
     controls.className = 'timer-controls';
     controls.style.cssText = `
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
         max-width: 0;
         opacity: 0;
         overflow: hidden;
         pointer-events: none;
         flex-shrink: 0;
         margin-right: 0;
-        transform: translateX(8px);
         transition:
-            max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-            opacity 0.25s ease,
-            margin-right 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-            transform 0.35s cubic-bezier(0.4, 0, 1, 1);
+            max-width 120ms ease,
+            opacity 120ms ease,
+            margin-right 120ms ease;
     `;
 
     const btnStyle =
-        'background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; transition: background 0.2s, transform 0.1s; outline: none; flex-shrink: 0;';
+        'background: oklch(0.955 0.003 275 / 0.08); border: none; color: oklch(0.86 0.004 275); border-radius: 6px; width: 20px; height: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 560; transition: background 120ms ease; outline: none; flex-shrink: 0;';
 
     const minusBtn = document.createElement('button');
     minusBtn.type = 'button';
+    minusBtn.setAttribute('aria-label', 'Make timer smaller');
     minusBtn.innerText = '−';
     minusBtn.style.cssText = btnStyle;
     minusBtn.onclick = (e) => {
@@ -467,6 +528,7 @@ function initDraggableTimer() {
 
     const plusBtn = document.createElement('button');
     plusBtn.type = 'button';
+    plusBtn.setAttribute('aria-label', 'Make timer bigger');
     plusBtn.innerText = '+';
     plusBtn.style.cssText = btnStyle;
     plusBtn.onclick = (e) => {
@@ -480,30 +542,58 @@ function initDraggableTimer() {
     const timerCore = document.createElement('div');
     timerCore.className = 'timer-core';
     timerCore.style.cssText =
-        'display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap;';
+        'display: flex; align-items: center; gap: 7px; flex-shrink: 0; white-space: nowrap;';
 
     const timeSpan = document.createElement('span');
-    timeSpan.innerText = '0m 0s';
+    timeSpan.innerText = '0:00';
+    timeSpan.style.cssText = 'font-variant-numeric: tabular-nums; letter-spacing: -0.01em;';
 
     timerCore.innerHTML = iconStr;
     timerCore.appendChild(timeSpan);
 
     timerContainer.appendChild(controls);
     timerContainer.appendChild(timerCore);
+    timerContainer.appendChild(closeBtn);
     document.body.appendChild(timerContainer);
 
+    const setCollapsed = (next: boolean) => {
+        collapsed = next;
+        timerCore.style.display = next ? 'none' : 'flex';
+        controls.style.display = next ? 'none' : 'flex';
+        closeBtn.style.display = next ? 'none' : 'flex';
+        timerContainer.style.padding = next ? '0' : '7px 12px';
+        timerContainer.style.width = next ? '32px' : 'fit-content';
+        timerContainer.style.height = next ? '32px' : '';
+        timerContainer.style.borderRadius = next ? '9999px' : '12px';
+        if (next) {
+            const dot = document.createElement('span');
+            dot.className = 'timer-dot';
+            dot.style.cssText =
+                'width: 8px; height: 8px; border-radius: 9999px; background: oklch(0.68 0.15 255); margin: auto; display: block;';
+            timerContainer.appendChild(dot);
+        } else {
+            timerContainer.querySelector('.timer-dot')?.remove();
+        }
+        chrome.storage.local.set({ [COLLAPSED_KEY]: next });
+        applyTransform(false);
+    };
+
+    timerContainer.addEventListener('dblclick', (e) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        setCollapsed(!collapsed);
+    });
+
     timerContainer.onmouseenter = () => {
+        if (collapsed) return;
         controls.style.opacity = '1';
-        controls.style.maxWidth = '56px';
+        controls.style.maxWidth = '52px';
         controls.style.marginRight = '8px';
-        controls.style.transform = 'translateX(0)';
         controls.style.pointerEvents = 'auto';
     };
     timerContainer.onmouseleave = () => {
         controls.style.opacity = '0';
         controls.style.maxWidth = '0';
         controls.style.marginRight = '0';
-        controls.style.transform = 'translateX(8px)';
         controls.style.pointerEvents = 'none';
     };
 
@@ -513,72 +603,104 @@ function initDraggableTimer() {
         applyStyles();
     };
 
-    let isDragging = false;
-    let currentX: number;
-    let currentY: number;
-    let initialX: number;
-    let initialY: number;
-
     applyStyles();
 
-    timerContainer.addEventListener('mousedown', dragStart);
-    document.addEventListener('mousemove', drag);
-    document.addEventListener('mouseup', dragEnd);
+    // Restore per-site position + collapsed state.
+    chrome.storage.local.get([POS_KEY, COLLAPSED_KEY], (res) => {
+        const saved = res?.[POS_KEY] as { x?: number; y?: number } | undefined;
+        if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+            posX = Math.max(0, Math.min(window.innerWidth - 60, saved.x!));
+            posY = Math.max(0, Math.min(window.innerHeight - 40, saved.y!));
+        } else {
+            posX = window.innerWidth - 140;
+            posY = 20;
+        }
+        if (res?.[COLLAPSED_KEY] === true) setCollapsed(true);
+        applyTransform(false);
+    });
 
-    function dragStart(e: MouseEvent) {
-        if (e.target instanceof HTMLButtonElement) return;
+    let isDragging = false;
+    let dragOriginX = 0;
+    let dragOriginY = 0;
+    let lastX = 0;
+    let lastY = 0;
+    let lastT = 0;
+    let velX = 0;
+    let velY = 0;
+    let moved = false;
+
+    const onPointerMove = (e: PointerEvent) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const now = performance.now();
+        const dt = Math.max(1, now - lastT);
+        velX = (e.clientX - lastX) / dt * 16;
+        velY = (e.clientY - lastY) / dt * 16;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        lastT = now;
+        posX = e.clientX - dragOriginX;
+        posY = e.clientY - dragOriginY;
+        moved = true;
+        timerContainer.style.transition = 'none';
+        timerContainer.style.transform = `translate3d(${posX}px, ${posY}px, 0) scale(${scale})`;
+    };
+
+    const onPointerUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        timerContainer.style.cursor = 'grab';
+        timerContainer.releasePointerCapture?.(lastPointerId);
+        if (moved) snapToCorner(velX, velY);
+    };
+
+    let lastPointerId = 0;
+    timerContainer.addEventListener('pointerdown', (e) => {
         if ((e.target as HTMLElement).closest('button')) return;
-        initialX = e.clientX - xOffset;
-        initialY = e.clientY - yOffset;
-        if (
-            e.target === timerContainer ||
-            (e.target as HTMLElement).parentNode === timerContainer ||
-            (e.target as HTMLElement).parentNode?.parentNode === timerContainer ||
-            (e.target as HTMLElement).closest?.('.timer-core')
-        ) {
-            isDragging = true;
-            timerContainer.style.cursor = 'grabbing';
-        }
-    }
+        isDragging = true;
+        moved = false;
+        lastPointerId = e.pointerId;
+        timerContainer.setPointerCapture?.(e.pointerId);
+        dragOriginX = e.clientX - posX;
+        dragOriginY = e.clientY - posY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        lastT = performance.now();
+        velX = 0;
+        velY = 0;
+        timerContainer.style.cursor = 'grabbing';
+    });
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
 
-    function drag(e: MouseEvent) {
-        if (isDragging) {
-            e.preventDefault();
-            const newX = e.clientX - initialX;
-            const newY = e.clientY - initialY;
-            currentX = newX;
-            currentY = newY;
-            xOffset = currentX;
-            yOffset = currentY;
-            timerContainer.style.transform = `translate3d(${currentX}px, ${currentY}px, 0) scale(${scale * 1.05})`;
-        }
-    }
-
-    function dragEnd() {
-        if (isDragging) {
-            initialX = currentX;
-            initialY = currentY;
-            isDragging = false;
-            timerContainer.style.cursor = 'grab';
-            timerContainer.style.transform = `translate3d(${xOffset}px, ${yOffset}px, 0) scale(${scale})`;
-        }
-    }
-
-    const updateTime = () => {
-        const host = window.location.hostname;
-        chrome.runtime.sendMessage({ type: 'GET_CURRENT_URL_TIME', domain: host }, (response) => {
+    // Tick locally and only re-sync with the worker now and then. Asking the
+    // worker every second from every open tab kept it (and extension storage)
+    // permanently busy, which is what made FocuzPass lookups crawl.
+    let baseMs = 0;
+    let baseAt = performance.now();
+    let counting = false;
+    const render = () => {
+        const ms = baseMs + (counting ? performance.now() - baseAt : 0);
+        timeSpan.innerText = fmtTime(Math.floor(ms / 1000));
+    };
+    const syncTime = () => {
+        if (document.visibilityState !== 'visible' || !chrome.runtime?.id) return;
+        chrome.runtime.sendMessage({ type: 'GET_CURRENT_URL_TIME', domain: window.location.hostname }, (response) => {
+            void chrome.runtime.lastError;
             if (response && response.timeSpent !== undefined) {
-                const totalSeconds = Math.floor(response.timeSpent / 1000);
-                const minutes = Math.floor(totalSeconds / 60);
-                const seconds = totalSeconds % 60;
-                let displayStr = '';
-                if (minutes > 0) displayStr += `${minutes}m `;
-                displayStr += `${seconds}s`;
-                timeSpan.innerText = displayStr;
+                baseMs = response.timeSpent;
+                baseAt = performance.now();
+                counting = response.counting !== false;
+                render();
             }
         });
     };
 
-    updateTime();
-    setInterval(updateTime, 1000);
+    syncTime();
+    setInterval(() => {
+        if (document.visibilityState === 'visible') render();
+    }, 1000);
+    setInterval(syncTime, 30_000);
+    document.addEventListener('visibilitychange', syncTime);
+    window.addEventListener('focus', syncTime);
 }

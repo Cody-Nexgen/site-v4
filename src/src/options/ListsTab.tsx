@@ -1,39 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Highlight, themes, type Language } from 'prism-react-renderer';
 import {
     CalendarPlus,
     Check,
-    CheckSquare,
-    Code2,
-    Download,
+    ChevronRight,
     FileText,
-    Film,
-    GripVertical,
-    Heading2,
-    Image,
-    Link as LinkIcon,
     Loader2,
-    Music,
+    MoreHorizontal,
     Paperclip,
     Plus,
-    Quote,
     Sparkles,
     Trash2,
-    Type,
     UploadCloud,
     X,
 } from 'lucide-react';
 import { streamAiCoachChat } from '../lib/aiCoachApi';
-import {
-    deleteAttachment,
-    downloadAttachment,
-    uploadAttachment,
-    type AttachmentRecord,
-} from '../lib/attachmentApi';
+import { deleteAttachment, uploadAttachment, type AttachmentRecord } from '../lib/attachmentApi';
 import { expandRecurringEvent } from '../lib/calendarRecurrence';
-import { fetchLinkPreview, type LinkPreview } from '../lib/linkPreviewApi';
 import {
     createBlankList,
     createListPreset,
@@ -44,37 +27,35 @@ import {
     normalizeListPreset,
     SAVED_LISTS_KEY,
     type ListBlock,
-    type ListBlockType,
     type ListPreset,
+    type ListSchedule,
     type SavedList,
 } from '../lib/listTypes';
 import { CALENDAR_EVENTS_KEY, type CalendarEvent } from '../lib/schedulingTypes';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
+import { Dialog } from '../components/fz/Dialog';
+import { Button } from '../components/fz/Button';
+import { IconButton } from '../components/fz/IconButton';
+import { Input, Field } from '../components/fz/Field';
+import { Menu, type MenuItem } from '../components/fz/Menu';
+import { SegmentedControl } from '../components/fz/SegmentedControl';
+import { ListEditor, type EditorTemplate } from './lists/ListEditor';
+import { isEmptyList } from './lists/editorUtils';
+import { PageIcon } from './lists/EmojiPicker';
+import { parseMarkdownBlocks } from './lists/blockCatalog';
 
-type Template = {
-    id: string;
-    name: string;
-    description: string;
-    accent: string;
-    blocks: () => ListBlock[];
-};
-
-const TEMPLATES: Template[] = [
+const TEMPLATES: EditorTemplate[] = [
     {
         id: 'todo',
         name: 'To-do list',
         description: 'A clean checklist for today.',
         accent: '#5ea2ff',
-        blocks: () => [
-            newBlock('heading', 'Today'),
+        make: () => [
+            { ...newBlock('heading', 'Today'), level: 2 },
             {
                 ...newBlock('checklist'),
-                items: ['Most important task', 'Quick win', 'Follow up'].map((text) => ({
-                    id: newListId('item'),
-                    text,
-                    done: false,
-                })),
+                items: ['Most important task', 'Quick win', 'Follow up'].map((text) => ({ id: newListId('item'), text, done: false })),
             },
         ],
     },
@@ -83,25 +64,16 @@ const TEMPLATES: Template[] = [
         name: 'Grocery list',
         description: 'Grouped essentials for a quick shop.',
         accent: '#51c878',
-        blocks: () => [
-            newBlock('heading', 'Groceries'),
-            newBlock('text', 'Produce'),
+        make: () => [
+            { ...newBlock('heading', 'Produce'), level: 3 },
             {
                 ...newBlock('checklist'),
-                items: ['Apples', 'Spinach', 'Avocados'].map((text) => ({
-                    id: newListId('item'),
-                    text,
-                    done: false,
-                })),
+                items: ['Apples', 'Spinach', 'Avocados'].map((text) => ({ id: newListId('item'), text, done: false })),
             },
-            newBlock('text', 'Pantry'),
+            { ...newBlock('heading', 'Pantry'), level: 3 },
             {
                 ...newBlock('checklist'),
-                items: ['Rice', 'Coffee'].map((text) => ({
-                    id: newListId('item'),
-                    text,
-                    done: false,
-                })),
+                items: ['Rice', 'Coffee'].map((text) => ({ id: newListId('item'), text, done: false })),
             },
         ],
     },
@@ -110,27 +82,38 @@ const TEMPLATES: Template[] = [
         name: 'Project plan',
         description: 'Scope, milestones, and next actions.',
         accent: '#a98bff',
-        blocks: () => [
-            newBlock('heading', 'Project brief'),
-            newBlock('text', 'What are we building, and why now?'),
-            newBlock('heading', 'Milestones'),
+        make: () => [
+            { ...newBlock('callout', 'What are we building, and why now?'), icon: '🎯' },
+            { ...newBlock('heading', 'Milestones'), level: 2 },
             {
                 ...newBlock('checklist'),
-                items: ['Define scope', 'Build first pass', 'Review and ship'].map((text) => ({
-                    id: newListId('item'),
-                    text,
-                    done: false,
-                })),
+                items: ['Define scope', 'Build first pass', 'Review and ship'].map((text) => ({ id: newListId('item'), text, done: false })),
             },
+            { ...newBlock('heading', 'Notes'), level: 2 },
+            newBlock('bullets'),
+        ],
+    },
+    {
+        id: 'study',
+        name: 'Study guide',
+        description: 'Topics, key ideas, and practice questions.',
+        accent: '#f0a65a',
+        make: () => [
+            newBlock('toc'),
+            { ...newBlock('heading', 'Key ideas'), level: 2 },
+            newBlock('bullets'),
+            { ...newBlock('heading', 'Practice questions'), level: 2 },
+            { ...newBlock('toggle', 'Question 1'), body: 'Answer…' },
+            { ...newBlock('toggle', 'Question 2'), body: 'Answer…' },
         ],
     },
     {
         id: 'code',
         name: 'Code notes',
         description: 'Context, snippets, and implementation notes.',
-        accent: '#f0a65a',
-        blocks: () => [
-            newBlock('heading', 'Implementation notes'),
+        accent: '#9aa0a6',
+        make: () => [
+            { ...newBlock('heading', 'Implementation notes'), level: 2 },
             newBlock('text', 'Goal and constraints'),
             { ...newBlock('code'), language: 'typescript', content: '// Paste or write code here' },
             newBlock('quote', 'Keep the smallest useful surface area.'),
@@ -138,76 +121,43 @@ const TEMPLATES: Template[] = [
     },
 ];
 
-const BLOCK_OPTIONS: { type: ListBlockType; label: string; icon: typeof Type }[] = [
-    { type: 'text', label: 'Text', icon: Type },
-    { type: 'heading', label: 'Heading', icon: Heading2 },
-    { type: 'checklist', label: 'Checklist', icon: CheckSquare },
-    { type: 'code', label: 'Code', icon: Code2 },
-    { type: 'quote', label: 'Quote', icon: Quote },
-    { type: 'link', label: 'Link', icon: LinkIcon },
-];
+const PRESET_COLORS = ['#5ea2ff', '#51c878', '#a98bff', '#f0a65a', '#f06b8b', '#9aa0a6'];
 
-function parseGeneratedContent(content: string): ListBlock[] {
-    const blocks: ListBlock[] = [];
-    const lines = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, language, code) => {
-        blocks.push({ ...newBlock('code'), language: language || 'text', content: code.trim() });
-        return '';
-    }).split('\n');
-    let checklist: ListBlock | null = null;
-    for (const raw of lines) {
-        const line = raw.trim();
-        if (!line) {
-            checklist = null;
-            continue;
-        }
-        if (/^#{1,6}\s*/.test(line)) {
-            blocks.push(newBlock('heading', line.replace(/^#{1,6}\s*/, '')));
-            checklist = null;
-        } else if (/^[-*]\s+(?:\[[ x]\]\s*)?/i.test(line) || /^\d+\.\s/.test(line)) {
-            if (!checklist) {
-                checklist = { ...newBlock('checklist'), items: [] };
-                blocks.push(checklist);
-            }
-            checklist.items?.push({
-                id: newListId('item'),
-                text: line.replace(/^[-*]\s+(?:\[[ x]\]\s*)?/i, '').replace(/^\d+\.\s*/, ''),
-                done: /\[[x]\]/i.test(line),
-            });
-        } else {
-            blocks.push(newBlock('text', line));
-            checklist = null;
-        }
-    }
-    return blocks.length ? blocks : [newBlock('text', content.trim())];
-}
+/** Titles we treat as "not named yet" — a template or AI result may replace them. */
+const PLACEHOLDER_TITLES = new Set(['', 'untitled', 'my first list']);
+
+const CARD =
+    'rounded-[10px] border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] shadow-[var(--fz-elev-card)]';
 
 function normalizeStoredHeadings(list: SavedList): SavedList {
     return {
         ...list,
         blocks: list.blocks.map((block) =>
             block.type !== 'code' && /^#{1,6}\s*/.test(block.content)
-                ? {
-                      ...block,
-                      type: 'heading',
-                      content: block.content.replace(/^#{1,6}\s*/, ''),
-                  }
+                ? { ...block, type: 'heading', content: block.content.replace(/^#{1,6}\s*/, '') }
                 : block,
         ),
     };
 }
 
-function useIsLightDashboard() {
-    const read = () => document.documentElement.dataset.dashboardTheme === 'light';
-    const [isLight, setIsLight] = useState(read);
-    useEffect(() => {
-        const observer = new MutationObserver(() => setIsLight(read()));
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['data-dashboard-theme'],
-        });
-        return () => observer.disconnect();
-    }, []);
-    return isLight;
+function listProgress(list: SavedList) {
+    const items = list.blocks
+        .filter((b) => b.type === 'checklist')
+        .flatMap((block) => block.items ?? [])
+        .filter((item) => item.text.trim() || item.done);
+    return { done: items.filter((item) => item.done).length, total: items.length };
+}
+
+/** "…" button + menu. */
+function MoreMenu({ label, items }: { label: string; items: MenuItem[] }) {
+    const [open, setOpen] = useState(false);
+    const anchorRef = useRef<HTMLButtonElement>(null);
+    return (
+        <>
+            <IconButton ref={anchorRef} icon={<MoreHorizontal size={15} />} tooltip={label} onClick={() => setOpen((o) => !o)} />
+            <Menu open={open} onClose={() => setOpen(false)} anchor={anchorRef} align="end" items={items} />
+        </>
+    );
 }
 
 export default function ListsTab() {
@@ -218,17 +168,19 @@ export default function ListsTab() {
     const [loaded, setLoaded] = useState(false);
     const [presetsLoaded, setPresetsLoaded] = useState(false);
     const [showPresetModal, setShowPresetModal] = useState(false);
-    const [managingPresets, setManagingPresets] = useState(false);
-    const [presetSourceId, setPresetSourceId] = useState('');
     const [presetName, setPresetName] = useState('');
     const [presetDescription, setPresetDescription] = useState('');
-    const [presetAccent, setPresetAccent] = useState('#5ea2ff');
-    const [aiPrompt, setAiPrompt] = useState('');
-    const [generating, setGenerating] = useState(false);
-    const [aiError, setAiError] = useState('');
-    const [attachmentError, setAttachmentError] = useState('');
+    const [presetAccent, setPresetAccent] = useState(PRESET_COLORS[0]);
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    const [notice, setNotice] = useState('');
     const [uploading, setUploading] = useState(false);
     const [draggingFiles, setDraggingFiles] = useState(false);
+    const [scheduleOpen, setScheduleOpen] = useState(false);
+    const [newMenuOpen, setNewMenuOpen] = useState(false);
+    const [switcherOpen, setSwitcherOpen] = useState(false);
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    const newMenuAnchor = useRef<HTMLButtonElement>(null);
+    const switcherAnchor = useRef<HTMLButtonElement>(null);
     const dragDepth = useRef(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const active = lists.find((list) => list.id === activeId) ?? lists[0];
@@ -241,7 +193,7 @@ export default function ListsTab() {
                 ? (stored as SavedList[]).map(normalizeStoredHeadings)
                 : [createBlankList('My first list')];
             setLists(next);
-            setActiveId(next[0].id);
+            setActiveId(next.find((l) => !l.parentId)?.id ?? next[0].id);
             setLoaded(true);
         });
     }, []);
@@ -256,10 +208,33 @@ export default function ListsTab() {
         });
     }, []);
 
+    // Every list lives under one key, so writing it on each keystroke re-sends the whole
+    // workspace (and chrome.storage broadcasts it to every tab). Batch writes instead.
+    const pendingLists = useRef<SavedList[] | null>(null);
     useEffect(() => {
         if (!loaded) return;
-        chrome.storage.local.set({ [SAVED_LISTS_KEY]: lists });
+        pendingLists.current = lists;
+        const t = window.setTimeout(() => {
+            pendingLists.current = null;
+            void chrome.storage.local.set({ [SAVED_LISTS_KEY]: lists });
+        }, 300);
+        return () => window.clearTimeout(t);
     }, [lists, loaded]);
+    useEffect(() => {
+        const flush = () => {
+            if (!pendingLists.current) return;
+            void chrome.storage.local.set({ [SAVED_LISTS_KEY]: pendingLists.current });
+            pendingLists.current = null;
+        };
+        const onHide = () => document.visibilityState === 'hidden' && flush();
+        window.addEventListener('pagehide', flush);
+        document.addEventListener('visibilitychange', onHide);
+        return () => {
+            window.removeEventListener('pagehide', flush);
+            document.removeEventListener('visibilitychange', onHide);
+            flush(); // leaving the Lists tab
+        };
+    }, []);
 
     useEffect(() => {
         if (!presetsLoaded) return;
@@ -268,87 +243,146 @@ export default function ListsTab() {
 
     const updateActive = (updater: (list: SavedList) => SavedList) => {
         if (!active) return;
+        const id = active.id;
         setLists((current) =>
-            current.map((list) =>
-                list.id === active.id
-                    ? { ...updater(list), updatedAt: new Date().toISOString() }
-                    : list,
-            ),
+            current.map((list) => (list.id === id ? { ...updater(list), updatedAt: new Date().toISOString() } : list)),
         );
     };
 
-    const createList = (title = 'Untitled') => {
+    /* ── tree ─────────────────────────────────────────────────────── */
+
+    const byId = useMemo(() => new Map(lists.map((l) => [l.id, l])), [lists]);
+    const childrenOf = (id: string | null) =>
+        lists.filter((l) => (id === null ? !l.parentId || !byId.has(l.parentId) : l.parentId === id));
+    const ancestors = (list?: SavedList): SavedList[] => {
+        const chain: SavedList[] = [];
+        let cur = list?.parentId ? byId.get(list.parentId) : undefined;
+        while (cur && chain.length < 10) {
+            chain.unshift(cur);
+            cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+        }
+        return chain;
+    };
+    const activeAncestors = ancestors(active);
+    const isExpanded = (id: string) => expanded[id] ?? activeAncestors.some((a) => a.id === id);
+    const descendantsOf = (id: string): string[] => {
+        const kids = lists.filter((l) => l.parentId === id).map((l) => l.id);
+        return [...kids, ...kids.flatMap(descendantsOf)];
+    };
+
+    const selectList = (id: string) => {
+        setActiveId(id);
+        setScheduleOpen(false);
+        setNotice('');
+    };
+
+    const createList = (title = 'Untitled', blocks?: ListBlock[], parentId?: string) => {
         const next = createBlankList(title);
-        setLists((current) => [next, ...current]);
-        setActiveId(next.id);
+        if (blocks) next.blocks = blocks;
+        if (parentId) next.parentId = parentId;
+        setLists((current) => {
+            if (!parentId) return [next, ...current];
+            const i = current.findIndex((l) => l.id === parentId);
+            return [...current.slice(0, i + 1), next, ...current.slice(i + 1)];
+        });
+        if (parentId) setExpanded((e) => ({ ...e, [parentId]: true }));
+        return next.id;
     };
 
-    const applyTemplate = (template: Template) => {
-        const next = createBlankList(template.name);
-        next.blocks = template.blocks();
-        setLists((current) => [next, ...current]);
-        setActiveId(next.id);
+    /** Fill the open page if it's still empty, otherwise start a new one. */
+    const applyTemplate = (name: string, blocks: ListBlock[]) => {
+        if (active && isEmptyList(active)) {
+            updateActive((list) => ({
+                ...list,
+                title: PLACEHOLDER_TITLES.has(list.title.trim().toLowerCase()) ? name : list.title,
+                blocks,
+            }));
+        } else {
+            selectList(createList(name, blocks));
+        }
     };
 
-    const applyPreset = (preset: ListPreset) => {
-        const next = createBlankList(preset.title);
-        next.blocks = cloneReusableBlocks(preset.blocks);
-        setLists((current) => [next, ...current]);
-        setActiveId(next.id);
+    const deleteActive = () => {
+        if (!active) return;
+        const doomed = new Set([active.id, ...descendantsOf(active.id)]);
+        lists
+            .filter((l) => doomed.has(l.id))
+            .forEach((l) => {
+                l.blocks.forEach((block) => {
+                    if (block.attachment) void deleteAttachment(supabase, block.attachment);
+                });
+                void syncCalendar({ ...l, schedule: undefined });
+            });
+        const remaining = lists.filter((l) => !doomed.has(l.id));
+        if (!remaining.length) {
+            const next = createBlankList();
+            setLists([next]);
+            selectList(next.id);
+            return;
+        }
+        setLists(remaining);
+        selectList(active.parentId && !doomed.has(active.parentId) ? active.parentId : remaining.find((l) => !l.parentId)?.id ?? remaining[0].id);
     };
 
     const openPresetModal = () => {
-        setPresetSourceId(active.id);
-        setPresetName(active.title ? `${active.title} preset` : 'New preset');
+        if (!active) return;
+        setPresetName(active.title || 'New template');
         setPresetDescription('');
-        setPresetAccent('#5ea2ff');
+        setPresetAccent(PRESET_COLORS[0]);
         setShowPresetModal(true);
     };
 
     const savePreset = () => {
-        const source = lists.find((list) => list.id === presetSourceId);
-        if (!source || !presetName.trim()) return;
+        if (!active || !presetName.trim()) return;
         setPresets((current) => [
             ...current,
             createListPreset({
                 title: presetName,
-                description: presetDescription.trim() || `Reusable blocks from ${source.title || 'Untitled'}.`,
+                description: presetDescription.trim() || `Reusable blocks from ${active.title || 'Untitled'}.`,
                 accent: presetAccent,
-                blocks: source.blocks,
+                blocks: active.blocks,
             }),
         ]);
         setShowPresetModal(false);
     };
 
+    /* ── files ────────────────────────────────────────────────────── */
+
+    const uploadOne = async (file: File): Promise<AttachmentRecord | null> => {
+        if (!active) return null;
+        if (!isPro) {
+            setNotice('Uploading files is a Pro feature.');
+            return null;
+        }
+        const result = await uploadAttachment(supabase, file, { context: 'list', listId: active.id });
+        if (!result.ok) {
+            setNotice(result.error);
+            return null;
+        }
+        return result.attachment;
+    };
+
     const addAttachments = async (files: File[]) => {
         if (!active || !files.length || uploading) return;
         if (!isPro) {
-            setAttachmentError('Attachments are available on Pro.');
+            setNotice('Uploading files is a Pro feature.');
             return;
         }
         setUploading(true);
-        setAttachmentError('');
+        setNotice('');
         for (const file of files) {
-            const result = await uploadAttachment(supabase, file, {
-                context: 'list',
-                listId: active.id,
-            });
-            if (!result.ok) {
-                setAttachmentError(result.error);
-                continue;
-            }
-            const attachment = result.attachment;
+            const record = await uploadOne(file);
+            if (!record) continue;
+            const type = record.mimeType.startsWith('image/')
+                ? 'image'
+                : record.mimeType.startsWith('video/')
+                  ? 'video'
+                  : record.mimeType.startsWith('audio/')
+                    ? 'audio'
+                    : 'attachment';
             updateActive((list) => ({
                 ...list,
-                blocks: [
-                    ...list.blocks,
-                    {
-                        id: newListId('block'),
-                        type: 'attachment',
-                        content: attachment.fileName,
-                        attachment,
-                    },
-                ],
+                blocks: [...list.blocks, { id: newListId('block'), type, content: record.fileName, attachment: record }],
             }));
         }
         setUploading(false);
@@ -367,11 +401,14 @@ export default function ListsTab() {
         if (dragDepth.current === 0) setDraggingFiles(false);
     };
     const onDrop = (event: React.DragEvent) => {
+        if (!event.dataTransfer.types.includes('Files')) return;
         event.preventDefault();
         dragDepth.current = 0;
         setDraggingFiles(false);
         void addAttachments(Array.from(event.dataTransfer.files));
     };
+
+    /* ── calendar ─────────────────────────────────────────────────── */
 
     const syncCalendar = async (list: SavedList) => {
         const result = await chrome.storage.local.get([CALENDAR_EVENTS_KEY]);
@@ -409,53 +446,181 @@ export default function ListsTab() {
         });
     };
 
-    const generateWithAi = async () => {
-        if (!active || !aiPrompt.trim() || generating) return;
-        setGenerating(true);
-        setAiError('');
-        let output = '';
-        await streamAiCoachChat({
-            model: 'gemini-2.5-flash',
-            sessionId: null,
-            messages: [{
-                role: 'user',
-                content: `Create a concise, useful structured list for: ${aiPrompt.trim()}.
+    // Keep the calendar event's title in step with the page title.
+    const scheduledTitleKey = active?.schedule?.enabled ? `${active.id}:${active.title}` : '';
+    useEffect(() => {
+        if (!scheduledTitleKey || !active) return;
+        const t = window.setTimeout(() => void syncCalendar(active), 700);
+        return () => window.clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [scheduledTitleKey]);
+
+    /* ── AI ───────────────────────────────────────────────────────── */
+
+    const runAi = (prompt: string) =>
+        new Promise<ListBlock[] | null>((resolve) => {
+            if (!active) return resolve(null);
+            let output = '';
+            void streamAiCoachChat({
+                model: 'gemini-2.5-flash',
+                sessionId: null,
+                messages: [{
+                    role: 'user',
+                    content: `Write content for a notes page. Request: ${prompt}.
 ${active.blocks
-    .filter((block) => block.type === 'attachment' && block.attachment?.extractedText)
+    .filter((block) => block.attachment?.extractedText)
     .map((block) => `Attached file "${block.attachment!.fileName}":\n${block.attachment!.extractedText}`)
     .join('\n\n')}
-Return only markdown using level-two headings (##), checklist items, short text, and fenced code only when relevant. Never use level-four or deeper headings. Do not include commentary.`,
-            }],
-            coachContext: { surface: 'lists', current_title: active.title },
-            callbacks: {
-                onToken: (_chunk, visible) => {
-                    output = visible;
+Return only markdown: ## and ### headings, "- [ ]" for tasks, "-" for bullets, "1." for steps, "> " for a quote, --- for a divider, short paragraphs, and fenced code only when relevant. No commentary.`,
+                }],
+                coachContext: { surface: 'lists', current_title: active.title },
+                callbacks: {
+                    onToken: (_chunk, visible) => {
+                        output = visible;
+                    },
+                    onDone: (payload) => {
+                        output = payload.content || output;
+                        if (PLACEHOLDER_TITLES.has(active.title.trim().toLowerCase())) {
+                            updateActive((list) => ({ ...list, title: prompt.charAt(0).toUpperCase() + prompt.slice(1, 60) }));
+                        }
+                        resolve(parseMarkdownBlocks(output));
+                    },
+                    onError: (message) => {
+                        setNotice(message);
+                        resolve(null);
+                    },
                 },
-                onDone: (payload) => {
-                    output = payload.content || output;
-                    updateActive((list) => ({ ...list, blocks: parseGeneratedContent(output) }));
-                    setAiPrompt('');
-                    setGenerating(false);
-                },
-                onError: (message) => {
-                    setAiError(message);
-                    setGenerating(false);
-                },
-            },
+            });
         });
+
+    const addAiBlock = () => {
+        if (!active) return;
+        const block = newBlock('ai');
+        updateActive((list) => ({
+            ...list,
+            blocks: isEmptyList(list) ? [block] : [...list.blocks, block],
+        }));
     };
 
-    const progress = useMemo(() => {
-        if (!active) return { done: 0, total: 0 };
-        const items = active.blocks.flatMap((block) => block.items ?? []);
-        return { done: items.filter((item) => item.done).length, total: items.length };
-    }, [active]);
+    const progress = useMemo(() => (active ? listProgress(active) : { done: 0, total: 0 }), [active]);
 
     if (!active) return null;
 
+    const schedule = active.schedule;
+    const scheduleLabel = schedule?.enabled
+        ? `${format(parseISO(`${schedule.date}T12:00:00`), 'EEE, MMM d')} · ${format(
+              new Date(2000, 0, 1, Math.floor(schedule.startMin / 60), schedule.startMin % 60),
+              'h:mm a',
+          )}${schedule.repeat === 'daily' ? ' · daily' : schedule.repeat === 'weekly' ? ' · weekly' : ''}`
+        : '';
+
+    const newMenuItems: MenuItem[] = [
+        { id: 'blank', label: 'Empty page', icon: <FileText size={13} />, onSelect: () => selectList(createList()) },
+        {
+            id: 'ai',
+            label: 'Write with AI',
+            icon: <Sparkles size={13} />,
+            onSelect: () => selectList(createList('Untitled', [newBlock('ai')])),
+        },
+        { type: 'separator', id: 'sep' },
+        { type: 'label', id: 'tpl', label: 'Templates' },
+        ...TEMPLATES.map((t) => ({
+            id: t.id,
+            label: t.name,
+            icon: <span className="size-2 rounded-full" style={{ backgroundColor: t.accent }} />,
+            onSelect: () => selectList(createList(t.name, t.make())),
+        })),
+        ...presets.map((p) => ({
+            id: p.id,
+            label: p.title,
+            icon: <span className="size-2 rounded-full" style={{ backgroundColor: p.accent }} />,
+            submenu: [
+                { id: `${p.id}-use`, label: 'New page from this', icon: <Plus size={13} />, onSelect: () => selectList(createList(p.title, cloneReusableBlocks(p.blocks))) },
+                { id: `${p.id}-del`, label: 'Delete template', icon: <Trash2 size={13} />, danger: true, onSelect: () => setPresets((cur) => cur.filter((x) => x.id !== p.id)) },
+            ],
+        })),
+    ];
+
+    const editorTemplates: EditorTemplate[] = [
+        ...TEMPLATES,
+        ...presets.map((p) => ({
+            id: p.id,
+            name: p.title,
+            description: p.description,
+            accent: p.accent,
+            make: () => cloneReusableBlocks(p.blocks),
+        })),
+    ];
+
+    const renderTree = (parent: string | null, depth: number): React.ReactNode =>
+        childrenOf(parent).map((list) => {
+            const kids = childrenOf(list.id);
+            const open = isExpanded(list.id);
+            const selected = list.id === active.id;
+            const p = listProgress(list);
+            return (
+                <div key={list.id}>
+                    <div
+                        className={`group/row flex h-8 items-center rounded-md pr-1.5 transition-colors ${
+                            selected ? 'bg-[var(--fz-bg-selected)]' : 'hover:bg-[var(--fz-bg-hover)]'
+                        }`}
+                        style={{ paddingLeft: 4 + depth * 14 }}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setExpanded((e) => ({ ...e, [list.id]: !open }))}
+                            className={`flex size-5 shrink-0 items-center justify-center rounded text-[var(--fz-text-4)] hover:bg-[var(--fz-bg-active)] hover:text-[var(--fz-text-2)] ${
+                                kids.length ? '' : 'invisible'
+                            }`}
+                            aria-label={open ? 'Collapse' : 'Expand'}
+                        >
+                            <ChevronRight size={12} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => selectList(list.id)}
+                            className="flex h-full min-w-0 flex-1 items-center gap-2 pl-0.5 text-left"
+                        >
+                            <span className="flex size-5 shrink-0 items-center justify-center">
+                                {list.icon ? (
+                                    <PageIcon icon={list.icon} size={16} />
+                                ) : (
+                                    <FileText size={14} className="text-[var(--fz-text-3)]" />
+                                )}
+                            </span>
+                            <span
+                                className={`truncate text-[13px] ${
+                                    selected ? 'font-medium text-[var(--fz-text-1)]' : 'text-[var(--fz-text-2)]'
+                                }`}
+                            >
+                                {list.title || 'Untitled'}
+                            </span>
+                        </button>
+                        {p.total > 0 && (
+                            <span className="ml-1 shrink-0 text-[11px] tabular-nums text-[var(--fz-text-4)] group-hover/row:hidden">
+                                {p.done}/{p.total}
+                            </span>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => selectList(createList('Untitled', undefined, list.id))}
+                            className="ml-1 hidden size-5 shrink-0 items-center justify-center rounded text-[var(--fz-text-4)] hover:bg-[var(--fz-bg-active)] hover:text-[var(--fz-text-2)] group-hover/row:flex"
+                            aria-label="Add a page inside"
+                            title="Add a page inside"
+                        >
+                            <Plus size={13} />
+                        </button>
+                    </div>
+                    {open && kids.length > 0 && renderTree(list.id, depth + 1)}
+                </div>
+            );
+        });
+
+    const nested = descendantsOf(active.id).length;
+
     return (
         <div
-            className="lists-workspace relative flex h-[calc(100vh-48px)] min-h-0 overflow-hidden rounded-lg border border-white/[0.07] bg-[#111112]"
+            className="lists-workspace flex h-full w-full gap-4 px-6 pb-6 pt-5"
             onDragEnter={onDragEnter}
             onDragOver={(event) => {
                 if (event.dataTransfer.types.includes('Files')) event.preventDefault();
@@ -473,896 +638,378 @@ Return only markdown using level-two headings (##), checklist items, short text,
                     event.target.value = '';
                 }}
             />
-            <AnimatePresence>
-                {draggingFiles && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[200] flex items-center justify-center bg-[#09090b]/75 backdrop-blur-md"
-                    >
-                        <div className="mx-6 w-full max-w-lg rounded-2xl border border-blue-400/30 bg-[#11131a]/95 p-8 text-center shadow-2xl shadow-blue-950/40">
-                            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-300">
-                                <UploadCloud size={32} />
-                            </div>
-                            <h2 className="mt-5 text-xl font-semibold text-white">
-                                {isPro ? 'Drop files into this list' : 'Attachments are a Pro feature'}
-                            </h2>
-                            <p className="mt-2 text-sm text-neutral-400">Private storage · Any file type · Up to 10MB each</p>
-                            <div className="mt-6 flex items-center justify-center gap-3 text-xs text-neutral-500">
-                                <span className="rounded-lg bg-white/[0.05] px-3 py-2">Drop</span>
-                                <span>→</span>
-                                <span className="rounded-lg bg-white/[0.05] px-3 py-2">Secure upload</span>
-                                <span>→</span>
-                                <span className="rounded-lg bg-white/[0.05] px-3 py-2">AI-ready notes</span>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-            <aside className="flex w-[210px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0d0d0e]">
-                <div className="flex h-11 items-center justify-between px-3">
-                    <span className="text-xs font-medium text-neutral-300">Lists</span>
-                    <button
-                        type="button"
-                        onClick={() => createList()}
-                        className="rounded p-1 text-neutral-500 hover:bg-white/[0.06] hover:text-white"
-                        aria-label="New list"
-                    >
-                        <Plus size={14} />
-                    </button>
+
+            {/* Pages */}
+            <aside className={`${CARD} hidden w-[260px] shrink-0 flex-col overflow-hidden md:flex`}>
+                <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--fz-border)] pl-4 pr-2.5">
+                    <span className="text-[13px] font-semibold text-[var(--fz-text-1)]">
+                        Lists <span className="ml-1 font-normal tabular-nums text-[var(--fz-text-4)]">{lists.length}</span>
+                    </span>
+                    <IconButton ref={newMenuAnchor} icon={<Plus size={15} />} tooltip="New page" onClick={() => setNewMenuOpen((v) => !v)} />
+                    <Menu open={newMenuOpen} onClose={() => setNewMenuOpen(false)} anchor={newMenuAnchor} align="end" items={newMenuItems} />
                 </div>
-                <div className="flex-1 space-y-0.5 overflow-y-auto px-2">
-                    {lists.map((list) => (
+                <div className="min-h-0 flex-1 overflow-y-auto p-1.5 scrollbar-hide">{renderTree(null, 0)}</div>
+            </aside>
+
+            {/* Page */}
+            <section className={`${CARD} relative flex min-w-0 flex-1 flex-col overflow-hidden`}>
+                <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--fz-border)] pl-3 pr-2.5">
+                    <div className="flex min-w-0 items-center gap-1">
                         <button
-                            key={list.id}
+                            ref={switcherAnchor}
                             type="button"
-                            onClick={() => setActiveId(list.id)}
-                            className={`flex h-8 w-full items-center gap-2 rounded px-2 text-left text-xs ${
-                                list.id === active.id
-                                    ? 'bg-white/[0.07] text-neutral-200'
-                                    : 'text-neutral-500 hover:bg-white/[0.04] hover:text-neutral-300'
-                            }`}
+                            onClick={() => setSwitcherOpen((v) => !v)}
+                            className="flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--fz-text-2)] hover:bg-[var(--fz-bg-hover)] md:hidden"
                         >
                             <FileText size={13} />
-                            <span className="min-w-0 flex-1 truncate">{list.title || 'Untitled'}</span>
+                            Lists
                         </button>
-                    ))}
-                </div>
-            </aside>
-
-            <main className="min-w-0 flex-1 overflow-y-auto">
-                <div className="mx-auto max-w-3xl px-8 pb-24 pt-12">
-                    <div className="mb-7 flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                            <input
-                                value={active.title}
-                                onChange={(event) => updateActive((list) => ({ ...list, title: event.target.value }))}
-                                className="w-full bg-transparent text-3xl font-semibold tracking-tight text-neutral-100 outline-none placeholder:text-neutral-700"
-                                placeholder="Untitled"
-                            />
-                            <p className="mt-1 text-[11px] text-neutral-600">
-                                {progress.total ? `${progress.done} of ${progress.total} complete` : `Edited ${format(new Date(active.updatedAt), 'MMM d, h:mm a')}`}
-                            </p>
-                        </div>
-                        <button
-                            type="button"
+                        <Menu
+                            open={switcherOpen}
+                            onClose={() => setSwitcherOpen(false)}
+                            anchor={switcherAnchor}
+                            items={[
+                                ...lists.map((list) => ({
+                                    id: list.id,
+                                    label: list.title || 'Untitled',
+                                    checked: list.id === active.id,
+                                    onSelect: () => selectList(list.id),
+                                })),
+                                { type: 'separator' as const, id: 'sep' },
+                                { id: 'new', label: 'New page', icon: <Plus size={13} />, onSelect: () => selectList(createList()) },
+                            ]}
+                        />
+                        {/* Breadcrumbs */}
+                        {[...activeAncestors, active].map((crumb, i, arr) => (
+                            <div key={crumb.id} className="flex min-w-0 items-center">
+                                {i > 0 && <span className="px-0.5 text-[13px] text-[var(--fz-text-4)]">/</span>}
+                                <button
+                                    type="button"
+                                    onClick={() => selectList(crumb.id)}
+                                    className={`flex h-7 min-w-0 items-center gap-1.5 rounded-md px-1.5 text-[13px] transition-colors hover:bg-[var(--fz-bg-hover)] ${
+                                        i === arr.length - 1 ? 'text-[var(--fz-text-1)]' : 'text-[var(--fz-text-3)]'
+                                    }`}
+                                >
+                                    {crumb.icon && <PageIcon icon={crumb.icon} size={14} />}
+                                    <span className="max-w-[180px] truncate">{crumb.title || 'Untitled'}</span>
+                                </button>
+                            </div>
+                        ))}
+                        {progress.total > 0 && (
+                            <span className="text-meta ml-2 hidden shrink-0 lg:inline">
+                                {progress.done} of {progress.total} done
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            iconLeft={<CalendarPlus size={13} />}
                             onClick={() => {
-                                if (lists.length === 1) {
-                                    const next = createBlankList();
-                                    setLists([next]);
-                                    setActiveId(next.id);
+                                if (!schedule?.enabled) {
+                                    const next: ListSchedule = {
+                                        enabled: true,
+                                        date: schedule?.date ?? format(new Date(), 'yyyy-MM-dd'),
+                                        startMin: schedule?.startMin ?? 9 * 60,
+                                        durationMin: schedule?.durationMin ?? 30,
+                                        repeat: schedule?.repeat ?? 'none',
+                                        recurrenceWeekdays: schedule?.recurrenceWeekdays,
+                                    };
+                                    updateActive((list) => ({ ...list, schedule: next }));
+                                    void syncCalendar({ ...active, schedule: next });
+                                    setScheduleOpen(true);
                                 } else {
-                                    setLists((current) => current.filter((list) => list.id !== active.id));
-                                    setActiveId(lists.find((list) => list.id !== active.id)?.id ?? '');
+                                    setScheduleOpen((v) => !v);
                                 }
                             }}
-                            className="flex items-center gap-1.5 rounded px-2 py-1.5 text-[11px] text-neutral-600 hover:bg-white/[0.05] hover:text-red-400"
-                            aria-label="Delete list"
+                            className={schedule?.enabled ? 'text-[var(--fz-text-1)]' : undefined}
                         >
-                            <Trash2 size={13} />
-                            Delete list
-                        </button>
-                    </div>
-
-                    <div className="space-y-2">
-                        {active.blocks.map((block) => (
-                            <BlockEditor
-                                key={block.id}
-                                block={block}
-                                onChange={(next) =>
-                                    updateActive((list) => ({
-                                        ...list,
-                                        blocks: list.blocks.map((item) => item.id === block.id ? next : item),
-                                    }))
-                                }
-                                onDelete={() => {
-                                    if (block.attachment) {
-                                        void deleteAttachment(supabase, block.attachment).then((result) => {
-                                            if (!result.ok) setAttachmentError(result.error);
-                                        });
-                                    }
-                                    updateActive((list) => ({
-                                        ...list,
-                                        blocks: list.blocks.filter((item) => item.id !== block.id),
-                                    }));
-                                }}
-                                onError={setAttachmentError}
-                            />
-                        ))}
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-1">
-                        {BLOCK_OPTIONS.map(({ type, label, icon: Icon }) => (
-                            <button
-                                key={type}
-                                type="button"
-                                onClick={() => updateActive((list) => ({ ...list, blocks: [...list.blocks, newBlock(type)] }))}
-                                className="flex h-7 items-center gap-1.5 rounded px-2 text-[11px] text-neutral-600 hover:bg-white/[0.05] hover:text-neutral-300"
-                            >
-                                <Icon size={12} />
-                                {label}
-                            </button>
-                        ))}
-                        <button
-                            type="button"
+                            <span className="hidden sm:inline">{schedule?.enabled ? scheduleLabel : 'Add to calendar'}</span>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             disabled={uploading}
+                            iconLeft={uploading ? <Loader2 size={13} className="animate-spin" /> : <Paperclip size={13} />}
                             onClick={() => {
                                 if (isPro) fileInputRef.current?.click();
-                                else setAttachmentError('Attachments are available on Pro.');
+                                else setNotice('Uploading files is a Pro feature.');
                             }}
-                            className="flex h-7 items-center gap-1.5 rounded px-2 text-[11px] text-neutral-600 hover:bg-white/[0.05] hover:text-neutral-300 disabled:opacity-50"
                         >
-                            {uploading ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
-                            {uploading ? 'Uploading…' : 'Attachment'}
-                            {!isPro && <span className="rounded bg-amber-400/10 px-1 text-[9px] text-amber-300">PRO</span>}
-                        </button>
-                    </div>
-                    {attachmentError && (
-                        <div className="mt-3 flex items-center gap-3 rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2 text-[11px] text-amber-200">
-                            <span className="flex-1">{attachmentError}</span>
+                            <span className="hidden sm:inline">{uploading ? 'Uploading…' : 'Attach'}</span>
                             {!isPro && (
-                                <button
-                                    type="button"
-                                    onClick={() => void upgradeToPro()}
-                                    className="rounded bg-amber-300 px-2 py-1 font-semibold text-neutral-950"
-                                >
-                                    Upgrade
-                                </button>
-                            )}
-                            <button type="button" onClick={() => setAttachmentError('')} aria-label="Dismiss">×</button>
-                        </div>
-                    )}
-
-                    <div className="mt-10 rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
-                        <div className="flex items-center gap-2">
-                            <Sparkles size={14} className="text-neutral-400" />
-                            <input
-                                value={aiPrompt}
-                                onChange={(event) => setAiPrompt(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if (event.key === 'Enter') void generateWithAi();
-                                }}
-                                placeholder="Generate a packing list, sprint plan, study guide…"
-                                className="min-w-0 flex-1 bg-transparent text-xs text-neutral-200 outline-none placeholder:text-neutral-600"
-                            />
-                            <button
-                                type="button"
-                                disabled={!aiPrompt.trim() || generating}
-                                onClick={() => void generateWithAi()}
-                                className="rounded bg-neutral-200 px-2.5 py-1 text-[11px] font-medium text-neutral-950 disabled:opacity-40"
-                            >
-                                {generating ? 'Writing…' : 'Generate'}
-                            </button>
-                        </div>
-                        {aiError && <p className="mt-2 text-[11px] text-red-400">{aiError}</p>}
-                    </div>
-
-                    <ScheduleList list={active} onChange={updateActive} onSync={syncCalendar} />
-                </div>
-            </main>
-
-            <aside className="w-[340px] shrink-0 overflow-y-auto border-l border-white/[0.07] bg-[#0f0f10] p-3">
-                <div className="flex items-center justify-between px-1 pb-2">
-                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-600">Presets</p>
-                    {presets.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setManagingPresets((value) => !value)}
-                            className="text-[10px] text-neutral-600 hover:text-neutral-300"
-                        >
-                            {managingPresets ? 'Done' : 'Manage'}
-                        </button>
-                    )}
-                </div>
-                <div className="space-y-2">
-                    {TEMPLATES.map((template) => (
-                        <PresetCard
-                            key={template.id}
-                            name={template.name}
-                            description={template.description}
-                            accent={template.accent}
-                            blocks={template.blocks()}
-                            onClick={() => applyTemplate(template)}
-                        />
-                    ))}
-                    {presets.map((preset) => (
-                        <div key={preset.id} className="relative">
-                            <PresetCard
-                                name={preset.title}
-                                description={preset.description}
-                                accent={preset.accent}
-                                blocks={preset.blocks}
-                                onClick={() => applyPreset(preset)}
-                            />
-                            {managingPresets && (
-                                <button
-                                    type="button"
-                                    onClick={() => setPresets((current) => current.filter((item) => item.id !== preset.id))}
-                                    className="absolute right-2 top-2 z-30 rounded-md border border-red-400/20 bg-[#171718]/95 p-1.5 text-red-400 shadow-lg hover:bg-red-400/10"
-                                    aria-label={`Delete ${preset.title} preset`}
-                                >
-                                    <Trash2 size={12} />
-                                </button>
-                            )}
-                        </div>
-                    ))}
-                    <button
-                        type="button"
-                        onClick={openPresetModal}
-                        className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/[0.12] text-[11px] text-neutral-500 transition-colors hover:border-white/[0.2] hover:bg-white/[0.03] hover:text-neutral-300"
-                    >
-                        <Plus size={13} />
-                        Add new preset
-                    </button>
-                </div>
-            </aside>
-
-            <AnimatePresence>
-                {showPresetModal && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[210] flex items-center justify-center bg-black/65 p-6 backdrop-blur-sm"
-                        onMouseDown={(event) => {
-                            if (event.target === event.currentTarget) setShowPresetModal(false);
-                        }}
-                    >
-                        <motion.div
-                            initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                            role="dialog"
-                            aria-modal="true"
-                            aria-labelledby="preset-dialog-title"
-                            className="w-full max-w-md rounded-xl border border-white/[0.1] bg-[#151516] p-5 shadow-2xl"
-                        >
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <h2 id="preset-dialog-title" className="text-sm font-semibold text-neutral-100">Create a preset</h2>
-                                    <p className="mt-1 text-[11px] text-neutral-500">Save reusable blocks from one of your lists.</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPresetModal(false)}
-                                    className="rounded p-1 text-neutral-600 hover:bg-white/[0.05] hover:text-neutral-300"
-                                    aria-label="Close"
-                                >
-                                    <X size={15} />
-                                </button>
-                            </div>
-                            <div className="mt-5 space-y-4">
-                                <label className="block text-[11px] text-neutral-400">
-                                    Source list
-                                    <select
-                                        value={presetSourceId}
-                                        onChange={(event) => setPresetSourceId(event.target.value)}
-                                        className="mt-1.5 w-full rounded-lg border border-white/[0.09] bg-black/30 px-3 py-2 text-xs text-neutral-200 outline-none focus:border-blue-400/40"
-                                    >
-                                        {lists.map((list) => (
-                                            <option key={list.id} value={list.id}>{list.title || 'Untitled'}</option>
-                                        ))}
-                                    </select>
-                                </label>
-                                <label className="block text-[11px] text-neutral-400">
-                                    Preset name
-                                    <input
-                                        value={presetName}
-                                        onChange={(event) => setPresetName(event.target.value)}
-                                        className="mt-1.5 w-full rounded-lg border border-white/[0.09] bg-black/30 px-3 py-2 text-xs text-neutral-200 outline-none focus:border-blue-400/40"
-                                        placeholder="Weekly review"
-                                        autoFocus
-                                    />
-                                </label>
-                                <label className="block text-[11px] text-neutral-400">
-                                    Description
-                                    <input
-                                        value={presetDescription}
-                                        onChange={(event) => setPresetDescription(event.target.value)}
-                                        className="mt-1.5 w-full rounded-lg border border-white/[0.09] bg-black/30 px-3 py-2 text-xs text-neutral-200 outline-none focus:border-blue-400/40"
-                                        placeholder="A quick structure for every Friday."
-                                    />
-                                </label>
-                                <label className="flex items-center justify-between rounded-lg border border-white/[0.07] bg-black/20 px-3 py-2.5 text-[11px] text-neutral-400">
-                                    Accent line color
-                                    <input
-                                        type="color"
-                                        value={presetAccent}
-                                        onChange={(event) => setPresetAccent(event.target.value)}
-                                        className="h-7 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
-                                    />
-                                </label>
-                                {(lists.find((list) => list.id === presetSourceId)?.blocks.some((block) => block.type === 'attachment')) && (
-                                    <p className="rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2 text-[10px] leading-4 text-amber-200/80">
-                                        Attachments are not included. This keeps stored files safely owned by their original list.
-                                    </p>
-                                )}
-                            </div>
-                            <div className="mt-5 flex justify-end gap-2">
-                                <button type="button" onClick={() => setShowPresetModal(false)} className="rounded-lg px-3 py-2 text-xs text-neutral-500 hover:text-neutral-200">
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={!presetName.trim()}
-                                    onClick={savePreset}
-                                    className="rounded-lg bg-neutral-100 px-3 py-2 text-xs font-medium text-neutral-950 disabled:opacity-40"
-                                >
-                                    Save preset
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
-}
-
-function PresetCard({
-    name,
-    description,
-    accent,
-    blocks,
-    onClick,
-}: {
-    name: string;
-    description: string;
-    accent: string;
-    blocks: ListBlock[];
-    onClick: () => void;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            className="list-preset-card relative h-[104px] w-full overflow-hidden rounded-lg border border-white/[0.07] bg-[#131314] text-left transition-colors hover:border-white/[0.14] hover:bg-[#171718] focus-visible:border-white/[0.18] focus-visible:outline-none"
-        >
-            <span className="absolute inset-y-0 left-0 z-10 flex w-[48%] flex-col justify-center p-3">
-                <span className="mb-2 h-1.5 w-8 rounded-full" style={{ backgroundColor: accent }} />
-                <span className="truncate text-xs font-medium text-neutral-200">{name}</span>
-                <span className="mt-1 line-clamp-2 text-[9px] leading-3.5 text-neutral-600">{description}</span>
-            </span>
-            <span className="pointer-events-none absolute inset-y-3 left-[47%] z-20 w-px bg-gradient-to-b from-transparent via-white/[0.13] to-transparent" />
-            <span
-                className="absolute inset-y-0 right-0 w-[58%] overflow-hidden pb-2 pl-9 pr-2 pt-3"
-                style={{
-                    background: 'linear-gradient(90deg, transparent 0%, var(--list-preview-bg) 24%, var(--list-preview-bg) 100%)',
-                    maskImage: 'linear-gradient(90deg, transparent 0%, black 25%, black 100%)',
-                    WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 25%, black 100%)',
-                }}
-            >
-                <TemplateWidgetPreview blocks={blocks} />
-            </span>
-        </button>
-    );
-}
-
-function TemplateWidgetPreview({ blocks: sourceBlocks }: { blocks: ListBlock[] }) {
-    const blocks = sourceBlocks.slice(0, 4);
-    return (
-        <span className="block space-y-1.5">
-            {blocks.map((block, index) => {
-                if (block.type === 'checklist') {
-                    return (
-                        <span key={`${block.type}-${index}`} className="block space-y-1">
-                            {(block.items ?? []).slice(0, 3).map((item) => (
-                                <span key={item.text} className="flex items-center gap-1.5">
-                                    <span className="h-2.5 w-2.5 rounded-[2px] border border-white/[0.18]" />
-                                    <span className="truncate text-[8px] text-neutral-400">{item.text}</span>
+                                <span className="rounded border border-[var(--fz-border)] px-1 text-[10px] leading-4 text-[var(--fz-text-3)]">
+                                    Pro
                                 </span>
-                            ))}
-                        </span>
-                    );
-                }
-                if (block.type === 'code') {
-                    return (
-                        <span key={`${block.type}-${index}`} className="list-preview-code block rounded bg-black/35 p-1.5 font-mono text-[7px] leading-3">
-                            <span className="text-[#c586c0]">const</span>
-                            <span className="text-neutral-400"> plan = </span>
-                            <span className="text-[#ce9178]">&apos;focus&apos;</span>
-                        </span>
-                    );
-                }
-                if (block.type === 'heading') {
-                    return (
-                        <span key={`${block.type}-${index}`} className="block truncate text-[10px] font-semibold text-neutral-200">
-                            {block.content}
-                        </span>
-                    );
-                }
-                return (
-                    <span
-                        key={`${block.type}-${index}`}
-                        className={`block truncate text-[8px] ${
-                            block.type === 'quote'
-                                ? 'border-l border-white/[0.18] pl-1.5 italic text-neutral-500'
-                                : 'text-neutral-500'
-                        }`}
-                    >
-                        {block.content}
-                    </span>
-                );
-            })}
-        </span>
-    );
-}
-
-function BlockEditor({
-    block,
-    onChange,
-    onDelete,
-    onError,
-}: {
-    block: ListBlock;
-    onChange: (block: ListBlock) => void;
-    onDelete: () => void;
-    onError: (message: string) => void;
-}) {
-    return (
-        <div className="group flex items-start gap-1 rounded-md py-1 hover:bg-white/[0.018]">
-            <span className="mt-2 cursor-grab text-neutral-800 opacity-0 transition-opacity group-hover:opacity-100">
-                <GripVertical size={13} />
-            </span>
-            <div className="min-w-0 flex-1">
-                {block.type === 'attachment' && block.attachment ? (
-                    <AttachmentBlock attachment={block.attachment} onDelete={onDelete} onError={onError} />
-                ) : block.type === 'link' ? (
-                    <LinkBlockEditor block={block} onChange={onChange} onError={onError} />
-                ) : block.type === 'checklist' ? (
-                    <div className="space-y-1">
-                        {(block.items ?? []).map((item) => (
-                            <div key={item.id} className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        onChange({
-                                            ...block,
-                                            items: block.items?.map((candidate) =>
-                                                candidate.id === item.id ? { ...candidate, done: !candidate.done } : candidate,
-                                            ),
-                                        })
-                                    }
-                                    className={`flex h-4 w-4 items-center justify-center rounded-[4px] border ${
-                                        item.done ? 'border-neutral-300 bg-neutral-300 text-black' : 'border-white/[0.18]'
-                                    }`}
-                                >
-                                    {item.done && <Check size={11} strokeWidth={2.5} />}
-                                </button>
-                                <input
-                                    value={item.text}
-                                    onChange={(event) =>
-                                        onChange({
-                                            ...block,
-                                            items: block.items?.map((candidate) =>
-                                                candidate.id === item.id ? { ...candidate, text: event.target.value } : candidate,
-                                            ),
-                                        })
-                                    }
-                                    className={`min-w-0 flex-1 bg-transparent text-sm outline-none ${
-                                        item.done ? 'text-neutral-600 line-through' : 'text-neutral-300'
-                                    }`}
-                                    placeholder="List item"
-                                />
-                            </div>
-                        ))}
-                        <button
-                            type="button"
-                            onClick={() =>
-                                onChange({
-                                    ...block,
-                                    items: [...(block.items ?? []), { id: newListId('item'), text: '', done: false }],
-                                })
-                            }
-                            className="ml-6 text-[11px] text-neutral-700 hover:text-neutral-400"
-                        >
-                            + Add item
-                        </button>
+                            )}
+                        </Button>
+                        <MoreMenu
+                            label="Page options"
+                            items={[
+                                { id: 'ai', label: 'Write with AI', icon: <Sparkles size={13} />, onSelect: addAiBlock },
+                                { id: 'sub', label: 'Add a page inside', icon: <Plus size={13} />, onSelect: () => selectList(createList('Untitled', undefined, active.id)) },
+                                { id: 'preset', label: 'Save as template', icon: <FileText size={13} />, onSelect: openPresetModal },
+                                { type: 'separator', id: 'sep' },
+                                { id: 'delete', label: 'Delete page', icon: <Trash2 size={13} />, danger: true, onSelect: () => setConfirmDelete(true) },
+                            ]}
+                        />
                     </div>
-                ) : block.type === 'code' ? (
-                    <CodeBlockEditor block={block} onChange={onChange} />
-                ) : (
-                    <textarea
-                        value={block.content}
-                        onChange={(event) => onChange({ ...block, content: event.target.value })}
-                        rows={1}
-                        placeholder={block.type === 'heading' ? 'Heading' : 'Type something…'}
-                        className={`w-full resize-none bg-transparent outline-none placeholder:text-neutral-700 ${
-                            block.type === 'heading'
-                                ? 'text-xl font-semibold text-neutral-200'
-                                : block.type === 'quote'
-                                    ? 'border-l-2 border-white/[0.15] pl-3 text-sm italic text-neutral-400'
-                                    : 'text-sm leading-6 text-neutral-400'
-                        }`}
-                    />
+                </header>
+                {progress.total > 0 && (
+                    <div className="h-0.5 shrink-0 bg-[var(--fz-bg-active)]">
+                        <div
+                            className="h-full bg-[var(--fz-text-1)] transition-[width] duration-500 ease-out"
+                            style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                        />
+                    </div>
                 )}
-            </div>
-            {block.type !== 'attachment' && (
-                <button
-                    type="button"
-                    onClick={onDelete}
-                    className="mt-1 rounded p-1 text-neutral-800 opacity-0 hover:text-red-400 group-hover:opacity-100"
-                    aria-label="Delete block"
-                >
-                    <Trash2 size={12} />
-                </button>
-            )}
-        </div>
-    );
-}
 
-function AttachmentBlock({
-    attachment,
-    onDelete,
-    onError,
-}: {
-    attachment: AttachmentRecord;
-    onDelete: () => void;
-    onError: (message: string) => void;
-}) {
-    const [previewUrl, setPreviewUrl] = useState('');
-    const isImage = attachment.mimeType.startsWith('image/');
-    const isVideo = attachment.mimeType.startsWith('video/');
-    const isAudio = attachment.mimeType.startsWith('audio/');
-    const needsPreviewUrl = isImage || isVideo || isAudio;
-    const FileTypeIcon = isImage ? Image : isVideo ? Film : isAudio ? Music : FileText;
-
-    useEffect(() => {
-        if (!needsPreviewUrl) return;
-        let active = true;
-        void supabase.storage
-            .from('attachments')
-            .createSignedUrl(attachment.storagePath, 300)
-            .then(({ data }) => {
-                if (active) setPreviewUrl(data?.signedUrl ?? '');
-            });
-        return () => {
-            active = false;
-        };
-    }, [attachment.storagePath, needsPreviewUrl]);
-
-    return (
-        <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-[#0d0d0f]">
-            {isImage && previewUrl && (
-                <img src={previewUrl} alt="" className="max-h-56 w-full bg-black/20 object-contain" />
-            )}
-            {isVideo && previewUrl && (
-                <video src={previewUrl} controls preload="metadata" className="max-h-72 w-full bg-black" />
-            )}
-            {isAudio && previewUrl && (
-                <div className="p-3 pb-0">
-                    <audio src={previewUrl} controls preload="metadata" className="w-full" />
+                <div className="cal-scroll min-h-0 flex-1 overflow-y-auto">
+                    <ListEditor
+                        key={active.id}
+                        list={active}
+                        lists={lists}
+                        onChange={updateActive}
+                        onOpenList={selectList}
+                        onCreateSubpage={() => createList('Untitled', undefined, active.id)}
+                        isPro={isPro}
+                        onUpload={uploadOne}
+                        onError={setNotice}
+                        onAi={runAi}
+                        templates={editorTemplates}
+                        onApplyTemplate={applyTemplate}
+                    >
+                        {schedule?.enabled && scheduleOpen && (
+                            <SchedulePanel
+                                list={active}
+                                onChange={updateActive}
+                                onSync={syncCalendar}
+                                onClose={() => setScheduleOpen(false)}
+                            />
+                        )}
+                    </ListEditor>
                 </div>
-            )}
-            <div className="flex items-center gap-3 p-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-400">
-                    <FileTypeIcon size={17} />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-medium text-neutral-200">{attachment.fileName}</p>
-                    <p className="mt-0.5 text-[10px] text-neutral-600">
-                        {attachment.sizeBytes >= 1024 * 1024
-                            ? `${(attachment.sizeBytes / (1024 * 1024)).toFixed(1)} MB`
-                            : `${(attachment.sizeBytes / 1024).toFixed(1)} KB`}
-                        {attachment.extractedText ? ' · Available to AI' : ''}
-                    </p>
-                    {attachment.extractedText && (
-                        <p className="mt-2 line-clamp-2 whitespace-pre-wrap font-mono text-[10px] leading-4 text-neutral-500">
-                            {attachment.extractedText.slice(0, 240)}
+
+                {notice && (
+                    <div className="absolute bottom-4 left-1/2 z-20 flex max-w-[520px] -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-overlay)] py-2 pl-3.5 pr-2 text-[13px] text-[var(--fz-text-2)] shadow-[var(--fz-shadow-overlay)]">
+                        <span className="min-w-0 flex-1">{notice}</span>
+                        {!isPro && /Pro/.test(notice) && (
+                            <Button variant="primary" size="sm" onClick={() => void upgradeToPro()}>
+                                Upgrade
+                            </Button>
+                        )}
+                        <IconButton icon={<X size={13} />} tooltip="Dismiss" onClick={() => setNotice('')} />
+                    </div>
+                )}
+
+                {draggingFiles && (
+                    <div className="pointer-events-none absolute inset-3 z-20 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--fz-border-strong)] bg-[var(--fz-bg-raised)]/90 text-center">
+                        <UploadCloud size={22} className="text-[var(--fz-text-2)]" />
+                        <p className="text-[14px] font-medium text-[var(--fz-text-1)]">
+                            {isPro ? 'Drop to add to this page' : 'Uploading files is a Pro feature'}
                         </p>
-                    )}
-                </div>
-                <button
-                    type="button"
-                    onClick={() => void downloadAttachment(supabase, attachment).then((result) => {
-                        if (!result.ok) onError(result.error);
-                    })}
-                    className="rounded p-2 text-neutral-500 hover:bg-white/[0.05] hover:text-white"
-                    aria-label={`Download ${attachment.fileName}`}
-                >
-                    <Download size={14} />
-                </button>
-                <button
-                    type="button"
-                    onClick={onDelete}
-                    className="rounded p-2 text-neutral-600 hover:bg-red-400/10 hover:text-red-400"
-                    aria-label={`Delete ${attachment.fileName}`}
-                >
-                    <Trash2 size={14} />
-                </button>
-            </div>
-        </div>
-    );
-}
-
-function LinkBlockEditor({
-    block,
-    onChange,
-    onError,
-}: {
-    block: ListBlock;
-    onChange: (block: ListBlock) => void;
-    onError: (message: string) => void;
-}) {
-    const [draftUrl, setDraftUrl] = useState(block.content || '');
-    const [loading, setLoading] = useState(false);
-
-    const confirmUrl = async () => {
-        const raw = draftUrl.trim();
-        if (!raw || loading) return;
-        setLoading(true);
-        try {
-            const preview = await fetchLinkPreview(raw);
-            onChange({ ...block, content: preview.url, link: preview });
-        } catch {
-            onError('Could not preview that link.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (block.link) {
-        return <LinkEmbedCard preview={block.link} />;
-    }
-
-    return (
-        <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-[#0d0d0f] p-2">
-            <LinkIcon size={14} className="shrink-0 text-neutral-500" />
-            <input
-                value={draftUrl}
-                onChange={(event) => setDraftUrl(event.target.value)}
-                onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void confirmUrl();
-                    }
-                }}
-                placeholder="Paste a link and press Enter…"
-                className="min-w-0 flex-1 bg-transparent text-sm text-neutral-300 outline-none placeholder:text-neutral-700"
-                autoFocus
-            />
-            <button
-                type="button"
-                disabled={!draftUrl.trim() || loading}
-                onClick={() => void confirmUrl()}
-                className="flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-[11px] font-medium text-neutral-400 hover:bg-white/[0.06] hover:text-neutral-200 disabled:opacity-40"
-            >
-                {loading ? <Loader2 size={12} className="animate-spin" /> : null}
-                {loading ? 'Loading…' : 'Preview'}
-            </button>
-        </div>
-    );
-}
-
-function LinkEmbedCard({ preview }: { preview: LinkPreview }) {
-    return (
-        <a
-            href={preview.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex gap-3 rounded-lg border border-white/[0.08] bg-[#0d0d0f] p-3 transition-colors hover:border-white/[0.16] hover:bg-[#131315]"
-        >
-            {preview.image ? (
-                <img
-                    src={preview.image}
-                    alt=""
-                    className="h-16 w-16 shrink-0 rounded-md bg-white/[0.05] object-cover"
-                    onError={(event) => {
-                        event.currentTarget.style.display = 'none';
-                    }}
-                />
-            ) : (
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-white/[0.05]">
-                    {preview.favicon ? (
-                        <img src={preview.favicon} alt="" className="h-7 w-7" />
-                    ) : (
-                        <LinkIcon size={18} className="text-neutral-500" />
-                    )}
-                </div>
-            )}
-            <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                    {preview.favicon && (
-                        <img src={preview.favicon} alt="" className="h-3.5 w-3.5 shrink-0 rounded-sm" />
-                    )}
-                    <span className="truncate text-[10px] font-medium uppercase tracking-wide text-neutral-500">
-                        {preview.siteName}
-                    </span>
-                </div>
-                <p className="mt-1 truncate text-sm font-medium text-neutral-200">{preview.title}</p>
-                {preview.description && (
-                    <p className="mt-0.5 line-clamp-2 text-xs text-neutral-500">{preview.description}</p>
+                        <p className="text-meta">Images, videos and audio play inline · up to 10MB each</p>
+                    </div>
                 )}
-            </div>
-        </a>
-    );
-}
+            </section>
 
-const CODE_LANGUAGES = ['typescript', 'javascript', 'python', 'tsx', 'jsx', 'json', 'css', 'markup', 'bash', 'sql'] as const;
-
-function CodeBlockEditor({
-    block,
-    onChange,
-}: {
-    block: ListBlock;
-    onChange: (block: ListBlock) => void;
-}) {
-    const isLight = useIsLightDashboard();
-    const language = (block.language || 'typescript') as Language;
-    const rows = Math.max(5, block.content.split('\n').length + 1);
-    return (
-        <div className="list-code-editor overflow-hidden rounded-md border border-white/[0.08] bg-[#0d0d0f]">
-            <div className="flex h-7 items-center border-b border-white/[0.06] px-2">
-                <Code2 size={11} className="mr-1.5 text-neutral-600" />
-                <select
-                    value={block.language || 'typescript'}
-                    onChange={(event) => onChange({ ...block, language: event.target.value })}
-                    className="bg-transparent text-[10px] text-neutral-500 outline-none"
-                    aria-label="Code language"
-                >
-                    {CODE_LANGUAGES.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                    ))}
-                </select>
-            </div>
-            <div className="relative min-h-[100px] overflow-hidden">
-                <Highlight theme={isLight ? themes.github : themes.vsDark} code={block.content || ' '} language={language}>
-                    {({ className, style, tokens, getLineProps, getTokenProps }) => (
-                        <pre
-                            aria-hidden
-                            className={`${className} pointer-events-none m-0 min-h-[100px] whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5`}
-                            style={{ ...style, background: 'transparent' }}
-                        >
-                            {tokens.map((line, lineIndex) => (
-                                <div key={lineIndex} {...getLineProps({ line })}>
-                                    {line.map((token, tokenIndex) => (
-                                        <span key={tokenIndex} {...getTokenProps({ token })} />
-                                    ))}
-                                </div>
+            <Dialog
+                open={showPresetModal}
+                onClose={() => setShowPresetModal(false)}
+                title="Save as template"
+                description={`Reuse the blocks from “${active.title || 'Untitled'}” in new pages.`}
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="ghost" onClick={() => setShowPresetModal(false)}>Cancel</Button>
+                        <Button variant="primary" disabled={!presetName.trim()} onClick={savePreset}>Save template</Button>
+                    </>
+                }
+            >
+                <div className="space-y-4">
+                    <Field label="Name">
+                        <Input
+                            value={presetName}
+                            onChange={(event) => setPresetName(event.target.value)}
+                            placeholder="Weekly review"
+                            autoFocus
+                            data-autofocus
+                        />
+                    </Field>
+                    <Field label="Description" helper="Optional">
+                        <Input
+                            value={presetDescription}
+                            onChange={(event) => setPresetDescription(event.target.value)}
+                            placeholder="A quick structure for every Friday."
+                        />
+                    </Field>
+                    <Field label="Color">
+                        <div className="flex items-center gap-2">
+                            {PRESET_COLORS.map((color) => (
+                                <button
+                                    key={color}
+                                    type="button"
+                                    onClick={() => setPresetAccent(color)}
+                                    aria-label={`Color ${color}`}
+                                    aria-pressed={presetAccent === color}
+                                    className={`size-6 rounded-full transition-transform hover:scale-110 ${
+                                        presetAccent === color ? 'ring-2 ring-[var(--fz-text-1)] ring-offset-2 ring-offset-[var(--fz-bg-overlay)]' : ''
+                                    }`}
+                                    style={{ backgroundColor: color }}
+                                />
                             ))}
-                        </pre>
-                    )}
-                </Highlight>
-                <textarea
-                    value={block.content}
-                    onChange={(event) => onChange({ ...block, content: event.target.value })}
-                    rows={rows}
-                    spellCheck={false}
-                    placeholder="Write or paste code…"
-                    className="list-code-input absolute inset-0 h-full w-full resize-none overflow-hidden whitespace-pre-wrap break-words bg-transparent p-3 font-mono text-xs leading-5 text-transparent caret-white outline-none placeholder:text-neutral-700"
-                    style={{ WebkitTextFillColor: 'transparent' }}
-                    aria-label={`${block.language || 'typescript'} code`}
-                />
-            </div>
+                        </div>
+                    </Field>
+                    <p className="text-meta rounded-lg bg-[var(--fz-bg-hover)] px-3 py-2">
+                        Uploaded files and links to other pages aren’t copied into templates.
+                    </p>
+                </div>
+            </Dialog>
+
+            <Dialog
+                open={confirmDelete}
+                onClose={() => setConfirmDelete(false)}
+                title={`Delete “${active.title || 'Untitled'}”?`}
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                        <Button
+                            variant="danger-solid"
+                            onClick={() => {
+                                setConfirmDelete(false);
+                                deleteActive();
+                            }}
+                        >
+                            Delete page
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-body-sm text-[var(--fz-text-3)]">
+                    {nested ? `This also deletes ${nested} page${nested === 1 ? '' : 's'} inside it. ` : ''}
+                    Its files and calendar event will be removed too. This can’t be undone.
+                </p>
+            </Dialog>
         </div>
     );
 }
 
-function ScheduleList({
+/** "On your calendar" settings, shown under the title like a property row. */
+function SchedulePanel({
     list,
     onChange,
     onSync,
+    onClose,
 }: {
     list: SavedList;
     onChange: (updater: (list: SavedList) => SavedList) => void;
     onSync: (list: SavedList) => Promise<void>;
+    onClose: () => void;
 }) {
     const schedule = list.schedule ?? {
-        enabled: false,
+        enabled: true,
         date: format(new Date(), 'yyyy-MM-dd'),
         startMin: 9 * 60,
         durationMin: 30,
         repeat: 'none' as const,
     };
-    const patch = (changes: Partial<typeof schedule>) => {
+    const patch = (changes: Partial<ListSchedule>) => {
         const next = { ...schedule, ...changes };
         onChange((current) => ({ ...current, schedule: next }));
         window.setTimeout(() => void onSync({ ...list, schedule: next }), 0);
     };
+    const weekdays = schedule.recurrenceWeekdays ?? [parseISO(`${schedule.date}T12:00:00`).getDay()];
+    const control =
+        'h-8 rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-panel)] px-2.5 text-[13px] text-[var(--fz-text-1)] outline-none transition-colors hover:border-[var(--fz-border-strong)] focus:border-[var(--fz-border-strong)]';
 
     return (
-        <div className="mt-4 rounded-lg border border-white/[0.07] p-3">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-neutral-400">
-                    <CalendarPlus size={14} />
-                    Show on calendar
-                </div>
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={schedule.enabled}
-                    onClick={() => patch({ enabled: !schedule.enabled })}
-                    className={`relative h-5 w-9 rounded-full transition-colors ${schedule.enabled ? 'bg-blue-500' : 'bg-white/[0.1]'}`}
-                >
-                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${schedule.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                </button>
-            </div>
-            {schedule.enabled && (
-                <div className="mt-3 space-y-2">
-                <div className="grid grid-cols-5 gap-2">
-                    <input
-                        type="date"
-                        value={schedule.date}
-                        onChange={(event) => patch({ date: event.target.value })}
-                        className="col-span-2 rounded-md border border-white/[0.08] bg-black/30 px-2 py-1.5 text-[11px] text-neutral-300 [color-scheme:dark]"
-                    />
-                    <input
-                        type="time"
-                        value={`${String(Math.floor(schedule.startMin / 60)).padStart(2, '0')}:${String(schedule.startMin % 60).padStart(2, '0')}`}
-                        onChange={(event) => {
-                            const [hour, minute] = event.target.value.split(':').map(Number);
-                            patch({ startMin: hour * 60 + minute });
+        <div className="mt-4 rounded-lg border border-[var(--fz-border)] p-3">
+            <div className="mb-2.5 flex items-center justify-between gap-3">
+                <p className="flex items-center gap-2 text-[13px] font-medium text-[var(--fz-text-1)]">
+                    <CalendarPlus size={14} className="text-[var(--fz-text-3)]" />
+                    On your calendar
+                </p>
+                <div className="-my-1 -mr-1 flex items-center">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                            patch({ enabled: false });
+                            onClose();
                         }}
-                        className="rounded-md border border-white/[0.08] bg-black/30 px-2 py-1.5 text-[11px] text-neutral-300 [color-scheme:dark]"
-                    />
-                    <select
-                        value={schedule.durationMin}
-                        onChange={(event) => patch({ durationMin: Number(event.target.value) })}
-                        className="rounded-md border border-white/[0.08] bg-black/30 px-2 py-1.5 text-[11px] text-neutral-300"
                     >
-                        {[15, 30, 45, 60, 90, 120].map((minutes) => (
-                            <option key={minutes} value={minutes}>{minutes} min</option>
-                        ))}
-                    </select>
-                    <select
-                        value={schedule.repeat}
-                        onChange={(event) => patch({ repeat: event.target.value as typeof schedule.repeat })}
-                        className="rounded-md border border-white/[0.08] bg-black/30 px-2 py-1.5 text-[11px] text-neutral-300"
-                    >
-                        <option value="none">No repeat</option>
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                    </select>
+                        Remove
+                    </Button>
+                    <IconButton icon={<Check size={14} />} tooltip="Done" onClick={onClose} />
                 </div>
-                {schedule.repeat === 'weekly' && (
-                    <div className="flex items-center gap-1.5">
-                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, day) => {
-                            const selected = (schedule.recurrenceWeekdays ?? [parseISO(`${schedule.date}T12:00:00`).getDay()]).includes(day);
-                            return (
-                                <button
-                                    key={`${label}-${day}`}
-                                    type="button"
-                                    aria-pressed={selected}
-                                    onClick={() => {
-                                        const current = schedule.recurrenceWeekdays ?? [parseISO(`${schedule.date}T12:00:00`).getDay()];
-                                        const next = selected
-                                            ? current.filter((value) => value !== day)
-                                            : [...current, day].sort((a, b) => a - b);
-                                        if (next.length) patch({ recurrenceWeekdays: next });
-                                    }}
-                                    className={`flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-medium transition-colors ${
-                                        selected
-                                            ? 'bg-neutral-200 text-neutral-950'
-                                            : 'border border-white/[0.08] text-neutral-600 hover:bg-white/[0.05] hover:text-neutral-300'
-                                    }`}
-                                >
-                                    {label}
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+                <input
+                    type="date"
+                    value={schedule.date}
+                    onChange={(event) => event.target.value && patch({ date: event.target.value })}
+                    className={control}
+                    aria-label="Date"
+                />
+                <input
+                    type="time"
+                    value={`${String(Math.floor(schedule.startMin / 60)).padStart(2, '0')}:${String(schedule.startMin % 60).padStart(2, '0')}`}
+                    onChange={(event) => {
+                        const [hour, minute] = event.target.value.split(':').map(Number);
+                        if (Number.isFinite(hour)) patch({ startMin: hour * 60 + (minute || 0) });
+                    }}
+                    className={control}
+                    aria-label="Start time"
+                />
+                <select
+                    value={schedule.durationMin}
+                    onChange={(event) => patch({ durationMin: Number(event.target.value) })}
+                    className={control}
+                    aria-label="Duration"
+                >
+                    {[15, 30, 45, 60, 90, 120].map((minutes) => (
+                        <option key={minutes} value={minutes}>{minutes} min</option>
+                    ))}
+                </select>
+                <SegmentedControl
+                    size="sm"
+                    idPrefix={`list-repeat-${list.id}`}
+                    value={schedule.repeat}
+                    onChange={(repeat) => patch({ repeat })}
+                    options={[
+                        { value: 'none', label: 'Once' },
+                        { value: 'daily', label: 'Daily' },
+                        { value: 'weekly', label: 'Weekly' },
+                    ]}
+                />
+            </div>
+            {schedule.repeat === 'weekly' && (
+                <div className="mt-2.5 flex items-center gap-1.5">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, day) => {
+                        const selected = weekdays.includes(day);
+                        return (
+                            <button
+                                key={`${label}-${day}`}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => {
+                                    const next = selected
+                                        ? weekdays.filter((value) => value !== day)
+                                        : [...weekdays, day].sort((a, b) => a - b);
+                                    if (next.length) patch({ recurrenceWeekdays: next });
+                                }}
+                                className={`flex size-7 items-center justify-center rounded-lg text-[12px] font-medium transition-colors ${
+                                    selected
+                                        ? 'bg-[var(--fz-accent)] text-[var(--fz-accent-fg)]'
+                                        : 'border border-[var(--fz-border)] text-[var(--fz-text-3)] hover:bg-[var(--fz-bg-hover)]'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
                 </div>
             )}
         </div>

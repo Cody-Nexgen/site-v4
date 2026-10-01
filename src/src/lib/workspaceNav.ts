@@ -18,20 +18,20 @@ export const PRIMARY_NAV: NavTab[] = [
 
 export const COLLAPSIBLE_NAV: NavSection[] = [
     {
-        id: 'planning',
-        label: 'Planning',
-        tabs: [
-            { id: 'calendar', label: 'Calendar' },
-            { id: 'lists', label: 'Lists' },
-        ],
-    },
-    {
         id: 'focus',
         label: 'Focus',
         tabs: [
             { id: 'sessions', label: 'Pomodoro' },
             { id: 'blocklist', label: 'Blocklist' },
             { id: 'habits', label: 'Habits' },
+        ],
+    },
+    {
+        id: 'planning',
+        label: 'Planning',
+        tabs: [
+            { id: 'calendar', label: 'Calendar' },
+            { id: 'lists', label: 'Lists' },
         ],
     },
     {
@@ -46,23 +46,16 @@ export const COLLAPSIBLE_NAV: NavSection[] = [
         id: 'progress',
         label: 'Progress',
         tabs: [
-            { id: 'progress', label: 'Overview' },
+            { id: 'progress', label: 'Achievements' },
             { id: 'challenges', label: 'Challenges' },
             { id: 'forest', label: 'Forest' },
-        ],
-    },
-    {
-        id: 'social',
-        label: 'Social',
-        tabs: [
             { id: 'friends', label: 'Friends' },
         ],
     },
 ];
 
 export const ACCOUNT_NAV: NavTab[] = [
-    { id: 'account', label: 'Account' },
-    { id: 'settings', label: 'Preferences' },
+    { id: 'settings', label: 'Settings' },
     { id: 'support', label: 'Help' },
     { id: 'shop', label: 'Focuz Shop' },
     { id: 'patterns', label: 'Patterns' },
@@ -89,6 +82,7 @@ export const TAB_ALIASES: Record<string, string> = {
     gamification: 'progress',
     pomodoro: 'sessions',
     focus_rooms: 'friends',
+    preferences: 'settings',
 };
 
 export function resolveTabId(tab: string | null | undefined): string {

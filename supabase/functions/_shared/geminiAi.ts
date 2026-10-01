@@ -1,4 +1,6 @@
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+// Vertex AI (express mode): Google's Gemini models, called with a Vertex API key in GEMINI_API_KEY.
+// Same request and response shapes as the Gemini API; only the address differs.
+const GEMINI_API_BASE = 'https://aiplatform.googleapis.com/v1/publishers/google';
 
 export type GeminiPart =
     | { text: string }
@@ -30,6 +32,18 @@ function geminiHeaders(): Record<string, string> {
     };
 }
 
+/** Token counts Gemini reports in `usageMetadata`. */
+export type GeminiUsage = { input: number; output: number; total: number };
+
+function usageFromGemini(parsed: Record<string, unknown>): GeminiUsage | null {
+    const u = parsed.usageMetadata as
+        | { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number; totalTokenCount?: number }
+        | undefined;
+    if (!u || typeof u.totalTokenCount !== 'number') return null;
+    const input = u.promptTokenCount ?? 0;
+    return { input, output: u.totalTokenCount - input, total: u.totalTokenCount };
+}
+
 function* textFromGeminiChunk(parsed: Record<string, unknown>): Generator<string> {
     const candidates = parsed.candidates as Array<Record<string, unknown>> | undefined;
     if (!candidates?.length) return;
@@ -40,13 +54,14 @@ function* textFromGeminiChunk(parsed: Record<string, unknown>): Generator<string
     }
 }
 
-export async function geminiGenerate(opts: {
+export async function geminiGenerateWithMeta(opts: {
     model: string;
     systemInstruction: string;
     contents: GeminiContent[];
     maxOutputTokens?: number;
     temperature?: number;
-}): Promise<string> {
+    thinkingBudget?: number;
+}): Promise<{ text: string; finishReason?: string; usage: GeminiUsage | null }> {
     const res = await fetch(modelUrl(opts.model, false), {
         method: 'POST',
         headers: geminiHeaders(),
@@ -56,6 +71,9 @@ export async function geminiGenerate(opts: {
             generationConfig: {
                 temperature: opts.temperature ?? 0.55,
                 maxOutputTokens: opts.maxOutputTokens ?? 2048,
+                ...(opts.thinkingBudget !== undefined
+                    ? { thinkingConfig: { thinkingBudget: opts.thinkingBudget } }
+                    : {}),
             },
         }),
     });
@@ -67,9 +85,23 @@ export async function geminiGenerate(opts: {
         );
     }
 
-    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    const candidate = data.candidates?.[0] ?? {};
+    const parts = candidate.content?.parts ?? [];
     const text = parts.map((p: { text?: string }) => p.text || '').join('').trim();
+    const finishReason = candidate.finishReason as string | undefined;
     if (!text) throw new Error('Empty response from Gemini API');
+    return { text, finishReason, usage: usageFromGemini(data) };
+}
+
+export async function geminiGenerate(opts: {
+    model: string;
+    systemInstruction: string;
+    contents: GeminiContent[];
+    maxOutputTokens?: number;
+    temperature?: number;
+    thinkingBudget?: number;
+}): Promise<string> {
+    const { text } = await geminiGenerateWithMeta(opts);
     return text;
 }
 
@@ -80,6 +112,9 @@ export async function* geminiStreamGenerate(opts: {
     contents: GeminiContent[];
     maxOutputTokens?: number;
     temperature?: number;
+    thinkingBudget?: number;
+    /** Called with Gemini's running token counts (the last call is the final total). */
+    onUsage?: (usage: GeminiUsage) => void;
 }): AsyncGenerator<string> {
     const res = await fetch(modelUrl(opts.model, true), {
         method: 'POST',
@@ -90,6 +125,9 @@ export async function* geminiStreamGenerate(opts: {
             generationConfig: {
                 temperature: opts.temperature ?? 0.55,
                 maxOutputTokens: opts.maxOutputTokens ?? 2048,
+                ...(opts.thinkingBudget !== undefined
+                    ? { thinkingConfig: { thinkingBudget: opts.thinkingBudget } }
+                    : {}),
             },
         }),
     });
@@ -119,6 +157,8 @@ export async function* geminiStreamGenerate(opts: {
                 if (!data || data === '[DONE]') continue;
                 try {
                     const parsed = JSON.parse(data) as Record<string, unknown>;
+                    const usage = usageFromGemini(parsed);
+                    if (usage) opts.onUsage?.(usage);
                     for (const text of textFromGeminiChunk(parsed)) {
                         yielded = true;
                         yield text;

@@ -1,19 +1,31 @@
 import { useEffect, useState } from 'react';
-import SimpleModal from './SimpleModal';
+import { Dialog } from './fz/Dialog';
+import { Button } from './fz/Button';
 
 type Props = {
     open: boolean;
     onClose: () => void;
     onSubmit: (name: string) => void | Promise<void>;
+    /** Pre-fills the field — used for renaming. */
+    initialName?: string;
+    title?: string;
+    submitLabel?: string;
 };
 
-export default function HabitNameModal({ open, onClose, onSubmit }: Props) {
+export default function HabitNameModal({
+    open,
+    onClose,
+    onSubmit,
+    initialName = '',
+    title = 'New habit',
+    submitLabel = 'Add habit',
+}: Props) {
     const [name, setName] = useState('');
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        if (open) setName('');
-    }, [open]);
+        if (open) setName(initialName);
+    }, [open, initialName]);
 
     const submit = async () => {
         const trimmed = name.trim();
@@ -28,40 +40,32 @@ export default function HabitNameModal({ open, onClose, onSubmit }: Props) {
     };
 
     return (
-        <SimpleModal
+        <Dialog
             open={open}
-            title="New habit"
-            description="Name something you want to do every day — meditate, deep work, exercise, etc."
             onClose={onClose}
+            size="sm"
+            title={title}
+            description={initialName ? undefined : 'Something small you want to do every day — meditate, deep work, exercise.'}
+            footer={
+                <>
+                    <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+                    <Button variant="primary" onClick={() => void submit()} disabled={!name.trim() || saving}>
+                        {saving ? 'Saving…' : submitLabel}
+                    </Button>
+                </>
+            }
         >
             <input
                 autoFocus
+                data-autofocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => {
                     if (e.key === 'Enter') void submit();
                 }}
                 placeholder="e.g. Meditate, Deep Work"
-                className="w-full h-9 bg-white/[0.025] border border-white/[0.08] rounded-md px-3 text-neutral-200 placeholder:text-neutral-600 outline-none focus:border-white/[0.18] text-sm"
+                className="w-full h-9 rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-panel)] px-3 text-[13px] text-[var(--fz-text-1)] placeholder:text-[var(--fz-text-4)] outline-none focus:border-[var(--fz-accent)] focus-visible:outline-2 focus-visible:outline-[var(--fz-focus-ring)]"
             />
-            <div className="flex gap-2 pt-1">
-                <button
-                    type="button"
-                    onClick={onClose}
-                    disabled={saving}
-                    className="flex-1 py-2 rounded-md bg-white/[0.04] hover:bg-white/[0.07] text-neutral-300 text-sm font-medium"
-                >
-                    Cancel
-                </button>
-                <button
-                    type="button"
-                    onClick={() => void submit()}
-                    disabled={!name.trim() || saving}
-                    className="flex-1 py-2 rounded-md bg-neutral-100 hover:bg-white text-neutral-950 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                    {saving ? 'Adding…' : 'Add habit'}
-                </button>
-            </div>
-        </SimpleModal>
+        </Dialog>
     );
 }

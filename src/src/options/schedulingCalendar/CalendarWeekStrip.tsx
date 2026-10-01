@@ -1,7 +1,7 @@
-import { addDays, eachDayOfInterval, endOfWeek, format, isSameDay, isWeekend } from 'date-fns';
+import type { CSSProperties } from 'react';
+import { addDays, eachDayOfInterval, endOfWeek, format, isBefore, isSameDay } from 'date-fns';
 import type { CalendarEvent, CalendarGroup } from '../../lib/schedulingTypes';
 import { sameSeriesSlot } from '../../lib/calendarRecurrence';
-import { eventCardFill } from '../../lib/calendarUtils';
 import { colorForEvent } from '../../lib/eventColors';
 import CalendarEventCard from '../CalendarEventCard';
 import type { useCalendarGrid } from './useCalendarGrid';
@@ -34,7 +34,25 @@ type Props = {
     ) => void;
 };
 
+/** Sticky day-header height; the all-day row sticks right under it. */
+export const CAL_HEADER_HEIGHT = 58;
+const GUTTER = 56;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+function hourLabel(h: number): string {
+    if (h === 12) return '12 PM';
+    return h < 12 ? `${h} AM` : `${h - 12} PM`;
+}
+
+function timeZoneShort(d: Date): string {
+    try {
+        return new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
+            .formatToParts(d)
+            .find((p) => p.type === 'timeZoneName')?.value ?? '';
+    } catch {
+        return '';
+    }
+}
 
 export default function CalendarWeekStrip({
     weekStart,
@@ -54,128 +72,110 @@ export default function CalendarWeekStrip({
     onEventPointerDown,
 }: Props) {
     const allWeekDays = eachDayOfInterval({ start: weekStart, end: endOfWeek(weekStart) });
-    const weekDays = singleDayMode
-        ? allWeekDays.filter((d) => isSameDay(d, singleDayMode))
-        : allWeekDays;
-    const maxAllDayRows = Math.max(1, ...weekDays.map((d) => allDayChipsForDay(d).length));
-    const nowTopPx = (now.getHours() * 60 + now.getMinutes()) * (hourHeight / 60);
-    const showNowLine = interactive && weekDays.some((d) => isSameDay(d, now));
+    const weekDays = singleDayMode ? allWeekDays.filter((d) => isSameDay(d, singleDayMode)) : allWeekDays;
+    const maxAllDayRows = Math.max(0, ...weekDays.map((d) => allDayChipsForDay(d).length));
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const nowTopPx = nowMin * (hourHeight / 60);
+    const todayIndex = weekDays.findIndex((d) => isSameDay(d, now));
+    const showNowLine = interactive && todayIndex >= 0;
+    const nowMs = now.getTime();
 
     const dayCount = weekDays.length;
-    const gridTemplate = `56px repeat(${dayCount}, 1fr)`;
+    const gridTemplate = `${GUTTER}px repeat(${dayCount}, minmax(0, 1fr))`;
+    // Calm grid: hour hairlines only (no half-hour stripes, no column fills).
+    const hairline = 'var(--fz-border)';
+    const hourLines: CSSProperties = {
+        backgroundImage: `linear-gradient(to bottom, ${hairline} 1px, transparent 1px)`,
+        backgroundSize: `100% ${hourHeight}px`,
+    };
 
     return (
-        <div className="flex h-full min-h-0 flex-col" style={{ width: '33.333%', flexShrink: 0 }}>
+        <div className="flex flex-col" style={{ width: '33.333%', flexShrink: 0 }}>
+            {/* Day header */}
             <div
-                className="border-b flex-shrink-0"
-                style={{
-                    display: 'grid',
-                    gridTemplateColumns: gridTemplate,
-                    backgroundColor: 'var(--cal-surface)',
-                    borderColor: 'var(--cal-border)',
-                }}
+                className="sticky top-0 z-[25] grid border-b border-[var(--fz-border)] bg-[var(--fz-bg-raised)]"
+                style={{ gridTemplateColumns: gridTemplate, height: CAL_HEADER_HEIGHT }}
             >
-                <div className="border-r" style={{ borderColor: 'var(--cal-border)' }} />
+                <div className="flex items-end justify-end pb-1.5 pr-2 text-[10px] font-medium text-[var(--fz-text-4)]">
+                    {timeZoneShort(now)}
+                </div>
                 {weekDays.map((day) => {
                     const isToday = isSameDay(day, today);
-                    const weekend = isWeekend(day);
+                    const isPast = !isToday && isBefore(day, today);
                     return (
                         <div
                             key={day.toISOString()}
-                            className="border-r py-2 px-1 text-center last:border-r-0"
-                            style={{ borderColor: 'var(--cal-border)' }}
+                            className={`flex flex-col justify-center gap-0.5 ${singleDayMode ? 'items-start pl-3' : 'items-center'}`}
                         >
-                            <div
-                                className="text-[10px] font-medium uppercase tracking-wide"
-                                style={{ color: isToday ? 'var(--cal-accent)' : weekend ? 'var(--cal-hour)' : 'var(--cal-hour)' }}
-                            >
-                                {format(day, 'EEE')}
-                            </div>
-                            <div
-                                className={`mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${
-                                    isToday ? 'text-white' : 'text-[var(--fz-text)]'
+                            <span
+                                className={`text-[10.5px] font-medium uppercase tracking-[0.08em] ${
+                                    isToday ? 'text-[var(--fz-text-1)]' : 'text-[var(--fz-text-4)]'
                                 }`}
-                                style={isToday ? { backgroundColor: 'var(--cal-today)' } : undefined}
+                            >
+                                {format(day, singleDayMode ? 'EEEE' : 'EEE')}
+                            </span>
+                            <span
+                                className={`flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[17px] font-medium tabular-nums leading-none ${
+                                    isToday
+                                        ? 'bg-[var(--fz-accent)] text-[var(--fz-accent-fg)]'
+                                        : isPast
+                                          ? 'text-[var(--fz-text-3)]'
+                                          : 'text-[var(--fz-text-1)]'
+                                }`}
                             >
                                 {format(day, 'd')}
-                            </div>
+                            </span>
                         </div>
                     );
                 })}
             </div>
 
+            {/* All-day row */}
             <div
-                className="sticky top-0 z-20 flex-shrink-0 border-b"
-                style={{
-                    minHeight: maxAllDayRows * 28 + 10,
-                    display: 'grid',
-                    gridTemplateColumns: gridTemplate,
-                    backgroundColor: 'var(--cal-surface)',
-                    borderColor: 'var(--cal-border)',
-                }}
+                className="sticky z-[24] grid border-b border-[var(--fz-border)] bg-[var(--fz-bg-raised)]"
+                style={{ top: CAL_HEADER_HEIGHT, gridTemplateColumns: gridTemplate, minHeight: maxAllDayRows ? maxAllDayRows * 24 + 8 : 26 }}
             >
-                <div className="flex items-start justify-end border-r pr-2 pt-1.5" style={{ borderColor: 'var(--cal-border)' }}>
-                    <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--cal-hour)' }}>
-                        All day
-                    </span>
+                <div className="flex items-center justify-end pr-2 text-[10px] font-medium text-[var(--fz-text-4)]">
+                    All day
                 </div>
                 {weekDays.map((day) => {
                     const chips = allDayChipsForDay(day);
                     return (
-                        <div
-                            key={`allday-${day.toISOString()}`}
-                            className="space-y-0.5 border-r p-1 last:border-r-0"
-                            style={{ borderColor: 'var(--cal-border)' }}
-                        >
-                            {chips.length === 0 ? (
-                                <div className="h-5" />
-                            ) : (
-                                chips.map((chip, i) => (
-                                    <div
-                                        key={`${chip.label}-${i}`}
-                                        className="flex overflow-hidden text-[9px] font-semibold truncate shadow-sm"
-                                        style={{ borderRadius: '10px' }}
-                                    >
-                                        <span className="w-1 shrink-0" style={{ backgroundColor: chip.color }} />
-                                        <span
-                                            className="calendar-event-title min-w-0 flex-1 truncate px-1.5 py-0.5 text-white"
-                                            style={{ backgroundColor: eventCardFill(chip.color) }}
-                                        >
-                                            {chip.label}
-                                        </span>
-                                    </div>
-                                ))
-                            )}
+                        <div key={`allday-${day.toISOString()}`} className="min-w-0 space-y-1 border-l px-1 py-1" style={{ borderColor: hairline }}>
+                            {chips.map((chip, i) => (
+                                <div
+                                    key={`${chip.label}-${i}`}
+                                    className="cal-chip flex h-5 items-center gap-1.5 overflow-hidden rounded-md pr-2"
+                                    style={{ '--ev': chip.color } as CSSProperties}
+                                    title={chip.label}
+                                >
+                                    <span className="h-full w-[3px] shrink-0" style={{ backgroundColor: chip.color }} />
+                                    <span className="truncate text-[11.5px] font-medium text-[var(--fz-text-1)]">{chip.label}</span>
+                                </div>
+                            ))}
                         </div>
                     );
                 })}
             </div>
 
-            <div
-                ref={interactive ? grid.gridScrollRef : undefined}
-                className="relative min-h-0 flex-1 overflow-hidden"
-            >
-                <div
-                    className="relative"
-                    style={{ height: gridHeight, display: 'grid', gridTemplateColumns: gridTemplate }}
-                >
-                    <div className="relative border-r" style={{ borderColor: 'var(--cal-border)' }}>
-                        {HOURS.map((h) => (
-                            <div key={h} className="relative" style={{ height: hourHeight }}>
+            {/* Time grid */}
+            <div ref={interactive ? grid.gridScrollRef : undefined} className="relative">
+                <div className="relative grid" style={{ height: gridHeight, gridTemplateColumns: gridTemplate }}>
+                    <div className="relative">
+                        {HOURS.slice(1).map((h) => {
+                            const y = h * hourHeight;
+                            // The current-time label takes this spot when it's close.
+                            const nearNow = showNowLine && Math.abs(y - nowTopPx) < 14;
+                            return (
                                 <span
-                                    className="absolute top-0 right-2 -translate-y-1/2 text-[11px] font-normal"
-                                    style={{ color: 'var(--cal-hour)' }}
+                                    key={h}
+                                    className="absolute right-2.5 -translate-y-1/2 text-[10.5px] tabular-nums text-[var(--fz-text-4)]"
+                                    style={{ top: y, visibility: nearNow ? 'hidden' : undefined }}
                                 >
-                                    {h === 0
-                                        ? '12 AM'
-                                        : h < 12
-                                          ? `${h} AM`
-                                          : h === 12
-                                            ? '12 PM'
-                                            : `${h - 12} PM`}
+                                    {hourLabel(h)}
                                 </span>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {weekDays.map((day, dayIndex) => {
@@ -190,12 +190,8 @@ export default function CalendarWeekStrip({
                                           }
                                         : undefined
                                 }
-                                className="relative border-r last:border-r-0 select-none"
-                                style={{
-                                    height: gridHeight,
-                                    backgroundColor: 'var(--cal-bg)',
-                                    borderColor: 'var(--cal-border)',
-                                }}
+                                className="relative select-none border-l"
+                                style={{ height: gridHeight, borderColor: hairline, ...hourLines }}
                                 onContextMenu={
                                     interactive
                                         ? (e) => {
@@ -232,33 +228,14 @@ export default function CalendarWeekStrip({
                                         : undefined
                                 }
                             >
-                                {HOURS.map((h) => (
-                                    <div
-                                        key={h}
-                                        className="border-t"
-                                        style={{ height: hourHeight, borderColor: 'var(--cal-border)' }}
-                                    />
-                                ))}
                                 {interactive && grid.dragSelect?.dayIndex === dayIndex && (
                                     <div
-                                    className="pointer-events-none absolute left-0.5 right-0.5 z-[2] rounded-[4px] border"
+                                        className="pointer-events-none absolute left-1 right-1.5 z-[2] rounded-md border border-[var(--fz-border-strong)] bg-[var(--fz-accent-soft)]"
                                         style={{
-                                            borderColor: 'var(--cal-accent)',
-                                            backgroundColor: 'var(--cal-accent-muted)',
-                                            top: grid.yFromMinutes(
-                                                Math.min(
-                                                    grid.dragSelect.startMin,
-                                                    grid.dragSelect.endMin,
-                                                ),
-                                            ),
+                                            top: grid.yFromMinutes(Math.min(grid.dragSelect.startMin, grid.dragSelect.endMin)),
                                             height: Math.max(
                                                 hourHeight / 4,
-                                                grid.yFromMinutes(
-                                                    Math.abs(
-                                                        grid.dragSelect.endMin -
-                                                            grid.dragSelect.startMin,
-                                                    ) || 15,
-                                                ),
+                                                grid.yFromMinutes(Math.abs(grid.dragSelect.endMin - grid.dragSelect.startMin) || 15),
                                             ),
                                         }}
                                     />
@@ -266,21 +243,15 @@ export default function CalendarWeekStrip({
                                 {dayEvents.map((ev) => {
                                     const startMin = ev.startHour * 60 + ev.startMin;
                                     const topPx = grid.yFromMinutes(startMin);
-                                    const heightPx = Math.max(
-                                        hourHeight / 4,
-                                        grid.yFromMinutes(ev.durationMin),
-                                    );
+                                    const heightPx = Math.max(hourHeight / 4, grid.yFromMinutes(ev.durationMin));
+                                    const endMs = new Date(day).setHours(0, startMin + ev.durationMin, 0, 0);
                                     const displayColor = colorForEvent(ev, groups);
                                     const connectedLeft =
                                         dayIndex > 0 &&
-                                        timedEventsForDay(addDays(day, -1)).some((other) =>
-                                            sameSeriesSlot(ev, other),
-                                        );
+                                        timedEventsForDay(addDays(day, -1)).some((other) => sameSeriesSlot(ev, other));
                                     const connectedRight =
                                         dayIndex < weekDays.length - 1 &&
-                                        timedEventsForDay(addDays(day, 1)).some((other) =>
-                                            sameSeriesSlot(ev, other),
-                                        );
+                                        timedEventsForDay(addDays(day, 1)).some((other) => sameSeriesSlot(ev, other));
                                     return (
                                         <CalendarEventCard
                                             key={ev.id}
@@ -288,6 +259,7 @@ export default function CalendarWeekStrip({
                                             color={displayColor}
                                             top={topPx}
                                             height={heightPx}
+                                            past={endMs < nowMs}
                                             connectedLeft={connectedLeft}
                                             connectedRight={connectedRight}
                                             onDelete={() => onDeleteEvent(ev)}
@@ -307,24 +279,22 @@ export default function CalendarWeekStrip({
                         );
                     })}
 
+                    {/* Current time: one even line across the whole week (under events), a dot where it
+                        starts, and the time in the gutter. */}
                     {showNowLine && (
                         <div
-                            className="pointer-events-none absolute left-0 right-0 z-[10] flex items-center"
-                            style={{ top: nowTopPx }}
+                            className="pointer-events-none absolute right-0 z-[3]"
+                            // Whole-pixel top keeps the 1px line crisp instead of a blurry 2px smear.
+                            style={{ top: Math.round(nowTopPx), left: GUTTER }}
                         >
+                            <span className="absolute -left-[3.5px] top-1/2 size-[7px] -translate-y-1/2 rounded-full bg-[var(--fz-danger)]" />
+                            <div className="h-px bg-[var(--fz-danger)]" />
                             <span
-                                className="w-[56px] flex-shrink-0 pr-2 text-right text-[10px] font-semibold leading-none"
-                                style={{ color: 'var(--cal-now)', backgroundColor: 'var(--cal-bg)' }}
+                                className="absolute top-1/2 -translate-y-1/2 text-[10.5px] font-semibold tabular-nums text-[var(--fz-danger)]"
+                                style={{ right: 'calc(100% + 10px)' }}
                             >
-                                {format(now, 'h:mm a')}
+                                {format(now, 'h:mm')}
                             </span>
-                            <div
-                                className="h-[2px] flex-1"
-                                style={{
-                                    backgroundColor: 'var(--cal-now)',
-                                    boxShadow: '0 0 8px rgba(255, 90, 95, 0.35)',
-                                }}
-                            />
                         </div>
                     )}
                 </div>

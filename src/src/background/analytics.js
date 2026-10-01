@@ -1,3 +1,5 @@
+import { isTrackingBackgroundAudio, whenEngineReady } from './blockengine.js';
+
 // ===============================================
 // analytics.js
 // Tracks screen time and imports history (MV3 Safe)
@@ -113,35 +115,33 @@ async function flushActivity() {
     activeTabStartTime = now;
     await chrome.storage.session.set({ activeTabStartTime, activeTabId });
 
-    // 2. Process audible tabs
-    chrome.storage.local.get(['blockEngineState'], async (res) => {
-        const engineState = res.blockEngineState || {};
-        if (engineState.trackBackgroundAudio) {
-            for (const tabIdStr in audibleTabs) {
-                const tabId = parseInt(tabIdStr);
-                if (tabId === activeTabId) continue; // Already processed as active tab
+    // 2. Process audible tabs (setting read from the in-memory engine, not storage)
+    await whenEngineReady();
+    if (isTrackingBackgroundAudio()) {
+        for (const tabIdStr in audibleTabs) {
+            const tabId = parseInt(tabIdStr);
+            if (tabId === activeTabId) continue; // Already processed as active tab
 
-                try {
-                    const t = await chrome.tabs.get(tabId);
-                    if (t?.audible && isValidUrl(t?.url)) {
-                        const domain = new URL(t.url).hostname;
-                        const rawGap = now - audibleTabs[tabId];
-                        if (rawGap > MAX_SEGMENT_MS * 2) {
-                            audibleTabs[tabId] = now;
-                        } else {
-                            await addDuration(domain, rawGap);
-                            audibleTabs[tabId] = now;
-                        }
+            try {
+                const t = await chrome.tabs.get(tabId);
+                if (t?.audible && isValidUrl(t?.url)) {
+                    const domain = new URL(t.url).hostname;
+                    const rawGap = now - audibleTabs[tabId];
+                    if (rawGap > MAX_SEGMENT_MS * 2) {
+                        audibleTabs[tabId] = now;
                     } else {
-                        delete audibleTabs[tabId];
+                        await addDuration(domain, rawGap);
+                        audibleTabs[tabId] = now;
                     }
-                } catch (e) {
+                } else {
                     delete audibleTabs[tabId];
                 }
+            } catch (e) {
+                delete audibleTabs[tabId];
             }
-            await chrome.storage.session.set({ audibleTabs });
         }
-    });
+        await chrome.storage.session.set({ audibleTabs });
+    }
 }
 
 export async function initAnalytics() {
@@ -256,14 +256,17 @@ export async function initAnalytics() {
                 .catch(err => sendResponse({ ok: false, error: err.message }));
             return true;
         }
-        // Expose current session duration for dragging timer overlay sync
+        // Site timer overlay sync. Every open tab asks for this, so it must stay
+        // in memory: it used to flush (tabs.get + storage writes + a full
+        // blockEngineState read) on every call, once a second per tab, which
+        // jammed extension storage and made everything else (FocuzPass) wait.
         if (message.type === 'GET_CURRENT_URL_TIME') {
-            (async () => {
-                await flushActivity();
-                const domain = message.domain;
-                sendResponse({ timeSpent: screenTimeData[domain] || 0 });
-            })();
-            return true;
+            const domain = String(message.domain || '').replace(/^www\./i, '').toLowerCase();
+            const counting = sender?.tab?.id != null && sender.tab.id === activeTabId;
+            const live = counting ? clampSegment(Date.now() - activeTabStartTime) : 0;
+            const today = new Date().toDateString() === todayStr ? screenTimeData : {};
+            sendResponse({ timeSpent: (today[domain] || 0) + live, counting });
+            return false;
         }
     });
 
@@ -277,7 +280,6 @@ export async function initAnalytics() {
 }
 
 async function importBrowsingHistory() {
-    console.log("[Analytics] Starting history ingestion...");
     const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
     // We get history items for the last 7 days
@@ -353,6 +355,5 @@ async function importBrowsingHistory() {
         }
     }
 
-    console.log("[Analytics] History ingestion complete.");
     return dailyStats;
 }

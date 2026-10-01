@@ -54,10 +54,10 @@ export default function BlockedPage() {
     const randomMessage = motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)];
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-black via-purple-950/20 to-black text-white flex items-center justify-center p-6 relative overflow-hidden">
+        <div className="min-h-screen bg-gradient-to-br from-black via-blue-950/20 to-black text-white flex items-center justify-center p-6 relative overflow-hidden">
             {/* Animated background elements */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse"></div>
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl animate-pulse"></div>
                 <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-600/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
             </div>
 
@@ -66,8 +66,8 @@ export default function BlockedPage() {
                 {/* Icon */}
                 <div className="flex justify-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                     <div className="relative">
-                        <div className="absolute inset-0 bg-purple-600/20 rounded-full blur-xl animate-pulse"></div>
-                        <div className="relative w-32 h-32 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center shadow-2xl shadow-purple-900/50">
+                        <div className="absolute inset-0 bg-blue-600/20 rounded-full blur-xl animate-pulse"></div>
+                        <div className="relative w-32 h-32 bg-gradient-to-br from-blue-600 to-pink-600 rounded-full flex items-center justify-center shadow-2xl shadow-blue-900/50">
                             <IconShieldLock className="w-16 h-16 text-white" strokeWidth={1.5} />
                         </div>
                     </div>
@@ -75,11 +75,11 @@ export default function BlockedPage() {
 
                 {/* Title */}
                 <div className="text-center mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-                    <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
+                    <h1 className="text-3xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-white via-blue-200 to-white bg-clip-text text-transparent">
                         Site Blocked
                     </h1>
-                    <div className="inline-block px-6 py-3 bg-purple-900/30 border border-purple-500/30 rounded-full backdrop-blur-sm">
-                        <p className="text-2xl md:text-3xl font-semibold text-purple-300 uppercase tracking-wider">
+                    <div className="inline-block px-6 py-3 bg-blue-900/30 border border-blue-500/30 rounded-full backdrop-blur-sm">
+                        <p className="text-2xl md:text-3xl font-semibold text-blue-300 uppercase tracking-wider">
                             {cleanedSite}
                         </p>
                     </div>
@@ -93,10 +93,10 @@ export default function BlockedPage() {
                 </div>
 
                 {/* Reason card */}
-                <div className="mb-8 p-6 bg-neutral-900/50 border border-white/10 rounded-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
+                <div className="mb-8 p-6 bg-neutral-900/50 border border-white/8 rounded-lg backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
                     <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center flex-shrink-0">
-                            <IconClock className="w-5 h-5 text-purple-400" />
+                        <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center flex-shrink-0">
+                            <IconClock className="w-5 h-5 text-blue-400" />
                         </div>
                         <div>
                             <h3 className="font-semibold text-white mb-1">Why is this blocked?</h3>
@@ -109,7 +109,7 @@ export default function BlockedPage() {
                 <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-400">
                     <button
                         onClick={handleGoBack}
-                        className="flex-1 h-14 bg-white text-black hover:bg-neutral-200 font-semibold text-lg shadow-xl shadow-purple-900/20 transition-all duration-300 hover:scale-105 rounded-xl flex items-center justify-center"
+                        className="flex-1 h-14 bg-white text-black hover:bg-neutral-200 font-semibold text-lg shadow-xl shadow-blue-900/20 transition-all duration-300 hover:scale-105 rounded-lg flex items-center justify-center"
                     >
                         <IconArrowLeft className="w-5 h-5 mr-2" />
                         Go Back
@@ -117,11 +117,11 @@ export default function BlockedPage() {
 
                     {/* Pro feature: Temporary unblock */}
                     <button
-                        className="flex-1 h-14 border border-purple-500/30 text-purple-300 hover:bg-purple-900/20 font-semibold text-lg backdrop-blur-sm relative overflow-hidden group rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 h-14 border border-blue-500/30 text-blue-300 hover:bg-blue-900/20 font-semibold text-lg backdrop-blur-sm relative overflow-hidden group rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled
                     >
                         <span className="relative z-10">Unblock Temporarily</span>
-                        <div className="absolute top-1 right-1 px-2 py-0.5 bg-purple-600 text-white text-[10px] font-bold rounded">
+                        <div className="absolute top-1 right-1 px-2 py-0.5 bg-blue-600 text-white text-[11px] font-bold rounded">
                             PRO
                         </div>
                     </button>
@@ -131,7 +131,7 @@ export default function BlockedPage() {
                 <div className="text-center mt-8 animate-in fade-in duration-700 delay-500">
                     <p className="text-sm text-neutral-500">
                         Manage your blocked sites in the{" "}
-                        <a href="chrome-extension://YOUR_EXTENSION_ID/popup.html" className="text-purple-400 hover:text-purple-300 underline">
+                        <a href="chrome-extension://YOUR_EXTENSION_ID/popup.html" className="text-blue-400 hover:text-blue-300 underline">
                             FocuzNow extension
                         </a>
                     </p>

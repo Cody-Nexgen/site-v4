@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { format, isBefore, parseISO, startOfDay } from 'date-fns';
 import { motion } from 'framer-motion';
 import { MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { holidaysForRange } from '../lib/usHolidays';
-import { eventCardFill } from '../lib/calendarUtils';
 import { recurrenceLabel } from '../lib/calendarRecurrence';
 import type { CalendarEvent, CalendarGroup } from '../lib/schedulingTypes';
+import { reducedMotion } from '../lib/motion';
 
 type ListItem = {
     id: string;
@@ -15,38 +15,47 @@ type ListItem = {
     event?: CalendarEvent;
 };
 
+const iconBtn =
+    'flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--fz-text-3)] transition-colors hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_var(--fz-focus-ring)]';
+const menuItem =
+    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] text-[var(--fz-text-2)] hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]';
+
 function GroupListCard({
     title,
     timeLabel,
     color,
+    past,
     onClick,
 }: {
     title: string;
     timeLabel: string;
     color: string;
+    past: boolean;
     onClick?: () => void;
 }) {
+    const cls = `cal-chip flex w-full overflow-hidden rounded-lg text-left transition-opacity ${past ? 'opacity-55 hover:opacity-80' : ''}`;
     const inner = (
         <>
-            <span className="w-1 shrink-0" style={{ backgroundColor: color }} />
-            <span className="min-w-0 flex-1 px-3 py-2" style={{ backgroundColor: eventCardFill(color) }}>
-                <span className="calendar-event-title block text-sm font-bold text-white">{title}</span>
-                <span className="calendar-event-time mt-0.5 block text-xs text-neutral-400">{timeLabel}</span>
+            <span className="w-[3px] shrink-0" style={{ backgroundColor: color }} />
+            <span className="min-w-0 flex-1 px-2.5 py-2">
+                <span className="block truncate text-[13px] font-medium text-[var(--fz-text-1)]">{title}</span>
+                <span className="mt-0.5 block truncate text-[11.5px] tabular-nums text-[var(--fz-text-3)]">{timeLabel}</span>
             </span>
         </>
     );
+    const style = { '--ev': color } as CSSProperties;
     if (onClick) {
         return (
-            <button
-                type="button"
-                onClick={onClick}
-                className="flex w-full overflow-hidden rounded-lg text-left transition-opacity hover:opacity-90"
-            >
+            <button type="button" onClick={onClick} className={cls} style={style}>
                 {inner}
             </button>
         );
     }
-    return <div className="flex w-full overflow-hidden rounded-lg">{inner}</div>;
+    return (
+        <div className={cls} style={style}>
+            {inner}
+        </div>
+    );
 }
 
 export default function GroupDetailPanel({
@@ -73,6 +82,9 @@ export default function GroupDetailPanel({
     const color = group.color;
     const [moreOpen, setMoreOpen] = useState(false);
     const moreRef = useRef<HTMLDivElement>(null);
+    const upcomingRef = useRef<HTMLDivElement>(null);
+    const today = startOfDay(new Date());
+
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
@@ -88,7 +100,7 @@ export default function GroupDetailPanel({
                     id: key,
                     date: parseISO(key),
                     title: name,
-                    timeLabel: 'All-day',
+                    timeLabel: 'All day',
                 }))
                 .sort((a, b) => a.date.getTime() - b.date.getTime());
         }
@@ -107,130 +119,132 @@ export default function GroupDetailPanel({
                     id: e.id,
                     date: new Date(e.date),
                     title: e.title,
-                    timeLabel: recurrenceLabel(e) ??
-                        (e.allDay
-                            ? 'All-day'
-                            : `${fmt(e.startHour, e.startMin)} – ${fmt(endH, endM)}`),
+                    timeLabel:
+                        recurrenceLabel(e) ??
+                        (e.allDay ? 'All day' : `${fmt(e.startHour, e.startMin)} – ${fmt(endH, endM)}`),
                     event: e,
                 };
             })
             .sort((a, b) => a.date.getTime() - b.date.getTime());
     }, [group, events, holidayRange]);
 
+    const firstUpcoming = items.findIndex((it) => !isBefore(it.date, today));
+
+    // Open on what's next rather than January.
+    useEffect(() => {
+        upcomingRef.current?.scrollIntoView({ block: 'start' });
+    }, [group.id]);
+
     return (
         <motion.aside
-            initial={{ width: 0 }}
-            animate={{ width: 320 }}
+            initial={reducedMotion.matches() ? false : { width: 0 }}
+            animate={{ width: 300 }}
             exit={{ width: 0 }}
-            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-            className="flex h-full shrink-0 flex-col overflow-hidden border-r border-white/10 bg-[#141414]"
+            transition={reducedMotion.safe({ duration: 0.28, ease: [0.16, 1, 0.3, 1] })}
+            className="mr-4 flex h-full shrink-0 flex-col overflow-hidden rounded-[10px] border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] shadow-[var(--fz-elev-card)]"
         >
-            <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-                <span className="h-4 w-4 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
-                <h2 className="min-w-0 flex-1 truncate text-sm font-bold text-white">{group.name}</h2>
+            <div className="flex w-[300px] shrink-0 items-center gap-2 pl-4 pr-2" style={{ height: 56 }}>
+                <span className="size-3 shrink-0 rounded-[4px]" style={{ backgroundColor: color }} />
+                <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[var(--fz-text-1)]" title={group.name}>
+                    {group.name}
+                </h2>
                 <div ref={moreRef} className="relative">
-                    <button
-                        type="button"
-                        onClick={() => setMoreOpen((v) => !v)}
-                        className="p-1 text-neutral-500 hover:text-white"
-                        title="More options"
-                    >
-                        <MoreHorizontal size={16} />
+                    <button type="button" onClick={() => setMoreOpen((v) => !v)} className={iconBtn} aria-label="More options" title="More options">
+                        <MoreHorizontal size={15} strokeWidth={1.75} />
                     </button>
                     {moreOpen && (
-                        <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-white/10 bg-[#1e1e1e] shadow-2xl py-1">
+                        <div
+                            className="absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-overlay)] p-1"
+                            style={{ boxShadow: 'var(--fz-shadow-overlay)' }}
+                        >
+                            <button type="button" onClick={() => { setMoreOpen(false); onEdit(); }} className={menuItem}>
+                                <Pencil size={13} strokeWidth={1.75} />
+                                Edit calendar
+                            </button>
+                            {group.kind === 'custom' && (
+                                <button type="button" onClick={() => { setMoreOpen(false); onAddEvent(); }} className={menuItem}>
+                                    <Plus size={13} strokeWidth={1.75} />
+                                    Add event
+                                </button>
+                            )}
                             <button
                                 type="button"
-                                onClick={() => { setMoreOpen(false); onEdit(); }}
-                                className="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-white/[0.06] flex items-center gap-2"
+                                onClick={() => { setMoreOpen(false); onDeleteGroup(); }}
+                                className={`${menuItem} !text-[var(--fz-danger)] hover:!bg-[var(--fz-danger-soft)]`}
                             >
-                                <Pencil size={13} />
-                                Edit group
+                                <Trash2 size={13} strokeWidth={1.75} />
+                                Delete calendar
                             </button>
-                            <>
-                                {group.kind === 'custom' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => { setMoreOpen(false); onAddEvent(); }}
-                                        className="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-white/[0.06] flex items-center gap-2"
-                                    >
-                                        <Plus size={13} />
-                                        Add event
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => { setMoreOpen(false); onDeleteGroup(); }}
-                                    className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
-                                >
-                                    <Trash2 size={13} />
-                                    Delete group
-                                </button>
-                            </>
                         </div>
                     )}
                 </div>
-                <button type="button" onClick={onEdit} className="p-1 text-neutral-500 hover:text-white" title="Edit">
-                    <Pencil size={16} />
+                <button type="button" onClick={onEdit} className={iconBtn} aria-label="Edit calendar" title="Edit">
+                    <Pencil size={14} strokeWidth={1.75} />
                 </button>
-                <button type="button" onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
-                    <X size={16} />
+                <button type="button" onClick={onClose} className={iconBtn} aria-label="Close" title="Close">
+                    <X size={15} strokeWidth={1.75} />
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-3">
+            <div className="w-[300px] flex-1 overflow-y-auto border-t border-[var(--fz-border)] px-3 pb-4 pt-3">
                 {group.kind === 'custom' && (
                     <button
                         type="button"
                         onClick={onAddEvent}
-                        className="mb-4 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 py-2 text-xs font-bold text-neutral-400 hover:border-white/30 hover:text-white"
+                        className="mb-3 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--fz-border-strong)] text-[12.5px] font-medium text-[var(--fz-text-3)] transition-colors hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]"
                     >
-                        <Plus size={14} />
+                        <Plus size={14} strokeWidth={1.75} />
                         Add event
                     </button>
                 )}
-                <div className="space-y-4">
-                    {items.map((item, index) => {
-                        const dateKey = format(item.date, 'yyyy-MM-dd');
-                        const previousDateKey =
-                            index > 0 ? format(items[index - 1].date, 'yyyy-MM-dd') : '';
-                        const showDate = dateKey !== previousDateKey;
-                        return (
-                            <div key={item.id}>
-                                {showDate && (
-                                    <p className="mb-2 text-xs font-medium text-neutral-500">
-                                        {format(item.date, 'EEE MMM d')}
-                                    </p>
-                                )}
-                                <div className="flex items-center gap-1 group/item">
-                                    <div className="flex-1 min-w-0">
-                                        <GroupListCard
-                                            title={item.title}
-                                            timeLabel={item.timeLabel}
-                                            color={color}
-                                            onClick={item.event ? () => onEditEvent(item.event!) : undefined}
-                                        />
-                                    </div>
-                                    {item.event && onDeleteEvent && (
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (confirm('Delete this event?')) {
-                                                    onDeleteEvent(item.event!);
-                                                }
-                                            }}
-                                            className="opacity-0 group-hover/item:opacity-100 p-1.5 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-all flex-shrink-0"
-                                            title="Delete event"
-                                        >
-                                            <Trash2 size={13} />
-                                        </button>
+                {items.length === 0 ? (
+                    <p className="px-1 py-6 text-center text-[12.5px] text-[var(--fz-text-4)]">Nothing in this calendar yet.</p>
+                ) : (
+                    <div className="space-y-3">
+                        {items.map((item, index) => {
+                            const dateKey = format(item.date, 'yyyy-MM-dd');
+                            const previousDateKey = index > 0 ? format(items[index - 1].date, 'yyyy-MM-dd') : '';
+                            const showDate = dateKey !== previousDateKey;
+                            const past = isBefore(item.date, today);
+                            return (
+                                <div key={item.id} ref={index === firstUpcoming ? upcomingRef : undefined} className="scroll-mt-3">
+                                    {showDate && (
+                                        <p className={`mb-1.5 px-1 text-[11px] font-medium uppercase tracking-[0.06em] ${past ? 'text-[var(--fz-text-4)]' : 'text-[var(--fz-text-3)]'}`}>
+                                            {format(item.date, 'EEE, MMM d')}
+                                        </p>
                                     )}
+                                    <div className="group/item flex items-center gap-1">
+                                        <div className="min-w-0 flex-1">
+                                            <GroupListCard
+                                                title={item.title}
+                                                timeLabel={item.timeLabel}
+                                                color={color}
+                                                past={past}
+                                                onClick={item.event ? () => onEditEvent(item.event!) : undefined}
+                                            />
+                                        </div>
+                                        {item.event && onDeleteEvent && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (confirm('Delete this event?')) {
+                                                        onDeleteEvent(item.event!);
+                                                    }
+                                                }}
+                                                className={`${iconBtn} opacity-0 hover:!text-[var(--fz-danger)] group-hover/item:opacity-100`}
+                                                title="Delete event"
+                                                aria-label="Delete event"
+                                            >
+                                                <Trash2 size={13} strokeWidth={1.75} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </motion.aside>
     );

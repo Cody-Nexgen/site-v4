@@ -9,19 +9,19 @@ export const LoaderThree = ({ className }: { className?: string }) => {
       <div className="relative flex items-center justify-center">
         {/* Outer Ring */}
         <motion.div
-          className="absolute size-32 rounded-full border-t-2 border-indigo-500 opacity-20"
+          className="absolute size-32 rounded-full border-t-2 border-blue-500 opacity-20"
           animate={{ rotate: 360 }}
           transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
         />
         <motion.div
-          className="absolute size-32 rounded-full border-r-2 border-indigo-500/40"
+          className="absolute size-32 rounded-full border-r-2 border-blue-500/40"
           animate={{ rotate: -360 }}
           transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
         />
         
         {/* Inner Pulsing Circle */}
         <motion.div
-          className="absolute size-24 rounded-full bg-indigo-500/10 blur-xl"
+          className="absolute size-24 rounded-full bg-blue-500/10 blur-xl"
           animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -34,10 +34,10 @@ export const LoaderThree = ({ className }: { className?: string }) => {
             transition={{ duration: 0.5 }}
             className="text-lg font-bold tracking-tighter text-white"
           >
-            Focuz<span className="text-indigo-500">now</span>
+            Focuz<span className="text-blue-500">now</span>
           </motion.span>
           <motion.div 
-            className="h-0.5 w-12 rounded-full bg-indigo-500"
+            className="h-0.5 w-12 rounded-full bg-blue-500"
             initial={{ width: 0 }}
             animate={{ width: "3rem" }}
             transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}

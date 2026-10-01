@@ -47,7 +47,7 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
     out.push(
         dyn({
             id: `dyn_week_pomo_${week}`,
-            title: 'Weekly Focus Sprint',
+            title: 'Weekly focus sprint',
             description: `Complete ${weeklyTarget} pomodoros this week`,
             icon: '⚡',
             metric: 'week_pomodoros',
@@ -96,7 +96,7 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
         out.push(
             dyn({
                 id: `dyn_deep_next_${week}`,
-                title: 'Deep Work Climb',
+                title: 'Deep work climb',
                 description: 'Log 1 more hour of deep work',
                 icon: '🏔️',
                 metric: 'focus_minutes',
@@ -113,7 +113,7 @@ export function generateDynamicChallenges(input: DynamicChallengeInput): Challen
         out.push(
             dyn({
                 id: `dyn_score_70_${today}`,
-                title: 'Focuz Score Boost',
+                title: 'Focuz score boost',
                 description: 'Get your focus score above 70 today',
                 icon: '📈',
                 metric: 'focus_score',

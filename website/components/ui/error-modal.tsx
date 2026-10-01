@@ -2,8 +2,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { IconAlertTriangle, IconX, IconRobot, IconMailExclamation } from "@tabler/icons-react";
-// Use CDN import to match project pattern
-import { GoogleGenAI } from "https://esm.sh/@google/genai";
 
 interface ErrorModalProps {
   isOpen: boolean;
@@ -91,6 +89,8 @@ export const ErrorModal = ({ isOpen, onClose, error }: ErrorModalProps) => {
       
       setLoading(true);
       try {
+        // From the installed package (never a CDN at runtime), and only fetched when there's a key.
+        const { GoogleGenAI } = await import("@google/genai");
         const ai = new GoogleGenAI({ apiKey });
         const model = "gemini-2.5-flash";
         
@@ -126,7 +126,7 @@ export const ErrorModal = ({ isOpen, onClose, error }: ErrorModalProps) => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-[#1a1820] border border-red-500/30 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
+            className="bg-[#1a1820] border border-red-500/30 w-full max-w-md rounded-lg overflow-hidden shadow-2xl"
           >
             <div className="p-6">
               <div className="flex items-start gap-4">
@@ -140,16 +140,16 @@ export const ErrorModal = ({ isOpen, onClose, error }: ErrorModalProps) => {
                   </p>
 
                   {showAiSection && (explanation || loading) && (
-                    <div className="bg-[#25222e] rounded-xl p-4 border border-purple-500/20">
-                      <div className="flex items-center gap-2 mb-2 text-purple-400 text-xs font-bold uppercase tracking-wider">
+                    <div className="bg-[#141416] rounded-lg p-4 border border-blue-500/20">
+                      <div className="flex items-center gap-2 mb-2 text-blue-400 text-xs font-bold uppercase tracking-wider">
                         <IconRobot className="w-4 h-4" /> 
                         {error?.includes("confirmation") ? "Troubleshooting" : "AI Analysis"}
                       </div>
                       {loading ? (
                         <div className="flex space-x-1 animate-pulse py-1">
-                          <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
-                          <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
-                          <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                         </div>
                       ) : (
                         <p className="text-neutral-300 text-sm leading-relaxed whitespace-pre-wrap">

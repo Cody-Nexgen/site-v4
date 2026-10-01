@@ -51,12 +51,12 @@ export const PaywallOverlay = ({ onClose, onUpgrade }: { onClose: () => void, on
                 <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                    className="absolute -inset-1 rounded-full bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 opacity-75 blur-sm"
+                    className="absolute -inset-1 rounded-full bg-gradient-to-r from-blue-600 via-pink-600 to-blue-600 opacity-75 blur-sm"
                 />
 
                 {/* Icon Container */}
-                <div className="relative w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center border border-white/10 shadow-2xl">
-                    <Zap className="w-10 h-10 text-purple-400 fill-purple-400/20" />
+                <div className="relative w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center border border-white/8 shadow-2xl">
+                    <Zap className="w-10 h-10 text-blue-400 fill-blue-400/20" />
 
                     {/* Floating Sparkles */}
                     <motion.div
@@ -75,21 +75,21 @@ export const PaywallOverlay = ({ onClose, onUpgrade }: { onClose: () => void, on
                 transition={{ delay: 0.1 }}
             >
                 <h2 className="text-2xl font-bold text-white mb-2">Unlock AI Coach</h2>
-                <p className="text-zinc-400 text-sm mb-6 max-w-[260px] mx-auto">
+                <p className="text-neutral-400 text-sm mb-6 max-w-[260px] mx-auto">
                     Get personalized productivity advice, smart blocking, and focus strategies powered by AI.
                 </p>
 
                 <div className="space-y-3 mb-8 text-left max-w-[240px] mx-auto">
-                    <div className="flex items-center gap-3 text-sm text-zinc-300">
-                        <Check className="w-4 h-4 text-purple-400" />
+                    <div className="flex items-center gap-3 text-sm text-neutral-300">
+                        <Check className="w-4 h-4 text-blue-400" />
                         <span>Smart website blocking</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-zinc-300">
-                        <Check className="w-4 h-4 text-purple-400" />
+                    <div className="flex items-center gap-3 text-sm text-neutral-300">
+                        <Check className="w-4 h-4 text-blue-400" />
                         <span>Focus timer integration</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-zinc-300">
-                        <Check className="w-4 h-4 text-purple-400" />
+                    <div className="flex items-center gap-3 text-sm text-neutral-300">
+                        <Check className="w-4 h-4 text-blue-400" />
                         <span>Unlimited AI chats</span>
                     </div>
                 </div>
@@ -97,14 +97,14 @@ export const PaywallOverlay = ({ onClose, onUpgrade }: { onClose: () => void, on
                 <div className="space-y-3 w-full max-w-[260px]">
                     <Button
                         onClick={onUpgrade}
-                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold h-11 shadow-lg shadow-purple-900/20"
+                        className="w-full bg-gradient-to-r from-blue-600 to-pink-600 hover:from-blue-700 hover:to-pink-700 text-white font-semibold h-11 shadow-lg shadow-blue-900/20"
                     >
                         Upgrade to Pro
                     </Button>
                     <Button
                         variant="ghost"
                         onClick={onClose}
-                        className="text-zinc-500 hover:text-zinc-300 text-xs"
+                        className="text-neutral-500 hover:text-neutral-300 text-xs"
                     >
                         Maybe later
                     </Button>
@@ -127,7 +127,7 @@ export const ErrorOverlay = ({ onClose, error }: { onClose: () => void, error: s
             </div>
 
             <h2 className="text-xl font-bold text-white mb-2">Something went wrong</h2>
-            <p className="text-zinc-400 text-sm mb-6 max-w-[280px] mx-auto">
+            <p className="text-neutral-400 text-sm mb-6 max-w-[280px] mx-auto">
                 {error}
             </p>
 
@@ -135,7 +135,7 @@ export const ErrorOverlay = ({ onClose, error }: { onClose: () => void, error: s
                 <Button
                     onClick={() => window.open('https://discord.gg/your-discord-link', '_blank')}
                     variant="outline"
-                    className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                    className="w-full border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-white"
                 >
                     <MessageSquare className="w-4 h-4 mr-2" />
                     Report on Discord
@@ -143,7 +143,7 @@ export const ErrorOverlay = ({ onClose, error }: { onClose: () => void, error: s
                 <Button
                     variant="ghost"
                     onClick={onClose}
-                    className="text-zinc-500 hover:text-zinc-300"
+                    className="text-neutral-500 hover:text-neutral-300"
                 >
                     Close
                 </Button>
@@ -161,12 +161,12 @@ export const ActionPreview: React.FC<ActionPreviewProps> = ({ data }) => {
                 initial={{ scale: 0.8, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 transition={{ type: "spring", bounce: 0.5, duration: 0.6 }}
-                className="mt-2 p-3 bg-purple-900/30 border border-purple-500/30 rounded-lg flex items-center gap-2"
+                className="mt-2 p-3 bg-blue-900/30 border border-blue-500/30 rounded-lg flex items-center gap-2"
             >
-                <Clock size={18} className="text-purple-400" />
+                <Clock size={18} className="text-blue-400" />
                 <div className="flex-1">
-                    <p className="text-xs font-medium text-purple-300">Timer Set</p>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs font-medium text-blue-300">Timer Set</p>
+                    <p className="text-xs text-neutral-400">
                         {data.data.domain} blocked for {data.data.minutes} min
                     </p>
                 </div>
@@ -227,19 +227,19 @@ export const ActionPreview: React.FC<ActionPreviewProps> = ({ data }) => {
                 initial={{ scale: 0.8, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 transition={{ type: "spring", bounce: 0.5, duration: 0.6 }}
-                className="mt-2 p-3 bg-zinc-800/50 border border-zinc-600/30 rounded-lg"
+                className="mt-2 p-3 bg-neutral-800/50 border border-neutral-600/30 rounded-lg"
             >
-                <p className="text-xs font-medium text-zinc-300 mb-2">Active Blocks</p>
+                <p className="text-xs font-medium text-neutral-300 mb-2">Active Blocks</p>
                 {data.data.blocks && data.data.blocks.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
                         {data.data.blocks.map((domain, idx) => (
-                            <span key={idx} className="px-2 py-0.5 bg-zinc-700 text-zinc-300 text-xs rounded">
+                            <span key={idx} className="px-2 py-0.5 bg-neutral-700 text-neutral-300 text-xs rounded">
                                 {domain}
                             </span>
                         ))}
                     </div>
                 ) : (
-                    <p className="text-xs text-zinc-500">No sites currently blocked</p>
+                    <p className="text-xs text-neutral-500">No sites currently blocked</p>
                 )}
             </motion.div>
         );
@@ -256,7 +256,7 @@ export const ActionPreview: React.FC<ActionPreviewProps> = ({ data }) => {
                 <Sparkles size={18} className="text-blue-400" />
                 <div className="flex-1">
                     <p className="text-xs font-medium text-blue-300">Setting Changed</p>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-neutral-400">
                         {data.data.setting_name} set to {data.data.new_value?.toString()}
                     </p>
                 </div>
@@ -561,7 +561,7 @@ export function ChatInterface({ onBack }: { onBack: () => void }) {
     const { subscriptionTier } = useAuthStore();
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-zinc-950">
+        <div className="absolute inset-0 flex flex-col bg-neutral-950">
             {/* Paywall Overlay */}
             <AnimatePresence>
                 {showPaywall && (
@@ -610,15 +610,15 @@ export function ChatInterface({ onBack }: { onBack: () => void }) {
                         exit={{ opacity: 0 }}
                         className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
                     >
-                        <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 max-w-sm w-full">
-                            <Sparkles className="w-8 h-8 text-purple-400 mx-auto mb-4" />
+                        <div className="bg-neutral-900 border border-white/8 rounded-lg p-6 max-w-sm w-full">
+                            <Sparkles className="w-8 h-8 text-blue-400 mx-auto mb-4" />
                             <h2 className="text-xl font-bold text-white mb-2">Allow Change?</h2>
-                            <p className="text-zinc-400 text-sm mb-6">
+                            <p className="text-neutral-400 text-sm mb-6">
                                 The AI Coach wants to change your setting <strong className="text-white">{pendingSettingChange.setting_name}</strong> to <strong className="text-white">{pendingSettingChange.new_value.toString()}</strong>.
                             </p>
                             <div className="flex gap-3">
                                 <Button onClick={pendingSettingChange.onCancel} variant="ghost" className="flex-1">Deny</Button>
-                                <Button onClick={pendingSettingChange.onConfirm} className="flex-1 bg-purple-600 hover:bg-purple-700">Allow</Button>
+                                <Button onClick={pendingSettingChange.onConfirm} className="flex-1 bg-blue-600 hover:bg-blue-700">Allow</Button>
                             </div>
                         </div>
                     </motion.div>
@@ -626,8 +626,8 @@ export function ChatInterface({ onBack }: { onBack: () => void }) {
             </AnimatePresence>
 
             {/* Header - Fixed */}
-            <div className="flex items-center gap-2 p-3 border-b border-white/10 bg-zinc-900/50 backdrop-blur-md flex-shrink-0">
-                <Button variant="ghost" size="icon" onClick={onBack} className="text-zinc-400 hover:text-white">
+            <div className="flex items-center gap-2 p-3 border-b border-white/8 bg-neutral-900/50 backdrop-blur-md flex-shrink-0">
+                <Button variant="ghost" size="icon" onClick={onBack} className="text-neutral-400 hover:text-white">
                     <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <span className="font-semibold text-white flex-1">AI Coach</span>
@@ -636,7 +636,7 @@ export function ChatInterface({ onBack }: { onBack: () => void }) {
                 {subscriptionTier === 'pro' ? (
                     <Badge
                         variant="secondary"
-                        className="bg-purple-600/20 text-purple-400 text-[10px] px-1.5 py-0 h-5 border-purple-500/20 font-bold"
+                        className="bg-blue-600/20 text-blue-400 text-[11px] px-1.5 py-0 h-5 border-blue-500/20 font-bold"
                     >
                         PRO
                     </Badge>
@@ -644,7 +644,7 @@ export function ChatInterface({ onBack }: { onBack: () => void }) {
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 text-[10px] px-2 text-purple-400 hover:text-purple-300 hover:bg-purple-900/20"
+                        className="h-7 text-[11px] px-2 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20"
                         onClick={() => setShowPaywall(true)}
                     >
                         <Zap className="w-3 h-3 mr-1" />
@@ -666,8 +666,8 @@ export function ChatInterface({ onBack }: { onBack: () => void }) {
                         >
                             <div className={`max-w-[85%] ${msg.role === 'user' ? '' : 'w-full'}`}>
                                 <div className={`p-3 rounded-lg text-sm ${msg.role === 'user'
-                                    ? 'bg-purple-600 text-white'
-                                    : 'bg-zinc-800 text-zinc-100'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-neutral-800 text-neutral-100'
                                     }`}>
                                     {msg.role === 'user' ? (
                                         msg.content
@@ -677,7 +677,7 @@ export function ChatInterface({ onBack }: { onBack: () => void }) {
                                                 remarkPlugins={[remarkGfm]}
                                                 components={{
                                                     p: ({ node, ...props }) => <p className="mb-1 last:mb-0" {...props} />,
-                                                    a: ({ node, ...props }) => <a className="text-purple-400 hover:underline" {...props} />,
+                                                    a: ({ node, ...props }) => <a className="text-blue-400 hover:underline" {...props} />,
                                                     code: ({ node, ...props }) => <code className="bg-black/30 px-1 py-0.5 rounded text-xs font-mono" {...props} />,
                                                 }}
                                             >
@@ -695,8 +695,8 @@ export function ChatInterface({ onBack }: { onBack: () => void }) {
                 </AnimatePresence>
                 {loading && (
                     <div className="flex justify-start">
-                        <div className="bg-zinc-800 p-3 rounded-lg">
-                            <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                        <div className="bg-neutral-800 p-3 rounded-lg">
+                            <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />
                         </div>
                     </div>
                 )}
@@ -704,15 +704,15 @@ export function ChatInterface({ onBack }: { onBack: () => void }) {
             </div>
 
             {/* Input - Fixed */}
-            <div className="p-3 border-t border-white/10 flex gap-2 flex-shrink-0 bg-zinc-950">
+            <div className="p-3 border-t border-white/8 flex gap-2 flex-shrink-0 bg-neutral-950">
                 <Input
                     placeholder="Ask me to block sites, set timers..."
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    className="bg-zinc-900 border-white/10 text-zinc-100"
+                    className="bg-neutral-900 border-white/8 text-neutral-100"
                 />
-                <Button size="icon" onClick={handleSend} disabled={loading} className="bg-purple-600 hover:bg-purple-700">
+                <Button size="icon" onClick={handleSend} disabled={loading} className="bg-blue-600 hover:bg-blue-700">
                     <Send className="h-4 w-4" />
                 </Button>
             </div>

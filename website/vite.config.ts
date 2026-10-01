@@ -67,6 +67,72 @@ function focuzBareDeps(): Plugin {
     };
 }
 
+/**
+ * Dev-only SPA fallback for page navigations. Vite treats extensionless URLs as
+ * module requests, and on case-insensitive filesystems (Windows) `/app`
+ * resolves to `App.tsx` — so the browser got the compiled source instead of
+ * the app. Top-level document requests for extensionless paths get
+ * `index.html`, mirroring the catch-all rewrite in vercel.json.
+ */
+function spaDocumentFallback(): Plugin {
+    return {
+        name: 'spa-document-fallback',
+        apply: 'serve',
+        configureServer(server) {
+            server.middlewares.use((req, _res, next) => {
+                const url = req.url ?? '/';
+                const [pathname, query] = url.split('?');
+                const isDocument =
+                    req.headers['sec-fetch-dest'] === 'document' ||
+                    (req.headers.accept ?? '').includes('text/html');
+                if (
+                    req.method === 'GET' &&
+                    isDocument &&
+                    pathname !== '/' &&
+                    !path.extname(pathname) &&
+                    !pathname.startsWith('/api/') &&
+                    !pathname.startsWith('/@')
+                ) {
+                    req.url = `/index.html${query ? `?${query}` : ''}`;
+                }
+                next();
+            });
+        },
+    };
+}
+
+/**
+ * The web vault (vault.html) decrypts FocuzPass in the page, so it gets an enforced CSP of its own
+ * in production builds: only its own scripts, and connections to Supabase alone. (Dev keeps Vite's
+ * inline preamble working, so it's build-only.)
+ */
+const WEB_VAULT_CSP = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
+    "img-src 'self' data:",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+].join('; ');
+
+function webVaultCsp(): Plugin {
+    return {
+        name: 'web-vault-csp',
+        apply: 'build',
+        transformIndexHtml: {
+            order: 'post',
+            handler(html, ctx) {
+                if (!ctx.filename.replace(/\\/g, '/').endsWith('/vault.html')) return html;
+                return html.replace('<head>', `<head>\n    <meta http-equiv="Content-Security-Policy" content="${WEB_VAULT_CSP}" />`);
+            },
+        },
+    };
+}
+
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     const groqKey = env.GROQ_API_KEY || process.env.GROQ_API_KEY;
@@ -80,12 +146,14 @@ export default defineConfig(({ mode }) => {
             },
         },
         plugins: [
+            spaDocumentFallback(),
             atAlias(),
             focuzBareDeps(),
             react(),
             tailwindcss(),
             groqApiDevPlugin(groqKey),
             betaApiDevPlugin(),
+            webVaultCsp(),
         ],
         define: {
             'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -111,6 +179,15 @@ export default defineConfig(({ mode }) => {
         },
         build: {
             chunkSizeWarningLimit: 2500,
+            rollupOptions: {
+                input: {
+                    main: path.join(websiteRoot, 'index.html'),
+                    // Real extension UI on demo data, embedded by the landing page.
+                    demo: path.join(websiteRoot, 'demo.html'),
+                    // FocuzPass without the extension (its own small bundle).
+                    vault: path.join(websiteRoot, 'vault.html'),
+                },
+            },
         },
     };
 });

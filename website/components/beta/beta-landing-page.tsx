@@ -29,12 +29,12 @@ export default function BetaLandingPage({
   const isPending = isLoggedIn && !isApproved;
 
   return (
-    <div className="min-h-screen bg-black text-neutral-200 font-sans selection:bg-purple-500/30">
-      <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/5 bg-black/80 backdrop-blur-md">
+    <div className="min-h-screen bg-black text-neutral-200 font-sans selection:bg-blue-500/30">
+      <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/8 bg-black/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <span className="text-lg font-bold tracking-tight">
-            Focuz<span className="text-purple-500">Now</span>
-            <span className="ml-2 text-xs font-medium text-purple-400 border border-purple-500/30 rounded-full px-2 py-0.5">
+            Focuz<span className="text-blue-500">Now</span>
+            <span className="ml-2 text-xs font-medium text-blue-400 border border-blue-500/30 rounded-full px-2 py-0.5">
               Beta
             </span>
           </span>
@@ -43,7 +43,7 @@ export default function BetaLandingPage({
             {isApproved ? (
               <button
                 onClick={onDownload}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors"
               >
                 <IconDownload size={16} />
                 Download FocuzNow
@@ -58,7 +58,7 @@ export default function BetaLandingPage({
                 <button
                   onClick={onApply}
                   disabled={applying}
-                  className="px-5 py-2 rounded-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors"
+                  className="px-5 py-2 rounded-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors"
                 >
                   {applying ? "Applying..." : "Apply for Beta"}
                 </button>
@@ -85,7 +85,7 @@ export default function BetaLandingPage({
       </nav>
 
       <header className="relative flex flex-col items-center justify-center min-h-screen overflow-hidden pt-16">
-        <div className="absolute inset-0 bg-gradient-to-b from-purple-900/10 via-black to-black pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-900/10 via-black to-black pointer-events-none" />
 
         <div className="z-10 w-full max-w-5xl px-6 flex flex-col items-center">
           <div className="h-[14rem] md:h-[24rem] flex items-center justify-center w-full">
@@ -93,7 +93,7 @@ export default function BetaLandingPage({
           </div>
 
           <div className="text-center -mt-10 md:-mt-16 space-y-6 flex flex-col items-center max-w-2xl">
-            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">
+            <h1 className="text-3xl md:text-3xl font-bold text-white leading-tight">
               Join the private beta
             </h1>
             <p className="text-neutral-400 text-lg leading-relaxed">
@@ -103,20 +103,20 @@ export default function BetaLandingPage({
             </p>
 
             {isApproved ? (
-              <div className="mt-4 p-6 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-center w-full max-w-md">
-                <p className="text-purple-200 mb-4">
+              <div className="mt-4 p-6 rounded-lg bg-blue-500/10 border border-blue-500/30 text-center w-full max-w-md">
+                <p className="text-blue-200 mb-4">
                   You&apos;re approved! Download the latest beta build below.
                 </p>
                 <button
                   onClick={onDownload}
-                  className="inline-flex items-center gap-2 px-8 py-3 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-bold transition-all"
+                  className="inline-flex items-center gap-2 px-8 py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all"
                 >
                   <IconDownload size={18} />
                   Download FocuzNow
                 </button>
               </div>
             ) : isPending ? (
-              <div className="mt-4 p-6 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-center w-full max-w-md">
+              <div className="mt-4 p-6 rounded-lg bg-amber-500/10 border border-amber-500/30 text-center w-full max-w-md">
                 <div className="inline-flex items-center gap-2 text-amber-300 font-semibold mb-2">
                   <IconClockHour4 size={20} />
                   You&apos;re on the waitlist
@@ -134,7 +134,7 @@ export default function BetaLandingPage({
                 <button
                   onClick={onApply}
                   disabled={applying}
-                  className="px-8 py-3 rounded-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white font-bold transition-all"
+                  className="px-8 py-3 rounded-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold transition-all"
                 >
                   {applying ? "Submitting..." : "Apply for Beta Access"}
                 </button>
@@ -152,7 +152,7 @@ export default function BetaLandingPage({
         </div>
       </header>
 
-      <section className="py-20 bg-neutral-950 border-t border-white/5">
+      <section className="py-20 bg-neutral-950 border-t border-white/8">
         <div className="max-w-4xl mx-auto px-6">
           <h2 className="text-2xl md:text-3xl font-bold text-white text-center mb-12">
             How the beta works
@@ -177,9 +177,9 @@ export default function BetaLandingPage({
             ].map((item) => (
               <div
                 key={item.step}
-                className="p-6 rounded-2xl bg-neutral-900/50 border border-white/5 text-center"
+                className="p-6 rounded-lg bg-neutral-900/50 border border-white/8 text-center"
               >
-                <div className="w-10 h-10 rounded-full bg-purple-900/40 text-purple-400 flex items-center justify-center font-bold mx-auto mb-4 border border-purple-500/20">
+                <div className="w-10 h-10 rounded-full bg-blue-900/40 text-blue-400 flex items-center justify-center font-bold mx-auto mb-4 border border-blue-500/20">
                   {item.step}
                 </div>
                 <h3 className="text-lg font-bold text-white mb-2">{item.title}</h3>
@@ -190,7 +190,7 @@ export default function BetaLandingPage({
         </div>
       </section>
 
-      <footer className="py-12 border-t border-white/5 text-center text-sm text-neutral-600">
+      <footer className="py-12 border-t border-white/8 text-center text-sm text-neutral-600">
         <p>&copy; 2026 FocuzNow. Beta program — access by invitation only.</p>
       </footer>
     </div>

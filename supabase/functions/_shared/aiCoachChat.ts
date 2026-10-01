@@ -1,6 +1,6 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { userHasProAccess } from './stripeBilling.ts';
-import { geminiGenerate, geminiStreamGenerate, type GeminiContent } from './geminiAi.ts';
+import { geminiGenerateWithMeta, geminiStreamGenerate, type GeminiContent, type GeminiUsage } from './geminiAi.ts';
 
 export type CoachModelId = 'gemini-2.5-flash' | 'gemini-2.5-pro';
 
@@ -69,11 +69,11 @@ action_type and data:
 - block / unblock — data.domains: string[] hostnames (no https)
 - timer — data.domain, data.minutes
 - blocks_list — list blocked sites
-- change_setting — data.setting_name, data.new_value (bool|string|number). Keys: focusMode, requireChallenge, trackBackgroundAudio, draggableTimer, redirectMessage
+- change_setting — data.setting_name, data.new_value (bool|string|number). Keys: focusMode, requireChallenge, trackBackgroundAudio, draggableTimer, pomodoroWidget, redirectMessage, allowlistMode
 - engine_settings — data.settings: object (batch). e.g. {"draggableTimer":true,"redirectMessage":"Stay focused"}
 - theme — data.theme: purple|emerald|amber|rose|pro|custom. If custom, include data.custom_theme {primary,accent,highlight} as hex colors when user asks specific colors.
 - nuclear_start — data.target: "blocked"|"all", data.minutes (default 60)
-- in_app_block — data.platform: youtube|instagram|tiktok, data.feature optional: youtubeShorts|instagramReels, data.enabled: bool
+- in_app_block — data.enabled: bool. For all in-app blocking omit platform. Or set data.platform: youtube|instagram|tiktok and optional data.feature: youtubeShorts|instagramReels. Never invent keys like in.app.blocking.
 - in_app_filter_add / in_app_filter_remove — data.handle (creator @name without @)
 - habit_add — data.name
 - habit_checkin — data.name or data.habit_id
@@ -85,6 +85,16 @@ action_type and data:
 - daily_goal_set — data.goal: string (main focus for today)
 - planner_set — data.planner_items: [{time, task, durationMin?, done?}] replaces daily planner
 - calendar_add_events — data.events: [{title, date (yyyy-MM-dd), startHour, startMin, durationMin, color?}] adds focus blocks
+
+Documents: when the user asks for something they'd keep or reuse — a focus plan, weekly plan, routine, study plan, checklist, notes, a report — or says "make a doc", write it as ONE document block. The app saves it to their Library and shows it as a card:
+~~~focuz-doc
+title: Weekly focus plan
+type: plan
+---
+# Weekly focus plan
+…markdown body (headings, lists, "- [ ]" checklists, tables)…
+~~~
+type is one of: plan, routine, study, checklist, notes, report. Use ~~~ (tildes) for the fence. Keep your chat reply outside the block to 1–2 sentences. You may still emit FOCUZNOW_ACTION lines after it (e.g. calendar_add_events for the plan's blocks). Don't wrap quick answers in a document.
 
 Category blocks: gaming, social, streaming, news → 8–15 well-known domains.
 You may emit MULTIPLE FOCUZNOW_ACTION lines. Never fake results.
@@ -241,42 +251,128 @@ export async function requirePro(
     return { ok: true };
 }
 
+const TITLE_SYSTEM_PROMPT =
+    'You name chat conversations. Write a title of 3 to 7 words in sentence case that states the specific topic of the user\'s request, like a descriptive email subject. Use concrete nouns from the conversation. Never output generic titles such as "New chat", "Focus help", "Question", "Chat", or a single word. No quotes, no emoji, no trailing punctuation.\n' +
+    'Examples:\n' +
+    'User: how do i stop checking youtube when studying -> Block YouTube during study sessions\n' +
+    'User: make me a plan for my bio exam friday -> Biology exam study plan\n' +
+    'User: whats the savanna climate like -> Savanna climate overview\n' +
+    'User: translate cross to spanish -> Spanish translation of cross\n' +
+    'Reply with only the title.';
+
+const GENERIC_TITLES = new Set([
+    'new chat', 'chat', 'focus', 'focus help', 'help', 'question', 'conversation', 'untitled',
+]);
+
+/** Strips markdown/quotes/prefix and caps length at a word boundary. */
+export function sanitizeTitle(raw: string): string {
+    let t = raw.trim();
+    t = t.replace(/^title\s*:\s*/i, '');
+    t = t.replace(/^["'`]+|["'`]+$/g, '');
+    t = t.replace(/[*_`#>\[\](){}]/g, '');
+    t = t.replace(/\s+/g, ' ').trim();
+    t = t.replace(/[.!?,;:]+$/g, '');
+    if (t.length > 60) {
+        t = t.slice(0, 60);
+        const lastSpace = t.lastIndexOf(' ');
+        if (lastSpace > 20) t = t.slice(0, lastSpace);
+        t = t.replace(/[.!?,;:\s]+$/g, '');
+    }
+    return t;
+}
+
+/** True when a candidate title is usable (not truncated, not generic). */
+export function isAcceptableTitle(title: string, finishReason?: string): boolean {
+    if (finishReason === 'MAX_TOKENS') return false;
+    if (title.length < 8) return false;
+    if (title.split(' ').filter(Boolean).length < 2) return false;
+    if (GENERIC_TITLES.has(title.toLowerCase())) return false;
+    return true;
+}
+
+const LEADING_FILLER =
+    /^(?:hey|hi|hello|yo|ok|okay|so|well|the|a|an|please|thanks|thank you|can you|could you|would you|will you|i want to|i need to|i'd like to|i would like to|im trying to|i'm trying to|how do i|how can i|how to|what is|what's|whats|what are|tell me)\b[\s,!.?]*/i;
+
+/** Deterministic title from the user's first message when the model fails. */
+export function fallbackTitleFromMessage(userMessage: string): string {
+    const first = (userMessage.split(/\n/)[0] || '').trim();
+    const sentence = (first.match(/^[^.!?]+/)?.[0] || first).trim();
+    let cleaned = sentence;
+    let prev = '';
+    while (cleaned !== prev) {
+        prev = cleaned;
+        cleaned = cleaned.replace(LEADING_FILLER, '').trim();
+    }
+    if (!cleaned) return 'New chat';
+    let title = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    const words = title.split(' ').filter(Boolean);
+    if (words.length > 6 || title.length > 50) {
+        title = words.slice(0, 6).join(' ');
+        if (title.length > 50) {
+            title = title.slice(0, 50);
+            const lastSpace = title.lastIndexOf(' ');
+            if (lastSpace > 15) title = title.slice(0, lastSpace);
+        }
+        title = title.replace(/[.!?,;:\s]+$/g, '');
+    }
+    if (title.split(' ').filter(Boolean).length < 2) {
+        const word = (words[0] || title).replace(/[.!?,;:]+$/g, '');
+        return word ? `Chat about ${word}` : 'New chat';
+    }
+    return title;
+}
+
 export async function generateChatTitle(
     model: CoachModelId,
     userMessage: string,
     assistantReply: string,
 ): Promise<string> {
-    const raw = await geminiGenerate({
-        model,
-        systemInstruction:
-            'Generate a short chat title (3–6 words, no quotes) summarizing this conversation. Reply with ONLY the title.',
-        contents: [
-            {
-                role: 'user',
-                parts: [
-                    {
-                        text: `User: ${userMessage.slice(0, 500)}\nAssistant: ${assistantReply.slice(0, 500)}`,
-                    },
-                ],
-            },
-        ],
-        maxOutputTokens: 32,
-        temperature: 0.3,
-    });
-    return raw.replace(/^["']|["']$/g, '').trim().slice(0, 80) || 'New chat';
+    const prompt = `User: ${userMessage.slice(0, 600)}\nAssistant: ${assistantReply.slice(0, 400)}`;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const { text, finishReason } = await geminiGenerateWithMeta({
+                model,
+                systemInstruction: TITLE_SYSTEM_PROMPT,
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                maxOutputTokens: 60,
+                temperature: 0.2,
+                thinkingBudget: 0,
+            });
+            const title = sanitizeTitle(text);
+            if (isAcceptableTitle(title, finishReason)) return title;
+        } catch {
+            /* retry once, then deterministic fallback */
+        }
+    }
+    return fallbackTitleFromMessage(userMessage);
 }
 
 export async function* streamCoachReply(
     model: CoachModelId,
     messages: ChatMessage[],
     context?: Record<string, unknown>,
+    onUsage?: (usage: GeminiUsage) => void,
 ): AsyncGenerator<string> {
     const contents = toGeminiContents(messages);
     yield* geminiStreamGenerate({
         model,
         systemInstruction: buildCoachSystemPrompt(context),
         contents,
+        onUsage,
     });
+}
+
+/** Rough token count when Gemini doesn't report usage (~4 chars/token). */
+export function estimateTurnUsage(
+    messages: ChatMessage[],
+    context: Record<string, unknown> | undefined,
+    reply: string,
+): { input: number; output: number; total: number; estimated: true } {
+    const inChars =
+        buildCoachSystemPrompt(context).length + messages.reduce((n, m) => n + m.content.length, 0);
+    const input = Math.ceil(inChars / 4);
+    const output = Math.ceil(reply.length / 4);
+    return { input, output, total: input + output, estimated: true };
 }
 
 export async function saveChatTurn(opts: {

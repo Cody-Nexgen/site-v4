@@ -21,10 +21,10 @@ export function BrowsingHistorySettings() {
     const imported = historyPermission && importDone;
 
     return (
-        <div className="glass-edge-card rounded-2xl p-5 sm:p-6">
+        <div className="glass-edge-card rounded-lg p-5 sm:p-6">
             <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 ring-1 ring-sky-500/20">
-                    <Globe size={18} className="text-sky-400" strokeWidth={2} />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--fz-bg-raised)] ring-1 ring-[var(--fz-border)]">
+                    <Globe size={18} className="text-[var(--fz-text-3)]" strokeWidth={2} />
                 </div>
                 <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-semibold text-white">Browsing history</h3>
@@ -36,7 +36,7 @@ export function BrowsingHistorySettings() {
                             type="button"
                             onClick={handleImport}
                             disabled={isImporting || imported}
-                            className="glass-edge-btn inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-sky-300 disabled:opacity-50"
+                            className="glass-edge-btn inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-[var(--fz-text-2)] disabled:opacity-50"
                         >
                             {isImporting ? (
                                 <>

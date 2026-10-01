@@ -187,7 +187,7 @@ export default function BookingApp({ client }: Props) {
     if (confirmed && selectedDay && selectedSlotLabel) {
         return (
             <div className="min-h-screen bg-gradient-to-b from-[#0c0c0f] via-[#111] to-[#0a0a0c] text-white flex items-center justify-center p-6">
-                <div className="max-w-md w-full rounded-3xl border border-emerald-500/20 bg-[#141414]/90 backdrop-blur p-8 text-center shadow-[0_0_60px_-12px_rgba(16,185,129,0.25)]">
+                <div className="max-w-md w-full rounded-lg border border-emerald-500/20 bg-[#141414]/90 backdrop-blur p-8 text-center shadow-[0_0_60px_-12px_rgba(16,185,129,0.25)]">
                     <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/30">
                         <Check size={28} className="text-emerald-400" strokeWidth={2.5} />
                     </div>
@@ -216,15 +216,15 @@ export default function BookingApp({ client }: Props) {
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#0c0c0f] via-[#111] to-[#0a0a0c] text-white">
             <div className="mx-auto flex min-h-screen max-w-6xl flex-col lg:flex-row">
-                <aside className="border-b border-white/[0.06] bg-[#0e0e12]/80 p-8 lg:w-[360px] lg:border-b-0 lg:border-r lg:min-h-screen">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-400/80 mb-3">
+                <aside className="border-b border-white/8 bg-[#0e0e12]/80 p-8 lg:w-[360px] lg:border-b-0 lg:border-r lg:min-h-screen">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-400/80 mb-3">
                         Book with
                     </p>
                     <h1 className="text-2xl font-black leading-tight mb-6">{link.title}</h1>
 
                     <HostProfile link={link} />
 
-                    <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className="space-y-3 rounded-lg border border-white/8 bg-white/4 p-4">
                         <div className="flex items-center gap-2 text-sm text-neutral-300">
                             <Clock size={16} className="text-neutral-500 shrink-0" />
                             <span>{link.durationMin} minutes</span>
@@ -247,7 +247,7 @@ export default function BookingApp({ client }: Props) {
                     )}
 
                     <div className="mt-8 hidden lg:block">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-600 mb-2">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-600 mb-2">
                             Time zone
                         </p>
                         <div className="flex items-center gap-2 text-sm text-neutral-400">
@@ -271,7 +271,7 @@ export default function BookingApp({ client }: Props) {
                                                 ? 'bg-blue-600 text-white'
                                                 : done
                                                   ? 'bg-white/10 text-white'
-                                                  : 'bg-white/[0.04] text-neutral-600'
+                                                  : 'bg-white/4 text-neutral-600'
                                         }`}
                                     >
                                         {i + 1}
@@ -283,7 +283,7 @@ export default function BookingApp({ client }: Props) {
                                     >
                                         {labels[s]}
                                     </span>
-                                    {i < 1 && <div className="h-px flex-1 bg-white/[0.06]" />}
+                                    {i < 1 && <div className="h-px flex-1 bg-white/6" />}
                                 </div>
                             );
                         })}
@@ -309,7 +309,7 @@ export default function BookingApp({ client }: Props) {
                                 type="button"
                                 disabled={!selectedDay || selectedStartMin == null}
                                 onClick={() => setStep('details')}
-                                className="mt-6 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-sm transition-colors"
+                                className="mt-6 px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-sm transition-colors"
                             >
                                 Continue
                             </button>
@@ -345,7 +345,7 @@ export default function BookingApp({ client }: Props) {
                                         value={guestName}
                                         onChange={(e) => setGuestName(e.target.value)}
                                         placeholder="Your name"
-                                        className="w-full bg-[#1a1a1f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                        className="w-full bg-[#1a1a1f] border border-white/8 rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                     />
                                 </label>
 
@@ -359,7 +359,7 @@ export default function BookingApp({ client }: Props) {
                                             onChange={(e) => setGuestEmail(e.target.value)}
                                             type="email"
                                             placeholder="you@email.com"
-                                            className="w-full bg-[#1a1a1f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                            className="w-full bg-[#1a1a1f] border border-white/8 rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                         />
                                     </label>
                                 )}
@@ -374,7 +374,7 @@ export default function BookingApp({ client }: Props) {
                                             onChange={(e) => setGuestPhone(e.target.value)}
                                             type="tel"
                                             placeholder="+1 (555) 000-0000"
-                                            className="w-full bg-[#1a1a1f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                            className="w-full bg-[#1a1a1f] border border-white/8 rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                         />
                                     </label>
                                 )}
@@ -389,7 +389,7 @@ export default function BookingApp({ client }: Props) {
                                             onChange={(e) => setGuestDetails(e.target.value)}
                                             placeholder="Anything the host should know"
                                             rows={4}
-                                            className="w-full bg-[#1a1a1f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 resize-none"
+                                            className="w-full bg-[#1a1a1f] border border-white/8 rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 resize-none"
                                         />
                                     </label>
                                 )}
@@ -401,7 +401,7 @@ export default function BookingApp({ client }: Props) {
                                 type="button"
                                 disabled={submitting}
                                 onClick={handleConfirm}
-                                className="mt-6 w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-900/25"
+                                className="mt-6 w-full py-3.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-900/25"
                             >
                                 {submitting ? 'Booking…' : 'Confirm booking'}
                             </button>
@@ -409,7 +409,7 @@ export default function BookingApp({ client }: Props) {
                     )}
 
                     <div className="mt-10 lg:hidden max-w-md">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-600 mb-2">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-600 mb-2">
                             Time zone
                         </p>
                         <div className="flex items-center gap-2 text-sm text-neutral-400">

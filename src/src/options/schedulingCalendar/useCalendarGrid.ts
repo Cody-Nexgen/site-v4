@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { CalendarEvent } from '../../lib/schedulingTypes';
 import { HOURS_PER_DAY, minutesFromY, snapMinutes, yFromMinutes } from '../../lib/calendarUtils';
 
@@ -17,28 +17,18 @@ export type DragEventState = {
     grabOffsetMin: number;
 } | null;
 
+/** Fixed hour row height — the day scrolls instead of squashing 24h into view. */
+export const CAL_HOUR_HEIGHT = 52;
+
 export function useCalendarGrid() {
     const gridScrollRef = useRef<HTMLDivElement>(null);
     const columnRefs = useRef<(HTMLDivElement | null)[]>([]);
-    const [hourHeight, setHourHeight] = useState(48);
+    const hourHeight = CAL_HOUR_HEIGHT;
     const [dragSelect, setDragSelect] = useState<DragSelect>(null);
     const dragEventRef = useRef<DragEventState>(null);
     const [, bump] = useState(0);
 
     const gridHeight = hourHeight * HOURS_PER_DAY;
-
-    useEffect(() => {
-        const el = gridScrollRef.current;
-        if (!el) return;
-        const measure = () => {
-            const h = el.clientHeight;
-            if (h > 24) setHourHeight(h / HOURS_PER_DAY);
-        };
-        measure();
-        const ro = new ResizeObserver(measure);
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, []);
 
     const minFromClientY = useCallback(
         (dayIndex: number, clientY: number) => {

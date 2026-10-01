@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Dialog } from '../components/fz/Dialog';
+import { Button } from '../components/fz/Button';
+import { Input } from '../components/fz/Field';
 
 export const FOCUS_PHRASES = [
     'I choose focus over distraction',
@@ -28,73 +31,101 @@ type ChallengeModalProps = {
 export function ChallengeModal({ isOpen, onClose, onComplete, phrase, onDisableChallenge, error }: ChallengeModalProps) {
     const [input, setInput] = useState('');
 
-    if (!isOpen) return null;
+    useEffect(() => {
+        if (isOpen) setInput('');
+    }, [isOpen]);
+
+    // §6.6: live character-diff — correct chars text-1, wrong chars danger-underlined,
+    // untyped chars dimmed; progress = longest correct prefix.
+    let correctPrefix = 0;
+    while (correctPrefix < input.length && input[correctPrefix] === phrase[correctPrefix]) correctPrefix += 1;
+    const progress = phrase.length ? correctPrefix / phrase.length : 0;
+
+    const close = () => {
+        setInput('');
+        onClose();
+    };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <div className="w-full max-w-lg p-8 space-y-6 border border-purple-500/30 rounded-3xl bg-[#111] shadow-2xl">
-                <div className="text-center space-y-2">
-                    <h3 className="text-2xl font-black text-white tracking-tight">Focus Challenge</h3>
-                    <p className="text-neutral-400 text-sm">
-                        Type the phrase below exactly to unblock. No timer — you must get it right.
+        <Dialog
+            open={isOpen}
+            onClose={close}
+            size="sm"
+            title="Focus challenge"
+            description="Type the phrase below exactly to unblock. No timer — you must get it right."
+            footer={
+                <>
+                    <Button variant="secondary" onClick={close}>Cancel</Button>
+                    <Button
+                        variant="primary"
+                        disabled={input !== phrase}
+                        onClick={() => {
+                            onComplete();
+                            setInput('');
+                        }}
+                    >
+                        Confirm unblock
+                    </Button>
+                </>
+            }
+        >
+            <div className="space-y-4">
+                <div className="select-none rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] p-4 text-center">
+                    <p className="text-title-3">
+                        {phrase.split('').map((char, i) => {
+                            const typed = i < input.length;
+                            const correct = typed && input[i] === char;
+                            const wrong = typed && !correct;
+                            return (
+                                <span
+                                    key={i}
+                                    className={
+                                        wrong
+                                            ? 'text-[var(--fz-danger)] underline decoration-[var(--fz-danger)] underline-offset-4'
+                                            : correct
+                                              ? 'text-[var(--fz-text-1)]'
+                                              : 'text-[var(--fz-text-4)]'
+                                    }
+                                >
+                                    {char === ' ' ? ' ' : char}
+                                </span>
+                            );
+                        })}
                     </p>
                 </div>
 
-                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-center select-none">
-                    <p className="text-lg font-mono font-bold text-purple-400 tracking-wide">&ldquo;{phrase}&rdquo;</p>
-                </div>
+                {error && (
+                    <p role="alert" className="rounded-lg border border-[var(--fz-danger)]/30 bg-[var(--fz-danger-soft)] px-3 py-2 text-[13px] text-[var(--fz-danger)]">
+                        {error}
+                    </p>
+                )}
 
-                <div className="space-y-4">
-                    {error && (
-                        <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                            {error}
-                        </p>
-                    )}
-                    <input
+                <div className="space-y-2">
+                    <Input
                         autoFocus
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="Type the phrase here..."
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder:text-neutral-600 outline-none focus:border-purple-500 transition-all font-medium"
+                        placeholder="Type the phrase here…"
+                        aria-label="Type the phrase to unblock"
                     />
-                    <div className="flex space-x-3">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setInput('');
-                                onClose();
-                            }}
-                            className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-neutral-400 font-bold rounded-2xl transition-all"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            disabled={input !== phrase}
-                            onClick={() => {
-                                onComplete();
-                                setInput('');
-                            }}
-                            className={`flex-1 py-4 font-black rounded-2xl transition-all shadow-xl ${
-                                input === phrase
-                                    ? 'bg-purple-600 text-white shadow-purple-600/20 hover:bg-purple-500'
-                                    : 'bg-neutral-800 text-neutral-600 cursor-not-allowed opacity-50'
-                            }`}
-                        >
-                            Confirm Unblock
-                        </button>
+                    <div className="h-1 overflow-hidden rounded-full bg-[var(--fz-bg-raised)]" aria-hidden>
+                        <div
+                            className="h-full rounded-full bg-[var(--fz-accent)] transition-[width] duration-150"
+                            style={{ width: `${Math.round(progress * 100)}%` }}
+                        />
                     </div>
-                    {onDisableChallenge && (
-                        <button
-                            type="button"
-                            onClick={onDisableChallenge}
-                            className="w-full py-3 text-xs font-semibold text-neutral-500 hover:text-neutral-300 transition-colors"
-                        >
-                            Turn off typing challenge
-                        </button>
-                    )}
                 </div>
+
+                {onDisableChallenge && (
+                    <button
+                        type="button"
+                        onClick={onDisableChallenge}
+                        className="w-full py-1 text-meta text-[var(--fz-text-3)] transition-colors hover:text-[var(--fz-text-1)]"
+                    >
+                        Turn off typing challenge
+                    </button>
+                )}
             </div>
-        </div>
+        </Dialog>
     );
 }

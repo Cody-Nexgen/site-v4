@@ -27,9 +27,12 @@ const chromeStorageAdapter = {
     },
 };
 
+const viteEnv: Record<string, string | undefined> =
+    (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+
 let activeConfig: SupabaseConfig = resolveSupabaseConfig(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_ANON_KEY,
+    viteEnv.VITE_SUPABASE_URL,
+    viteEnv.VITE_SUPABASE_ANON_KEY,
     null,
 );
 

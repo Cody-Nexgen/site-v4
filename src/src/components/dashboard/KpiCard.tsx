@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Minus, TrendingDown, TrendingUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { reducedMotion } from '../../lib/motion';
 
 type Trend = 'up' | 'down' | 'flat';
 type Tone = 'default' | 'warm' | 'cool' | 'danger' | 'success';
@@ -16,15 +17,41 @@ export type KpiCardProps = {
   className?: string;
 };
 
+// §6.1: KPI values are always text-1 — tone only tinted them before.
 const toneValue: Record<Tone, string> = {
-  default: 'text-foreground',
-  warm: 'text-[var(--chart-1)]',
-  cool: 'text-[var(--chart-2)]',
-  danger: 'text-destructive',
-  success: 'text-emerald-500',
+  default: 'text-[var(--fz-text-1)]',
+  warm: 'text-[var(--fz-text-1)]',
+  cool: 'text-[var(--fz-text-1)]',
+  danger: 'text-[var(--fz-text-1)]',
+  success: 'text-[var(--fz-text-1)]',
 };
 
-/** Minimal KPI card adapted from 21st.dev patterns for the Focuz dashboard theme. */
+// §6.1: count up once on mount, 400ms ease-out-expo, tabular numerals.
+function easeOutExpo(t: number) {
+  return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);
+}
+
+function useCountUp(target: number) {
+  const [display, setDisplay] = useState(0);
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) { setDisplay(target); return; }
+    started.current = true;
+    if (reducedMotion.matches() || target === 0) { setDisplay(target); return; }
+    const t0 = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / 400);
+      setDisplay(Math.round(target * easeOutExpo(p)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  return display;
+}
+
+/** §6.1 KPI card: label (text-3), stat number, delta chip. */
 export function KpiCard({
   label,
   value,
@@ -41,58 +68,51 @@ export function KpiCard({
   const isDown = trend === 'down';
   const DeltaIcon = isUp ? TrendingUp : isDown ? TrendingDown : Minus;
 
+  const numeric = typeof value === 'number';
+  const counted = useCountUp(numeric ? value : 0);
+
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-[var(--radius)] border border-border bg-card px-5 py-5 shadow-[var(--dashboard-shadow)]',
+        'relative rounded-[var(--fz-radius-lg)] border border-[var(--fz-border)] bg-[var(--fz-bg-panel)] px-4 py-4',
+        'transition-colors duration-150 hover:border-[var(--fz-border-strong)]',
         className,
       )}
     >
-      <span className="pointer-events-none absolute -right-6 -top-6 inline-flex h-16 w-16 rounded-full bg-foreground/[0.04]" />
-      <span className="pointer-events-none absolute -right-2 -top-2 inline-flex h-8 w-8 rounded-full bg-foreground/[0.04]" />
-
       <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1 min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {label}
-          </p>
-          <p
-            className={cn(
-              'text-2xl font-semibold tracking-tight tabular-nums',
-              toneValue[tone],
-            )}
-          >
-            {typeof value === 'number' ? value.toLocaleString() : value}
+        <div className="min-w-0 space-y-1">
+          <p className="text-label text-[var(--fz-text-3)]">{label}</p>
+          <p className={cn('text-stat tabular-nums', toneValue[tone])}>
+            {numeric ? counted.toLocaleString() : value}
           </p>
           {caption ? (
-            <p className="text-[11px] text-muted-foreground">{caption}</p>
+            <p className="text-meta text-[var(--fz-text-3)]">{caption}</p>
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           {typeof deltaValue !== 'undefined' && (
             <div
               className={cn(
-                'flex items-center gap-1 text-xs font-medium',
-                isUp && 'text-emerald-500',
-                isDown && 'text-destructive',
-                !isUp && !isDown && 'text-muted-foreground',
+                'flex items-center gap-1 rounded-full bg-[var(--fz-bg-raised)] px-1.5 py-0.5 text-meta text-[var(--fz-text-3)]',
               )}
             >
-              <DeltaIcon className="h-3.5 w-3.5" aria-hidden />
+              <DeltaIcon
+                className={cn(
+                  'h-3 w-3',
+                  isUp && 'text-emerald-400',
+                  isDown && 'text-[var(--fz-danger)]',
+                )}
+                aria-hidden
+              />
               {deltaValue}
             </div>
           )}
           {icon ? (
-            <div className="rounded-full bg-muted p-1.5 text-muted-foreground">{icon}</div>
+            <div className="rounded-md bg-[var(--fz-bg-raised)] p-1.5 text-[var(--fz-text-3)]">{icon}</div>
           ) : null}
         </div>
       </div>
-
-      <div
-        className="mt-3 h-0.5 w-14 rounded-full opacity-70"
-        style={{ background: 'var(--chart-1)' }}
-      />
     </div>
   );
 }

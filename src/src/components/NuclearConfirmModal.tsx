@@ -1,4 +1,7 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
+import { Dialog } from './fz/Dialog';
+import { Button } from './fz/Button';
+import { SegmentedControl } from './fz/SegmentedControl';
 
 type Props = {
     open: boolean;
@@ -6,75 +9,95 @@ type Props = {
     blocklistCount: number;
     onClose: () => void;
     onConfirm: () => void;
+    onDurationChange?: (minutes: number) => void;
 };
 
-export function NuclearConfirmModal({ open, durationMin, blocklistCount, onClose, onConfirm }: Props) {
+const HOLD_MS = 1200;
+const DURATIONS = ['15', '30', '60', '120'];
+
+export function NuclearConfirmModal({ open, durationMin, blocklistCount, onClose, onConfirm, onDurationChange }: Props) {
+    const [holding, setHolding] = useState(false);
+    const timerRef = useRef<number>(0);
+
+    const stopHold = () => {
+        window.clearTimeout(timerRef.current);
+        setHolding(false);
+    };
+    const startHold = () => {
+        stopHold();
+        setHolding(true);
+        timerRef.current = window.setTimeout(() => {
+            setHolding(false);
+            onConfirm();
+        }, HOLD_MS);
+    };
+
+    useEffect(() => {
+        if (!open) stopHold();
+        return stopHold;
+    }, [open]);
+
     return (
-        <AnimatePresence>
-            {open && (
-                <motion.div
-                    className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={onClose}
-                >
-                    <motion.div
-                        role="dialog"
-                        aria-labelledby="nuke-modal-title"
-                        className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
-                        style={{
-                            background: 'repeating-linear-gradient(-45deg, #1a1a1a, #1a1a1a 8px, #0d0d0d 8px, #0d0d0d 16px)',
-                            border: '3px solid #facc15',
-                            boxShadow: '0 0 40px rgba(250, 204, 21, 0.25), inset 0 0 0 1px rgba(0,0,0,0.8)',
+        <Dialog
+            open={open}
+            onClose={onClose}
+            size="sm"
+            title={<span className="text-[var(--fz-danger)]">Confirm nuclear lockdown</span>}
+            description="This cannot be cancelled early — not even by disabling the extension — until the timer expires."
+        >
+            <div className="space-y-4">
+                <p className="text-body-sm text-[var(--fz-text-2)] leading-relaxed">
+                    Block your <span className="font-semibold text-[var(--fz-text-1)]">{blocklistCount} blocklist site{blocklistCount === 1 ? '' : 's'}</span> for{' '}
+                    <span className="font-semibold text-[var(--fz-text-1)]">{durationMin} minute{durationMin === 1 ? '' : 's'}</span>.
+                </p>
+
+                {onDurationChange && (
+                    <div className="space-y-1.5">
+                        <span className="text-label text-[var(--fz-text-3)]">Duration</span>
+                        <div>
+                            <SegmentedControl
+                                idPrefix="nuke-duration"
+                                value={DURATIONS.includes(String(durationMin)) ? String(durationMin) : ''}
+                                onChange={(v) => onDurationChange(Number(v) || durationMin)}
+                                options={DURATIONS.map((m) => ({ value: m, label: `${m} min` }))}
+                            />
+                            {!DURATIONS.includes(String(durationMin)) && (
+                                <span className="text-meta text-[var(--fz-text-3)] ml-2">{durationMin} min</span>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                    <Button variant="secondary" className="flex-1" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <button
+                        type="button"
+                        onPointerDown={startHold}
+                        onPointerUp={stopHold}
+                        onPointerLeave={stopHold}
+                        onKeyDown={(e) => {
+                            if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) startHold();
                         }}
-                        initial={{ scale: 0.92, y: 12 }}
-                        animate={{ scale: 1, y: 0 }}
-                        exit={{ scale: 0.92, y: 12 }}
-                        onClick={(e) => e.stopPropagation()}
+                        onKeyUp={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') stopHold();
+                        }}
+                        className="relative flex-1 overflow-hidden rounded-lg border border-[var(--fz-danger)]/40 bg-[var(--fz-danger-soft)] py-2 text-[13px] font-semibold text-[var(--fz-danger)] transition-colors select-none"
+                        aria-label={`Hold ${HOLD_MS / 1000} seconds to start lockdown`}
                     >
-                        <div className="bg-yellow-400 px-5 py-3 flex items-center gap-3 border-b-4 border-black">
-                            <span className="text-2xl" aria-hidden>☢</span>
-                            <h2 id="nuke-modal-title" className="text-lg font-black text-black uppercase tracking-wide">
-                                Confirm nuclear lockdown
-                            </h2>
-                        </div>
-
-                        <div className="p-6 space-y-4 bg-[#111]">
-                            <p className="text-sm text-neutral-300 leading-relaxed">
-                                Block your <span className="font-bold text-yellow-400">{blocklistCount} blocklist site{blocklistCount === 1 ? '' : 's'}</span> for{' '}
-                                <span className="font-bold text-white">{durationMin} minute{durationMin === 1 ? '' : 's'}</span>.
-                            </p>
-                            <p className="text-sm text-neutral-500 leading-relaxed">
-                                This cannot be cancelled early — not even by disabling the extension — until the timer expires.
-                            </p>
-
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    type="button"
-                                    onClick={onClose}
-                                    className="flex-1 py-3 rounded-xl border border-white/15 bg-white/5 text-neutral-300 text-sm font-bold hover:bg-white/10 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={onConfirm}
-                                    className="flex-1 py-3 rounded-xl text-sm font-black uppercase tracking-wide transition-all hover:brightness-110 active:scale-[0.98]"
-                                    style={{
-                                        background: 'linear-gradient(180deg, #fde047 0%, #eab308 100%)',
-                                        color: '#000',
-                                        border: '2px solid #000',
-                                        boxShadow: '0 0 16px rgba(250, 204, 21, 0.4), inset 0 1px 0 rgba(255,255,255,0.35)',
-                                    }}
-                                >
-                                    ☢ Nuke em!
-                                </button>
-                            </div>
-                        </div>
-                    </motion.div>
-                </motion.div>
-            )}
-        </AnimatePresence>
+                        <span
+                            aria-hidden
+                            className="absolute inset-y-0 left-0 bg-[var(--fz-danger)]/25"
+                            style={{
+                                width: holding ? '100%' : '0%',
+                                transition: holding ? `width ${HOLD_MS}ms linear` : 'width 160ms ease-out',
+                            }}
+                        />
+                        <span className="relative">{holding ? 'Keep holding…' : 'Hold to lock down'}</span>
+                    </button>
+                </div>
+            </div>
+        </Dialog>
     );
 }

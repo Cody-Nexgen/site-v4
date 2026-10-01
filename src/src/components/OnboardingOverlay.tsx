@@ -13,8 +13,8 @@ export function OnboardingOverlay({ onComplete, onStepChange, currentStep }: Onb
         {
             title: "Welcome to FocuzNow",
             description: "Your personal productivity companion. Let's get you set up for success.",
-            icon: <Sparkles className="w-12 h-12 text-purple-400" />,
-            color: "bg-purple-500/20"
+            icon: <Sparkles className="w-12 h-12 text-blue-400" />,
+            color: "bg-blue-500/20"
         },
         {
             title: "Block Distractions",
@@ -45,11 +45,11 @@ export function OnboardingOverlay({ onComplete, onStepChange, currentStep }: Onb
     };
 
     return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm p-6 pointer-events-auto">
-            <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden relative">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-800">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-neutral-950/80 backdrop-blur-sm p-6 pointer-events-auto">
+            <div className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-lg shadow-2xl overflow-hidden relative">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-neutral-800">
                     <motion.div
-                        className="h-full bg-purple-600"
+                        className="h-full bg-blue-600"
                         initial={{ width: "0%" }}
                         animate={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
                         transition={{ duration: 0.3 }}
@@ -72,7 +72,7 @@ export function OnboardingOverlay({ onComplete, onStepChange, currentStep }: Onb
 
                             <div className="space-y-2">
                                 <h2 className="text-2xl font-bold text-white">{steps[currentStep].title}</h2>
-                                <p className="text-sm text-zinc-400 leading-relaxed">
+                                <p className="text-sm text-neutral-400 leading-relaxed">
                                     {steps[currentStep].description}
                                 </p>
                             </div>
@@ -80,7 +80,7 @@ export function OnboardingOverlay({ onComplete, onStepChange, currentStep }: Onb
                     </AnimatePresence>
 
                     <Button
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white mt-4"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-4"
                         onClick={handleNext}
                     >
                         {currentStep === steps.length - 1 ? (

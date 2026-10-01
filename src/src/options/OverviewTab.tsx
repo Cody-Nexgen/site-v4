@@ -1,10 +1,8 @@
 import { useAuthStore } from '../lib/store';
-import { useMemo, useState, useEffect } from 'react';
-import { Plus, Check, Trash2, ShieldBan, Flame, Timer, Gauge } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { useProDashboardVisuals } from '../lib/proDashboard';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { Plus, Check, Trash2, ShieldBan, Flame, Timer, Gauge, ListChecks } from 'lucide-react';
+import { Dialog } from '../components/fz/Dialog';
 import { capDayScreenMs } from '../lib/screenTimeCap';
-import { ProDashboardHero } from '../components/pro-dashboard/ProDashboardVisuals';
 import { HabitDayCell } from '../components/pro-dashboard/HabitCheckInButton';
 import HabitNameModal from '../components/HabitNameModal';
 import { computeFocusScore } from '../lib/focusScore';
@@ -15,10 +13,10 @@ import { computeHabitStreak } from '../lib/habitStreak';
 import { KpiCard } from '../components/dashboard/KpiCard';
 import { SparkMetricCard } from '../components/dashboard/SparkMetricCard';
 import { SurfaceCard } from '../components/dashboard/primitives';
+import { EmptyState } from '../components/dashboard/primitives';
 
 export default function OverviewTab() {
-    const { streak, engineState, last7DaysStats, fetchEngineState, offsetWeeks, setOffsetWeeks, dashboardStreak, importHistory } = useAuthStore();
-    const { proGoldTheme, enabled: proVisuals } = useProDashboardVisuals();
+    const { engineState, last7DaysStats, fetchEngineState, offsetWeeks, setOffsetWeeks, dashboardStreak, importHistory } = useAuthStore();
     const { progression } = useFocusProgression();
 
     useEffect(() => {
@@ -34,7 +32,7 @@ export default function OverviewTab() {
     const blockedCount = engineState.blockedToday || 0;
 
     const diff = todayTotal - yesterdayTotal;
-    const diffPercent = yesterdayTotal === 0 ? 0 : Math.round((Math.abs(diff) / yesterdayTotal) * 100);
+    const diffPercent = yesterdayTotal === 0 ? 0 : Math.round((diff / yesterdayTotal) * 100);
     const isUp = diff > 0;
 
     const formatTime = (ms: number, dateStr?: string) => {
@@ -57,7 +55,6 @@ export default function OverviewTab() {
     }, [offsetWeeks]);
 
     const [newTaskName, setNewTaskName] = useState('');
-    const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
     const [habitModalOpen, setHabitModalOpen] = useState(false);
     const [selectedDay, setSelectedDay] = useState<typeof last7DaysStats[0] | null>(null);
 
@@ -89,36 +86,26 @@ export default function OverviewTab() {
         useAuthStore.getState().recalculateStreak();
     };
 
+    const planSeq = useRef(0);
+    /** Show the new planner at once, save it, then re-sync unless a newer edit is already on its way. */
+    const savePlanner = async (updated: typeof planner) => {
+        const seq = ++planSeq.current;
+        useAuthStore.setState((s) => ({ engineState: { ...s.engineState, dailyPlanner: updated } }));
+        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } }, () => r()));
+        if (seq === planSeq.current) await fetchEngineState();
+    };
+
     const addPlanItem = async () => {
-        if (!newTaskName.trim()) return;
-        const updated = [...planner, { id: Date.now(), time: 'Anytime', task: newTaskName.trim(), done: false }];
-        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } }, () => r()));
+        const task = newTaskName.trim();
+        if (!task) return;
         setNewTaskName('');
-        fetchEngineState();
+        await savePlanner([...planner, { id: Date.now(), time: 'Anytime', task, done: false }]);
     };
 
-    const togglePlanItem = async (id: number) => {
-        const updated = planner.map((p: { id: number; done: boolean }) => (p.id === id ? { ...p, done: !p.done } : p));
-        await new Promise<void>(r => chrome.runtime.sendMessage({ type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } }, () => r()));
-        fetchEngineState();
-    };
+    const togglePlanItem = (id: number) =>
+        savePlanner(planner.map((p) => (p.id === id ? { ...p, done: !p.done } : p)));
 
-    const deletePlanItem = async (id: number) => {
-        if (deletingTaskId !== null) return;
-        setDeletingTaskId(id);
-        try {
-            const updated = planner.filter((p: { id: number }) => p.id !== id);
-            await new Promise<void>(r =>
-                chrome.runtime.sendMessage(
-                    { type: 'UPDATE_ENGINE_SETTINGS', settings: { dailyPlanner: updated } },
-                    () => r(),
-                ),
-            );
-            await fetchEngineState();
-        } finally {
-            setDeletingTaskId(null);
-        }
-    };
+    const deletePlanItem = (id: number) => savePlanner(planner.filter((p) => p.id !== id));
 
     const todaySites = endIdx >= 0 ? (last7DaysStats[endIdx]?.sites ?? {}) : {};
     const todayStr = today.toDateString();
@@ -157,6 +144,10 @@ export default function OverviewTab() {
     );
 
     const doneTasks = planner.filter((p: { done: boolean }) => p.done).length;
+    const nextSession = planner.find((p: { done: boolean }) => !p.done) ?? null;
+    const habitsDue = habits.filter(
+        (h: { checkins?: string[] }) => !h.checkins?.includes(todayStr),
+    );
 
     const focusMin = engineState.pomodoroSettings?.focusMin || 25;
     const todayFocusMs =
@@ -178,22 +169,9 @@ export default function OverviewTab() {
     );
 
     return (
-        <div className="relative space-y-8 pt-6 animate-fade-in-up pro-page-enter pb-24 font-sans w-full max-w-5xl mx-auto">
-            {proGoldTheme && proVisuals && <ProDashboardHero streak={streak} blockedToday={blockedCount} />}
+        <div className="relative space-y-6 animate-fade-in-up font-sans">
             {progression && <FocusLevelCard progression={progression} compact />}
 
-            <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 border-b border-border pb-6">
-                <div>
-                    <p className="text-[11px] font-semibold text-muted-foreground tracking-[0.2em] uppercase mb-2">
-                        {today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                    </p>
-                    <h1 className="text-4xl sm:text-5xl font-semibold text-foreground tracking-tight">Dashboard</h1>
-                </div>
-                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <span className="inline-flex w-2 h-2 rounded-full bg-emerald-400" />
-                    Live sync
-                </div>
-            </header>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <KpiCard
@@ -230,8 +208,8 @@ export default function OverviewTab() {
 
             <SurfaceCard className="p-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-muted text-sm">
-                        🍅
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--fz-bg-raised)] text-[var(--fz-text-3)] ring-1 ring-[var(--fz-border)]">
+                        <Timer className="h-4 w-4" />
                     </span>
                     <div>
                         <p className="text-xs font-semibold text-foreground">Pomodoro</p>
@@ -249,13 +227,13 @@ export default function OverviewTab() {
                 </button>
             </SurfaceCard>
 
-            <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-3 xl:items-stretch">
+            <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-3 xl:items-stretch">
                 <SurfaceCard className="overflow-hidden min-h-[320px]">
                     <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3 flex-wrap">
                         <div>
                             <h2 className="text-sm font-semibold text-foreground">Weekly activity</h2>
                             <p className="text-[11px] text-muted-foreground mt-1">
-                                {isUp ? '↑' : '↓'} {diffPercent}% vs yesterday
+                                {isUp ? '↑' : '↓'} {Math.abs(diffPercent)}% vs yesterday
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -264,7 +242,7 @@ export default function OverviewTab() {
                                 type="button"
                                 disabled={!canGoOlder}
                                 onClick={() => setOffsetWeeks(offsetWeeks + 1)}
-                                className="w-7 h-7 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                className="w-7 h-7 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                                 aria-label="Older week"
                             >
                                 ‹
@@ -273,7 +251,7 @@ export default function OverviewTab() {
                                 type="button"
                                 disabled={offsetWeeks === 0}
                                 onClick={() => setOffsetWeeks(Math.max(0, offsetWeeks - 1))}
-                                className="w-7 h-7 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                className="w-7 h-7 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                                 aria-label="Newer week"
                             >
                                 ›
@@ -283,22 +261,69 @@ export default function OverviewTab() {
                     <div className="px-2 pb-4 h-56 sm:h-64 md:h-72">
                         <ActivityGraph stats={weekStats} onSelectDay={setSelectedDay} />
                     </div>
-                    <div className="px-5 pb-4 flex justify-between text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <div className="px-5 pb-4 flex justify-between text-meta text-muted-foreground">
                         {weekStats.map((s, i) => (
                             <span key={i}>{new Date(s.date).toLocaleDateString('en-US', { weekday: 'short' })}</span>
                         ))}
                     </div>
                 </SurfaceCard>
 
-                <SparkMetricCard
-                    title="Focus time"
-                    value={formatTime(todayFocusMs)}
-                    caption="Pomodoro focus minutes this week"
-                    deltaLabel={`${focusIsUp ? '+' : '−'}${focusDiffPercent}%`}
-                    points={sparkPoints}
-                    formatPointValue={(ms) => formatTime(ms)}
-                    className="min-h-[320px] xl:min-h-full"
-                />
+                {/* §6.1: Today card — next session + habits due. */}
+                <SurfaceCard className="p-5 flex flex-col min-h-[320px]">
+                    <div className="mb-4">
+                        <h2 className="text-title-3 text-foreground">Today</h2>
+                        <p className="text-meta text-muted-foreground mt-1">
+                            {today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                        </p>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-label text-muted-foreground mb-2">Next session</p>
+                            {nextSession ? (
+                                <div className="flex items-center gap-2.5 rounded-[var(--fz-radius-md)] border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] px-3 py-2.5">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--fz-accent)] shrink-0" />
+                                    <span className="text-body-sm text-foreground truncate flex-1">{nextSession.task}</span>
+                                    <span className="text-meta text-muted-foreground tabular-nums shrink-0">{nextSession.time}</span>
+                                </div>
+                            ) : (
+                                <p className="text-body-sm text-muted-foreground">Nothing scheduled.</p>
+                            )}
+                        </div>
+                        <div>
+                            <p className="text-label text-muted-foreground mb-2">Habits due</p>
+                            {habitsDue.length === 0 ? (
+                                <p className="text-body-sm text-muted-foreground">All habits checked in.</p>
+                            ) : (
+                                <div className="space-y-1">
+                                    {habitsDue.slice(0, 4).map((h: { id: number; name: string }) => (
+                                        <button
+                                            key={h.id}
+                                            type="button"
+                                            onClick={() => checkInHabit(h.id, todayStr)}
+                                            className="flex w-full items-center gap-2.5 rounded-[var(--fz-radius-md)] px-2 py-1.5 text-left transition-colors hover:bg-[var(--fz-bg-hover)]"
+                                        >
+                                            <span className="h-4 w-4 rounded border border-[var(--fz-border-strong)] shrink-0" />
+                                            <span className="text-body-sm text-foreground truncate">{h.name}</span>
+                                        </button>
+                                    ))}
+                                    {habitsDue.length > 4 && (
+                                        <p className="text-meta text-muted-foreground px-2">+{habitsDue.length - 4} more</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="mt-auto pt-4">
+                        <SparkMetricCard
+                            title="Focus time"
+                            value={formatTime(todayFocusMs)}
+                            deltaLabel={`${focusIsUp ? '+' : '−'}${focusDiffPercent}%`}
+                            points={sparkPoints}
+                            formatPointValue={(ms) => formatTime(ms)}
+                            className="!border-0 !bg-transparent !p-0 !shadow-none"
+                        />
+                    </div>
+                </SurfaceCard>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -324,7 +349,11 @@ export default function OverviewTab() {
                     </div>
                     <div className="flex-1 space-y-1 overflow-y-auto">
                         {planner.length === 0 && (
-                            <p className="text-muted-foreground text-sm py-8 text-center">Nothing scheduled yet.</p>
+                            <EmptyState
+                                icon={<ListChecks className="h-4 w-4" />}
+                                title="No tasks yet"
+                                description="Add what you want to get done today and tick it off as you go."
+                            />
                         )}
                         {planner.map((p: { id: number; task: string; done: boolean }) => (
                             <div
@@ -338,7 +367,7 @@ export default function OverviewTab() {
                                     aria-label={`${p.done ? 'Mark incomplete' : 'Mark complete'}: ${p.task}`}
                                     aria-pressed={p.done}
                                 >
-                                    <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${p.done ? 'bg-primary border-primary' : 'border-border'}`}>
+                                    <span className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 ${p.done ? 'bg-primary border-primary' : 'border-border'}`}>
                                         {p.done && <Check size={12} className="text-primary-foreground" />}
                                     </span>
                                     <span className={`text-sm truncate ${p.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{p.task}</span>
@@ -349,8 +378,7 @@ export default function OverviewTab() {
                                         event.stopPropagation();
                                         void deletePlanItem(p.id);
                                     }}
-                                    disabled={deletingTaskId !== null}
-                                    className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/60 disabled:cursor-wait disabled:opacity-40 group-hover:opacity-100"
+                                    className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/60 group-hover:opacity-100"
                                     aria-label={`Delete task: ${p.task}`}
                                     title={`Delete ${p.task}`}
                                 >
@@ -368,9 +396,9 @@ export default function OverviewTab() {
                             <p className="text-[11px] text-muted-foreground">{habits.length} active</p>
                         </div>
                         <div className="flex items-center gap-1">
-                            <button type="button" onClick={() => setOffsetWeeks(offsetWeeks + 1)} className="w-8 h-8 rounded-md text-muted-foreground hover:bg-accent">‹</button>
-                            <button type="button" disabled={offsetWeeks === 0} onClick={() => setOffsetWeeks(Math.max(0, offsetWeeks - 1))} className="w-8 h-8 rounded-md text-muted-foreground hover:bg-accent disabled:opacity-30">›</button>
-                            <button type="button" onClick={() => setHabitModalOpen(true)} className="w-8 h-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center ml-1">
+                            <button type="button" onClick={() => setOffsetWeeks(offsetWeeks + 1)} className="w-8 h-8 rounded-lg text-muted-foreground hover:bg-accent">‹</button>
+                            <button type="button" disabled={offsetWeeks === 0} onClick={() => setOffsetWeeks(Math.max(0, offsetWeeks - 1))} className="w-8 h-8 rounded-lg text-muted-foreground hover:bg-accent disabled:opacity-30">›</button>
+                            <button type="button" onClick={() => setHabitModalOpen(true)} className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center ml-1">
                                 <Plus size={16} />
                             </button>
                         </div>
@@ -406,64 +434,44 @@ export default function OverviewTab() {
                 </SurfaceCard>
             </div>
 
-            {selectedDay && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="fixed inset-0 z-[100] flex items-start justify-center bg-background/70 backdrop-blur-md p-4 pt-16 sm:pt-24 overflow-y-auto"
-                    onClick={() => setSelectedDay(null)}
-                >
-                    <motion.div
-                        initial={{ scale: 0.97, opacity: 0, y: 8 }}
-                        animate={{ scale: 1, opacity: 1, y: 0 }}
-                        className="w-full max-w-md rounded-[var(--radius)] border border-border bg-card shadow-[var(--dashboard-shadow)]"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="px-6 pt-6 pb-4 border-b border-border flex items-start justify-between gap-3">
-                            <div>
-                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                    {new Date(selectedDay.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                                </p>
-                                <p className="text-3xl font-semibold text-foreground mt-1 tabular-nums">{formatTime(selectedDay.total)}</p>
-                                <p className="text-[11px] text-muted-foreground mt-0.5">
-                                    total screen time
-                                    {selectedDay.focusMs
-                                        ? ` · ${formatTime(selectedDay.focusMs)} focus`
-                                        : ''}
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setSelectedDay(null)}
-                                className="w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-lg leading-none"
-                                aria-label="Close"
-                            >
-                                ×
-                            </button>
+            <Dialog
+                open={!!selectedDay}
+                onClose={() => setSelectedDay(null)}
+                size="md"
+                title={selectedDay ? new Date(selectedDay.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : ''}
+            >
+                {selectedDay && (
+                    <>
+                        <div className="mb-4">
+                            <p className="text-stat text-[var(--fz-text-1)] tabular-nums">{formatTime(selectedDay.total)}</p>
+                            <p className="text-meta text-[var(--fz-text-3)] mt-0.5">
+                                Total screen time
+                                {selectedDay.focusMs ? ` · ${formatTime(selectedDay.focusMs)} focus` : ''}
+                            </p>
                         </div>
-                        <div className="px-3 py-3 max-h-72 overflow-y-auto">
+                        <div className="max-h-72 overflow-y-auto -mx-1">
                             {Object.entries(selectedDay.sites ?? {})
                                 .sort(([, a], [, b]) => (b as number) - (a as number))
                                 .slice(0, 12)
                                 .map(([site, ms]) => (
-                                    <div key={site} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius)] hover:bg-accent/50 transition-colors">
+                                    <div key={site} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--fz-radius-md)] hover:bg-[var(--fz-bg-hover)] transition-colors">
                                         <img
                                             src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(site)}&sz=32`}
                                             alt=""
                                             className="w-5 h-5 rounded shrink-0"
                                             loading="lazy"
                                         />
-                                        <span className="text-sm text-foreground truncate flex-1">{site}</span>
-                                        <span className="text-xs font-semibold text-muted-foreground tabular-nums shrink-0">{formatTime(ms as number)}</span>
+                                        <span className="text-body-sm text-[var(--fz-text-1)] truncate flex-1">{site}</span>
+                                        <span className="text-meta font-medium text-[var(--fz-text-3)] tabular-nums shrink-0">{formatTime(ms as number)}</span>
                                     </div>
                                 ))}
                             {Object.keys(selectedDay.sites ?? {}).length === 0 && (
-                                <p className="text-sm text-muted-foreground text-center py-8">No sites recorded that day.</p>
+                                <p className="text-body-sm text-[var(--fz-text-3)] text-center py-8">No sites recorded that day.</p>
                             )}
                         </div>
-                    </motion.div>
-                </motion.div>
-            )}
+                    </>
+                )}
+            </Dialog>
 
             <HabitNameModal open={habitModalOpen} onClose={() => setHabitModalOpen(false)} onSubmit={addHabitByName} />
         </div>

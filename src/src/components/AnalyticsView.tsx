@@ -78,10 +78,10 @@ export function AnalyticsView({ onBack }: { onBack: () => void }) {
     const maxTimeSpent = topSites.length > 0 ? Math.max(...topSites.map(s => s.timeSpent)) : 1;
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-zinc-950">
+        <div className="absolute inset-0 flex flex-col bg-neutral-950">
             {/* Header - Fixed */}
-            <div className="flex items-center gap-2 p-3 border-b border-white/10 bg-zinc-900/50 backdrop-blur-md flex-shrink-0">
-                <Button variant="ghost" size="icon" onClick={onBack} className="text-zinc-400 hover:text-white">
+            <div className="flex items-center gap-2 p-3 border-b border-white/8 bg-neutral-900/50 backdrop-blur-md flex-shrink-0">
+                <Button variant="ghost" size="icon" onClick={onBack} className="text-neutral-400 hover:text-white">
                     <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <h2 className="text-lg font-semibold text-white">Analytics</h2>
@@ -91,34 +91,34 @@ export function AnalyticsView({ onBack }: { onBack: () => void }) {
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {/* Overview Cards */}
                 <div className="grid grid-cols-2 gap-3">
-                    <Card className="bg-zinc-900/50 border-white/5">
+                    <Card className="bg-neutral-900/50 border-white/8">
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between mb-2">
-                                <Clock className="h-4 w-4 text-purple-400" />
+                                <Clock className="h-4 w-4 text-blue-400" />
                                 <span className="text-xs text-green-400">Today</span>
                             </div>
                             <div className="text-2xl font-bold text-white">
                                 {formatTime(topSites.reduce((sum, site) => sum + site.timeSpent, 0))}
                             </div>
-                            <div className="text-xs text-zinc-500">Total Time</div>
+                            <div className="text-xs text-neutral-500">Total Time</div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-zinc-900/50 border-white/5">
+                    <Card className="bg-neutral-900/50 border-white/8">
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between mb-2">
                                 <Shield className="h-4 w-4 text-pink-400" />
-                                <span className="text-xs text-zinc-500">Total</span>
+                                <span className="text-xs text-neutral-500">Total</span>
                             </div>
                             <div className="text-2xl font-bold text-white">{stats.blocksCount}</div>
-                            <div className="text-xs text-zinc-500">Sites Blocked</div>
+                            <div className="text-xs text-neutral-500">Sites Blocked</div>
                         </CardContent>
                     </Card>
                 </div>
 
                 {/* Weekly Activity Chart */}
-                <Card className="bg-zinc-900/50 border-white/5">
+                <Card className="bg-neutral-900/50 border-white/8">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                        <CardTitle className="text-sm font-medium text-neutral-400 flex items-center gap-2">
                             <BarChart3 className="h-4 w-4" />
                             Weekly Activity
                         </CardTitle>
@@ -128,10 +128,10 @@ export function AnalyticsView({ onBack }: { onBack: () => void }) {
                             {stats.dailyActivity.map((val, i) => (
                                 <div key={i} className="flex flex-col items-center gap-1 flex-1">
                                     <div
-                                        className="w-full bg-purple-600/50 hover:bg-purple-500 rounded-t transition-all"
+                                        className="w-full bg-blue-600/50 hover:bg-blue-500 rounded-t transition-all"
                                         style={{ height: `${(val / maxActivity) * 100}%` }}
                                     />
-                                    <span className="text-[10px] text-zinc-600">
+                                    <span className="text-[11px] text-neutral-600">
                                         {['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}
                                     </span>
                                 </div>
@@ -141,24 +141,24 @@ export function AnalyticsView({ onBack }: { onBack: () => void }) {
                 </Card>
 
                 {/* Top Sites - Real Data with Favicons */}
-                <Card className="bg-zinc-900/50 border-white/5">
+                <Card className="bg-neutral-900/50 border-white/8">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                        <CardTitle className="text-sm font-medium text-neutral-400 flex items-center gap-2">
                             <TrendingUp className="h-4 w-4" />
                             Top Sites Today
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                         {loading ? (
-                            <div className="text-center py-4 text-zinc-500 text-xs">Loading...</div>
+                            <div className="text-center py-4 text-neutral-500 text-xs">Loading...</div>
                         ) : topSites.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-8 text-center space-y-2">
-                                <div className="w-12 h-12 rounded-full bg-zinc-800/50 flex items-center justify-center">
-                                    <TrendingUp className="w-6 h-6 text-zinc-600" />
+                                <div className="w-12 h-12 rounded-full bg-neutral-800/50 flex items-center justify-center">
+                                    <TrendingUp className="w-6 h-6 text-neutral-600" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-medium text-zinc-400">No data yet</p>
-                                    <p className="text-[10px] text-zinc-600">Browse the web to generate stats!</p>
+                                    <p className="text-xs font-medium text-neutral-400">No data yet</p>
+                                    <p className="text-[11px] text-neutral-600">Browse the web to generate stats!</p>
                                 </div>
                             </div>
                         ) : (
@@ -174,13 +174,13 @@ export function AnalyticsView({ onBack }: { onBack: () => void }) {
                                                     e.currentTarget.style.display = 'none';
                                                 }}
                                             />
-                                            <span className="text-xs text-zinc-300 truncate">{site.domain}</span>
+                                            <span className="text-xs text-neutral-300 truncate">{site.domain}</span>
                                         </div>
-                                        <span className="text-xs text-zinc-500 flex-shrink-0">{formatTime(site.timeSpent)}</span>
+                                        <span className="text-xs text-neutral-500 flex-shrink-0">{formatTime(site.timeSpent)}</span>
                                     </div>
                                     <Progress
                                         value={(site.timeSpent / maxTimeSpent) * 100}
-                                        className="h-1.5 bg-zinc-800"
+                                        className="h-1.5 bg-neutral-800"
                                     />
                                 </div>
                             ))

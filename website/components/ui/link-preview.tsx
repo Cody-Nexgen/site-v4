@@ -108,13 +108,13 @@ export const LinkPreview = ({
                 },
               }}
               exit={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
-              className="absolute left-1/2 bottom-full mb-2 z-50 shadow-xl rounded-xl"
+              className="absolute left-1/2 bottom-full mb-2 z-50 shadow-xl rounded-lg"
               style={{
                 x: translateX,
               }}
             >
               <div
-                className="block p-1 bg-white border-2 border-transparent shadow rounded-xl hover:border-neutral-200 dark:hover:border-neutral-800"
+                className="block p-1 bg-white border-2 border-transparent shadow rounded-lg hover:border-neutral-200 dark:hover:border-neutral-800"
                 style={{ fontSize: 0 }}
               >
                 <img

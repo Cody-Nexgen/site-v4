@@ -79,7 +79,7 @@ export type LevelProgress = {
     isMaxLevel: boolean;
 };
 
-const EVENT_REWARDS: Record<ProgressionEvent, { xp: number; coins: number }> = {
+export const EVENT_REWARDS: Record<ProgressionEvent, { xp: number; coins: number }> = {
     pomodoro_complete: { xp: 25, coins: 5 },
     block_resisted: { xp: 5, coins: 1 },
     habit_checkin: { xp: 15, coins: 3 },

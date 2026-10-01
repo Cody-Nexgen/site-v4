@@ -1,25 +1,8 @@
-import { useAuthStore, type EngineState } from './store';
-import {
-    isProGoldThemeActive,
-    isProMotionEnabled,
-    isProThemeActive,
-    PRO_GOLD_THEME_ID,
-    PRO_THEME_ID,
-} from './themes';
+import { useAuthStore } from './store';
 
 export const PRO_DASHBOARD_SETTING_KEY = 'proDashboardVisuals';
 export const FOCUS_COMPLETE_EVENT = 'focuznow-focus-complete';
 export const PRO_CONFETTI_SESSION_KEY = 'focuznow_pro_confetti_week';
-
-export { PRO_THEME_ID, PRO_GOLD_THEME_ID, isProThemeActive, isProGoldThemeActive, isProMotionEnabled };
-
-/** @deprecated use isProMotionEnabled */
-export function isProDashboardVisualsEnabled(
-    engineState: Pick<EngineState, 'theme'> & { proDashboardVisuals?: boolean },
-    isPro: boolean,
-): boolean {
-    return isProMotionEnabled(engineState, isPro);
-}
 
 export function shouldShowProConfetti(): boolean {
     try {
@@ -45,12 +28,16 @@ export function dispatchFocusComplete() {
     window.dispatchEvent(new CustomEvent(FOCUS_COMPLETE_EVENT));
 }
 
-export function useProDashboardVisuals() {
+/**
+ * Motion/polish visuals — now enabled for every user (Pro Gold deleted).
+ * `setEnabled` is retained as the "Reduce motion" switch in Settings:
+ * `enabled=false` means reduce motion.
+ */
+export function useVisuals() {
     const { subscriptionTier, engineState, fetchEngineState } = useAuthStore();
     const isPro = subscriptionTier === 'pro';
-    const proTheme = isProThemeActive(engineState, isPro);
-    const proGoldTheme = isProGoldThemeActive(engineState, isPro);
-    const enabled = isProMotionEnabled(engineState, isPro);
+    // `proDashboardVisuals === false` is the stored "reduce motion" opt-out.
+    const enabled = engineState.proDashboardVisuals !== false;
 
     const setEnabled = async (next: boolean) => {
         await new Promise<void>((resolve) =>
@@ -62,5 +49,9 @@ export function useProDashboardVisuals() {
         await fetchEngineState();
     };
 
-    return { isPro, proTheme, proGoldTheme, enabled, setEnabled };
+    // Gold theme is deleted — these stay false so old call sites take the neutral branch.
+    return { isPro, enabled, setEnabled, proTheme: false, proGoldTheme: false };
 }
+
+/** @deprecated use useVisuals — same shape, enabled is now universal. */
+export const useProDashboardVisuals = useVisuals;

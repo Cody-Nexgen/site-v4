@@ -18,7 +18,6 @@ const state = {
     },
     schedules: {},      // domain -> [{ id, startHour, startMin, endHour, endMin, days: [0-6] }]
     timers: {},         // domain -> [{ id, endTime, durationMs }]
-    onTimerExpired: null, // Callback for journaling
 
     // New Feature Settings
     activeDays: [0, 1, 2, 3, 4, 5, 6], // 0-6 (Sun-Sat)
@@ -74,14 +73,6 @@ const state = {
     dailyPlanner: [],
     savedQuotes: [],
 
-    // Integrations
-    googleCalendarConnected: false,
-    googleCalendarToken: '',
-    googleProfile: null,
-    notionConnected: false,
-    notionToken: '',
-    notionDatabaseId: '',
-    notionJournalingEnabled: false,
     proDashboardVisuals: false
 };
 
@@ -115,8 +106,13 @@ export async function requestEmergencyOverride(url, reason) {
 // PERSISTENCE
 // =========================================================
 
+/** Fields of the removed Notion / Google Calendar integrations (purged from old saves). */
+const REMOVED_INTEGRATION_KEYS = ['googleCalendarConnected', 'googleCalendarToken', 'googleProfile', 'notionConnected', 'notionToken', 'notionDatabaseId', 'notionJournalingEnabled'];
+
+/** Last blockedToday/nuclear pair written to storage.sync (see saveState). */
+let lastSyncedKey = '';
+
 export async function saveState() {
-    console.log("[BlockEngine] saveState called");
     const serialized = {
         blocklist: {},
         allowedSites: Array.from(state.allowedSites),
@@ -150,13 +146,6 @@ export async function saveState() {
         scratchpad: state.scratchpad,
         dailyPlanner: state.dailyPlanner,
         savedQuotes: state.savedQuotes,
-        googleCalendarConnected: state.googleCalendarConnected,
-        googleCalendarToken: state.googleCalendarToken,
-        googleProfile: state.googleProfile,
-        notionConnected: state.notionConnected,
-        notionToken: state.notionToken,
-        notionDatabaseId: state.notionDatabaseId,
-        notionJournalingEnabled: state.notionJournalingEnabled,
         _localMutationAt: state._localMutationAt || 0,
         allowlistMode: state.allowlistMode === true,
     };
@@ -176,23 +165,25 @@ export async function saveState() {
 
     await chrome.storage.local.set({ blockEngineState: serialized });
 
-    // Also save critical state to sync storage for persistence across reinstalls
+    // Also save critical state to sync storage for persistence across reinstalls.
+    // storage.sync allows ~120 writes/minute, so only write when these change —
+    // it used to be rewritten on every save (every toggle, every blocked page).
     const syncState = {
-        blockedToday: state.blockedToday
+        blockedToday: state.blockedToday,
+        nuclearState: state.nuclearState.active
+            ? { ...state.nuclearState, remainingMs: Math.max(0, state.nuclearState.endTime - Date.now()) }
+            : state.nuclearState,
     };
-
-    if (state.nuclearState.active) {
-        syncState.nuclearState = {
-            ...state.nuclearState,
-            remainingMs: Math.max(0, state.nuclearState.endTime - Date.now())
-        };
-    } else {
-        syncState.nuclearState = state.nuclearState;
+    const syncKey = JSON.stringify({ blockedToday: syncState.blockedToday, nuclear: state.nuclearState });
+    if (syncKey !== lastSyncedKey) {
+        try {
+            await chrome.storage.sync.set(syncState);
+            lastSyncedKey = syncKey;
+        } catch (e) {
+            console.warn("[BlockEngine] storage.sync write failed:", e?.message || e);
+        }
     }
 
-    await chrome.storage.sync.set(syncState);
-
-    console.log("[BlockEngine] State saved successfully");
 
     // Broadcast update
     try {
@@ -209,12 +200,10 @@ export async function saveState() {
 }
 
 export async function loadState() {
-    console.log("[BlockEngine] loadState called");
     const result = await chrome.storage.local.get('blockEngineState');
 
     if (result.blockEngineState) {
         const loaded = result.blockEngineState;
-        console.log("[BlockEngine] Found saved state:", loaded);
 
         // Restore blocklist (convert Arrays back to Sets)
         state.blocklist = {};
@@ -320,19 +309,11 @@ export async function loadState() {
         state.savedQuotes = loaded.savedQuotes || [];
 
         // Restore Integrations
-        state.googleCalendarConnected = loaded.googleCalendarConnected ?? false;
-        state.googleCalendarToken = loaded.googleCalendarToken || '';
-        state.googleProfile = loaded.googleProfile || null;
-        state.notionConnected = loaded.notionConnected ?? false;
-        state.notionToken = loaded.notionToken || '';
-        state.notionDatabaseId = loaded.notionDatabaseId || '';
-        state.notionJournalingEnabled = loaded.notionJournalingEnabled ?? false;
         state.proDashboardVisuals = loaded.proDashboardVisuals ?? state.proDashboardVisuals;
 
         // Overlay sync state for Nuclear persistence
         const syncResult = await chrome.storage.sync.get(['nuclearState', 'blockedToday']);
         if (syncResult.nuclearState) {
-            console.log("[BlockEngine] Found synced Nuclear state:", syncResult.nuclearState);
             if (syncResult.nuclearState.active) {
                 // "Pause" logic: calculate new endTime based on remaining duration
                 state.nuclearState = {
@@ -347,10 +328,11 @@ export async function loadState() {
             state.blockedToday = syncResult.blockedToday;
         }
 
-        console.log("[BlockEngine] State loaded into memory");
         applyRules();
-    } else {
-        console.log("[BlockEngine] No saved state found");
+
+        // The Notion / Google Calendar integrations were removed. Once everything above
+        // is loaded, rewrite the saved state so their old tokens don't linger in storage.
+        if (REMOVED_INTEGRATION_KEYS.some((key) => key in loaded)) await saveState();
     }
 }
 
@@ -359,7 +341,6 @@ export async function loadState() {
 // =========================================================
 
 function addSource(domain, source) {
-    console.log(`[BlockEngine] addSource: ${domain} [${source}]`);
     if (!state.blocklist[domain]) {
         state.blocklist[domain] = { sources: new Set(), categoryKeys: new Set() };
     }
@@ -370,12 +351,10 @@ function addSource(domain, source) {
 }
 
 function removeSource(domain, source) {
-    console.log(`[BlockEngine] removeSource: ${domain} [${source}]`);
     if (!state.blocklist[domain]) return;
     state.blocklist[domain].sources.delete(source);
 
     if (state.blocklist[domain].sources.size === 0) {
-        console.log(`[BlockEngine] Domain ${domain} has no more sources, removing from blocklist`);
         delete state.blocklist[domain];
     }
 }
@@ -437,19 +416,16 @@ function getNuclearAllowedSites() {
 export async function addAllowedSite(rawDomain) {
     const domain = sanitizeDomain(rawDomain);
     if (!domain) return;
-    console.log(`[BlockEngine] addAllowedSite: ${domain}`);
     state.allowedSites.add(domain);
     state._localMutationAt = Date.now();
-    // Strip matching blocklist entries so allowlist actually unblocks.
+    // Strip matching blocklist entries so allowlist actually unblocks. During a
+    // nuclear lockdown the allowlist change is deferred until it ends.
     if (!state.nuclearState.active) {
         for (const blocked of Object.keys(state.blocklist)) {
             if (isDomainAllowlisted(blocked, state.allowedSites)) {
-                console.log(`[BlockEngine] Removing ${blocked} from blocklist because it was allowlisted`);
                 delete state.blocklist[blocked];
             }
         }
-    } else {
-        console.log(`[BlockEngine] Allowlist add deferred during nuclear lockdown: ${domain}`);
     }
     // First allowlist entry turns on exclusive mode (matches UI copy).
     if (state.allowedSites.size === 1) {
@@ -460,7 +436,6 @@ export async function addAllowedSite(rawDomain) {
 }
 
 export async function removeAllowedSite(domain) {
-    console.log(`[BlockEngine] removeAllowedSite: ${domain}`);
     state.allowedSites.delete(domain);
     state._localMutationAt = Date.now();
     if (state.allowedSites.size === 0) {
@@ -509,7 +484,6 @@ function checkDailyReset() {
     const resetMinutes = resetH * 60 + resetM;
 
     if (currentMinutes >= resetMinutes) {
-        console.log("[BlockEngine] Daily reset triggered at", now.toLocaleTimeString());
         state.blockedToday = 0;
         state.lastResetMarker = resetMarker;
         saveState();
@@ -524,7 +498,6 @@ function checkDailyReset() {
 // =========================================================
 
 export async function startNuclearOption(type, durationMinutes) {
-    console.log(`[BlockEngine] Starting NUCLEAR OPTION: ${type} for ${durationMinutes}m`);
     state.nuclearState = {
         active: true,
         endTime: Date.now() + (durationMinutes * 60 * 1000),
@@ -537,12 +510,10 @@ export async function startNuclearOption(type, durationMinutes) {
 
 function checkNuclearOption() {
     if (state.nuclearState.active && Date.now() > state.nuclearState.endTime) {
-        console.log("[BlockEngine] Nuclear Option EXPIRED");
         state.nuclearState.active = false;
         // Apply deferred allowlist exclusivity for sites added during lockdown
         for (const domain of state.allowedSites) {
             if (state.blocklist[domain]) {
-                console.log(`[BlockEngine] Applying deferred allowlist for ${domain}`);
                 delete state.blocklist[domain];
             }
         }
@@ -583,22 +554,18 @@ function sanitizeDomain(domain) {
 export async function blockDomainManual(rawDomain) {
     const domain = sanitizeDomain(rawDomain);
     if (!domain) return;
-    console.log(`[BlockEngine] blockDomainManual called for: ${domain}`);
     // Remove from allowedSites if present (Exclusivity)
     if (state.allowedSites.has(domain)) {
-        console.log(`[BlockEngine] Removing ${domain} from allowlist because it was manually blocked`);
         state.allowedSites.delete(domain);
     }
     addSource(domain, "manual");
     state._localMutationAt = Date.now();
     applyRules();
     await saveState();
-    console.log(`[BlockEngine] blockDomainManual finished for: ${domain}`);
 }
 
 export async function unblockDomainManual(domain) {
     assertCanRemoveBlockSource(domain);
-    console.log(`[BlockEngine] unblockDomainManual called for: ${domain}`);
     removeSource(domain, "manual");
     // Full manual unblock should also clear leftover category membership so the
     // site does not stay blocked after disappearing from the blocklist UI.
@@ -611,7 +578,6 @@ export async function unblockDomainManual(domain) {
     state._localMutationAt = Date.now();
     applyRules();
     await saveState();
-    console.log(`[BlockEngine] unblockDomainManual finished for: ${domain}`);
 }
 
 // =========================================================
@@ -619,18 +585,15 @@ export async function unblockDomainManual(domain) {
 // =========================================================
 
 export async function blockRegexManual(pattern) {
-    console.log(`[BlockEngine] blockRegexManual called for: ${pattern}`);
     if (!state.regexBlocklist[pattern]) {
         state.regexBlocklist[pattern] = { sources: new Set() };
     }
     state.regexBlocklist[pattern].sources.add("manual");
     applyRules();
     await saveState();
-    console.log(`[BlockEngine] blockRegexManual finished for: ${pattern}`);
 }
 
 export async function unblockRegexManual(pattern) {
-    console.log(`[BlockEngine] unblockRegexManual called for: ${pattern}`);
     if (state.regexBlocklist[pattern]) {
         state.regexBlocklist[pattern].sources.delete("manual");
         if (state.regexBlocklist[pattern].sources.size === 0) {
@@ -639,7 +602,6 @@ export async function unblockRegexManual(pattern) {
     }
     applyRules();
     await saveState();
-    console.log(`[BlockEngine] unblockRegexManual finished for: ${pattern}`);
 }
 
 // =========================================================
@@ -647,7 +609,6 @@ export async function unblockRegexManual(pattern) {
 // =========================================================
 
 export async function enableCategory(categoryName) {
-    console.log(`[BlockEngine] enableCategory called for: ${categoryName}`);
     if (!CATEGORIES[categoryName]) {
         const error = new Error(`Unsupported block category: ${categoryName}`);
         error.code = 'INVALID_CATEGORY_KEY';
@@ -655,7 +616,6 @@ export async function enableCategory(categoryName) {
     }
 
     state.categoriesActive[categoryName] = true;
-    console.log(`[BlockEngine] Category enabled in state: ${categoryName}`);
 
     // Add all domains in this category (skip allowlisted hosts)
     for (const domain of CATEGORIES[categoryName]) {
@@ -667,7 +627,6 @@ export async function enableCategory(categoryName) {
     state._localMutationAt = Date.now();
     applyRules();
     await saveState();
-    console.log(`[BlockEngine] enableCategory finished for: ${categoryName}`);
 }
 
 export async function disableCategory(categoryName) {
@@ -677,7 +636,6 @@ export async function disableCategory(categoryName) {
         error.code = 'NUCLEAR_LOCKDOWN_ACTIVE';
         throw error;
     }
-    console.log(`[BlockEngine] disableCategory called for: ${categoryName}`);
     if (!CATEGORIES[categoryName]) {
         const error = new Error(`Unsupported block category: ${categoryName}`);
         error.code = 'INVALID_CATEGORY_KEY';
@@ -685,7 +643,6 @@ export async function disableCategory(categoryName) {
     }
 
     state.categoriesActive[categoryName] = false;
-    console.log(`[BlockEngine] Category disabled in state: ${categoryName}`);
 
     // Remove category source from all domains
     for (const domain of CATEGORIES[categoryName]) {
@@ -698,7 +655,6 @@ export async function disableCategory(categoryName) {
     state._localMutationAt = Date.now();
     applyRules();
     await saveState();
-    console.log(`[BlockEngine] disableCategory finished for: ${categoryName}`);
 }
 
 export function getCategoryState(categoryName) {
@@ -714,7 +670,6 @@ export function getAllCategoryStates() {
 // =========================================================
 
 export async function addDailySchedule(domain, startHour, startMin, endHour, endMin, days = [0, 1, 2, 3, 4, 5, 6], specificDate = null) {
-    console.log(`[BlockEngine] addDailySchedule called for: ${domain}`);
     if (!state.schedules[domain]) {
         state.schedules[domain] = [];
     }
@@ -755,18 +710,15 @@ export async function addDailySchedule(domain, startHour, startMin, endHour, end
     }
 
     if (isActiveNow) {
-        console.log(`[BlockEngine] New schedule is ACTIVE NOW — enforcing immediately for ${domain}`);
         addSource(domain, "schedule");
         applyRules();
     }
 
     await saveState();
-    console.log(`[BlockEngine] addDailySchedule finished. ID: ${schedule.id}`);
     return schedule.id;
 }
 
 export async function removeDailySchedule(domain, scheduleId) {
-    console.log(`[BlockEngine] removeDailySchedule called for: ${domain}, ID: ${scheduleId}`);
     assertCanRemoveBlockSource(domain);
     if (!state.schedules[domain]) return;
 
@@ -778,7 +730,6 @@ export async function removeDailySchedule(domain, scheduleId) {
 
     await saveState();
     checkSchedules();
-    console.log(`[BlockEngine] removeDailySchedule finished`);
 }
 
 export function getSchedules(domain = null) {
@@ -789,7 +740,6 @@ export function getSchedules(domain = null) {
 }
 
 export function checkSchedules() {
-    console.log("[BlockEngine] checkSchedules heartbeat...");
     const now = new Date();
     const currentDay = now.getDay();
     const currentHour = now.getHours();
@@ -833,13 +783,11 @@ export function checkSchedules() {
         const hasScheduleSource = state.blocklist[domain]?.sources?.has("schedule");
 
         if (shouldBlock && !hasScheduleSource) {
-            console.log(`[BlockEngine] Schedule ACTIVATING for ${domain}`);
             // Only add if not manually blocked (optional, but requested behavior usually)
             // Actually, we should add it regardless, so it persists if manual is removed
             addSource(domain, "schedule");
             changed = true;
         } else if (!shouldBlock && hasScheduleSource) {
-            console.log(`[BlockEngine] Schedule DEACTIVATING for ${domain}`);
             removeSource(domain, "schedule");
             changed = true;
         }
@@ -856,7 +804,6 @@ export function checkSchedules() {
 // =========================================================
 
 export async function startTimer(domain, durationMinutes) {
-    console.log(`[BlockEngine] startTimer called for: ${domain}, duration: ${durationMinutes}m`);
     if (!state.timers[domain]) {
         state.timers[domain] = [];
     }
@@ -875,12 +822,10 @@ export async function startTimer(domain, durationMinutes) {
     applyRules();
     await saveState();
 
-    console.log(`[BlockEngine] startTimer finished. ID: ${timer.id}`);
     return timer.id;
 }
 
 export async function cancelTimer(domain, timerId) {
-    console.log(`[BlockEngine] cancelTimer called for: ${domain}, ID: ${timerId}`);
     assertCanRemoveBlockSource(domain);
     if (!state.timers[domain]) return;
 
@@ -893,7 +838,6 @@ export async function cancelTimer(domain, timerId) {
 
     applyRules();
     await saveState();
-    console.log(`[BlockEngine] cancelTimer finished`);
 }
 
 export async function removeBlockSource(rawDomain, source, sourceId = null) {
@@ -960,7 +904,6 @@ export async function removeBlockSource(rawDomain, source, sourceId = null) {
 
 export function checkTimers() {
     // Log every second as requested
-    console.log(`[BlockEngine] checkTimers heartbeat... Active timers: ${Object.keys(state.timers).length}`);
 
     const now = Date.now();
     let changed = false;
@@ -972,19 +915,11 @@ export function checkTimers() {
         state.timers[domain] = state.timers[domain].filter(t => t.endTime > now);
 
         if (state.timers[domain].length === 0) {
-            console.log(`[BlockEngine] Timer EXPIRED for ${domain}`);
-
-            // Log to Notion if callback is set
-            if (state.onTimerExpired && expired.length > 0) {
-                const totalDuration = expired.reduce((acc, t) => acc + (t.durationMs || 0), 0);
-                state.onTimerExpired(domain, totalDuration);
-            }
 
             delete state.timers[domain];
             removeSource(domain, "timer");
             changed = true;
         } else if (state.timers[domain].length !== activeBefore) {
-            console.log(`[BlockEngine] A timer expired for ${domain}, but others remain`);
             changed = true;
         }
     }
@@ -1003,7 +938,7 @@ export function getTimers(domain = null) {
 }
 
 export async function updateEngineSettings(settings) {
-                    const allowedFields = ['activeDays', 'activeHours', 'dailyResetTime', 'redirectMessage', 'requireChallenge', 'trackBackgroundAudio', 'draggableTimer', 'pomodoroWidget', 'focusMode', 'allowlistMode', 'inAppBlock', 'theme', 'customTheme', 'todos', 'dailyFocusTarget', 'profileName', 'profileInitial', 'profileAvatar', 'pomodoroSettings', 'habits', 'scratchpad', 'dailyPlanner', 'savedQuotes', 'googleCalendarConnected', 'googleCalendarToken', 'googleProfile', 'notionConnected', 'notionToken', 'notionDatabaseId', 'notionJournalingEnabled', 'dashboardLayout', 'weeklyGoalHours', 'proDashboardVisuals', 'temporaryAllows', 'emergencyOverrideSettings'];
+    const allowedFields = ['activeDays', 'activeHours', 'dailyResetTime', 'redirectMessage', 'requireChallenge', 'trackBackgroundAudio', 'draggableTimer', 'pomodoroWidget', 'focusMode', 'allowlistMode', 'inAppBlock', 'theme', 'customTheme', 'todos', 'dailyFocusTarget', 'profileName', 'profileInitial', 'profileAvatar', 'pomodoroSettings', 'habits', 'scratchpad', 'dailyPlanner', 'savedQuotes', 'dashboardLayout', 'weeklyGoalHours', 'proDashboardVisuals', 'temporaryAllows', 'emergencyOverrideSettings', 'pageVersions'];
     for (const field of allowedFields) {
         if (settings[field] !== undefined) {
             state[field] = field === 'inAppBlock'
@@ -1014,10 +949,6 @@ export async function updateEngineSettings(settings) {
     // Bump so cloud hydrate / web GET_STATE can't overwrite with a stale remote snapshot.
     state._localMutationAt = Date.now();
     await saveState();
-    if (settings.notionJournalingEnabled !== undefined) {
-        // Force immediate save if journaling toggle changed
-        await saveState();
-    }
     applyRules();
 
     if (settings.inAppBlock !== undefined) {
@@ -1049,9 +980,6 @@ export async function applyCloudWorkspaceState(remote) {
     if (!remote || typeof remote !== 'object') return;
 
     const settings = { ...remote };
-    delete settings.googleCalendarToken;
-    delete settings.notionToken;
-    delete settings.googleProfile;
 
     const remoteMutationAt = Number(settings._localMutationAt) || 0;
     const localMutationAt = Number(state._localMutationAt) || 0;
@@ -1059,7 +987,6 @@ export async function applyCloudWorkspaceState(remote) {
 
     if (settings.blocklist && typeof settings.blocklist === 'object') {
         if (preferLocalBlocking) {
-            console.log('[BlockEngine] Skipping remote blocklist — local mutations are newer');
             delete settings.blocklist;
         } else {
             state.blocklist = {};
@@ -1147,21 +1074,21 @@ export async function applyCloudWorkspaceState(remote) {
         await chrome.storage.local.set(extraStorage);
     }
 
+    // updateEngineSettings saves and re-applies the rules (covering the blocklist edits above).
     await updateEngineSettings(settings);
-    await saveState();
-    applyRules();
 }
 
 // =========================================================
 // STATE EXPORT
 // =========================================================
 
-export function setTimerExpiredCallback(callback) {
-    state.onTimerExpired = callback;
+
+/** Cheap read for hot paths that need one flag, not a full engine snapshot. */
+export function isTrackingBackgroundAudio() {
+    return state.trackBackgroundAudio === true;
 }
 
 export function getEngineState() {
-    console.log("[BlockEngine] getEngineState called");
     const formatted = {};
 
     for (const domain in state.blocklist) {
@@ -1205,13 +1132,6 @@ export function getEngineState() {
         scratchpad: state.scratchpad,
         dailyPlanner: state.dailyPlanner,
         savedQuotes: state.savedQuotes,
-        googleCalendarConnected: state.googleCalendarConnected,
-        googleCalendarToken: state.googleCalendarToken,
-        googleProfile: state.googleProfile,
-        notionConnected: state.notionConnected,
-        notionToken: state.notionToken,
-        notionDatabaseId: state.notionDatabaseId,
-        notionJournalingEnabled: state.notionJournalingEnabled,
         proDashboardVisuals: state.proDashboardVisuals
     };
 }
@@ -1232,7 +1152,6 @@ export async function incrementBlockedCount() {
 // =========================================================
 
 export function applyRules() {
-    console.log("[BlockEngine] applyRules called");
     pruneTemporaryAllows(state);
     const rules = [];
     let idCounter = 1;
@@ -1430,27 +1349,73 @@ export function applyRules() {
         }
     }
 
-    console.log(`[BlockEngine] Generated ${rules.length} rules. Updating dynamic rules...`);
-    // console.log("[BlockEngine] Rules:", JSON.stringify(rules, null, 2)); // Verbose logging
+    queueRuleUpdate(rules);
+}
 
-    chrome.declarativeNetRequest.updateDynamicRules({
-        removeRuleIds: Array.from({ length: 1000 }, (_, i) => i + 1), // Clear old rules (naive max ID)
-        addRules: rules
-    }, () => {
-        if (chrome.runtime.lastError) {
-            console.error("[BlockEngine] Error updating rules:", chrome.runtime.lastError);
-        } else {
-            console.log("[BlockEngine] Rules updated successfully");
+// Rule updates run one at a time, collapse bursts (only the newest rule set is
+// installed — twenty quick toggles mean at most two updates), and are skipped when
+// nothing changed: each updateDynamicRules call makes the browser re-index every rule.
+let lastAppliedRules = null;
+let pendingRules = null;
+let ruleUpdateRunning = false;
+
+function queueRuleUpdate(rules) {
+    pendingRules = rules;
+    if (!ruleUpdateRunning) void drainRuleUpdates();
+}
+
+async function drainRuleUpdates() {
+    ruleUpdateRunning = true;
+    try {
+        while (pendingRules) {
+            const rules = pendingRules;
+            pendingRules = null;
+            const signature = JSON.stringify(rules);
+            if (signature === lastAppliedRules) continue;
+            try {
+                // Remove whatever is installed — the old fixed 1..1000 id range missed
+                // rules past 1000, and the duplicate ids then made every update fail.
+                const existing = await chrome.declarativeNetRequest.getDynamicRules();
+                await chrome.declarativeNetRequest.updateDynamicRules({
+                    removeRuleIds: existing.map((rule) => rule.id),
+                    addRules: rules,
+                });
+                lastAppliedRules = signature;
+            } catch (e) {
+                lastAppliedRules = null;
+                console.error("[BlockEngine] Error updating rules:", e?.message || e);
+            }
         }
-    });
+    } finally {
+        ruleUpdateRunning = false;
+    }
 }
 
 // =========================================================
 // INITIALIZATION
 // =========================================================
 
-export async function initBlockEngine() {
-    console.log("[BlockEngine] initBlockEngine STARTING");
+// One load per service-worker lifetime. MV3 kills the worker after ~30s idle and
+// a click can wake it: the message listener is live before storage has loaded,
+// so a handler that ran early would edit the empty default state and saveState()
+// would overwrite the user's saved blocklist. Every handler awaits this first.
+let enginePromise = null;
+
+export function whenEngineReady() {
+    if (!enginePromise) {
+        enginePromise = startBlockEngine().catch((err) => {
+            enginePromise = null;
+            throw err;
+        });
+    }
+    return enginePromise;
+}
+
+export function initBlockEngine() {
+    return whenEngineReady();
+}
+
+async function startBlockEngine() {
     await loadState();
     checkSchedules();
     checkTimers();
@@ -1458,14 +1423,16 @@ export async function initBlockEngine() {
 
     // MV3 Lifecycle Heartbeat
     chrome.alarms.create('blockEngineHeartbeat', { periodInMinutes: 1 });
-    chrome.alarms.onAlarm.addListener((alarm) => {
-        if (alarm.name === 'blockEngineHeartbeat') {
-            checkNuclearOption();
-            checkTimers();
-            checkSchedules();
-            checkDailyReset();
-        }
-    });
 
-    console.log("[BlockEngine] initBlockEngine COMPLETED");
 }
+
+// Registered at module load (not after an await) so an alarm that wakes the
+// worker is delivered to it.
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name !== 'blockEngineHeartbeat') return;
+    await whenEngineReady();
+    checkNuclearOption();
+    checkTimers();
+    checkSchedules();
+    checkDailyReset();
+});

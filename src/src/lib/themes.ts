@@ -1,6 +1,6 @@
 import type { EngineState } from './store';
+import { accentHueFor, applyAccentHue, readCustomHue } from './accents';
 
-export const PRO_GOLD_THEME_ID = 'pro' as const;
 export const CUSTOM_THEME_ID = 'custom' as const;
 export const DASHBOARD_COLOR_MODE_KEY = 'dashboardColorMode' as const;
 const DASHBOARD_COLOR_MODE_CACHE_KEY = 'focuznow-dashboard-color-mode-v1';
@@ -128,65 +128,58 @@ export function subscribeToDashboardColorMode(
     };
 }
 
-/** @deprecated use PRO_GOLD_THEME_ID */
-export const PRO_THEME_ID = PRO_GOLD_THEME_ID;
+export const PRO_GOLD_THEME_ID = 'pro' as const; // legacy stored value only — theme deleted
 
-export const PUBLIC_THEME_IDS = ['purple', 'emerald', 'amber', 'rose'] as const;
+// 'blue' is deliberately absent: it was the post-gold migration target, so a stored
+// 'blue' is treated as the legacy default and resolves to mono. Blue is now 'azure'.
+export const PUBLIC_THEME_IDS = ['mono', 'azure', 'violet', 'emerald', 'amber', 'rose'] as const;
 
-export const PRO_EXCLUSIVE_THEME_IDS = [PRO_GOLD_THEME_ID, CUSTOM_THEME_ID] as const;
+export const PRO_EXCLUSIVE_THEME_IDS = [CUSTOM_THEME_ID] as const; // custom is free; kept for type compat
 
 export type PublicThemeId = (typeof PUBLIC_THEME_IDS)[number];
-export type ProExclusiveThemeId = (typeof PRO_EXCLUSIVE_THEME_IDS)[number];
-export type ThemeId = PublicThemeId | ProExclusiveThemeId;
+export type ThemeId = PublicThemeId | typeof CUSTOM_THEME_ID;
 
 export interface CustomThemeColors {
     primary: string;
     accent: string;
     highlight: string;
+    /** OKLCH hue for the accent picker (custom accent = user hue, L/C clamped). */
+    hue?: number;
 }
 
 export const DEFAULT_CUSTOM_THEME: CustomThemeColors = {
-    primary: '#7c3aed',
-    accent: '#a855f7',
-    highlight: '#c4b5fd',
+    primary: '#3b82f6',
+    accent: '#5ea2ff',
+    highlight: '#bfdbfe',
 };
 
 export const THEME_LABELS: Record<ThemeId, string> = {
-    purple: 'Purple',
+    mono: 'Mono',
+    azure: 'Blue',
+    violet: 'Purple',
     emerald: 'Emerald',
     amber: 'Amber',
     rose: 'Rose',
-    pro: 'Pro Gold',
     custom: 'Custom',
 };
-
-export function isProGoldTheme(theme: string | undefined): boolean {
-    return theme === PRO_GOLD_THEME_ID;
-}
 
 export function isCustomTheme(theme: string | undefined): boolean {
     return theme === CUSTOM_THEME_ID;
 }
 
-export function isProExclusiveTheme(theme: string | undefined): boolean {
-    return theme === PRO_GOLD_THEME_ID || theme === CUSTOM_THEME_ID;
+/** All accent themes are free for everyone. */
+export function isProExclusiveTheme(_theme: string | undefined): boolean {
+    return false;
 }
 
-/** @deprecated use isProGoldTheme */
-export function isProTheme(theme: string | undefined): boolean {
-    return isProGoldTheme(theme);
+export function canUseTheme(_theme: ThemeId, _isPro: boolean): boolean {
+    return true;
 }
 
-export function canUseTheme(theme: ThemeId, isPro: boolean): boolean {
-    if (isProExclusiveTheme(theme)) return isPro;
-    return PUBLIC_THEME_IDS.includes(theme as PublicThemeId);
-}
-
-export function normalizeThemeForUser(theme: string | undefined, isPro: boolean): ThemeId {
-    if (isPro && theme === PRO_GOLD_THEME_ID) return PRO_GOLD_THEME_ID;
-    if (isPro && theme === CUSTOM_THEME_ID) return CUSTOM_THEME_ID;
+export function normalizeThemeForUser(theme: string | undefined, _isPro: boolean): ThemeId {
+    if (theme === CUSTOM_THEME_ID) return CUSTOM_THEME_ID;
     if (theme && PUBLIC_THEME_IDS.includes(theme as PublicThemeId)) return theme as PublicThemeId;
-    return 'purple';
+    return 'mono'; // legacy 'purple'/'blue' defaults, 'pro' (gold) and unknown values migrate to monochrome
 }
 
 export function resolveCustomThemeColors(
@@ -228,31 +221,6 @@ function hexAlpha(hex: string, alpha: number): string {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/** Pro Gold shell or Custom theme active */
-export function isProThemeActive(
-    engineState: Pick<EngineState, 'theme'>,
-    isPro: boolean,
-): boolean {
-    return isPro && isProExclusiveTheme(engineState?.theme);
-}
-
-/** Pro Gold only (gold vignette, hero, avatar ring) */
-export function isProGoldThemeActive(
-    engineState: Pick<EngineState, 'theme'>,
-    isPro: boolean,
-): boolean {
-    return isPro && isProGoldTheme(engineState?.theme);
-}
-
-/** Extra motion on Pro-exclusive themes */
-export function isProMotionEnabled(
-    engineState: Pick<EngineState, 'theme'> & { proDashboardVisuals?: boolean },
-    isPro: boolean,
-): boolean {
-    if (!isProThemeActive(engineState, isPro)) return false;
-    return engineState.proDashboardVisuals === true;
-}
-
 export function applyDocumentTheme(
     engineState: Pick<EngineState, 'theme' | 'customTheme'> | null | undefined,
     isPro: boolean,
@@ -260,14 +228,19 @@ export function applyDocumentTheme(
     const theme = normalizeThemeForUser(engineState?.theme, isPro);
     const root = document.documentElement;
     root.setAttribute('data-theme', theme);
-    root.classList.toggle('pro-theme-active', theme === PRO_GOLD_THEME_ID);
-    root.classList.toggle('pro-motion', theme === PRO_GOLD_THEME_ID);
     root.classList.toggle('custom-motion', theme === CUSTOM_THEME_ID);
     if (theme === CUSTOM_THEME_ID) {
         applyCustomThemeVars(resolveCustomThemeColors(engineState?.customTheme));
+        applyAccentHue(customHueFromColors(engineState?.customTheme));
     } else {
         clearCustomThemeVars();
+        applyAccentHue(accentHueFor(theme));
     }
+}
+
+function customHueFromColors(colors: CustomThemeColors | undefined | null): number | undefined {
+    const hue = (colors as { hue?: number } | undefined | null)?.hue;
+    return typeof hue === 'number' && Number.isFinite(hue) ? hue : readCustomHue();
 }
 
 export async function setEngineTheme(theme: ThemeId) {
@@ -291,13 +264,17 @@ export async function setCustomThemeColors(colors: CustomThemeColors) {
     );
 }
 
+/**
+ * Formerly applied Pro Gold on upgrade; now only migrates a stored 'pro'
+ * (gold) theme to the default accent — otherwise a no-op.
+ */
 export async function applyProWelcomePack() {
+    const { useAuthStore } = await import('./store');
+    const current = useAuthStore.getState().engineState?.theme;
+    if (current !== PRO_GOLD_THEME_ID) return;
     await new Promise<void>((resolve) =>
         chrome.runtime.sendMessage(
-            {
-                type: 'UPDATE_ENGINE_SETTINGS',
-                settings: { theme: PRO_GOLD_THEME_ID, proDashboardVisuals: false },
-            },
+            { type: 'UPDATE_ENGINE_SETTINGS', settings: { theme: 'mono' } },
             () => resolve(),
         ),
     );
@@ -306,7 +283,7 @@ export async function applyProWelcomePack() {
 export async function revertProThemeIfNeeded() {
     await new Promise<void>((resolve) =>
         chrome.runtime.sendMessage(
-            { type: 'UPDATE_ENGINE_SETTINGS', settings: { theme: 'purple' } },
+            { type: 'UPDATE_ENGINE_SETTINGS', settings: { theme: 'mono' } },
             () => resolve(),
         ),
     );

@@ -75,24 +75,24 @@ export function TimePicker({ date, setDate, className }: TimePickerProps) {
     return (
         <div className={cn("flex items-end gap-1", className)}>
             <div className="grid gap-1 text-center">
-                <Label htmlFor="hours" className="text-[10px] text-zinc-500">Hr</Label>
+                <Label htmlFor="hours" className="text-[11px] text-neutral-500">Hr</Label>
                 <Input
                     ref={hourRef}
                     id="hours"
-                    className="w-[40px] h-8 text-center font-mono text-sm p-0 bg-zinc-900 border-zinc-800"
+                    className="w-[40px] h-8 text-center tabular-nums text-sm p-0 bg-neutral-900 border-neutral-800"
                     value={hours12}
                     onChange={handleHourChange}
                     maxLength={2}
                     placeholder="12"
                 />
             </div>
-            <span className="pb-1 text-lg text-zinc-600">:</span>
+            <span className="pb-1 text-lg text-neutral-600">:</span>
             <div className="grid gap-1 text-center">
-                <Label htmlFor="minutes" className="text-[10px] text-zinc-500">Min</Label>
+                <Label htmlFor="minutes" className="text-[11px] text-neutral-500">Min</Label>
                 <Input
                     ref={minuteRef}
                     id="minutes"
-                    className="w-[40px] h-8 text-center font-mono text-sm p-0 bg-zinc-900 border-zinc-800"
+                    className="w-[40px] h-8 text-center tabular-nums text-sm p-0 bg-neutral-900 border-neutral-800"
                     value={minutes}
                     onChange={handleMinuteChange}
                     maxLength={2}
@@ -102,7 +102,7 @@ export function TimePicker({ date, setDate, className }: TimePickerProps) {
             <Button
                 variant="outline"
                 size="sm"
-                className="h-8 w-10 px-0 ml-1 bg-zinc-900 border-zinc-800 text-xs font-medium"
+                className="h-8 w-10 px-0 ml-1 bg-neutral-900 border-neutral-800 text-xs font-medium"
                 onClick={togglePeriod}
             >
                 {period}

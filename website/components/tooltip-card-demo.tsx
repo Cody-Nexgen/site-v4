@@ -81,7 +81,7 @@ const TestimonialCard = () => {
           <p className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
             Tyler Durden
           </p>
-          <p className="text-[10px] text-neutral-600 dark:text-neutral-400">
+          <p className="text-[11px] text-neutral-600 dark:text-neutral-400">
             Senior Product Manager at FC
           </p>
         </div>

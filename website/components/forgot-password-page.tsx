@@ -77,7 +77,7 @@ export default function ForgotPasswordPage({ onBack }: Props) {
         <GlassCard className="p-8">
           {sent ? (
             <div className="text-center space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
+              <div className="w-14 h-14 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
                 <IconCheck size={28} className="text-emerald-400" />
               </div>
               <h1 className="text-2xl font-black text-white">Check your email</h1>

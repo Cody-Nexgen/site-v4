@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Demo Site — Sign in</title>
+<style>
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+           background: #0f0f11; color: #e4e4e7; font-family: Inter, system-ui, sans-serif; }
+    form { width: 320px; display: grid; gap: 12px; padding: 28px; border: 1px solid #2a2a2e;
+           border-radius: 12px; background: #17171a; }
+    h1 { margin: 0 0 6px; font-size: 18px; }
+    label { display: grid; gap: 5px; font-size: 12px; color: #a1a1aa; }
+    input { height: 38px; padding: 0 10px; border-radius: 7px; border: 1px solid #333338;
+            background: #101012; color: #f4f4f5; font-size: 13px; }
+    button { height: 38px; border: 0; border-radius: 7px; background: #f4f4f5; color: #17171a;
+             font-size: 13px; font-weight: 600; cursor: pointer; }
+</style>
+</head>
+<body>
+<form action="#" method="post" onsubmit="return false">
+    <h1>Sign in to Demo Site</h1>
+    <label>Email
+        <input name="email" type="email" autocomplete="username email" placeholder="you@example.com" />
+    </label>
+    <label>Password
+        <input name="password" type="password" autocomplete="current-password" placeholder="Password" />
+    </label>
+    <button type="submit">Sign in</button>
+</form>
+<script type="module">
+    import { boot } from './harness.ts';
+    boot();
+</script>
+</body>
+</html>

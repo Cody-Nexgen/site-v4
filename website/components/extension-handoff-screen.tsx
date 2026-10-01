@@ -12,9 +12,9 @@ export default function ExtensionHandoffScreen({ phase }: Props) {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-10">
       <div className="relative w-16 h-16 mb-6">
-        <div className="absolute inset-0 border-4 border-purple-500/20 rounded-full" />
+        <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full" />
         {isRedirecting && (
-          <div className="absolute inset-0 border-4 border-t-purple-500 rounded-full animate-spin" />
+          <div className="absolute inset-0 border-4 border-t-blue-500 rounded-full animate-spin" />
         )}
         {!isRedirecting && (
           <div className="absolute inset-0 flex items-center justify-center text-2xl text-emerald-400">
@@ -22,7 +22,7 @@ export default function ExtensionHandoffScreen({ phase }: Props) {
           </div>
         )}
       </div>
-      <h1 className="text-2xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-400">
+      <h1 className="text-2xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-400">
         {isRedirecting ? "Redirecting to extension…" : "Redirected to extension"}
       </h1>
       <p className="text-neutral-400 text-sm text-center max-w-md">

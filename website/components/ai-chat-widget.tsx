@@ -13,6 +13,7 @@ import ReactMarkdown from "react-markdown";
 import { supabase } from "@/lib/supabase";
 import { postChatMessage } from "@/lib/chat-api";
 import type { ChatMessage } from "@/lib/ai-types";
+import { BeamZMark } from "@focuz/components/BeamZMark";
 
 const WELCOME: ChatMessage = {
     role: "assistant",
@@ -88,10 +89,10 @@ export function AiChatWidget() {
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.9, opacity: 0 }}
                         onClick={() => setIsOpen(true)}
-                        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full border border-violet-500/30 bg-[#121018] px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-950/50 hover:border-violet-400/50 hover:bg-[#18141f] transition-colors"
+                        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full border border-blue-500/30 bg-[#121018] px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-blue-950/50 hover:border-blue-400/50 hover:bg-[#18141f] transition-colors"
                         aria-label="Open chat"
                     >
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-600">
                             <IconMessage size={18} />
                         </span>
                         Ask FocuzNow
@@ -106,22 +107,22 @@ export function AiChatWidget() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 24, scale: 0.96 }}
                         transition={{ type: "spring", damping: 26, stiffness: 320 }}
-                        className="fixed bottom-6 right-6 z-[60] flex h-[min(560px,85vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0c0b10] shadow-2xl shadow-black/60"
+                        className="fixed bottom-6 right-6 z-[60] flex h-[min(560px,85vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-white/8 bg-[#0c0b10] shadow-2xl shadow-black/60"
                     >
-                        <header className="flex items-center gap-3 border-b border-white/[0.06] bg-[#100e16] px-4 py-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600">
+                        <header className="flex items-center gap-3 border-b border-white/8 bg-[#100e16] px-4 py-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-600">
                                 <IconSparkles size={18} />
                             </div>
                             <div className="min-w-0 flex-1">
                                 <h3 className="text-sm font-bold text-white">FocuzNow Coach</h3>
-                                <p className="truncate text-[11px] text-zinc-500">
+                                <p className="truncate text-[11px] text-neutral-500">
                                     {user?.email ? `Signed in · ${user.email}` : "Powered by Groq · free to ask"}
                                 </p>
                             </div>
                             <button
                                 type="button"
                                 onClick={clearChat}
-                                className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+                                className="rounded-lg p-2 text-neutral-500 hover:bg-white/6 hover:text-neutral-300"
                                 title="Clear chat"
                             >
                                 <IconMinus size={18} />
@@ -129,7 +130,7 @@ export function AiChatWidget() {
                             <button
                                 type="button"
                                 onClick={() => setIsOpen(false)}
-                                className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white"
+                                className="rounded-lg p-2 text-neutral-500 hover:bg-white/6 hover:text-white"
                                 aria-label="Close"
                             >
                                 <IconX size={18} />
@@ -143,10 +144,10 @@ export function AiChatWidget() {
                                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                                 >
                                     <div
-                                        className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
+                                        className={`max-w-[88%] rounded-lg px-3.5 py-2.5 text-xs leading-relaxed ${
                                             msg.role === "user"
-                                                ? "bg-violet-600 text-white rounded-br-md"
-                                                : "bg-[#1a1822] text-zinc-200 border border-white/[0.06] rounded-bl-md"
+                                                ? "bg-blue-600 text-white rounded-br-lg"
+                                                : "bg-[#1a1822] text-neutral-200 border border-white/8 rounded-bl-lg"
                                         }`}
                                     >
                                         {msg.role === "assistant" ? (
@@ -161,10 +162,8 @@ export function AiChatWidget() {
                             ))}
                             {loading && (
                                 <div className="flex justify-start">
-                                    <div className="flex gap-1 rounded-2xl rounded-bl-md border border-white/[0.06] bg-[#1a1822] px-4 py-3">
-                                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:0ms]" />
-                                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:120ms]" />
-                                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:240ms]" />
+                                    <div className="flex items-center rounded-lg px-1 py-1">
+                                        <BeamZMark size={40} animated contrast="on-dark" title="FocuzNow is thinking" />
                                     </div>
                                 </div>
                             )}
@@ -176,28 +175,28 @@ export function AiChatWidget() {
                                 e.preventDefault();
                                 void handleSend();
                             }}
-                            className="border-t border-white/[0.06] bg-[#0a090d] p-3"
+                            className="border-t border-white/8 bg-[#0a090d] p-3"
                         >
-                            <div className="flex gap-2 rounded-xl border border-white/[0.08] bg-[#141218] p-1 focus-within:border-violet-500/40">
+                            <div className="flex gap-2 rounded-lg border border-white/8 bg-[#141218] p-1 focus-within:border-blue-500/40">
                                 <input
                                     type="text"
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     placeholder="Ask about focus, blocking, habits…"
-                                    className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
+                                    className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-neutral-600"
                                     disabled={loading}
                                 />
                                 <button
                                     type="submit"
                                     disabled={loading || !input.trim()}
-                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white transition hover:bg-violet-500 disabled:opacity-40"
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition hover:bg-blue-500 disabled:opacity-40"
                                 >
                                     <IconSend size={16} />
                                 </button>
                             </div>
                             {!user && (
-                                <p className="mt-2 text-center text-[10px] text-zinc-600">
-                                    <a href="/login" className="text-violet-400/90 hover:underline">
+                                <p className="mt-2 text-center text-[11px] text-neutral-600">
+                                    <a href="/login" className="text-blue-400/90 hover:underline">
                                         Sign in
                                     </a>{" "}
                                     to sync with your extension account

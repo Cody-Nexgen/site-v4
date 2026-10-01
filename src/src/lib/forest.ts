@@ -160,6 +160,24 @@ export function integrateGrowthMinutes(
     return total;
 }
 
+/**
+ * Real minutes from `now` until `gain` clean growth minutes accrue,
+ * accounting for a slip-recovery ramp still in progress.
+ */
+export function minutesUntilGrowth(lastSlipAt: number | null, now: number, gain: number): number {
+    if (gain <= 0) return 0;
+    const at = (m: number) => integrateGrowthMinutes(lastSlipAt, now, now + m * MIN);
+    let lo = gain; // never faster than full speed
+    let hi = gain / SLIP_MULTIPLIER_FLOOR; // never slower than the floor
+    if (at(lo) >= gain - 1e-6) return lo;
+    for (let i = 0; i < 40; i++) {
+        const mid = (lo + hi) / 2;
+        if (at(mid) >= gain) hi = mid;
+        else lo = mid;
+    }
+    return hi;
+}
+
 /** Credit accrued growth to every tree and advance lastSettledAt. */
 export function settleGrowth(state: ForestState, now = Date.now()): ForestState {
     const gained = integrateGrowthMinutes(state.lastSlipAt, state.lastSettledAt, now);

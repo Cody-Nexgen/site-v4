@@ -254,21 +254,21 @@ export default function ForestWorld3D({ onBack, onOpenStats }: Props) {
     ];
 
     return (
-        <div className="fixed inset-0 z-[250] bg-[#0a0f0c]">
+        <div className="fixed inset-0 z-[250] bg-surface">
             <div ref={mountRef} className="absolute inset-0" />
 
             <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 pointer-events-none">
                 <button
                     type="button"
                     onClick={onBack}
-                    className="pointer-events-auto flex items-center gap-2 px-3 py-2 rounded-xl bg-black/50 backdrop-blur-md border border-white/10 text-white text-sm font-semibold"
+                    className="pointer-events-auto flex items-center gap-2 px-3 py-2 rounded-lg bg-black/50 backdrop-blur-md border border-white/8 text-white text-sm font-semibold"
                 >
                     <ArrowLeft size={16} /> Exit Forest
                 </button>
                 <button
                     type="button"
                     onClick={onOpenStats}
-                    className="pointer-events-auto flex items-center gap-2 px-3 py-2 rounded-xl bg-black/50 backdrop-blur-md border border-white/10 text-emerald-300 text-sm font-semibold"
+                    className="pointer-events-auto flex items-center gap-2 px-3 py-2 rounded-lg bg-black/50 backdrop-blur-md border border-white/8 text-emerald-300 text-sm font-semibold"
                 >
                     <BarChart3 size={16} /> Stats
                 </button>

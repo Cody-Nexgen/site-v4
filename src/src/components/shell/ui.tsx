@@ -28,7 +28,7 @@ export function ShellButton({
         <button
             type="button"
             className={[
-                'inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-[background,color,opacity] duration-150',
+                'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-[background,color,opacity] duration-150',
                 'disabled:opacity-45 disabled:pointer-events-none',
                 fullWidth ? 'w-full' : '',
                 VARIANTS[variant],

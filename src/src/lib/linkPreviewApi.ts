@@ -25,7 +25,24 @@ function normalizeUrl(raw: string): string {
     return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-/** Basic offline fallback — a favicon + hostname preview when the edge function is unavailable. */
+/** "…/arts/chicago-museums-art.html" → "Chicago museums art" (falls back to the hostname). */
+function titleFromUrl(url: string, hostname: string): string {
+    try {
+        const segment = new URL(url).pathname
+            .split('/')
+            .filter(Boolean)
+            .reverse()
+            .find((s) => /[a-z]/i.test(s) && !/^(index|home|default)(\.\w+)?$/i.test(s));
+        const words = segment
+            ? decodeURIComponent(segment).replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[-_+]+/g, ' ').trim()
+            : '';
+        return words ? words.charAt(0).toUpperCase() + words.slice(1) : hostname;
+    } catch {
+        return hostname;
+    }
+}
+
+/** Offline fallback — a readable title + favicon when the edge function is unavailable. */
 function fallbackPreview(raw: string): LinkPreview {
     const url = normalizeUrl(raw);
     let hostname = raw;
@@ -36,7 +53,7 @@ function fallbackPreview(raw: string): LinkPreview {
     }
     return {
         url,
-        title: hostname || raw,
+        title: titleFromUrl(url, hostname) || raw,
         description: null,
         siteName: hostname || raw,
         image: null,

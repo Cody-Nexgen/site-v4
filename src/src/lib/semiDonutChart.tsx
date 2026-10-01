@@ -79,7 +79,7 @@ export const semiDonutMetrics = {
 export function SemiDonutChart({
     slices,
     totalLabel,
-    subLabel = 'TOTAL TIME',
+    subLabel = 'Total time',
     onSliceClick,
     onSliceHover,
     className = '',
@@ -114,8 +114,8 @@ export function SemiDonutChart({
                     {trackPath && (
                         <path
                             d={trackPath}
-                            fill="rgba(255,255,255,0.08)"
-                            stroke="rgba(255,255,255,0.12)"
+                            fill="rgba(255, 255, 255, 0.08)"
+                            stroke="rgba(255, 255, 255, 0.08)"
                             strokeWidth={1.5}
                         />
                     )}
@@ -150,8 +150,8 @@ export function SemiDonutChart({
                         className="absolute left-0 right-0 flex flex-col items-center pointer-events-none"
                         style={{ top: LABEL_Y, transform: 'translateY(-50%)' }}
                     >
-                        <span className="text-4xl font-black text-white leading-none tracking-tight">{totalLabel}</span>
-                        <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-[0.2em] mt-2">
+                        <span className="text-stat leading-none text-[var(--fz-text-1)]">{totalLabel}</span>
+                        <span className="text-meta mt-2 text-[var(--fz-text-4)]">
                             {subLabel}
                         </span>
                     </div>

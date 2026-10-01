@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // options/legacy holds frozen pre-revamp pages (Settings → Page versions); not linted.
+  globalIgnores(['dist', 'src/options/legacy']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

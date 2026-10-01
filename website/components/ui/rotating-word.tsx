@@ -17,7 +17,7 @@ export function RotatingWord({ className = "" }: { className?: string }) {
   }, []);
 
   return (
-    <span className={`inline-block min-w-[5ch] text-purple-500 font-bold ${className}`}>
+    <span className={`inline-block min-w-[5ch] text-blue-500 font-bold ${className}`}>
       <AnimatePresence mode="wait" initial={false}>
         <motion.span
           key={word}

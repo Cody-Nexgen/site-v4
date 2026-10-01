@@ -1,4 +1,5 @@
 import type { CoachAction, CoachActionType } from './aiCoachTypes';
+import { canonicalizeCoachAction } from './coachSettingCopy';
 import { getAnalyticsConsent, setAnalyticsConsent } from './aiCoachContext';
 import { sendEngineMessage } from './engineMessage';
 import { SCHEDULING_LINKS_KEY, CALENDAR_EVENTS_KEY, type CalendarEvent } from './schedulingTypes';
@@ -109,7 +110,8 @@ export function normalizeActions(action_data: unknown): CoachAction[] {
     const list = Array.isArray(parsed) ? parsed : [parsed];
     return list
         .map((item) => coerceCoachAction(item))
-        .filter((a): a is CoachAction => a !== null);
+        .filter((a): a is CoachAction => a !== null)
+        .map(canonicalizeCoachAction);
 }
 
 async function getState(): Promise<Record<string, unknown>> {
@@ -136,6 +138,7 @@ export async function executeSingleCoachAction(
     handlers?: CoachActionHandlers,
 ): Promise<CoachAction> {
     if (!action?.action_type) throw new Error('Invalid action');
+    action = canonicalizeCoachAction(action);
 
     switch (action.action_type) {
         case 'timer':
@@ -211,7 +214,7 @@ export async function executeSingleCoachAction(
             const t = action.data.theme as ThemeId | undefined;
             const isPro = useAuthStore.getState().subscriptionTier === 'pro';
             if (t && !canUseTheme(t, isPro)) {
-                throw new Error('Pro subscription required for Gold and Custom themes');
+                throw new Error('Unknown theme');
             }
             if (t) {
                 if (t === 'custom' && action.data.custom_theme) {
@@ -253,18 +256,24 @@ export async function executeSingleCoachAction(
             const st = await getState();
             const inApp = { ...((st.inAppBlock as object) || {}) } as Record<string, unknown>;
             const platform = action.data.platform;
-            if (platform === 'youtube') {
-                const enabled = action.data.enabled ?? true;
+            const enabled = action.data.enabled ?? true;
+            if (!platform) {
+                inApp.youtube = enabled;
+                inApp.youtubeShorts = enabled;
+                inApp.instagram = enabled;
+                inApp.instagramReels = enabled;
+                inApp.tiktok = enabled;
+            } else if (platform === 'youtube') {
                 inApp.youtubeShorts = enabled;
                 inApp.youtube = enabled;
             } else if (platform === 'instagram') {
                 if (action.data.feature === 'instagramReels') {
-                    inApp.instagramReels = action.data.enabled ?? true;
+                    inApp.instagramReels = enabled;
                 } else {
-                    inApp.instagram = action.data.enabled ?? true;
+                    inApp.instagram = enabled;
                 }
             } else if (platform === 'tiktok') {
-                inApp.tiktok = action.data.enabled ?? true;
+                inApp.tiktok = enabled;
             }
             await requireEngineOk(
                 { type: 'UPDATE_ENGINE_SETTINGS', settings: { inAppBlock: inApp } },
@@ -464,7 +473,7 @@ export async function executeSingleCoachAction(
                 startHour: e.startHour ?? 9,
                 startMin: e.startMin ?? 0,
                 durationMin: e.durationMin ?? 25,
-                color: e.color || '#a855f7',
+                color: e.color || '#5ea2ff',
             }));
             await chrome.storage.local.set({
                 [CALENDAR_EVENTS_KEY]: [...existing, ...newEvents],

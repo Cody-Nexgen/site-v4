@@ -1,6 +1,7 @@
 import { getLevelProgress, FOCUS_RANKS, milestoneLabel } from '../lib/focusProgression';
 import type { FocusProgressionState } from '../lib/focusProgression';
 import { badgeMark } from '../lib/focusShop';
+import { ProgressRing } from './fz/ProgressRing';
 
 type Props = {
     progression: FocusProgressionState;
@@ -20,7 +21,7 @@ export function FocusLevelCard({ progression, compact = false, className = '' }:
         return (
             <div className={`flex items-center gap-4 ${className}`}>
                 <div
-                    className={`w-11 h-11 rounded-lg bg-white/[0.05] border border-white/[0.07] flex items-center justify-center font-medium text-neutral-300 tabular-nums ${frameClass}`}
+                    className={`w-11 h-11 rounded-lg bg-white/6 border border-white/8 flex items-center justify-center font-medium text-neutral-300 tabular-nums ${frameClass}`}
                 >
                     {progress.level}
                 </div>
@@ -37,7 +38,7 @@ export function FocusLevelCard({ progression, compact = false, className = '' }:
                         </span>
                     </div>
                     <p className="text-[11px] text-neutral-500 mt-0.5 truncate">{milestone}</p>
-                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden mt-1.5">
+                    <div className="h-1.5 bg-white/6 rounded-full overflow-hidden mt-1.5">
                         <div
                             className="h-full pro-xp-fill rounded-full transition-all"
                             style={{ width: `${progress.progressPct}%` }}
@@ -49,19 +50,19 @@ export function FocusLevelCard({ progression, compact = false, className = '' }:
     }
 
     return (
-        <div className={`p-6 rounded-lg border border-white/[0.07] bg-[#121214] ${className}`}>
+        <div className={`p-6 rounded-[var(--fz-radius-lg)] border border-[var(--fz-border)] bg-[var(--fz-bg-panel)] ${className}`}>
             <div className="flex items-start justify-between gap-4 mb-5">
                 <div>
-                    <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-2">Focuz Level</p>
+                    <p className="text-label text-[var(--fz-text-3)] mb-2">Focuz level</p>
                     <div className="flex items-center gap-3">
-                        <div
-                            className={`w-14 h-14 rounded-lg bg-white/[0.05] border border-white/[0.07] flex items-center justify-center text-2xl font-semibold text-neutral-200 tabular-nums ${frameClass}`}
-                        >
-                            {progress.level}
+                        <div className={`relative ${frameClass}`}>
+                            <ProgressRing value={progress.progressPct / 100} size={56} stroke={4}>
+                                <span className="text-title-3 text-[var(--fz-text-1)] tabular-nums">{progress.level}</span>
+                            </ProgressRing>
                         </div>
                         <div>
-                            <h3 className="text-xl font-semibold text-white">Level {progress.level}</h3>
-                            <p className="text-xs text-neutral-400 mt-0.5">
+                            <h3 className="text-title-2 text-[var(--fz-text-1)]">Level {progress.level}</h3>
+                            <p className="text-meta text-[var(--fz-text-3)] mt-0.5">
                                 {progress.isMaxLevel
                                     ? 'Maximum level reached'
                                     : nextRank
@@ -72,12 +73,12 @@ export function FocusLevelCard({ progression, compact = false, className = '' }:
                     </div>
                 </div>
                 <div className="text-right">
-                    <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">Coins</p>
-                    <p className="text-2xl font-semibold text-neutral-100 tabular-nums mt-1">{progression.coins}</p>
-                    <p className="text-[10px] text-neutral-500 mt-1 max-w-[8rem]">Earned from sessions &amp; habits</p>
+                    <p className="text-label text-[var(--fz-text-3)]">Coins</p>
+                    <p className="text-stat text-[var(--fz-text-1)] tabular-nums mt-1">{progression.coins}</p>
+                    <p className="text-meta text-[var(--fz-text-3)] mt-1 max-w-[8rem]">Earned from sessions &amp; habits</p>
                     {progression.equippedCosmetics.badge && (
                         <span
-                            className="mt-2 inline-block text-[10px] font-semibold tracking-[0.16em] text-neutral-400 border border-white/[0.1] rounded px-1.5 py-0.5"
+                            className="mt-2 inline-block text-meta font-medium text-[var(--fz-text-3)] border border-[var(--fz-border)] rounded px-1.5 py-0.5"
                             title="Equipped badge"
                         >
                             {badgeMark(progression.equippedCosmetics.badge)}
@@ -91,7 +92,7 @@ export function FocusLevelCard({ progression, compact = false, className = '' }:
                     <span className="text-neutral-400">{progress.xp.toLocaleString()} XP from real focus work</span>
                     <span className="text-neutral-400 font-medium tabular-nums">{progress.progressPct}%</span>
                 </div>
-                <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-2.5 bg-white/6 rounded-full overflow-hidden">
                     <div
                         className="h-full pro-xp-fill rounded-full transition-all duration-500"
                         style={{ width: `${progress.progressPct}%` }}

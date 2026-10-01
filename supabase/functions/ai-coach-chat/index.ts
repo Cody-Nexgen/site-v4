@@ -5,6 +5,7 @@ import {
     COACH_MODELS,
     buildCoachSystemPrompt,
     ensureChatSession,
+    estimateTurnUsage,
     parseActionsFromContent,
     requirePro,
     saveChatTurn,
@@ -12,7 +13,7 @@ import {
     stripActionMarkers,
     toGeminiContents,
 } from '../_shared/aiCoachChat.ts';
-import { geminiGenerate } from '../_shared/geminiAi.ts';
+import { geminiGenerateWithMeta, type GeminiUsage } from '../_shared/geminiAi.ts';
 
 const SSE_HEADERS = {
     ...corsHeaders,
@@ -78,7 +79,8 @@ Deno.serve(async (req) => {
 
         if (!stream) {
             let full = '';
-            for await (const chunk of streamCoachReply(model, messages, coachContext)) {
+            let usage: GeminiUsage | null = null;
+            for await (const chunk of streamCoachReply(model, messages, coachContext, (u) => (usage = u))) {
                 full += chunk;
             }
             const { text, actions } = parseActionsFromContent(full);
@@ -99,6 +101,7 @@ Deno.serve(async (req) => {
                 choices: [{ message: { content: displayText } }],
                 action_data: actions.length === 1 ? actions[0] : actions,
                 actions,
+                usage: usage ?? estimateTurnUsage(messages, coachContext, full),
             });
         }
 
@@ -106,6 +109,16 @@ Deno.serve(async (req) => {
             async start(controller) {
                 const encoder = new TextEncoder();
                 let full = '';
+                let usage: GeminiUsage | null = null;
+                const generateOnce = async () => {
+                    const res = await geminiGenerateWithMeta({
+                        model,
+                        systemInstruction: buildCoachSystemPrompt(coachContext),
+                        contents: toGeminiContents(messages),
+                    });
+                    if (res.usage) usage = res.usage;
+                    return res.text;
+                };
 
                 try {
                     controller.enqueue(
@@ -113,7 +126,7 @@ Deno.serve(async (req) => {
                     );
 
                     try {
-                        for await (const chunk of streamCoachReply(model, messages, coachContext)) {
+                        for await (const chunk of streamCoachReply(model, messages, coachContext, (u) => (usage = u))) {
                             full += chunk;
                             const visible = stripActionMarkers(full);
                             controller.enqueue(
@@ -122,11 +135,7 @@ Deno.serve(async (req) => {
                         }
                     } catch (streamErr) {
                         console.warn('[ai-coach-chat] stream failed, using non-stream', streamErr);
-                        full = await geminiGenerate({
-                            model,
-                            systemInstruction: buildCoachSystemPrompt(coachContext),
-                            contents: toGeminiContents(messages),
-                        });
+                        full = await generateOnce();
                         const visible = stripActionMarkers(full);
                         controller.enqueue(
                             encoder.encode(sseEvent({ type: 'token', text: full, visible })),
@@ -134,11 +143,7 @@ Deno.serve(async (req) => {
                     }
 
                     if (!full.trim()) {
-                        full = await geminiGenerate({
-                            model,
-                            systemInstruction: buildCoachSystemPrompt(coachContext),
-                            contents: toGeminiContents(messages),
-                        });
+                        full = await generateOnce();
                         const visible = stripActionMarkers(full);
                         controller.enqueue(
                             encoder.encode(sseEvent({ type: 'token', text: full, visible })),
@@ -168,6 +173,7 @@ Deno.serve(async (req) => {
                                 content: displayText,
                                 actions,
                                 action_data: actions.length === 1 ? actions[0] : actions,
+                                usage: usage ?? estimateTurnUsage(messages, coachContext, full),
                             }),
                         ),
                     );

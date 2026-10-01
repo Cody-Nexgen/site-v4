@@ -16,6 +16,7 @@ export default defineConfig({
             input: {
                 popup: path.resolve(__dirname, 'src/popup/index.html'),
                 focuzpassUnlock: path.resolve(__dirname, 'src/focuzpass-unlock/index.html'),
+                focuzpassEmbed: path.resolve(__dirname, 'src/focuzpass-embed/index.html'),
                 options: path.resolve(__dirname, 'src/options/index.html'),
                 calendar: path.resolve(__dirname, 'src/options/calendar.html'),
                 booking: path.resolve(__dirname, 'src/booking/index.html'),

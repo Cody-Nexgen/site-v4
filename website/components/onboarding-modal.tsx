@@ -68,10 +68,10 @@ export default function OnboardingModal({ isOpen, onClose, onComplete }: Onboard
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="relative w-full max-w-lg bg-[#0a0a0a] border border-white/10 rounded-3xl overflow-hidden shadow-2xl shadow-purple-900/20">
+            <div className="relative w-full max-w-lg bg-[#0a0a0a] border border-white/8 rounded-lg overflow-hidden shadow-2xl shadow-blue-900/20">
                 <div className="h-1 bg-neutral-900 w-full">
                     <div
-                        className="h-full bg-purple-600 transition-all duration-500 ease-out"
+                        className="h-full bg-blue-600 transition-all duration-500 ease-out"
                         style={{ width: `${(step / totalSteps) * 100}%` }}
                     />
                 </div>
@@ -107,10 +107,10 @@ export default function OnboardingModal({ isOpen, onClose, onComplete }: Onboard
                                             key={item.id}
                                             type="button"
                                             onClick={() => setChallenge(item.id)}
-                                            className={`w-full text-left px-4 py-3.5 rounded-2xl border text-sm transition-colors ${
+                                            className={`w-full text-left px-4 py-3.5 rounded-lg border text-sm transition-colors ${
                                                 selected
-                                                    ? "border-purple-500/60 bg-purple-500/10 text-white"
-                                                    : "border-white/10 bg-white/[0.02] text-neutral-300 hover:border-white/20 hover:bg-white/[0.04]"
+                                                    ? "border-blue-500/60 bg-blue-500/10 text-white"
+                                                    : "border-white/8 bg-white/4 text-neutral-300 hover:border-white/16 hover:bg-white/4"
                                             }`}
                                         >
                                             {item.label}
@@ -142,10 +142,10 @@ export default function OnboardingModal({ isOpen, onClose, onComplete }: Onboard
                                             key={item.id}
                                             type="button"
                                             onClick={() => setGoal(item.id)}
-                                            className={`w-full text-left px-4 py-3.5 rounded-2xl border text-sm transition-colors ${
+                                            className={`w-full text-left px-4 py-3.5 rounded-lg border text-sm transition-colors ${
                                                 selected
-                                                    ? "border-purple-500/60 bg-purple-500/10 text-white"
-                                                    : "border-white/10 bg-white/[0.02] text-neutral-300 hover:border-white/20 hover:bg-white/[0.04]"
+                                                    ? "border-blue-500/60 bg-blue-500/10 text-white"
+                                                    : "border-white/8 bg-white/4 text-neutral-300 hover:border-white/16 hover:bg-white/4"
                                             }`}
                                         >
                                             {item.label}
@@ -158,7 +158,7 @@ export default function OnboardingModal({ isOpen, onClose, onComplete }: Onboard
 
                     {step === 3 && (
                         <div className="text-center space-y-6 py-4 animate-in slide-in-from-right-8 duration-500">
-                            <div className="w-16 h-16 bg-purple-600/20 rounded-full flex items-center justify-center mx-auto text-purple-300">
+                            <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto text-blue-300">
                                 <IconCheck size={32} />
                             </div>
                             <div className="space-y-3">
@@ -175,7 +175,7 @@ export default function OnboardingModal({ isOpen, onClose, onComplete }: Onboard
                             type="button"
                             onClick={handleNext}
                             disabled={!canAdvance || saving}
-                            className="px-8 py-3 bg-white text-black hover:bg-neutral-200 rounded-xl font-semibold flex items-center gap-2 transition-all disabled:opacity-40 disabled:hover:bg-white"
+                            className="px-8 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-semibold flex items-center gap-2 transition-all disabled:opacity-40 disabled:hover:bg-white"
                         >
                             {step === totalSteps ? (saving ? "Saving…" : "Get started") : "Continue"}
                             <IconArrowRight size={18} />

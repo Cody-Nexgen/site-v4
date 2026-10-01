@@ -77,7 +77,7 @@ export default function PublicProfilePage({ username }: { username: string }) {
         <p className="text-neutral-500 text-sm max-w-md">
           @{username} hasn&apos;t enabled a public focus profile yet, or this handle doesn&apos;t exist.
         </p>
-        <a href="/" className="mt-8 text-purple-400 text-sm font-bold hover:text-purple-300">
+        <a href="/" className="mt-8 text-blue-400 text-sm font-bold hover:text-blue-300">
           ← Back to FocuzNow
         </a>
       </div>
@@ -99,7 +99,7 @@ export default function PublicProfilePage({ username }: { username: string }) {
           href="https://chrome.google.com/webstore"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-400 hover:text-purple-300"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300"
         >
           Get the extension <ExternalLink size={12} />
         </a>
@@ -110,26 +110,26 @@ export default function PublicProfilePage({ username }: { username: string }) {
           <GlassCard className="p-8 mb-6">
             <div className="flex items-start gap-5">
               <div
-                className={`w-20 h-20 rounded-2xl bg-purple-500/20 border-2 border-purple-500/30 flex items-center justify-center overflow-hidden shrink-0 ${frame}`}
+                className={`w-20 h-20 rounded-lg bg-blue-500/20 border-2 border-blue-500/30 flex items-center justify-center overflow-hidden shrink-0 ${frame}`}
               >
                 {profile.avatarUrl && failedAvatarUrl !== profile.avatarUrl ? (
                   <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatarUrl(profile.avatarUrl || "")} className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-3xl font-black text-purple-300">
+                  <span className="text-3xl font-black text-blue-300">
                     {profile.displayName.charAt(0).toUpperCase() || 'F'}
                   </span>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Focus Profile</p>
+                <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Focus Profile</p>
                 <h1 className="text-3xl font-black tracking-tight truncate">{profile.displayName}</h1>
                 <p className="text-neutral-500 font-mono text-sm">@{profile.username}</p>
                 <div className="flex items-center gap-3 mt-3">
-                  <span className="px-3 py-1 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-xs font-black">
+                  <span className="px-3 py-1 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs font-black">
                     Lv {stats.level} · {stats.rank}
                   </span>
                   {stats.equippedBadge && (
-                    <span className="px-2 py-1 rounded border border-white/15 text-[10px] font-semibold tracking-[0.16em] text-neutral-300">
+                    <span className="px-2 py-1 rounded border border-white/16 text-[11px] font-semibold tracking-[0.16em] text-neutral-300">
                       {badgeMark(stats.equippedBadge)}
                     </span>
                   )}
@@ -146,8 +146,8 @@ export default function PublicProfilePage({ username }: { username: string }) {
               { icon: Trophy, label: "Achievements", value: String(stats.achievementsUnlocked) },
             ].map(({ icon: Icon, label, value }) => (
               <GlassCard key={label} className="p-4">
-                <Icon size={16} className="text-purple-400 mb-2" />
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">{label}</p>
+                <Icon size={16} className="text-blue-400 mb-2" />
+                <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">{label}</p>
                 <p className="text-xl font-black mt-1">{value}</p>
               </GlassCard>
             ))}
@@ -160,7 +160,7 @@ export default function PublicProfilePage({ username }: { username: string }) {
               <span><strong className="text-white">{stats.xp.toLocaleString()}</strong> XP earned</span>
             </div>
             {stats.updatedAt && (
-              <p className="text-[10px] text-neutral-600 mt-4">
+              <p className="text-[11px] text-neutral-600 mt-4">
                 Last updated {new Date(stats.updatedAt).toLocaleDateString()}
               </p>
             )}

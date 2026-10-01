@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>html,body{margin:0;padding:0;overflow:hidden;background:#000}canvas,svg{display:block;position:absolute;inset:0}</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g stroke="#ffffff" stroke-opacity="0.9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+    <!-- app window -->
+    <rect x="230" y="215" width="790" height="290" rx="16"/>
+    <!-- sidebar divider -->
+    <line x1="505" y1="215" x2="505" y2="505" stroke-opacity="0.75"/>
+    <!-- nav rows -->
+    <rect x="258" y="240" width="190" height="20" rx="10" fill="#ffffff" fill-opacity="0.95" stroke="none"/>
+    <rect x="258" y="290" width="150" height="12" rx="6" stroke-opacity="0.6"/>
+    <rect x="258" y="322" width="175" height="12" rx="6" stroke-opacity="0.6"/>
+    <rect x="258" y="354" width="130" height="12" rx="6" stroke-opacity="0.6"/>
+    <rect x="258" y="386" width="162" height="12" rx="6" stroke-opacity="0.6"/>
+    <!-- main panel rows -->
+    <rect x="540" y="240" width="210" height="13" rx="6.5" stroke-opacity="0.45"/>
+    <rect x="540" y="275" width="170" height="13" rx="6.5" stroke-opacity="0.35"/>
+    <rect x="540" y="310" width="230" height="13" rx="6.5" stroke-opacity="0.28"/>
+    <!-- drag handle grip on divider -->
+    <line x1="500" y1="352" x2="500" y2="368" stroke-opacity="0.95"/>
+    <line x1="510" y1="352" x2="510" y2="368" stroke-opacity="0.95"/>
+    <!-- resize arrow beside divider -->
+    <line x1="540" y1="360" x2="640" y2="360" stroke-opacity="0.8"/>
+    <path d="M552 350 L540 360 L552 370" stroke-opacity="0.8"/>
+    <path d="M628 350 L640 360 L628 370" stroke-opacity="0.8"/>
+  </g>
+</svg>
+<script>
+const gl = document.getElementById('c').getContext('webgl');
+const vs = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+const fs = `precision highp float;
+uniform vec2 r;
+float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+  return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+vec2(1.,1.)),f.x),f.y);}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*n(p);p=p*2.03+vec2(1.7,4.3);a*=.5;}return v;}
+void main(){
+  vec2 uv=gl_FragCoord.xy/r; vec2 p=uv*vec2(r.x/r.y,1.)*2.2;
+  // domain-warped fbm: sharp silky folds
+  vec2 q=vec2(fbm(p),fbm(p+vec2(5.2,1.3)));
+  vec2 w=vec2(fbm(p+3.2*q+vec2(1.7,9.2)),fbm(p+3.2*q+vec2(8.3,2.8)));
+  float f=fbm(p+2.6*w);
+  // sharpen ridges: valleys collapse to black, crests catch light
+  float ridge=smoothstep(0.38,0.72,f);
+  ridge=pow(ridge,1.4);
+  // near-black base ~oklch(0.12 0 0), zero chroma
+  vec3 base=vec3(0.028);
+  // bloom from top-left
+  float d=distance(uv,vec2(0.18,0.85));
+  float bloom=smoothstep(1.1,0.0,d);
+  vec3 col=base+vec3(0.52)*bloom*(0.15+0.85*ridge);
+  // faint ambient sheen on ridges outside the bloom
+  col+=vec3(0.05)*ridge;
+  // vignette
+  float v=smoothstep(1.35,0.35,distance(uv,vec2(0.5,0.55)));
+  col*=mix(0.6,1.0,v);
+  // film grain ~3%
+  col+=(h(gl_FragCoord.xy)-0.5)*0.03;
+  gl_FragColor=vec4(col,1.);
+}`;
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);return o;}
+const pr=gl.createProgram();
+gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs));
+gl.linkProgram(pr);gl.useProgram(pr);
+const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const l=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,2,gl.FLOAT,false,0,0);
+gl.viewport(0,0,1280,720);
+gl.uniform2f(gl.getUniformLocation(pr,'r'),1280,720);
+gl.drawArrays(gl.TRIANGLES,0,3);
+document.title='done';
+</script>
+</body>
+</html>

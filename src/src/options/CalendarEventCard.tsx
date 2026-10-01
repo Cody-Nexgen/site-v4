@@ -1,24 +1,32 @@
-import type { PointerEvent } from 'react';
+import type { CSSProperties, PointerEvent } from 'react';
 import type { CalendarEvent } from '../lib/schedulingTypes';
-import { eventCardFill, eventTimeLabel, formatMinutes } from '../lib/calendarUtils';
+import { eventTimeLabel } from '../lib/calendarUtils';
 
-/** Below this height, only the start time fits comfortably. */
+/** Below this height, title and start time share one line. */
 const RANGE_TIME_MIN_HEIGHT = 36;
-/** Below this height, there isn't room for a time line at all. */
-const ANY_TIME_MIN_HEIGHT = 22;
-/** Above this height there's enough room to bump typography up a notch. */
+/** Below this height, there isn't room for a time at all. */
+const ANY_TIME_MIN_HEIGHT = 18;
+/** Above this height there's room to breathe a little. */
 const TALL_MIN_HEIGHT = 60;
 
-function compactTimeLabel(ev: CalendarEvent): string {
-    if (ev.allDay) return 'All day';
-    return formatMinutes(ev.startHour * 60 + ev.startMin);
+/** "10a", "10:30a" — short enough to leave the title room in narrow columns. */
+function compactTime(totalMin: number): string {
+    const h = Math.floor(totalMin / 60) % 24;
+    const m = totalMin % 60;
+    return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''}${h < 12 ? 'a' : 'p'}`;
 }
 
+/**
+ * Timed event block. The event's own color is kept (it carries meaning) but
+ * muted into the monochrome UI: a tint of it over the panel (`.cal-event`), a
+ * slim accent bar, and fz text colors that read in both themes.
+ */
 export default function CalendarEventCard({
     ev,
     color,
     top,
     height,
+    past = false,
     onPointerDown,
     onPointerUp,
     onDelete,
@@ -29,24 +37,25 @@ export default function CalendarEventCard({
     color: string;
     top: number;
     height: number;
+    /** Already ended — rendered quieter. */
+    past?: boolean;
     onPointerDown?: (e: PointerEvent<HTMLButtonElement>) => void;
     onPointerUp?: (e: PointerEvent<HTMLButtonElement>) => void;
     onDelete?: () => void;
     connectedLeft?: boolean;
     connectedRight?: boolean;
 }) {
-    const h = Math.max(height, 20);
+    const h = Math.max(height, 18);
     const showTime = !ev.allDay && h >= ANY_TIME_MIN_HEIGHT;
-    const showFullRange = h >= RANGE_TIME_MIN_HEIGHT;
+    const stacked = h >= RANGE_TIME_MIN_HEIGHT;
     const isTall = h >= TALL_MIN_HEIGHT;
-    const timeText = showFullRange ? eventTimeLabel(ev) : compactTimeLabel(ev);
-
-    const titleSizeClass = isTall ? 'text-[12px]' : showFullRange ? 'text-[11px]' : 'text-[10px]';
-    const timeSizeClass = isTall ? 'text-[11px]' : showFullRange ? 'text-[10px]' : 'text-[9px]';
+    const startLabel = compactTime(ev.startHour * 60 + ev.startMin);
+    const radius = 'var(--cal-event-radius, 6px)';
 
     return (
         <button
             type="button"
+            title={`${ev.title} · ${ev.allDay ? 'All day' : eventTimeLabel(ev)}`}
             onPointerDown={(e) => {
                 if (e.button === 2) {
                     e.preventDefault();
@@ -62,36 +71,40 @@ export default function CalendarEventCard({
                 onDelete?.();
             }}
             onClick={(e) => e.preventDefault()}
-            className="absolute z-[4] flex overflow-hidden text-left touch-none select-none"
-            style={{
-                top,
-                height: h,
-                left: connectedLeft ? -1 : 2,
-                right: connectedRight ? -1 : 2,
-                borderTopLeftRadius: connectedLeft ? 0 : 'var(--cal-event-radius, 6px)',
-                borderBottomLeftRadius: connectedLeft ? 0 : 'var(--cal-event-radius, 6px)',
-                borderTopRightRadius: connectedRight ? 0 : 'var(--cal-event-radius, 6px)',
-                borderBottomRightRadius: connectedRight ? 0 : 'var(--cal-event-radius, 6px)',
-            }}
+            data-past={past || undefined}
+            className="cal-event absolute z-[4] flex overflow-hidden text-left touch-none select-none"
+            style={
+                {
+                    '--ev': color,
+                    top: top + 1,
+                    height: h - 2,
+                    left: connectedLeft ? -1 : 3,
+                    right: connectedRight ? -1 : 5,
+                    borderTopLeftRadius: connectedLeft ? 0 : radius,
+                    borderBottomLeftRadius: connectedLeft ? 0 : radius,
+                    borderTopRightRadius: connectedRight ? 0 : radius,
+                    borderBottomRightRadius: connectedRight ? 0 : radius,
+                } as CSSProperties
+            }
         >
-            {!connectedLeft && <span className="w-1 shrink-0" style={{ backgroundColor: color }} />}
-            <span
-                className={`flex min-w-0 flex-1 flex-col justify-start px-1.5 ${
-                    isTall ? 'py-1.5 gap-1' : showFullRange ? 'py-1 gap-0.5' : 'py-0.5'
-                }`}
-                style={{ backgroundColor: eventCardFill(color) }}
-            >
-                <span className={`calendar-event-title truncate font-bold leading-tight text-white ${titleSizeClass}`}>
-                    {ev.title}
-                </span>
-                {showTime && (
-                    <span
-                        className={`calendar-event-time truncate font-medium leading-snug tabular-nums text-white/75 ${timeSizeClass}`}
-                    >
-                        {timeText}
+            {!connectedLeft && <span className="w-[3px] shrink-0" style={{ backgroundColor: color }} />}
+            {stacked ? (
+                <span className={`flex min-w-0 flex-1 flex-col px-1.5 ${isTall ? 'gap-0.5 py-1.5' : 'py-1'}`}>
+                    <span className={`truncate font-semibold leading-tight text-[var(--fz-text-1)] ${isTall ? 'text-[12.5px]' : 'text-[12px]'}`}>
+                        {ev.title}
                     </span>
-                )}
-            </span>
+                    {showTime && (
+                        <span className="cal-event-time truncate text-[11px] font-medium leading-snug tabular-nums">
+                            {eventTimeLabel(ev)}
+                        </span>
+                    )}
+                </span>
+            ) : (
+                <span className="flex min-w-0 flex-1 items-center gap-1 px-1.5 text-[11.5px] leading-none">
+                    <span className="truncate font-semibold text-[var(--fz-text-1)]">{ev.title}</span>
+                    {showTime && <span className="cal-event-time shrink-0 font-medium tabular-nums">{startLabel}</span>}
+                </span>
+            )}
         </button>
     );
 }

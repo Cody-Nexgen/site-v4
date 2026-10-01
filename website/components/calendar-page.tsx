@@ -105,21 +105,21 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500/30">
+    <div className="min-h-screen bg-black text-white font-sans selection:bg-blue-500/30">
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/60 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-white/8 bg-black/60 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
+              className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/6 transition-colors"
               aria-label="Back to dashboard"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
               <h1 className="text-2xl font-bold text-white">Calendar</h1>
-              <p className="text-sm text-zinc-500">
+              <p className="text-sm text-neutral-500">
                 <a href="/app" onClick={(e) => { e.preventDefault(); onBack(); }} className="hover:text-white transition-colors underline underline-offset-2">
                   Back to dashboard
                 </a>
@@ -134,7 +134,7 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
         {notice && (
-          <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-sm text-purple-200">
+          <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-200">
             {notice}
           </div>
         )}
@@ -143,7 +143,7 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
         <GlassCard className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">This week</h2>
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-neutral-500">
               {format(weekStart, "MMM d")} – {format(addDays(weekStart, 6), "MMM d, yyyy")}
             </span>
           </div>
@@ -154,17 +154,17 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
               return (
                 <div
                   key={day.toISOString()}
-                  className={`rounded-xl border p-3 min-h-[110px] ${
-                    isToday ? "border-purple-500/40 bg-purple-500/5" : "border-white/10 bg-white/[0.02]"
+                  className={`rounded-lg border p-3 min-h-[110px] ${
+                    isToday ? "border-blue-500/40 bg-blue-500/5" : "border-white/8 bg-white/4"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+                    <span className="text-[11px] uppercase tracking-wider text-neutral-500">
                       {format(day, "EEE")}
                     </span>
                     <span
                       className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
-                        isToday ? "bg-purple-600 text-white" : "text-zinc-300"
+                        isToday ? "bg-blue-600 text-white" : "text-neutral-300"
                       }`}
                     >
                       {format(day, "d")}
@@ -174,16 +174,16 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
                     {dayBookings.slice(0, 3).map((b) => (
                       <div
                         key={b.id}
-                        className="text-[11px] font-medium px-1.5 py-1 rounded-lg bg-purple-500/15 text-purple-200 truncate"
+                        className="text-[11px] font-medium px-1.5 py-1 rounded-lg bg-blue-500/15 text-blue-200 truncate"
                         title={`${b.guest_name} — ${b.link_title}`}
                       >
                         {formatSlotLabel(b.start_min)} · {b.guest_name}
                       </div>
                     ))}
                     {dayBookings.length > 3 && (
-                      <div className="text-[10px] text-zinc-500">+{dayBookings.length - 3} more</div>
+                      <div className="text-[11px] text-neutral-500">+{dayBookings.length - 3} more</div>
                     )}
-                    {dayBookings.length === 0 && <div className="text-[10px] text-zinc-600">—</div>}
+                    {dayBookings.length === 0 && <div className="text-[11px] text-neutral-600">—</div>}
                   </div>
                 </div>
               );
@@ -194,30 +194,30 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Saved scheduling links */}
           <GlassCard className="p-0 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+            <div className="p-6 border-b border-white/8 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Your scheduling links</h2>
-              <Link2 className="w-4 h-4 text-zinc-500" />
+              <Link2 className="w-4 h-4 text-neutral-500" />
             </div>
             <div className="flex-1 p-2 max-h-[360px] overflow-y-auto">
               {loading ? (
-                <div className="p-6 text-sm text-zinc-500">Loading…</div>
+                <div className="p-6 text-sm text-neutral-500">Loading…</div>
               ) : links.length > 0 ? (
                 <div className="space-y-1">
                   {links.map((link) => (
                     <div
                       key={link.id}
-                      className="flex items-center justify-between gap-2 p-3 rounded-xl hover:bg-white/5 transition-colors"
+                      className="flex items-center justify-between gap-2 p-3 rounded-lg hover:bg-white/6 transition-colors"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-zinc-200 truncate">{link.title}</p>
-                        <p className="text-xs text-zinc-500">
+                        <p className="text-sm font-medium text-neutral-200 truncate">{link.title}</p>
+                        <p className="text-xs text-neutral-500">
                           {link.type === "recurring" ? "Recurring" : "One-off"} · {link.durationMin}m · /schedule/{link.slug}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => copyLink(link.slug)}
-                          className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                          className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
                           title="Copy booking link"
                         >
                           <Copy className="w-4 h-4" />
@@ -226,7 +226,7 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
                           href={`/schedule/${link.slug}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                          className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
                           title="Preview booking page"
                         >
                           <ExternalLink className="w-4 h-4" />
@@ -236,7 +236,7 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-40 text-zinc-500 gap-2">
+                <div className="flex flex-col items-center justify-center h-40 text-neutral-500 gap-2">
                   <CalendarIcon className="w-6 h-6" />
                   <p className="text-sm">No scheduling links yet</p>
                 </div>
@@ -246,25 +246,25 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
 
           {/* Upcoming bookings */}
           <GlassCard className="p-0 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+            <div className="p-6 border-b border-white/8 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Upcoming bookings</h2>
-              <Users className="w-4 h-4 text-zinc-500" />
+              <Users className="w-4 h-4 text-neutral-500" />
             </div>
             <div className="flex-1 p-2 max-h-[360px] overflow-y-auto">
               {loading ? (
-                <div className="p-6 text-sm text-zinc-500">Loading…</div>
+                <div className="p-6 text-sm text-neutral-500">Loading…</div>
               ) : bookings.length > 0 ? (
                 <div className="space-y-1">
                   {bookings.slice(0, 20).map((b) => (
-                    <div key={b.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors">
-                      <div className="w-9 h-9 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                    <div key={b.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/6 transition-colors">
+                      <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                         <Clock className="w-4 h-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-zinc-200 truncate">
+                        <p className="text-sm font-medium text-neutral-200 truncate">
                           {b.guest_name} · {b.link_title}
                         </p>
-                        <p className="text-xs text-zinc-500">
+                        <p className="text-xs text-neutral-500">
                           {format(new Date(`${b.booking_date}T00:00:00`), "EEE, MMM d")} at {formatSlotLabel(b.start_min)}
                         </p>
                       </div>
@@ -272,7 +272,7 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-40 text-zinc-500">
+                <div className="flex flex-col items-center justify-center h-40 text-neutral-500">
                   <p className="text-sm">No bookings yet</p>
                 </div>
               )}
@@ -311,7 +311,7 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="relative z-10 w-full max-w-md rounded-2xl border border-white/12 bg-[rgba(22,24,32,0.72)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+              className="relative z-10 w-full max-w-md rounded-lg border border-white/16 bg-[rgba(22,24,32,0.72)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
             >
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Scheduling</p>
               <h2 id="schedule-link-type-title" className="mt-1 text-xl font-semibold tracking-tight text-white">
@@ -324,9 +324,9 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
                 <button
                   type="button"
                   onClick={() => openExtensionForLinkCreation("recurring")}
-                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left transition-colors hover:bg-white/[0.08]"
+                  className="flex items-center gap-3 rounded-lg border border-white/8 bg-white/4 px-4 py-3.5 text-left transition-colors hover:bg-white/6"
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/15 text-blue-300">
                     <Link2 size={16} />
                   </span>
                   <span>
@@ -337,7 +337,7 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
                 <button
                   type="button"
                   onClick={() => openExtensionForLinkCreation("oneoff")}
-                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left transition-colors hover:bg-white/[0.08]"
+                  className="flex items-center gap-3 rounded-lg border border-white/8 bg-white/4 px-4 py-3.5 text-left transition-colors hover:bg-white/6"
                 >
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
                     <Link2 size={16} />
@@ -358,7 +358,7 @@ export default function CalendarPage({ session, onBack }: CalendarPageProps) {
                   href={CHROME_EXTENSION_STORE_URL}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 block text-center text-xs font-semibold text-purple-300 hover:text-white transition-colors"
+                  className="mt-2 block text-center text-xs font-semibold text-blue-300 hover:text-white transition-colors"
                 >
                   Install the extension →
                 </a>

@@ -154,8 +154,8 @@ export function SparkMetricCard({
           >
             <defs>
               <linearGradient id="fzSparkArea" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--chart-2)" stopOpacity="0.35" />
-                <stop offset="100%" stopColor="var(--chart-2)" stopOpacity="0.02" />
+                <stop offset="0%" stopColor="var(--fz-chart-1, var(--chart-2))" stopOpacity="0.14" />
+                <stop offset="100%" stopColor="var(--fz-chart-1, var(--chart-2))" stopOpacity="0.02" />
               </linearGradient>
             </defs>
 
@@ -200,7 +200,7 @@ export function SparkMetricCard({
             <path
               d={path}
               fill="none"
-              stroke="var(--chart-2)"
+              stroke="var(--fz-chart-1, var(--chart-2))"
               strokeWidth="2.25"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -212,7 +212,7 @@ export function SparkMetricCard({
                 cy={activeCoord.y}
                 r="5"
                 fill="var(--card)"
-                stroke="var(--chart-2)"
+                stroke="var(--fz-chart-1, var(--chart-2))"
                 strokeWidth="2.5"
               />
             )}

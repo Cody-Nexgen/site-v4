@@ -4,7 +4,8 @@
 // ===============================================
 
 import { supabase } from '../lib/supabase';
-import { handleFocuzPassMessage, isFocuzPassMessage } from './focuzPassBridge';
+import { isFocuzPassMessage } from './focuzPassBridge';
+import { senderKind } from '../lib/trustedOrigins';
 import {
     blockDomainManual,
     unblockDomainManual,
@@ -26,8 +27,8 @@ import {
     startNuclearOption,
     incrementBlockedCount,
     saveState,
-    setTimerExpiredCallback,
     requestEmergencyOverride,
+    whenEngineReady,
 } from "./blockengine.js";
 import { completePomodoroSegment } from "./pomodoro.js";
 import {
@@ -114,48 +115,13 @@ chrome.storage.local.get(['sb-auth-token'], (result) => {
     if (result['sb-auth-token']) {
         try {
             currentSession = JSON.parse(result['sb-auth-token']);
-            console.log('[MessageRouter] Loaded session into memory');
         } catch (e) {
             console.error('[MessageRouter] Failed to parse stored session');
         }
     }
 });
 
-// --- Focus Session Logging (Notion) ---
-setTimerExpiredCallback(async (domain, durationMs) => {
-    const state = getEngineState();
-    if (!state.notionConnected || !state.notionToken || !state.notionDatabaseId || !state.notionJournalingEnabled) {
-        console.log('[MessageRouter] Notion journaling not enabled/connected, skipping focus log.');
-        return;
-    }
-
-    if (!currentSession?.user) {
-        console.warn('[MessageRouter] No user session found for Notion log.');
-        return;
-    }
-
-    try {
-        console.log(`[MessageRouter] Logging focus session to Notion: ${domain} (${durationMs}ms)`);
-
-        // Convert to minutes for readable logs
-        const minutes = Math.round(durationMs / 60000);
-
-        await supabase.functions.invoke('notion-log-session', {
-            body: {
-                token: state.notionToken,
-                databaseId: state.notionDatabaseId,
-                title: `Focus: ${domain}`,
-                durationMinutes: minutes,
-                domain: domain,
-                userId: currentSession.user.id
-            }
-        });
-    } catch (e) {
-        console.error('[MessageRouter] Failed to log focus session to Notion:', e);
-    }
-});
-
-/** Cloud sync for workspace settings. Integration tokens stay local. */
+/** Cloud sync for workspace settings. */
 const SYNCABLE_KEYS = [
     'blocklist', 'allowedSites', 'regexBlocklist', 'categoriesActive', 'schedules',
     'activeDays', 'activeHours', 'dailyResetTime', 'redirectMessage', 'requireChallenge',
@@ -163,7 +129,8 @@ const SYNCABLE_KEYS = [
     'emergencyOverrideSettings', 'weeklyGoalHours', 'theme', 'customTheme', 'todos',
     'dailyFocusTarget', 'profileName', 'profileInitial', 'profileAvatar', 'pomodoroSettings',
     'habits', 'scratchpad', 'dailyPlanner', 'savedQuotes', 'dashboardLayout',
-    'proDashboardVisuals', 'notionJournalingEnabled', '_localMutationAt', 'allowlistMode',
+    'proDashboardVisuals', '_localMutationAt', 'allowlistMode',
+    'pageVersions',
 ];
 
 const EXTRA_STORAGE_SYNC_KEYS = [
@@ -198,10 +165,39 @@ async function syncSettingsToSupabase() {
             console.error('[MessageRouter] upsert_my_workspace_state failed:', error);
             return;
         }
-        console.log('[MessageRouter] Workspace state synced to cloud');
     } catch (e) {
         console.error('[MessageRouter] syncSettingsToSupabase exception:', e?.message || e);
     }
+}
+
+let syncTimer = null;
+let syncInFlight = null;
+let syncAgain = false;
+
+/**
+ * Cloud push that never holds up a reply, batched: a burst of changes (typing,
+ * toggling several things) becomes one upload of the workspace instead of one per
+ * change, with at most one request in flight.
+ */
+function syncSettingsInBackground() {
+    if (!currentSession?.user) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(runQueuedSync, 1500);
+}
+
+function runQueuedSync() {
+    syncTimer = null;
+    if (syncInFlight) {
+        syncAgain = true;
+        return;
+    }
+    syncInFlight = syncSettingsToSupabase().finally(() => {
+        syncInFlight = null;
+        if (syncAgain) {
+            syncAgain = false;
+            syncSettingsInBackground();
+        }
+    });
 }
 
 async function fetchSettingsFromSupabase() {
@@ -223,12 +219,10 @@ async function fetchSettingsFromSupabase() {
         const remoteMutationAt = Number(remote._localMutationAt) || 0;
         // Stale / in-flight cloud read lost a race with a local unblock/block.
         if (localMutationAt > remoteMutationAt) {
-            console.log('[MessageRouter] Local workspace newer than cloud — pushing local');
             await syncSettingsToSupabase();
             return;
         }
         await applyCloudWorkspaceState(remote);
-        console.log('[MessageRouter] Workspace state loaded from cloud');
     } catch (e) {
         console.error('[MessageRouter] fetchSettingsFromSupabase exception:', e?.message || e);
     }
@@ -237,7 +231,6 @@ async function fetchSettingsFromSupabase() {
 async function syncNuclearWithSupabase() {
     if (!currentSession?.user) return;
     try {
-        console.log('[MessageRouter] Checking Supabase for active Nuclear Lockdown...');
         const { data: blocks, error } = await supabase
             .from('active_blocks')
             .select('*')
@@ -251,7 +244,6 @@ async function syncNuclearWithSupabase() {
         }
 
         if (blocks && new Date(blocks.expires_at) > new Date()) {
-            console.log('[MessageRouter] Found active Nuclear Lockdown in Supabase');
             const durationMs = new Date(blocks.expires_at).getTime() - Date.now();
             const durationMinutes = Math.ceil(durationMs / 60000);
             await startNuclearOption(blocks.source, durationMinutes);
@@ -270,7 +262,6 @@ async function handleSessionSync(session) {
     }
     lastSyncTime = now;
 
-    console.log('[MessageRouter] Syncing session...');
     currentSession = session;
 
     // Supabase client sync (this will use the adapter to save to storage)
@@ -279,7 +270,6 @@ async function handleSessionSync(session) {
             access_token: session.access_token,
             refresh_token: session.refresh_token,
         });
-        console.log('[MessageRouter] Supabase session synced');
     } catch (e) {
         console.error('[MessageRouter] Supabase setSession failed:', e);
     }
@@ -301,39 +291,85 @@ async function handleSessionSync(session) {
     return { success: true };
 }
 
+/**
+ * Message types this router answers (keep in step with the switch below). Anything
+ * else — FocuzPass, analytics, broadcasts — returns false straight away instead of
+ * holding the channel open and waiting for the engine to load for nothing.
+ */
+const ROUTER_MESSAGE_TYPES = new Set([
+    'ADD_ALLOWED_SITE',
+    'ADD_BLOCK',
+    'ADD_TODO',
+    'BLOCK_DOMAIN',
+    'CATEGORY_TOGGLE',
+    'CLASSIFY_YOUTUBE_VIDEO',
+    'EMERGENCY_OVERRIDE',
+    'EQUIP_COSMETIC',
+    'EXPORT_LOCAL_STATS',
+    'FUTURE_SELF_ACTIVE_TAB',
+    'FUTURE_SELF_BLOCKED',
+    'FUTURE_SELF_FINISH',
+    'FUTURE_SELF_GET',
+    'FUTURE_SELF_MIRROR_SHOWN',
+    'FUTURE_SELF_OVERRIDE',
+    'FUTURE_SELF_SET_MODE',
+    'FUTURE_SELF_START',
+    'GET_CATEGORY_STATES',
+    'GET_OVERRIDE_LOG',
+    'GET_PROGRESSION',
+    'GET_SCHEDULES',
+    'GET_SESSION',
+    'GET_STATE',
+    'GET_TIMERS',
+    'INCREMENT_BLOCKED_COUNT',
+    'OPEN_AI_CHAT',
+    'OPEN_OPTIONS',
+    'PAYMENT_SUCCESS',
+    'POMODORO_SEGMENT_COMPLETE',
+    'PROGRESSION_ACHIEVEMENT',
+    'PROGRESSION_HABIT_CHECKIN',
+    'PURCHASE_SHOP_ITEM',
+    'REMOVE_ALLOWED_SITE',
+    'REMOVE_BLOCK',
+    'REMOVE_BLOCK_SOURCE',
+    'SB_SESSION_SYNC',
+    'SCHEDULE_ADD',
+    'SCHEDULE_REMOVE',
+    'SET_CHALLENGE_FOCUS_SCORE',
+    'SET_PUBLIC_PROFILE',
+    'SOCIAL_HEARTBEAT',
+    'START_CHALLENGE',
+    'START_NUCLEAR',
+    'START_SESSION',
+    'SYNC_SESSION',
+    'TIMER_CANCEL',
+    'TIMER_START',
+    'UPDATE_ENGINE_SETTINGS',
+]);
+
 export function initMessageRouter() {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+        if (!ROUTER_MESSAGE_TYPES.has(msg?.type) || isFocuzPassMessage(msg?.type)) return false;
         (async () => {
             try {
-                if (msg?.type === 'FOCUZPASS_OVERLAY_RELAY') {
-                    const tabId = sender.tab?.id;
-                    if (tabId != null) {
-                        await chrome.tabs.sendMessage(
-                            tabId,
-                            {
-                                type: msg.payloadType,
-                                ...(msg.payload && typeof msg.payload === 'object' ? msg.payload : {}),
-                                sourceFrameId: sender.frameId,
-                            },
-                            { frameId: Number.isInteger(msg.frameId) ? msg.frameId : 0 },
-                        ).catch(() => undefined);
-                    }
-                    sendResponse({ ok: true });
-                    return;
-                }
-                if (isFocuzPassMessage(msg?.type)) {
-                    sendResponse(await handleFocuzPassMessage(msg, sender));
-                    return;
-                }
+                // A message can be what woke the worker — never touch block state
+                // before it has loaded from storage.
+                await whenEngineReady();
                 switch (msg.type) {
                     case 'SYNC_SESSION':
                     case 'SB_SESSION_SYNC':
+                        // Signing the extension in: only the FocuzNow site (after its own login) or our pages.
+                        if (senderKind(sender) === 'other') {
+                            sendResponse({ success: false, error: 'Not available here' });
+                            break;
+                        }
                         const res = await handleSessionSync(msg.session);
                         sendResponse(res);
                         break;
 
                     case 'GET_SESSION':
-                        sendResponse({ session: currentSession });
+                        // The session holds the account's tokens: our own pages only.
+                        sendResponse(senderKind(sender) === 'extension-page' ? { session: currentSession } : { session: null });
                         break;
 
                     case 'PAYMENT_SUCCESS':
@@ -349,21 +385,21 @@ export function initMessageRouter() {
 
                     case "ADD_BLOCK":
                         await blockDomainManual(msg.domain);
-                        if (currentSession?.user) await syncSettingsToSupabase();
-                        sendResponse({ ok: true });
+                        sendResponse({ ok: true, state: getEngineState() });
+                        syncSettingsInBackground();
                         break;
 
                     case "REMOVE_BLOCK":
                         await unblockDomainManual(msg.domain);
-                        if (currentSession?.user) await syncSettingsToSupabase();
-                        sendResponse({ ok: true });
+                        sendResponse({ ok: true, state: getEngineState() });
+                        syncSettingsInBackground();
                         break;
 
                     case "CATEGORY_TOGGLE":
                         if (msg.enabled) await enableCategory(msg.category);
                         else await disableCategory(msg.category);
-                        if (currentSession?.user) await syncSettingsToSupabase();
-                        sendResponse({ ok: true });
+                        sendResponse({ ok: true, state: getEngineState() });
+                        syncSettingsInBackground();
                         break;
 
                     case "GET_CATEGORY_STATES":
@@ -372,14 +408,14 @@ export function initMessageRouter() {
 
                     case "SCHEDULE_ADD":
                         const sId = await addDailySchedule(msg.domain, msg.startHour, msg.startMin, msg.endHour, msg.endMin, msg.days, msg.specificDate);
-                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true, scheduleId: sId });
+                        syncSettingsInBackground();
                         break;
 
                     case "SCHEDULE_REMOVE":
                         await removeDailySchedule(msg.domain, msg.scheduleId);
-                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
+                        syncSettingsInBackground();
                         break;
 
                     case "GET_SCHEDULES":
@@ -388,20 +424,20 @@ export function initMessageRouter() {
 
                     case "TIMER_START":
                         const tId = await startTimer(msg.domain, msg.durationMinutes);
-                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true, timerId: tId });
+                        syncSettingsInBackground();
                         break;
 
                     case "TIMER_CANCEL":
                         await cancelTimer(msg.domain, msg.timerId);
-                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
+                        syncSettingsInBackground();
                         break;
 
                     case "REMOVE_BLOCK_SOURCE":
                         await removeBlockSource(msg.domain, msg.source, msg.sourceId || null);
-                        if (currentSession?.user) await syncSettingsToSupabase();
-                        sendResponse({ ok: true });
+                        sendResponse({ ok: true, state: getEngineState() });
+                        syncSettingsInBackground();
                         break;
 
                     case "GET_TIMERS":
@@ -410,14 +446,14 @@ export function initMessageRouter() {
 
                     case "ADD_ALLOWED_SITE":
                         await addAllowedSite(msg.domain);
-                        if (currentSession?.user) await syncSettingsToSupabase();
-                        sendResponse({ ok: true });
+                        sendResponse({ ok: true, state: getEngineState() });
+                        syncSettingsInBackground();
                         break;
 
                     case "REMOVE_ALLOWED_SITE":
                         await removeAllowedSite(msg.domain);
-                        if (currentSession?.user) await syncSettingsToSupabase();
-                        sendResponse({ ok: true });
+                        sendResponse({ ok: true, state: getEngineState() });
+                        syncSettingsInBackground();
                         break;
 
                     case "START_NUCLEAR":
@@ -426,18 +462,22 @@ export function initMessageRouter() {
                             break;
                         }
                         await startNuclearOption(msg.target, msg.duration);
+                        sendResponse({ ok: true });
                         if (currentSession?.user) {
+                            // Cross-device record — after the reply, never in front of it.
                             const expiresAt = new Date(Date.now() + msg.duration * 60000).toISOString();
-                            await supabase
+                            void supabase
                                 .from('active_blocks')
                                 .upsert({
                                     user_id: currentSession.user.id,
                                     domain: 'NUCLEAR_LOCKDOWN',
                                     source: msg.target,
                                     expires_at: expiresAt
+                                })
+                                .then(({ error }) => {
+                                    if (error) console.error('[MessageRouter] nuclear cloud record failed:', error);
                                 });
                         }
-                        sendResponse({ ok: true });
                         break;
 
                     case "INCREMENT_BLOCKED_COUNT":
@@ -452,7 +492,16 @@ export function initMessageRouter() {
                     }
 
                     case "EXPORT_LOCAL_STATS": {
-                        const all = await chrome.storage.local.get(null);
+                        // Only the screen/focus-time keys (+ pomodoro runtime), not the whole
+                        // store (vault, calendar, lists…). getKeys() is Chromium 130+.
+                        let all;
+                        if (typeof chrome.storage.local.getKeys === 'function') {
+                            const keys = (await chrome.storage.local.getKeys())
+                                .filter((key) => key.startsWith('screenTime_') || key.startsWith('focusTime_'));
+                            all = await chrome.storage.local.get([...keys, 'pomodoroRuntimeV1']);
+                        } else {
+                            all = await chrome.storage.local.get(null);
+                        }
                         const screenTime = {};
                         const focusTime = {};
                         for (const [key, value] of Object.entries(all)) {
@@ -529,9 +578,7 @@ export function initMessageRouter() {
                         await updateEngineSettings(msg.settings);
                         // Respond immediately — cloud sync must not block UI toggles (was ~30s).
                         sendResponse({ ok: true, state: getEngineState() });
-                        if (currentSession?.user) {
-                            void syncSettingsToSupabase();
-                        }
+                        syncSettingsInBackground();
                         break;
 
                     case "GET_STATE":
@@ -561,8 +608,8 @@ export function initMessageRouter() {
                         const mins = msg.duration || 25;
                         const domain = msg.domain || "focus";
                         await startTimer(domain, mins);
-                        if (currentSession?.user) await syncSettingsToSupabase();
                         sendResponse({ ok: true });
+                        syncSettingsInBackground();
                         break;
                     }
 
@@ -582,7 +629,7 @@ export function initMessageRouter() {
                                     },
                                 ],
                             });
-                            if (currentSession?.user) await syncSettingsToSupabase();
+                            syncSettingsInBackground();
                         }
                         if (msg.openDashboard) {
                             await openOptionsWithTab('overview', {
@@ -598,7 +645,7 @@ export function initMessageRouter() {
                         const duration = Number(msg.duration) || 25;
                         if (domain) {
                             await startTimer(domain, duration);
-                            if (currentSession?.user) await syncSettingsToSupabase();
+                            syncSettingsInBackground();
                         }
                         if (msg.openDashboard) {
                             await openOptionsWithTab('blocklist', {
@@ -712,31 +759,6 @@ export function initMessageRouter() {
                         break;
                     }
 
-                    case "SYNC_NOTION_TASKS":
-                    case "UPDATE_NOTION_TASK":
-                        (async () => {
-                            try {
-                                if (currentSession?.user) {
-                                    const engineState = getEngineState();
-                                    const body = {
-                                        token: engineState.notionToken,
-                                        databaseId: engineState.notionDatabaseId,
-                                        action: msg.type === "SYNC_NOTION_TASKS" ? 'FETCH' : 'UPDATE_STATUS',
-                                        taskId: msg.taskId,
-                                        done: msg.done
-                                    };
-
-                                    const { data, error } = await supabase.functions.invoke('notion-sync-tasks', { body });
-                                    if (error) throw error;
-                                    sendResponse({ ok: true, tasks: data?.tasks });
-                                } else {
-                                    sendResponse({ ok: false, error: "No session" });
-                                }
-                            } catch (e) {
-                                sendResponse({ ok: false, error: e.message });
-                            }
-                        })();
-                        return true; // Keep channel open for async response
                 }
             } catch (err) {
                 console.error("[MessageRouter] Error:", err);

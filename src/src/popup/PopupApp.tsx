@@ -4,13 +4,13 @@ import '../index.css';
 import { useAuthStore } from '../lib/store';
 import {
     ExternalLink,
-    Flame,
+    KeyRound,
     LayoutDashboard,
+    Pause,
     Play,
     ShieldAlert,
     ShieldBan,
-    Timer,
-    Wrench,
+    Youtube,
 } from 'lucide-react';
 import { openWebDashboard } from '../lib/workspaceSync';
 
@@ -18,44 +18,121 @@ const EXTENSION_OPTIONS_URL = chrome.runtime.getURL('src/options/index.html');
 const SIGNUP_URL = 'https://focuznow.com/login?extension_oauth=1';
 const ICON_URL = chrome.runtime.getURL('public/icons/icon-128.png');
 
-function PopupBrand({ subtitle }: { subtitle?: string }) {
+function fmtClock(totalSec: number) {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function useNow(active: boolean) {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        if (!active) return;
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, [active]);
+    return now;
+}
+
+function PopupBrand({ status }: { status?: string }) {
     return (
-        <div className="focuz-popup-brand flex items-center gap-3 min-w-0">
-            <div className="focuz-popup-mark relative shrink-0">
-                <img src={ICON_URL} alt="" width={36} height={36} className="h-9 w-9 rounded-[10px]" />
-            </div>
+        <div className="flex items-center gap-2.5 min-w-0">
+            <img src={ICON_URL} alt="" width={28} height={28} className="h-7 w-7 rounded-md" />
             <div className="min-w-0">
-                <p className="focuz-popup-wordmark text-[17px] font-semibold tracking-tight text-white leading-none">
-                    Focuz<span className="text-neutral-400">Now</span>
+                <p className="text-[13px] font-semibold tracking-tight text-[var(--fz-text-1)] leading-none">
+                    FocuzNow
                 </p>
-                {subtitle ? (
-                    <p className="mt-1 text-[11px] text-neutral-500 truncate">{subtitle}</p>
+                {status ? (
+                    <p className="mt-0.5 text-[11px] text-[var(--fz-text-3)] truncate tabular-nums">{status}</p>
                 ) : null}
             </div>
         </div>
     );
 }
 
+function PopupSwitch({
+    checked,
+    disabled,
+    onChange,
+    label,
+}: {
+    checked: boolean;
+    disabled?: boolean;
+    onChange: (next: boolean) => void;
+    label: string;
+}) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            aria-label={label}
+            disabled={disabled}
+            onClick={(e) => {
+                e.stopPropagation();
+                onChange(!checked);
+            }}
+            className="relative h-[20px] w-[34px] shrink-0 rounded-full transition-colors duration-150 disabled:opacity-40"
+            style={{
+                background: checked ? 'var(--fz-accent)' : 'var(--fz-bg-active)',
+                boxShadow: 'inset 0 0 0 1px var(--fz-border)',
+            }}
+        >
+            <span
+                className="absolute top-[2px] h-[16px] w-[16px] rounded-full bg-white transition-transform duration-150"
+                style={{
+                    left: 2,
+                    transform: checked ? 'translateX(14px)' : 'translateX(0)',
+                    transitionTimingFunction: 'var(--fz-ease-out)',
+                }}
+            />
+        </button>
+    );
+}
+
+function ToggleRow({
+    icon,
+    label,
+    hint,
+    checked,
+    disabled,
+    onChange,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    hint?: string;
+    checked: boolean;
+    disabled?: boolean;
+    onChange: (next: boolean) => void;
+}) {
+    return (
+        <div className="flex items-center gap-2.5 px-3 py-2">
+            <span className="flex h-6 w-6 items-center justify-center text-[var(--fz-text-3)]">{icon}</span>
+            <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] font-medium text-[var(--fz-text-1)] leading-tight">{label}</p>
+                {hint ? <p className="text-[10.5px] text-[var(--fz-text-4)] leading-tight mt-0.5">{hint}</p> : null}
+            </div>
+            <PopupSwitch checked={checked} disabled={disabled} onChange={onChange} label={label} />
+        </div>
+    );
+}
+
 function PopupSignedOut() {
     return (
-        <div className="relative z-10 flex h-full flex-col">
-            <PopupBrand subtitle="Focus that sticks" />
-
-            <div className="mt-7 flex-1">
-                <h1 className="focuz-popup-hero text-[26px] font-semibold tracking-tight text-white leading-[1.15]">
-                    Block noise.
-                    <br />
-                    Keep the streak.
+        <div className="flex h-full flex-col">
+            <PopupBrand status="Focus that sticks" />
+            <div className="mt-6 flex-1">
+                <h1 className="text-[19px] font-semibold tracking-tight text-[var(--fz-text-1)] leading-snug">
+                    Block noise. Keep the streak.
                 </h1>
-                <p className="mt-3 text-[12.5px] leading-relaxed text-neutral-500">
+                <p className="mt-2 text-[12px] leading-relaxed text-[var(--fz-text-3)]">
                     Site blocking, Pomodoros, and your dashboard — synced when you sign in.
                 </p>
             </div>
-
             <div className="mt-auto space-y-2">
                 <button
                     type="button"
-                    className="focuz-popup-cta w-full"
+                    className="w-full rounded-[var(--fz-radius-md)] bg-[var(--fz-accent)] px-3 py-2.5 text-[13px] font-semibold text-[var(--fz-accent-fg)] transition-opacity hover:opacity-90"
                     onClick={() => {
                         chrome.tabs.create({ url: SIGNUP_URL });
                         window.close();
@@ -65,13 +142,12 @@ function PopupSignedOut() {
                 </button>
                 <button
                     type="button"
-                    className="focuz-popup-ghost w-full"
+                    className="w-full rounded-[var(--fz-radius-md)] border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] px-3 py-2 text-[12px] font-medium text-[var(--fz-text-2)] transition-colors hover:bg-[var(--fz-bg-hover)]"
                     onClick={() => {
                         chrome.tabs.create({ url: EXTENSION_OPTIONS_URL });
                         window.close();
                     }}
                 >
-                    <Wrench size={14} className="opacity-70" />
                     Extension tools
                 </button>
             </div>
@@ -80,47 +156,76 @@ function PopupSignedOut() {
 }
 
 function PopupSignedIn({
-    streak,
-    blockedToday,
-    sessionsToday,
-    displayName,
     nuclear,
     isTimerActive,
+    focusElapsedSec,
 }: {
-    streak: number;
-    blockedToday: number;
-    sessionsToday: number;
-    displayName: string;
     nuclear: boolean;
     isTimerActive: boolean;
+    focusElapsedSec: number;
 }) {
-    const greeting = (() => {
-        const h = new Date().getHours();
-        if (h < 12) return 'Good morning';
-        if (h < 18) return 'Good afternoon';
-        return 'Good evening';
-    })();
+    const { engineState, fetchEngineState, patchInAppBlock } = useAuthStore();
+    const [nuclearConfirm, setNuclearConfirm] = useState(false);
+    const [busy, setBusy] = useState(false);
 
-    const openSessions = (start: boolean) => {
-        if (start && !nuclear && !isTimerActive) {
-            chrome.runtime.sendMessage({ type: 'START_SESSION', duration: 25 });
-        }
-        chrome.tabs.create({ url: `${EXTENSION_OPTIONS_URL}?tab=sessions` });
-        window.close();
+    const blocking = !!engineState.focusMode;
+    const smartYt = !!engineState.inAppBlock?.smartYouTube?.enabled;
+
+    const toggleBlocking = (next: boolean) => {
+        chrome.runtime.sendMessage(
+            { type: 'UPDATE_ENGINE_SETTINGS', settings: { focusMode: next } },
+            () => fetchEngineState(),
+        );
+    };
+
+    const toggleSmartYt = (next: boolean) => {
+        void patchInAppBlock({
+            smartYouTube: {
+                blockShorts: true,
+                ...(engineState.inAppBlock?.smartYouTube || {}),
+                enabled: next,
+            },
+        });
+    };
+
+    const startFocus = () => {
+        if (nuclear || isTimerActive || busy) return;
+        setBusy(true);
+        chrome.runtime.sendMessage({ type: 'START_SESSION', duration: 25 }, () => {
+            setBusy(false);
+            chrome.tabs.create({ url: `${EXTENSION_OPTIONS_URL}?tab=sessions` });
+            window.close();
+        });
+    };
+
+    const startNuclear = () => {
+        if (busy) return;
+        setBusy(true);
+        chrome.runtime.sendMessage(
+            { type: 'START_NUCLEAR', target: 'popup', duration: 60 },
+            () => {
+                setBusy(false);
+                setNuclearConfirm(false);
+                void fetchEngineState();
+            },
+        );
     };
 
     return (
-        <div className="relative z-10 flex h-full flex-col">
-            <div className="flex items-start justify-between gap-3">
-                <PopupBrand subtitle={`${greeting}, ${displayName}`} />
-                {nuclear ? (
-                    <span className="focuz-popup-pill focuz-popup-pill-danger shrink-0">
-                        <ShieldAlert size={11} />
-                        Lockdown
-                    </span>
-                ) : isTimerActive ? (
-                    <span className="focuz-popup-pill focuz-popup-pill-live shrink-0">
-                        <span className="focuz-popup-live-dot" />
+        <div className="flex h-full flex-col">
+            <div className="flex items-center justify-between gap-3">
+                <PopupBrand
+                    status={
+                        nuclear
+                            ? 'Lockdown active'
+                            : isTimerActive
+                                ? `Focusing · ${fmtClock(focusElapsedSec)}`
+                                : 'Not focusing'
+                    }
+                />
+                {isTimerActive && !nuclear ? (
+                    <span className="flex items-center gap-1.5 rounded-full border border-[var(--fz-border)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--fz-text-3)]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--fz-success)]" />
                         Live
                     </span>
                 ) : null}
@@ -128,77 +233,113 @@ function PopupSignedIn({
 
             <button
                 type="button"
-                onClick={() => openSessions(!isTimerActive && !nuclear)}
-                className="focuz-popup-focus mt-5 flex flex-1 flex-col items-center justify-center text-center"
+                onClick={startFocus}
+                disabled={nuclear || isTimerActive || busy}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--fz-radius-lg)] border border-[var(--fz-border)] px-3 py-3.5 text-[14px] font-semibold transition-all duration-150 disabled:cursor-default"
+                style={{
+                    background: isTimerActive ? 'var(--fz-accent-soft)' : 'var(--fz-accent)',
+                    color: isTimerActive ? 'var(--fz-accent)' : 'var(--fz-accent-fg)',
+                    borderColor: isTimerActive ? 'var(--fz-accent)' : 'transparent',
+                }}
             >
                 {nuclear ? (
                     <>
-                        <span className="focuz-popup-focus-icon focuz-popup-focus-icon-danger">
-                            <ShieldAlert size={22} strokeWidth={2} />
-                        </span>
-                        <p className="mt-3 text-[15px] font-semibold text-red-200">Lockdown active</p>
-                        <p className="mt-1 text-[11px] text-neutral-500">Distractions are blocked</p>
+                        <ShieldAlert size={15} />
+                        Lockdown active
                     </>
                 ) : isTimerActive ? (
                     <>
-                        <span className="focuz-popup-focus-icon focuz-popup-focus-icon-live">
-                            <Play size={20} strokeWidth={2} className="ml-0.5" />
-                        </span>
-                        <p className="mt-3 text-[15px] font-semibold text-emerald-200">Session running</p>
-                        <p className="mt-1 text-[11px] text-neutral-500">Open sessions to manage</p>
+                        <Pause size={15} />
+                        <span className="tabular-nums">{fmtClock(focusElapsedSec)}</span>
+                        <span className="font-medium opacity-70">— session running</span>
                     </>
                 ) : (
                     <>
-                        <span className="focuz-popup-focus-icon">
-                            <Play size={20} strokeWidth={2} className="ml-0.5" />
-                        </span>
-                        <p className="mt-3 text-[15px] font-semibold text-white">Start 25m focus</p>
-                        <p className="mt-1 text-[11px] text-neutral-500">Quick Pomodoro · one click</p>
+                        <Play size={15} />
+                        Start 25m focus
                     </>
                 )}
             </button>
 
-            <div className="mt-3 grid grid-cols-3 gap-2">
-                <div className="focuz-popup-stat">
-                    <Flame size={12} className="text-orange-300/90" />
-                    <span className="focuz-popup-stat-value">{streak}</span>
-                    <span className="focuz-popup-stat-label">Streak</span>
-                </div>
-                <div className="focuz-popup-stat">
-                    <ShieldBan size={12} className="text-neutral-400" />
-                    <span className="focuz-popup-stat-value">{blockedToday}</span>
-                    <span className="focuz-popup-stat-label">Blocked</span>
-                </div>
-                <div className="focuz-popup-stat">
-                    <Timer size={12} className="text-neutral-400" />
-                    <span className="focuz-popup-stat-value">{sessionsToday}</span>
-                    <span className="focuz-popup-stat-label">Sessions</span>
-                </div>
+            <div className="mt-3 rounded-[var(--fz-radius-lg)] border border-[var(--fz-border)] bg-[var(--fz-bg-panel)]">
+                <ToggleRow
+                    icon={<ShieldBan size={14} />}
+                    label="Blocking"
+                    hint="Blocklist and schedules"
+                    checked={blocking}
+                    onChange={toggleBlocking}
+                />
+                <div className="mx-3 border-t border-[var(--fz-border)]" />
+                <ToggleRow
+                    icon={<Youtube size={14} />}
+                    label="Smart YouTube"
+                    hint="Classify and block distractions"
+                    checked={smartYt}
+                    onChange={toggleSmartYt}
+                />
+                <div className="mx-3 border-t border-[var(--fz-border)]" />
+                <ToggleRow
+                    icon={<ShieldAlert size={14} />}
+                    label="Nuclear lockdown"
+                    hint={nuclear ? 'Active until it expires' : 'Blocks everything for 60m'}
+                    checked={nuclear}
+                    disabled={nuclear}
+                    onChange={(next) => {
+                        if (next) setNuclearConfirm(true);
+                    }}
+                />
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            {nuclearConfirm ? (
+                <div className="mt-2 rounded-[var(--fz-radius-md)] border border-[var(--fz-danger)] bg-[var(--fz-danger-soft)] px-3 py-2.5">
+                    <p className="text-[12px] font-medium text-[var(--fz-text-1)]">
+                        Start a 60-minute lockdown?
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-[var(--fz-text-3)]">
+                        All distracting sites stay blocked until it ends.
+                    </p>
+                    <div className="mt-2 flex gap-2">
+                        <button
+                            type="button"
+                            onClick={startNuclear}
+                            className="rounded-[var(--fz-radius-sm)] bg-[var(--fz-danger)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--fz-danger-fg)]"
+                        >
+                            Start lockdown
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setNuclearConfirm(false)}
+                            className="rounded-[var(--fz-radius-sm)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--fz-text-3)] hover:text-[var(--fz-text-1)]"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            ) : null}
+
+            <div className="mt-auto flex items-center gap-2 pt-3">
                 <button
                     type="button"
-                    className="focuz-popup-secondary"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-[var(--fz-radius-md)] border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] px-3 py-2 text-[12px] font-medium text-[var(--fz-text-2)] transition-colors hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]"
                     onClick={() => {
                         openWebDashboard();
                         window.close();
                     }}
                 >
-                    <LayoutDashboard size={14} />
-                    Dashboard
-                    <ExternalLink size={11} className="ml-auto opacity-40" />
+                    <LayoutDashboard size={13} />
+                    Open dashboard
+                    <ExternalLink size={10} className="opacity-50" />
                 </button>
                 <button
                     type="button"
-                    className="focuz-popup-secondary"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-[var(--fz-radius-md)] border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] px-3 py-2 text-[12px] font-medium text-[var(--fz-text-2)] transition-colors hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]"
                     onClick={() => {
-                        chrome.tabs.create({ url: EXTENSION_OPTIONS_URL });
+                        chrome.tabs.create({ url: `${EXTENSION_OPTIONS_URL}?tab=focuzpass` });
                         window.close();
                     }}
                 >
-                    <Wrench size={14} />
-                    Tools
+                    <KeyRound size={13} />
+                    FocuzPass
                 </button>
             </div>
         </div>
@@ -206,8 +347,9 @@ function PopupSignedIn({
 }
 
 const PopupApp = () => {
-    const { session, streak, engineState, fetchEngineState, focusStartTime, init } = useAuthStore();
+    const { session, engineState, fetchEngineState, focusStartTime, init } = useAuthStore();
     const [ready, setReady] = useState(false);
+    const now = useNow(!!focusStartTime);
 
     useEffect(() => {
         let cancelled = false;
@@ -230,39 +372,30 @@ const PopupApp = () => {
         };
     }, [fetchEngineState, init]);
 
-    const todayStr = new Date().toDateString();
-    const sessionsToday =
-        engineState?.pomodoroSettings?.lastDate === todayStr
-            ? engineState?.pomodoroSettings?.sessionsCompleted ?? 0
-            : 0;
-    const blockedToday = engineState?.blockedToday ?? 0;
-    const displayName =
-        engineState?.profileName?.trim()?.split(' ')[0] ||
-        session?.user?.user_metadata?.full_name?.split(' ')[0] ||
-        session?.user?.email?.split('@')[0] ||
-        'there';
+    const focusElapsedSec = focusStartTime ? Math.max(0, Math.floor((now - focusStartTime) / 1000)) : 0;
 
     return (
-        <div className="focuz-popup w-[340px] h-[440px]">
-            <div className="focuz-popup-shell">
-                <div className="focuz-popup-atmosphere" aria-hidden />
-                {!ready && !session ? (
-                    <div className="relative z-10 flex h-full items-center justify-center">
-                        <PopupBrand />
-                    </div>
-                ) : session ? (
-                    <PopupSignedIn
-                        streak={streak}
-                        blockedToday={blockedToday}
-                        sessionsToday={sessionsToday}
-                        displayName={displayName}
-                        nuclear={!!engineState?.nuclearState?.active}
-                        isTimerActive={!!focusStartTime}
-                    />
-                ) : (
-                    <PopupSignedOut />
-                )}
-            </div>
+        <div
+            className="w-[360px] max-h-[560px] overflow-y-auto p-4"
+            style={{
+                background: 'var(--fz-bg-app)',
+                color: 'var(--fz-text-1)',
+                fontFamily: 'var(--fz-font-display)',
+            }}
+        >
+            {!ready && !session ? (
+                <div className="flex h-[120px] items-center justify-center">
+                    <PopupBrand />
+                </div>
+            ) : session ? (
+                <PopupSignedIn
+                    nuclear={!!engineState?.nuclearState?.active}
+                    isTimerActive={!!focusStartTime}
+                    focusElapsedSec={focusElapsedSec}
+                />
+            ) : (
+                <PopupSignedOut />
+            )}
         </div>
     );
 };

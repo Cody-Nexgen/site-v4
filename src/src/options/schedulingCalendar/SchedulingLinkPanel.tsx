@@ -1,30 +1,43 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-    addDays,
+    addMonths,
     eachDayOfInterval,
     endOfMonth,
     endOfWeek,
     format,
+    isBefore,
+    isSameDay,
     isSameMonth,
+    startOfDay,
     startOfMonth,
     startOfWeek,
 } from 'date-fns';
 import {
-    ArrowRight,
+    AlertCircle,
+    AlignLeft,
+    Check,
+    ChevronDown,
+    ChevronLeft,
     ChevronRight,
     Clock,
     Globe,
-    HelpCircle,
-    Link2,
+    Loader2,
     MapPin,
-    MoreHorizontal,
     Phone,
-    AlignLeft,
+    Plus,
+    Video,
+    X,
 } from 'lucide-react';
 import type { CalendarGroup, SchedulingLink } from '../../lib/schedulingTypes';
 import { isSchedulingSlugAvailable } from '../../lib/schedulingApi';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
+import { Sheet } from '../../components/fz/Sheet';
+import { Button } from '../../components/fz/Button';
+import { Dialog } from '../../components/fz/Dialog';
+import { Switch } from '../../components/fz/Switch';
+import { Checkbox } from '../../components/fz/Checkbox';
+import { Menu } from '../../components/fz/Menu';
 import { TIMEZONE_OPTIONS, timezoneLabel, currentTimezoneId } from './timezones';
 
 export type LinkLocationType = 'link' | 'phone' | 'in_person' | 'custom';
@@ -56,7 +69,6 @@ export type LinkDraft = {
     bookingWindowDays: number;
 };
 
-const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 export function linkDraftFromSchedulingLink(link: SchedulingLink): LinkDraft {
     const slots: Record<number, WeekdaySlot> = {};
@@ -143,39 +155,162 @@ export function defaultLinkDraft(displayName: string): LinkDraft {
     };
 }
 
-function formatHour12(t: string): string {
-    const [h, m] = t.split(':').map((x) => parseInt(x, 10) || 0);
-    const ap = h >= 12 ? 'PM' : 'AM';
-    const hr = h % 12 || 12;
-    return `${hr}${m ? `:${String(m).padStart(2, '0')}` : ''} ${ap}`;
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/** Weekly hours list order — Monday first, like most booking tools. */
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
+const NOTICE_OPTIONS = [0, 1, 2, 4, 12, 24, 48, 168];
+const WINDOW_OPTIONS = [7, 14, 30, 60, 90, 180, 365];
+
+function durationLabel(min: number): string {
+    if (min < 60) return `${min} min`;
+    const h = min / 60;
+    return Number.isInteger(h) ? `${h} hr` : `${h.toFixed(1)} hr`;
 }
 
-const timeInputClass =
-    'bg-[#1a1a1a] border border-white/10 rounded-md px-2 py-1 text-white text-xs outline-none focus:border-red-500/50 [color-scheme:dark]';
+function noticeLabel(h: number): string {
+    if (h === 0) return 'No minimum';
+    if (h === 168) return '1 week';
+    if (h >= 24 && h % 24 === 0) return h === 24 ? '1 day' : `${h / 24} days`;
+    return h === 1 ? '1 hour' : `${h} hours`;
+}
 
-function TimeRangeInputs({
-    slot,
+function windowLabel(d: number): string {
+    if (d === 365) return '1 year';
+    if (d % 7 === 0 && d <= 14) return d === 7 ? '1 week' : `${d / 7} weeks`;
+    return `${d} days`;
+}
+
+/** Preset options plus the draft's current value when it's a custom one. */
+function withCurrent(presets: number[], current: number): number[] {
+    return presets.includes(current) ? presets : [...presets, current].sort((a, b) => a - b);
+}
+
+const slugify = (v: string) =>
+    v
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-/, '');
+
+/* ── Layout primitives ─────────────────────────────────────────────── */
+
+type GhostOption = { value: string; label: string; icon?: ReactNode };
+
+/** Borderless dropdown — reads as plain text until hovered. */
+function GhostSelect({
+    value,
+    options,
     onChange,
-    compact,
+    ariaLabel,
+    align = 'start',
 }: {
-    slot: WeekdaySlot;
-    onChange: (slot: WeekdaySlot) => void;
-    compact?: boolean;
+    value: string;
+    options: GhostOption[];
+    onChange: (v: string) => void;
+    ariaLabel: string;
+    align?: 'start' | 'end';
+}) {
+    const [open, setOpen] = useState(false);
+    const anchorRef = useRef<HTMLButtonElement>(null);
+    const current = options.find((o) => o.value === value);
+    return (
+        <>
+            <button
+                ref={anchorRef}
+                type="button"
+                aria-label={ariaLabel}
+                aria-haspopup="menu"
+                aria-expanded={open}
+                onClick={() => setOpen((o) => !o)}
+                className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-md px-2 text-[13px] text-[var(--fz-text-1)] transition-colors hover:bg-[var(--fz-bg-hover)] aria-expanded:bg-[var(--fz-bg-hover)]"
+            >
+                <span className="truncate">{current?.label ?? value}</span>
+                <ChevronDown size={12} strokeWidth={2} className="shrink-0 text-[var(--fz-text-4)]" />
+            </button>
+            <Menu
+                open={open}
+                onClose={() => setOpen(false)}
+                anchor={anchorRef}
+                align={align}
+                items={options.map((o) => ({
+                    id: o.value,
+                    label: o.label,
+                    icon: o.icon,
+                    checked: o.value === value,
+                    onSelect: () => onChange(o.value),
+                }))}
+            />
+        </>
+    );
+}
+
+/** Icon + value line, like an event's properties. */
+function PropertyRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+    return (
+        <div className="flex min-h-8 items-center gap-2">
+            <span className="flex w-5 shrink-0 justify-center text-[var(--fz-text-4)]">{icon}</span>
+            <div className="-ml-0.5 min-w-0 flex-1">{children}</div>
+        </div>
+    );
+}
+
+/** Label on the left, control on the right — used inside "More options". */
+function OptionRow({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <div className="flex min-h-9 items-center justify-between gap-4">
+            <span className="text-[13px] text-[var(--fz-text-2)]">{label}</span>
+            <div className="flex shrink-0 items-center">{children}</div>
+        </div>
+    );
+}
+
+const ghostField =
+    'h-8 w-full rounded-md bg-[var(--fz-bg-hover)] px-2.5 text-[13px] text-[var(--fz-text-1)] outline-none placeholder:text-[var(--fz-text-4)] focus:shadow-[inset_0_0_0_1px_var(--fz-border-strong)]';
+
+function TimeInput({
+    value,
+    onChange,
+    label,
+    invalid,
+}: {
+    value: string;
+    onChange: (v: string) => void;
+    label: string;
+    invalid?: boolean;
 }) {
     return (
-        <div className={`flex items-center gap-1.5 ${compact ? '' : 'flex-1 min-w-0'}`}>
-            <input
-                type="time"
-                value={slot.start}
-                onChange={(e) => onChange({ ...slot, start: e.target.value })}
-                className={timeInputClass}
-            />
-            <ArrowRight size={12} className="text-neutral-600 shrink-0" />
-            <input
-                type="time"
+        <input
+            type="time"
+            value={value}
+            aria-label={label}
+            aria-invalid={invalid || undefined}
+            onChange={(e) => onChange(e.target.value)}
+            onClick={(e) => {
+                try {
+                    e.currentTarget.showPicker?.();
+                } catch {
+                    /* picker not allowed here — typing still works */
+                }
+            }}
+            className={`h-7 w-[84px] rounded-md bg-transparent px-1.5 text-[13px] tabular-nums outline-none transition-colors hover:bg-[var(--fz-bg-hover)] focus:bg-[var(--fz-bg-hover)] [&::-webkit-calendar-picker-indicator]:hidden ${
+                invalid ? 'text-[var(--fz-danger)]' : 'text-[var(--fz-text-1)]'
+            }`}
+        />
+    );
+}
+
+function TimeRange({ slot, onChange, label }: { slot: WeekdaySlot; onChange: (s: WeekdaySlot) => void; label: string }) {
+    return (
+        <div className="flex items-center">
+            <TimeInput value={slot.start} onChange={(start) => onChange({ ...slot, start })} label={`${label} start`} />
+            <span className="px-0.5 text-[13px] text-[var(--fz-text-4)]">–</span>
+            <TimeInput
                 value={slot.end}
-                onChange={(e) => onChange({ ...slot, end: e.target.value })}
-                className={timeInputClass}
+                onChange={(end) => onChange({ ...slot, end })}
+                label={`${label} end`}
+                invalid={slot.end <= slot.start}
             />
         </div>
     );
@@ -183,13 +318,7 @@ function TimeRangeInputs({
 
 type AddressHit = { label: string; placeId: string };
 
-function AddressAutocomplete({
-    value,
-    onChange,
-}: {
-    value: string;
-    onChange: (v: string) => void;
-}) {
+function AddressAutocomplete({ value, onChange }: { value: string; onChange: (v: string) => void }) {
     const [hits, setHits] = useState<AddressHit[]>([]);
     const [open, setOpen] = useState(false);
     const debounceRef = useRef<number | null>(null);
@@ -230,20 +359,23 @@ function AddressAutocomplete({
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 onFocus={() => hits.length > 0 && setOpen(true)}
+                onBlur={() => window.setTimeout(() => setOpen(false), 120)}
                 placeholder="Start typing an address…"
-                className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none"
+                aria-label="Address"
+                className={ghostField}
             />
             {open && hits.length > 0 && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-40 overflow-y-auto rounded-xl border border-white/10 bg-[#1a1a1a] shadow-2xl">
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-overlay)] p-1 shadow-[var(--fz-shadow-overlay)]">
                     {hits.map((h) => (
                         <button
                             key={h.placeId}
                             type="button"
+                            onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
                                 onChange(h.label);
                                 setOpen(false);
                             }}
-                            className="w-full text-left px-3 py-2 text-xs text-neutral-300 hover:bg-white/5"
+                            className="w-full rounded-md px-2.5 py-1.5 text-left text-[12.5px] text-[var(--fz-text-2)] hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]"
                         >
                             {h.label}
                         </button>
@@ -254,50 +386,25 @@ function AddressAutocomplete({
     );
 }
 
-function NotionToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-    return (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={checked}
-            onClick={() => onChange(!checked)}
-            className={`relative w-9 h-5 rounded-full transition-colors ${checked ? 'bg-red-600' : 'bg-neutral-600'}`}
-        >
-            <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                    checked ? 'translate-x-4' : 'translate-x-0'
-                }`}
-            />
-        </button>
-    );
-}
-
-function LinkPreviewCard({ url }: { url: string }) {
+function LinkHost({ url }: { url: string }) {
     let host = '';
-    let title = url;
     try {
-        const u = new URL(url.startsWith('http') ? url : `https://${url}`);
-        host = u.hostname.replace(/^www\./, '');
-        title = host;
+        host = new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace(/^www\./, '');
     } catch {
-        host = url;
+        return null;
     }
+    if (!host.includes('.')) return null;
     return (
-        <div className="mt-2 flex gap-3 rounded-xl border border-white/10 bg-[#1a1a1a] p-3">
-            <img
-                src={`https://www.google.com/s2/favicons?domain=${host}&sz=64`}
-                alt=""
-                className="w-10 h-10 rounded-lg bg-white/5 shrink-0"
-            />
-            <div className="min-w-0">
-                <p className="text-sm font-bold text-white truncate">{title}</p>
-                <p className="text-xs text-neutral-500 truncate">{host || url}</p>
-            </div>
-        </div>
+        <p className="text-meta mt-1.5 flex items-center gap-1.5">
+            <img src={`https://www.google.com/s2/favicons?domain=${host}&sz=32`} alt="" className="size-3.5 rounded-sm" />
+            {host}
+        </p>
     );
 }
 
-function AvailabilityModal({
+/* ── Date picker (one-off links) ───────────────────────────────────── */
+
+function DatePickerDialog({
     open,
     onClose,
     draft,
@@ -308,208 +415,94 @@ function AvailabilityModal({
     draft: LinkDraft;
     onChange: (d: LinkDraft) => void;
 }) {
-    const [month, setMonth] = useState(new Date());
-
-    const monthStart = startOfMonth(month);
-    const days = eachDayOfInterval({
-        start: startOfWeek(monthStart),
-        end: endOfWeek(endOfMonth(monthStart)),
-    });
+    const [month, setMonth] = useState(() => startOfMonth(new Date()));
+    const today = startOfDay(new Date());
+    const days = eachDayOfInterval({ start: startOfWeek(month), end: endOfWeek(endOfMonth(month)) });
 
     const toggleDate = (d: Date) => {
         const key = format(d, 'yyyy-MM-dd');
         if (draft.pickedDates.includes(key)) {
-            const { [key]: _removed, ...restSlots } = draft.dateSlots;
-            onChange({
-                ...draft,
-                pickedDates: draft.pickedDates.filter((x) => x !== key),
-                dateSlots: restSlots,
-            });
+            const restSlots = { ...draft.dateSlots };
+            delete restSlots[key];
+            onChange({ ...draft, pickedDates: draft.pickedDates.filter((x) => x !== key), dateSlots: restSlots });
         } else {
             onChange({
                 ...draft,
                 pickedDates: [...draft.pickedDates, key].sort(),
-                dateSlots: {
-                    ...draft.dateSlots,
-                    [key]: { start: '09:00', end: '17:00' },
-                },
+                dateSlots: { ...draft.dateSlots, [key]: draft.weekdaySlots[d.getDay()] ?? { start: '09:00', end: '17:00' } },
             });
         }
     };
 
-    const toggleRepeat = (dow: number) => {
-        onChange({
-            ...draft,
-            repeatWeekdays: draft.repeatWeekdays.includes(dow)
-                ? draft.repeatWeekdays.filter((x) => x !== dow)
-                : [...draft.repeatWeekdays, dow].sort(),
-        });
-    };
-
-    const summary = useMemo(() => {
-        const parts: string[] = [];
-        if (draft.repeatWeekdays.length) {
-            parts.push(
-                draft.repeatWeekdays.map((d) => format(new Date(2024, 0, 7 + d), 'EEEE')).join(', '),
-            );
-        }
-        if (draft.pickedDates.length) {
-            parts.push(
-                draft.pickedDates
-                    .slice(0, 4)
-                    .map((k) => format(new Date(k), 'MMM d'))
-                    .join(' · '),
-            );
-        }
-        return parts.join(' · ') || 'No times selected';
-    }, [draft]);
-
-    if (!open) return null;
+    const navBtn =
+        'flex size-7 items-center justify-center rounded-md text-[var(--fz-text-3)] transition-colors hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]';
 
     return (
-        <div className="fixed inset-0 z-[700] flex items-center justify-center bg-black/80 p-4">
-            <div className="w-full max-w-[320px] rounded-2xl border border-white/10 bg-[#141414] shadow-2xl overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-                    <span className="text-sm font-bold text-white">Available times</span>
-                    <button type="button" onClick={onClose} className="text-xs font-bold text-red-400">
-                        Done
+        <Dialog
+            open={open}
+            onClose={onClose}
+            title="Pick dates"
+            size="sm"
+            footer={
+                <Button variant="primary" size="sm" onClick={onClose}>
+                    Done
+                </Button>
+            }
+        >
+            <div className="mb-2 flex items-center justify-between">
+                <span className="pl-1 text-[13px] font-semibold text-[var(--fz-text-1)]">{format(month, 'MMMM yyyy')}</span>
+                <div className="flex items-center">
+                    <button type="button" onClick={() => setMonth((m) => addMonths(m, -1))} className={navBtn} aria-label="Previous month">
+                        <ChevronLeft size={15} strokeWidth={1.75} />
+                    </button>
+                    <button type="button" onClick={() => setMonth((m) => addMonths(m, 1))} className={navBtn} aria-label="Next month">
+                        <ChevronRight size={15} strokeWidth={1.75} />
                     </button>
                 </div>
-                <div className="p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <button type="button" onClick={() => setMonth((m) => addDays(startOfMonth(m), -1))} className="text-neutral-500">
-                            ‹
-                        </button>
-                        <span className="text-xs font-bold">{format(month, 'MMM yyyy')}</span>
-                        <button type="button" onClick={() => setMonth((m) => addDays(endOfMonth(m), 1))} className="text-neutral-500">
-                            ›
-                        </button>
-                    </div>
-                    <div className="grid grid-cols-7 gap-0.5 mb-3">
-                        {days.map((day) => {
-                            const key = format(day, 'yyyy-MM-dd');
-                            const sel = draft.pickedDates.includes(key);
-                            const inMonth = isSameMonth(day, month);
-                            return (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => toggleDate(day)}
-                                    className={`h-8 text-[10px] font-bold rounded-md ${
-                                        sel
-                                            ? 'bg-red-600 text-white'
-                                            : inMonth
-                                              ? 'text-neutral-300 hover:bg-white/10'
-                                              : 'text-neutral-700'
-                                    }`}
-                                >
-                                    {format(day, 'd')}
-                                </button>
-                            );
-                        })}
-                    </div>
-                    <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-2">Repeat weekly</p>
-                    <div className="flex flex-wrap gap-1 mb-3">
-                        {DAY_LABELS.map((label, dow) => (
-                            <button
-                                key={label}
-                                type="button"
-                                onClick={() => toggleRepeat(dow)}
-                                className={`w-9 h-9 rounded-lg text-[10px] font-bold ${
-                                    draft.repeatWeekdays.includes(dow)
-                                        ? 'bg-red-600/30 text-red-300 border border-red-500/50'
-                                        : 'border border-white/10 text-neutral-500'
-                                }`}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-                    {draft.pickedDates.length > 0 && (
-                        <div className="space-y-2 mb-3 max-h-[200px] overflow-y-auto border-t border-white/10 pt-3">
-                            <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
-                                Hours for each date
-                            </p>
-                            {draft.pickedDates.map((key) => {
-                                const slot = draft.dateSlots[key] ?? { start: '09:00', end: '17:00' };
-                                return (
-                                    <div key={key} className="flex items-center gap-2">
-                                        <span className="text-[11px] font-bold text-neutral-400 w-12 shrink-0">
-                                            {format(new Date(key + 'T12:00:00'), 'MMM d')}
-                                        </span>
-                                        <TimeRangeInputs
-                                            slot={slot}
-                                            compact
-                                            onChange={(next) =>
-                                                onChange({
-                                                    ...draft,
-                                                    dateSlots: { ...draft.dateSlots, [key]: next },
-                                                })
-                                            }
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                    <p className="text-xs text-neutral-400 leading-relaxed">{summary}</p>
-                </div>
             </div>
-        </div>
-    );
-}
-
-function TimezonePopover({
-    value,
-    onChange,
-}: {
-    value: string;
-    onChange: (id: string) => void;
-}) {
-    const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const close = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-        };
-        document.addEventListener('mousedown', close);
-        return () => document.removeEventListener('mousedown', close);
-    }, [open]);
-
-    return (
-        <div ref={ref} className="relative">
-            <button
-                type="button"
-                onClick={() => setOpen((o) => !o)}
-                className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white"
-            >
-                <Globe size={14} />
-                <span>{timezoneLabel(value)}</span>
-            </button>
-            {open && (
-                <div className="absolute right-full mr-2 top-0 z-50 w-[260px] max-h-[280px] overflow-y-auto rounded-2xl border border-white/10 bg-[#1a1a1a] shadow-2xl p-2">
-                    {TIMEZONE_OPTIONS.map((tz) => (
+            <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-medium text-[var(--fz-text-4)]">
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                    <span key={i} className="py-1">
+                        {d}
+                    </span>
+                ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+                {days.map((day) => {
+                    const key = format(day, 'yyyy-MM-dd');
+                    const selected = draft.pickedDates.includes(key);
+                    const past = isBefore(day, today);
+                    const inMonth = isSameMonth(day, month);
+                    return (
                         <button
-                            key={tz.id}
+                            key={key}
                             type="button"
-                            onClick={() => {
-                                onChange(tz.id);
-                                setOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
-                                tz.id === value ? 'bg-red-600/20 text-red-300' : 'text-neutral-300 hover:bg-white/5'
+                            disabled={past}
+                            onClick={() => toggleDate(day)}
+                            aria-pressed={selected}
+                            className={`flex h-9 items-center justify-center rounded-lg text-[13px] tabular-nums transition-colors disabled:cursor-default disabled:opacity-35 ${
+                                selected
+                                    ? 'bg-[var(--fz-accent)] font-semibold text-[var(--fz-accent-fg)]'
+                                    : `hover:bg-[var(--fz-bg-hover)] ${
+                                          isSameDay(day, today) ? 'font-semibold text-[var(--fz-text-1)] ring-1 ring-inset ring-[var(--fz-border-strong)]' : ''
+                                      } ${inMonth ? 'text-[var(--fz-text-2)]' : 'text-[var(--fz-text-4)]'}`
                             }`}
                         >
-                            {tz.label}
+                            {format(day, 'd')}
                         </button>
-                    ))}
-                </div>
-            )}
-        </div>
+                    );
+                })}
+            </div>
+            <p className="text-meta mt-3 px-1">
+                {draft.pickedDates.length === 0
+                    ? 'Click days to add them.'
+                    : `${draft.pickedDates.length} ${draft.pickedDates.length === 1 ? 'date' : 'dates'} selected`}
+            </p>
+        </Dialog>
     );
 }
+
+/* ── Panel ─────────────────────────────────────────────────────────── */
 
 type Props = {
     mode: 'recurring' | 'oneoff';
@@ -523,25 +516,28 @@ type Props = {
     editingLinkId?: string | null;
 };
 
+const LOCATION_ICON: Record<LinkLocationType, ReactNode> = {
+    link: <Video size={14} strokeWidth={1.75} />,
+    phone: <Phone size={14} strokeWidth={1.75} />,
+    in_person: <MapPin size={14} strokeWidth={1.75} />,
+    custom: <AlignLeft size={14} strokeWidth={1.75} />,
+};
+
 export default function SchedulingLinkPanel({
     mode,
     draft,
     onChange,
     onClose,
     onCreate,
-    hostEmail,
     previewSlug,
     groups,
     editingLinkId = null,
 }: Props) {
     const { session } = useAuthStore();
     const [slugStatus, setSlugStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
-    const [showAvailability, setShowAvailability] = useState(false);
-    const [showGroupPicker, setShowGroupPicker] = useState(false);
-    const [showCustomize, setShowCustomize] = useState(false);
-    const [showBookingWindow, setShowBookingWindow] = useState(false);
+    const [showDates, setShowDates] = useState(false);
+    const [showMore, setShowMore] = useState(false);
     const customGroups = groups.filter((g) => g.kind === 'custom');
-    const selectedGroup = customGroups.find((g) => g.id === draft.groupId);
 
     const patch = (p: Partial<LinkDraft>) => onChange({ ...draft, ...p });
 
@@ -553,532 +549,330 @@ export default function SchedulingLinkPanel({
         }
         setSlugStatus('checking');
         const t = window.setTimeout(() => {
-            void isSchedulingSlugAvailable(supabase, slug, editingLinkId ?? undefined).then(
-                (res) => {
-                    setSlugStatus(res.available ? 'available' : 'taken');
-                },
-            );
+            void isSchedulingSlugAvailable(supabase, slug, editingLinkId ?? undefined)
+                .then((res) => setSlugStatus(res.available ? 'available' : 'taken'))
+                .catch(() => setSlugStatus('idle'));
         }, 400);
         return () => window.clearTimeout(t);
     }, [draft.slug, editingLinkId, session?.user?.id]);
 
-    const availabilitySummary = useMemo(() => {
-        const bits: string[] = [];
-        if (draft.repeatWeekdays.length) {
-            bits.push(
-                `Weekly: ${draft.repeatWeekdays.map((d) => DAY_LABELS[d]).join(', ')}`,
-            );
-        }
-        if (draft.pickedDates.length) {
-            bits.push(`${draft.pickedDates.length} date(s) picked`);
-        }
-        return bits.join(' · ') || 'Set available times';
-    }, [draft]);
+    const setWeekday = (dow: number, slot: WeekdaySlot | null) => {
+        const slots = { ...draft.weekdaySlots };
+        if (slot) slots[dow] = slot;
+        else delete slots[dow];
+        patch({ weekdaySlots: slots });
+    };
+
+    const removeDate = (key: string) => {
+        const rest = { ...draft.dateSlots };
+        delete rest[key];
+        patch({ pickedDates: draft.pickedDates.filter((k) => k !== key), dateSlots: rest });
+    };
+
+    const timezoneOptions = TIMEZONE_OPTIONS.some((t) => t.id === draft.timezone)
+        ? TIMEZONE_OPTIONS
+        : [{ id: draft.timezone, label: timezoneLabel(draft.timezone) }, ...TIMEZONE_OPTIONS];
+
+    // Saving re-checks the slug, so a slow check never blocks the button.
+    const canSave = draft.title.trim().length > 0 && slugStatus !== 'taken';
+
+    const moreSummary = [
+        draft.bookingNoticeHours ? `${noticeLabel(draft.bookingNoticeHours)} notice` : 'No notice needed',
+        `up to ${windowLabel(draft.bookingWindowDays)} ahead`,
+        draft.avoidConflicts ? 'skips busy times' : null,
+        draft.singleUse ? 'single use' : null,
+    ]
+        .filter(Boolean)
+        .join(' · ');
 
     return (
-        <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-white/10 bg-[#111]">
-            <AvailabilityModal
-                open={showAvailability}
-                onClose={() => setShowAvailability(false)}
-                draft={draft}
-                onChange={onChange}
-            />
-
-            {showGroupPicker && (
-                <div className="fixed inset-0 z-[650] flex items-center justify-center bg-black/70 p-4">
-                    <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-[#1a1a1a] p-4">
-                        <p className="text-sm font-bold text-white mb-3">Add to group</p>
-                        <div className="space-y-1 max-h-[240px] overflow-y-auto">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    patch({ groupId: '' });
-                                    setShowGroupPicker(false);
-                                }}
-                                className="w-full text-left px-3 py-2 rounded-lg text-sm text-neutral-400 hover:bg-white/5"
-                            >
-                                None
-                            </button>
-                            {customGroups.map((g) => (
-                                <button
-                                    key={g.id}
-                                    type="button"
-                                    onClick={() => {
-                                        patch({ groupId: g.id });
-                                        setShowGroupPicker(false);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white hover:bg-white/5"
-                                >
-                                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                                    {g.name}
-                                </button>
-                            ))}
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setShowGroupPicker(false)}
-                            className="mt-3 w-full py-2 text-xs font-bold text-neutral-500"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-                <div className="flex items-center gap-2 min-w-0">
-                    <Link2 size={16} className="text-neutral-400 shrink-0" />
-                    <span className="text-sm font-bold text-white truncate">
-                        {mode === 'recurring' ? 'Recurring link' : 'One-off link'}
+        <Sheet
+            open
+            onClose={onClose}
+            side="right"
+            title={
+                <span className="flex items-center gap-2">
+                    {editingLinkId ? 'Edit booking link' : 'New booking link'}
+                    <span className="text-meta font-normal text-[var(--fz-text-4)]">
+                        {mode === 'recurring' ? 'Recurring' : 'One-off'}
                     </span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                    <button type="button" className="p-1.5 text-neutral-500 hover:text-white">
-                        <MoreHorizontal size={16} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onCreate}
-                        disabled={slugStatus === 'taken' || slugStatus === 'checking'}
-                        className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                        {editingLinkId ? 'Save' : 'Create'}
-                    </button>
-                </div>
-            </div>
+                </span>
+            }
+            footer={
+                <>
+                    <Button variant="ghost" size="sm" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={onCreate} disabled={!canSave}>
+                        {editingLinkId ? 'Save changes' : 'Create link'}
+                    </Button>
+                </>
+            }
+        >
+            <DatePickerDialog open={showDates} onClose={() => setShowDates(false)} draft={draft} onChange={onChange} />
 
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 text-[13px]">
-                <input
-                    value={draft.title}
-                    onChange={(e) => patch({ title: e.target.value })}
-                    className="w-full bg-transparent text-xl font-bold text-white outline-none"
-                />
-                <p className="flex items-center gap-2 text-neutral-500 text-sm -mt-2">
-                    <Clock size={14} className="text-neutral-600" />
-                    {draft.durationMin} min duration
-                </p>
-                <p className="text-neutral-600 text-xs break-all">
-                    focuznow.com/schedule/{draft.slug.trim() || previewSlug}
-                </p>
-                {draft.slug.trim() && slugStatus !== 'idle' && (
-                    <p
-                        className={`text-[11px] font-bold ${
-                            slugStatus === 'checking'
-                                ? 'text-neutral-500'
-                                : slugStatus === 'available'
-                                  ? 'text-emerald-400'
-                                  : 'text-red-400'
-                        }`}
-                    >
-                        {slugStatus === 'checking'
-                            ? 'Checking availability…'
-                            : slugStatus === 'available'
-                              ? 'This URL is available'
-                              : 'This URL is already taken'}
-                    </p>
-                )}
-                <button
-                    type="button"
-                    onClick={() => setShowCustomize((v) => !v)}
-                    className="flex items-center gap-1 text-neutral-500 text-sm hover:text-white w-full text-left"
-                >
-                    Customize link
-                    <ChevronRight
-                        size={14}
-                        className={`transition-transform ${showCustomize ? 'rotate-90' : ''}`}
-                    />
-                </button>
-                {showCustomize && (
-                    <div className="space-y-3 pl-1 border-l border-white/10 ml-1">
-                        <label className="block space-y-1">
-                            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
-                                URL slug
-                            </span>
-                            <div className="flex items-center gap-1 text-xs text-neutral-500">
-                                <span className="shrink-0">/schedule/</span>
-                                <input
-                                    value={draft.slug}
-                                    onChange={(e) =>
-                                        patch({
-                                            slug: e.target.value
-                                                .toLowerCase()
-                                                .replace(/[^a-z0-9-]+/g, '-')
-                                                .replace(/^-|-$/g, ''),
-                                        })
-                                    }
-                                    className="flex-1 min-w-0 bg-[#1a1a1a] border border-white/10 rounded-lg px-2 py-1.5 text-white font-mono"
-                                />
-                            </div>
-                        </label>
-                        <label className="block space-y-1">
-                            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
-                                Duration (minutes)
-                            </span>
-                            <input
-                                type="number"
-                                min={15}
-                                max={240}
-                                step={15}
-                                value={draft.durationMin}
-                                onChange={(e) =>
-                                    patch({
-                                        durationMin: Math.min(
-                                            240,
-                                            Math.max(15, parseInt(e.target.value, 10) || 30),
-                                        ),
-                                    })
-                                }
-                                className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
-                            />
-                        </label>
-                    </div>
-                )}
-
-                <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-neutral-300">
-                        Link expiration date <HelpCircle size={12} className="text-neutral-600" />
-                    </span>
-                    <NotionToggle checked={draft.linkExpires} onChange={(v) => patch({ linkExpires: v })} />
-                </div>
-                {draft.linkExpires && (
-                    <input
-                        type="datetime-local"
-                        value={draft.expiresAt}
-                        onChange={(e) => patch({ expiresAt: e.target.value })}
-                        className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-white text-xs"
-                    />
-                )}
-
-                <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-neutral-300">
-                        Single-use link <HelpCircle size={12} className="text-neutral-600" />
-                    </span>
-                    <NotionToggle checked={draft.singleUse} onChange={(v) => patch({ singleUse: v })} />
-                </div>
-
-                <TimezonePopover value={draft.timezone} onChange={(tz) => patch({ timezone: tz })} />
-
+            <div className="space-y-6">
+                {/* Name + public URL */}
                 <div>
-                    <p className="text-white font-bold mb-2">Weekly hours</p>
-                    <p className="text-xs text-neutral-500 mb-2">Different times per weekday — only open slots show when booking.</p>
-                    <div className="flex gap-3">
-                            <div className="flex flex-col gap-1 text-[11px] font-bold text-neutral-500">
-                                {DAY_LABELS.map((label, dow) => (
-                                    <button
-                                        key={label}
-                                        type="button"
-                                        className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                            draft.weekdaySlots[dow]
-                                                ? 'bg-red-600 text-white'
-                                                : 'text-neutral-600'
-                                        }`}
-                                        onClick={() => {
-                                            const slots = { ...draft.weekdaySlots };
-                                            if (slots[dow]) delete slots[dow];
-                                            else slots[dow] = { start: '09:00', end: '17:00' };
-                                            patch({ weekdaySlots: slots });
-                                        }}
-                                    >
-                                        {label}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="flex-1 min-w-0 space-y-1.5">
-                                {DAY_LABELS.map((label, dow) => {
-                                    const slot = draft.weekdaySlots[dow];
-                                    return (
-                                        <div key={label} className="flex items-center gap-2 min-h-8">
-                                            {slot ? (
-                                                <TimeRangeInputs
-                                                    slot={slot}
-                                                    onChange={(next) => {
-                                                        patch({
-                                                            weekdaySlots: {
-                                                                ...draft.weekdaySlots,
-                                                                [dow]: next,
-                                                            },
-                                                        });
-                                                    }}
-                                                />
-                                            ) : (
-                                                <span className="text-neutral-600 text-sm">
-                                                    Start <ArrowRight size={12} className="inline opacity-40" /> End
-                                                </span>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                    <input
+                        value={draft.title}
+                        onChange={(e) => patch({ title: e.target.value })}
+                        placeholder="Meeting name"
+                        aria-label="Meeting name"
+                        className="w-full bg-transparent text-[20px] font-semibold tracking-[-0.015em] text-[var(--fz-text-1)] outline-none placeholder:text-[var(--fz-text-4)]"
+                    />
+                    <div className="mt-1 flex items-center text-[12.5px]">
+                        <span className="shrink-0 text-[var(--fz-text-4)]">focuznow.com/schedule/</span>
+                        <input
+                            value={draft.slug}
+                            onChange={(e) => patch({ slug: slugify(e.target.value) })}
+                            onBlur={() => draft.slug.endsWith('-') && patch({ slug: draft.slug.replace(/-+$/, '') })}
+                            placeholder={previewSlug}
+                            aria-label="Link URL"
+                            className="-ml-0.5 min-w-0 flex-1 rounded px-0.5 bg-transparent text-[var(--fz-text-2)] outline-none transition-colors hover:bg-[var(--fz-bg-hover)] focus:bg-[var(--fz-bg-hover)] focus:text-[var(--fz-text-1)] placeholder:text-[var(--fz-text-4)]"
+                        />
+                        <span className="ml-1 flex size-4 shrink-0 items-center justify-center" aria-live="polite">
+                            {slugStatus === 'checking' && (
+                                <Loader2 size={12} className="animate-spin text-[var(--fz-text-4)]" aria-label="Checking URL" />
+                            )}
+                            {slugStatus === 'available' && (
+                                <Check size={12} strokeWidth={2.25} className="text-[var(--fz-text-3)]" aria-label="URL available" />
+                            )}
+                            {slugStatus === 'taken' && (
+                                <AlertCircle size={12} className="text-[var(--fz-danger)]" aria-label="URL taken" />
+                            )}
+                        </span>
                     </div>
+                    {slugStatus === 'taken' && (
+                        <p className="text-meta mt-1 text-[var(--fz-danger)]">That URL is taken — try another.</p>
+                    )}
+                </div>
 
-                    {mode === 'oneoff' && (
-                        <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
-                            <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
-                                Extra dates (optional)
-                            </p>
+                {/* Properties */}
+                <div className="space-y-0.5">
+                    <PropertyRow icon={<Clock size={14} strokeWidth={1.75} />}>
+                        <GhostSelect
+                            ariaLabel="Duration"
+                            value={String(draft.durationMin)}
+                            onChange={(v) => patch({ durationMin: Number(v) })}
+                            options={withCurrent(DURATION_OPTIONS, draft.durationMin).map((m) => ({
+                                value: String(m),
+                                label: durationLabel(m),
+                            }))}
+                        />
+                    </PropertyRow>
+                    <PropertyRow icon={LOCATION_ICON[draft.locationType]}>
+                        <GhostSelect
+                            ariaLabel="Location"
+                            value={draft.locationType}
+                            onChange={(v) => patch({ locationType: v as LinkLocationType, locationValue: '' })}
+                            options={[
+                                { value: 'link', label: 'Video call', icon: LOCATION_ICON.link },
+                                { value: 'phone', label: 'Phone call', icon: LOCATION_ICON.phone },
+                                { value: 'in_person', label: 'In person', icon: LOCATION_ICON.in_person },
+                                { value: 'custom', label: 'Somewhere else', icon: LOCATION_ICON.custom },
+                            ]}
+                        />
+                    </PropertyRow>
+                    {draft.locationType !== 'phone' && (
+                        <div className="pb-1 pl-7">
+                            {draft.locationType === 'in_person' ? (
+                                <AddressAutocomplete value={draft.locationValue} onChange={(v) => patch({ locationValue: v })} />
+                            ) : (
+                                <input
+                                    value={draft.locationValue}
+                                    onChange={(e) => patch({ locationValue: e.target.value })}
+                                    placeholder={draft.locationType === 'link' ? 'Paste a Zoom or Meet link' : 'Where you’ll meet'}
+                                    aria-label="Location details"
+                                    className={ghostField}
+                                />
+                            )}
+                            {draft.locationType === 'link' && draft.locationValue.trim().length > 4 && (
+                                <LinkHost url={draft.locationValue.trim()} />
+                            )}
+                        </div>
+                    )}
+                    <PropertyRow icon={<Globe size={14} strokeWidth={1.75} />}>
+                        <GhostSelect
+                            ariaLabel="Time zone"
+                            value={draft.timezone}
+                            onChange={(tz) => patch({ timezone: tz })}
+                            options={timezoneOptions.map((t) => ({ value: t.id, label: t.label }))}
+                        />
+                    </PropertyRow>
+                </div>
+
+                {mode === 'oneoff' && (
+                    <div>
+                        <div className="mb-1 flex items-center justify-between">
+                            <h3 className="text-[13px] font-semibold text-[var(--fz-text-1)]">Dates</h3>
                             <button
                                 type="button"
-                                onClick={() => setShowAvailability(true)}
-                                className="flex items-center gap-2 w-full text-left text-neutral-400 hover:text-white text-sm font-medium"
+                                onClick={() => setShowDates(true)}
+                                className="flex h-7 items-center gap-1 rounded-md px-2 text-[12.5px] text-[var(--fz-text-3)] transition-colors hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]"
                             >
-                                <Clock size={14} />
-                                Add specific dates & custom hours
+                                <Plus size={13} />
+                                Add
                             </button>
-                            {draft.pickedDates.length > 0 && (
-                                <div className="space-y-1.5 pl-1">
-                                    {draft.pickedDates.slice(0, 5).map((key) => {
-                                        const slot = draft.dateSlots[key] ?? {
-                                            start: '09:00',
-                                            end: '17:00',
-                                        };
-                                        return (
-                                            <p key={key} className="text-xs text-neutral-500">
-                                                {format(new Date(key + 'T12:00:00'), 'EEE MMM d')}:{' '}
-                                                {formatHour12(slot.start)} – {formatHour12(slot.end)}
-                                            </p>
-                                        );
-                                    })}
-                                    {draft.pickedDates.length > 5 && (
-                                        <p className="text-xs text-neutral-600">
-                                            +{draft.pickedDates.length - 5} more
-                                        </p>
+                        </div>
+                        {draft.pickedDates.length === 0 ? (
+                            <p className="text-meta">No dates yet — add the days people can book.</p>
+                        ) : (
+                            draft.pickedDates.map((key) => {
+                                const slot = draft.dateSlots[key] ?? { start: '09:00', end: '17:00' };
+                                const label = format(new Date(`${key}T12:00:00`), 'EEE, MMM d');
+                                return (
+                                    <div key={key} className="group/date flex h-9 items-center gap-3">
+                                        <span className="w-[92px] text-[13px] text-[var(--fz-text-1)]">{label}</span>
+                                        <TimeRange
+                                            slot={slot}
+                                            label={label}
+                                            onChange={(next) => patch({ dateSlots: { ...draft.dateSlots, [key]: next } })}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeDate(key)}
+                                            className="ml-auto flex size-7 items-center justify-center rounded-md text-[var(--fz-text-4)] opacity-0 transition hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)] focus-visible:opacity-100 group-hover/date:opacity-100"
+                                            aria-label={`Remove ${label}`}
+                                        >
+                                            <X size={13} />
+                                        </button>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
+
+                {/* Weekly hours */}
+                <div>
+                    <h3 className="text-[13px] font-semibold text-[var(--fz-text-1)]">
+                        {mode === 'recurring' ? 'Weekly hours' : 'Every week too'}
+                    </h3>
+                    {mode === 'oneoff' && <p className="text-meta mt-0.5">Optional — leave all unchecked for dates only.</p>}
+                    <div className="mt-1.5">
+                        {WEEK_ORDER.map((dow) => {
+                            const slot = draft.weekdaySlots[dow];
+                            return (
+                                <div key={dow} className="flex h-9 items-center gap-3">
+                                    <Checkbox
+                                        checked={Boolean(slot)}
+                                        onCheckedChange={(on) => setWeekday(dow, on ? { start: '09:00', end: '17:00' } : null)}
+                                        aria-label={`Available on ${DAY_NAMES[dow]}`}
+                                    />
+                                    <span className={`w-10 text-[13px] ${slot ? 'text-[var(--fz-text-1)]' : 'text-[var(--fz-text-4)]'}`}>
+                                        {DAY_NAMES[dow].slice(0, 3)}
+                                    </span>
+                                    {slot ? (
+                                        <TimeRange slot={slot} onChange={(next) => setWeekday(dow, next)} label={DAY_NAMES[dow]} />
+                                    ) : (
+                                        <span className="px-1.5 text-[13px] text-[var(--fz-text-4)]">Unavailable</span>
                                     )}
                                 </div>
-                            )}
-                        </div>
-                    )}
-
-                    <button
-                        type="button"
-                        onClick={() => setShowAvailability(true)}
-                        className="mt-2 w-full text-left text-xs text-neutral-600 hover:text-white"
-                    >
-                        {availabilitySummary}
-                    </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                <div>
-                    <p className="flex items-center gap-1 text-white font-bold mb-2">
-                        Location <HelpCircle size={12} className="text-neutral-600" />
-                    </p>
+                {/* Everything else, folded away */}
+                <div className="border-t border-[var(--fz-border)] pt-4">
                     <button
                         type="button"
-                        onClick={() => patch({ locationType: 'link' })}
-                        className={`w-full flex items-center gap-2 py-2 text-left ${draft.locationType === 'link' ? 'text-white' : 'text-neutral-500'}`}
+                        onClick={() => setShowMore((v) => !v)}
+                        aria-expanded={showMore}
+                        className="flex w-full items-start justify-between gap-3 text-left"
                     >
-                        <Link2 size={16} /> Link
-                    </button>
-                    {draft.locationType === 'link' && (
-                        <>
-                            <input
-                                value={draft.locationValue}
-                                onChange={(e) => patch({ locationValue: e.target.value })}
-                                placeholder="https://zoom.us/j/..."
-                                className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none"
-                            />
-                            {draft.locationValue.trim().length > 4 && (
-                                <LinkPreviewCard url={draft.locationValue} />
-                            )}
-                        </>
-                    )}
-                    <button
-                        type="button"
-                        onClick={() => patch({ locationType: 'phone' })}
-                        className={`w-full flex items-center gap-2 py-2 text-left ${draft.locationType === 'phone' ? 'text-white' : 'text-neutral-500'}`}
-                    >
-                        <Phone size={16} /> Phone
-                    </button>
-                    {draft.locationType === 'phone' && (
-                        <p className="text-xs text-neutral-500 pl-6">Recipients will provide their phone when booking.</p>
-                    )}
-                    <button
-                        type="button"
-                        onClick={() => patch({ locationType: 'in_person' })}
-                        className={`w-full flex items-center gap-2 py-2 text-left ${draft.locationType === 'in_person' ? 'text-white' : 'text-neutral-500'}`}
-                    >
-                        <MapPin size={16} /> In person
-                    </button>
-                    {draft.locationType === 'in_person' && (
-                        <AddressAutocomplete
-                            value={draft.locationValue}
-                            onChange={(v) => patch({ locationValue: v })}
-                        />
-                    )}
-                    <button
-                        type="button"
-                        onClick={() => patch({ locationType: 'custom' })}
-                        className={`w-full flex items-center gap-2 py-2 text-left ${draft.locationType === 'custom' ? 'text-white' : 'text-neutral-500'}`}
-                    >
-                        <AlignLeft size={16} /> Custom
-                    </button>
-                    {draft.locationType === 'custom' && (
-                        <input
-                            value={draft.locationValue}
-                            onChange={(e) => patch({ locationValue: e.target.value })}
-                            placeholder="Where"
-                            className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none"
-                        />
-                    )}
-                </div>
-
-                <div>
-                    <button
-                        type="button"
-                        onClick={() => setShowBookingWindow((v) => !v)}
-                        className="flex items-center justify-between w-full text-white font-bold mb-2"
-                    >
-                        Booking window
-                        <ChevronRight
+                        <span className="min-w-0">
+                            <span className="block text-[13px] font-semibold text-[var(--fz-text-1)]">More options</span>
+                            {!showMore && <span className="text-meta mt-0.5 block truncate">{moreSummary}</span>}
+                        </span>
+                        <ChevronDown
                             size={14}
-                            className={`text-neutral-500 transition-transform ${showBookingWindow ? 'rotate-90' : ''}`}
+                            className={`mt-0.5 shrink-0 text-[var(--fz-text-4)] transition-transform ${showMore ? 'rotate-180' : ''}`}
                         />
                     </button>
-                    <p className="text-xs text-neutral-500 mb-2">
-                        {draft.bookingNoticeHours}h notice · {draft.bookingWindowDays} day max horizon
-                    </p>
-                    {showBookingWindow && (
-                        <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                            <label className="block space-y-1.5">
-                                <span className="text-xs text-neutral-400">Minimum notice (hours)</span>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            patch({
-                                                bookingNoticeHours: Math.max(
-                                                    0,
-                                                    draft.bookingNoticeHours - 1,
-                                                ),
-                                            })
-                                        }
-                                        className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold"
-                                    >
-                                        −
-                                    </button>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        max={168}
-                                        value={draft.bookingNoticeHours}
-                                        onChange={(e) =>
-                                            patch({
-                                                bookingNoticeHours: Math.max(
-                                                    0,
-                                                    parseInt(e.target.value, 10) || 0,
-                                                ),
-                                            })
-                                        }
-                                        className="flex-1 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm text-center"
+                    {showMore && (
+                        <div className="mt-2">
+                            <OptionRow label="Minimum notice">
+                                <GhostSelect
+                                    ariaLabel="Minimum notice"
+                                    align="end"
+                                    value={String(draft.bookingNoticeHours)}
+                                    onChange={(v) => patch({ bookingNoticeHours: Number(v) })}
+                                    options={withCurrent(NOTICE_OPTIONS, draft.bookingNoticeHours).map((h) => ({
+                                        value: String(h),
+                                        label: noticeLabel(h),
+                                    }))}
+                                />
+                            </OptionRow>
+                            <OptionRow label="Bookable up to">
+                                <GhostSelect
+                                    ariaLabel="Booking window"
+                                    align="end"
+                                    value={String(draft.bookingWindowDays)}
+                                    onChange={(v) => patch({ bookingWindowDays: Number(v) })}
+                                    options={withCurrent(WINDOW_OPTIONS, draft.bookingWindowDays).map((d) => ({
+                                        value: String(d),
+                                        label: `${windowLabel(d)} ahead`,
+                                    }))}
+                                />
+                            </OptionRow>
+                            {customGroups.length > 0 && (
+                                <OptionRow label="Add bookings to">
+                                    <GhostSelect
+                                        ariaLabel="Calendar for bookings"
+                                        align="end"
+                                        value={draft.groupId}
+                                        onChange={(v) => patch({ groupId: v })}
+                                        options={[
+                                            { value: '', label: 'No calendar' },
+                                            ...customGroups.map((g) => ({
+                                                value: g.id,
+                                                label: g.name,
+                                                icon: <span className="size-2.5 rounded-full" style={{ backgroundColor: g.color }} />,
+                                            })),
+                                        ]}
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            patch({
-                                                bookingNoticeHours: Math.min(
-                                                    168,
-                                                    draft.bookingNoticeHours + 1,
-                                                ),
-                                            })
-                                        }
-                                        className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold"
-                                    >
-                                        +
-                                    </button>
-                                </div>
-                            </label>
-                            <label className="block space-y-1.5">
-                                <span className="text-xs text-neutral-400">Maximum days ahead</span>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            patch({
-                                                bookingWindowDays: Math.max(
-                                                    1,
-                                                    draft.bookingWindowDays - 1,
-                                                ),
-                                            })
-                                        }
-                                        className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold"
-                                    >
-                                        −
-                                    </button>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={365}
-                                        value={draft.bookingWindowDays}
-                                        onChange={(e) =>
-                                            patch({
-                                                bookingWindowDays: Math.max(
-                                                    1,
-                                                    parseInt(e.target.value, 10) || 1,
-                                                ),
-                                            })
-                                        }
-                                        className="flex-1 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm text-center"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            patch({
-                                                bookingWindowDays: Math.min(
-                                                    365,
-                                                    draft.bookingWindowDays + 1,
-                                                ),
-                                            })
-                                        }
-                                        className="w-8 h-8 rounded-lg bg-white/10 text-white font-bold"
-                                    >
-                                        +
-                                    </button>
-                                </div>
-                            </label>
+                                </OptionRow>
+                            )}
+                            <OptionRow label="Skip times I’m busy">
+                                <Switch
+                                    checked={draft.avoidConflicts}
+                                    onCheckedChange={(v) => patch({ avoidConflicts: v })}
+                                    aria-label="Avoid conflicts"
+                                />
+                            </OptionRow>
+                            <OptionRow label="One booking only">
+                                <Switch checked={draft.singleUse} onCheckedChange={(v) => patch({ singleUse: v })} aria-label="Single use" />
+                            </OptionRow>
+                            <OptionRow label="Expires">
+                                <Switch
+                                    checked={draft.linkExpires}
+                                    onCheckedChange={(v) => patch({ linkExpires: v })}
+                                    aria-label="Link expires"
+                                />
+                            </OptionRow>
+                            {draft.linkExpires && (
+                                <input
+                                    type="datetime-local"
+                                    value={draft.expiresAt}
+                                    onChange={(e) => patch({ expiresAt: e.target.value })}
+                                    aria-label="Expiration date"
+                                    className={`${ghostField} mb-1`}
+                                />
+                            )}
+                            <textarea
+                                value={draft.description}
+                                onChange={(e) => patch({ description: e.target.value })}
+                                placeholder="Note for people booking (optional)"
+                                aria-label="Description"
+                                rows={2}
+                                className={`${ghostField} mt-2 h-auto min-h-[64px] resize-none py-2 leading-[18px]`}
+                            />
                         </div>
                     )}
                 </div>
-
-                <textarea
-                    value={draft.description}
-                    onChange={(e) => patch({ description: e.target.value })}
-                    placeholder="Any details to show on booking page"
-                    rows={2}
-                    className="w-full bg-transparent text-neutral-600 text-sm outline-none resize-none placeholder:text-neutral-700"
-                />
-
-                <button
-                    type="button"
-                    onClick={() => setShowGroupPicker(true)}
-                    className="flex items-center gap-2 w-full text-left py-2 border border-white/10 rounded-xl px-3"
-                >
-                    {selectedGroup ? (
-                        <>
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedGroup.color }} />
-                            <span className="text-white text-sm font-bold">{selectedGroup.name}</span>
-                        </>
-                    ) : (
-                        <span className="text-neutral-500 text-sm">Add to calendar group…</span>
-                    )}
-                </button>
-
-                <div className="flex items-center gap-2 text-neutral-400">
-                    <span className="w-8 h-8 rounded bg-red-600/20 flex items-center justify-center text-red-400 text-xs font-bold">
-                        {hostEmail.charAt(0).toUpperCase()}
-                    </span>
-                    <span className="text-sm">{hostEmail}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-neutral-300">
-                        Avoid conflicts <HelpCircle size={12} className="text-neutral-600" />
-                    </span>
-                    <NotionToggle checked={draft.avoidConflicts} onChange={(v) => patch({ avoidConflicts: v })} />
-                </div>
-                <p className="text-xs text-neutral-600 truncate">{hostEmail}</p>
             </div>
-
-            <button type="button" onClick={onClose} className="sr-only">
-                Close
-            </button>
-        </aside>
+        </Sheet>
     );
 }

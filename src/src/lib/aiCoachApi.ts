@@ -2,6 +2,8 @@ import { getSupabaseConfig } from './supabase';
 import { supabase } from './supabase';
 import type { AiCoachModelId } from './aiCoachModels';
 
+export type CoachTokenUsage = { input: number; output: number; total: number; estimated?: boolean };
+
 export type StreamCoachCallbacks = {
     onSession?: (sessionId: string) => void;
     onToken?: (chunk: string, visibleText: string) => void;
@@ -11,6 +13,8 @@ export type StreamCoachCallbacks = {
         title?: string;
         actions: Record<string, unknown>[];
         action_data: Record<string, unknown> | Record<string, unknown>[] | null;
+        /** Model tokens this turn used (exact from Gemini; `estimated` if not reported). */
+        usage?: CoachTokenUsage;
     }) => void;
     onError?: (message: string, code?: string) => void;
 };
@@ -24,6 +28,7 @@ type SsePayload = {
     title?: string;
     actions?: Record<string, unknown>[];
     action_data?: Record<string, unknown> | Record<string, unknown>[];
+    usage?: CoachTokenUsage;
     error?: string;
     code?: string;
 };
@@ -45,6 +50,7 @@ function parseSsePart(part: string, callbacks: StreamCoachCallbacks): boolean {
                 title: payload.title,
                 actions: payload.actions || [],
                 action_data: payload.action_data ?? null,
+                usage: payload.usage,
             });
             return true;
         } else if (payload.type === 'error') {
@@ -78,6 +84,7 @@ export async function streamAiCoachChat(opts: {
     messages: { role: 'user' | 'assistant'; content: string }[];
     sessionId: string | null;
     coachContext?: Record<string, unknown>;
+    signal?: AbortSignal;
     callbacks: StreamCoachCallbacks;
 }): Promise<void> {
     const cfg = getSupabaseConfig();
@@ -125,6 +132,7 @@ export async function streamAiCoachChat(opts: {
             stream: true,
             coach_context: opts.coachContext,
         }),
+        signal: opts.signal,
     });
 
     if (!res.ok) {
@@ -152,6 +160,10 @@ export async function streamAiCoachChat(opts: {
     let streamFinished = false;
 
     while (true) {
+        if (opts.signal?.aborted) {
+            await reader.cancel().catch(() => {});
+            return;
+        }
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });

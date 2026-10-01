@@ -1,4 +1,5 @@
 /** In-page command palette (shadow DOM). Works on http(s) pages via content script + chrome.commands. */
+import { isPaletteShortcut, IS_MAC, PALETTE_SHORTCUT_LABEL } from '../lib/shortcuts';
 import { installWebExtensionBridge } from './webBridge';
 
 // Install early so the web dashboard RPC works even if the site-specific
@@ -7,135 +8,135 @@ installWebExtensionBridge();
 
 const ICONS = {
     search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`,
-    focus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="2"></circle></svg>`,
     todo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>`,
     check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>`,
     block: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`,
-    dashboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>`,
-    nav: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`,
+    grid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>`,
+    calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>`,
+    habits: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>`,
+    stats: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18 17V9M13 17V5M8 17v-3"></path></svg>`,
+    settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"></path></svg>`,
+    timer: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4M12 14l3-3"></path><circle cx="12" cy="14" r="8"></circle></svg>`,
+    external: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>`,
 };
 
+/* The same look as focuznow.com's palette and the dashboard's (.fz-cmdk in
+ * styles/focuzDesign.css). Content scripts render in a shadow DOM that can't see that
+ * stylesheet, so the values are copied here; keep the two in sync. */
 const STYLES = `
     :host { all: initial; }
     .palette-backdrop {
+        --cmdk-scrim: oklch(0.08 0.003 275 / 0.6);
+        --cmdk-panel: oklch(0.185 0.004 275);
+        --cmdk-ring: oklch(0.955 0.003 275 / 0.15);
+        --cmdk-line: oklch(0.955 0.003 275 / 0.08);
+        --cmdk-shadow: 0 40px 120px -20px rgb(0 0 0 / 0.85);
+        --cmdk-text-1: oklch(0.985 0.002 275);
+        --cmdk-text-2: oklch(0.83 0.004 275);
+        --cmdk-text-3: oklch(0.69 0.005 275);
+        --cmdk-text-4: oklch(0.55 0.005 275);
+        --cmdk-selected: oklch(1 0 0 / 0.07);
+        --cmdk-kbd-bg: oklch(1 0 0 / 0.05);
+        --cmdk-kbd-edge: oklch(1 0 0 / 0.08);
+        --cmdk-success: oklch(0.74 0.14 150);
+        --cmdk-ease: cubic-bezier(0.16, 1, 0.3, 1);
         position: fixed; inset: 0; z-index: 2147483647;
-        background: rgba(0,0,0,0.70);
+        background: var(--cmdk-scrim);
+        -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
         display: flex; align-items: flex-start; justify-content: center;
-        padding-top: 12vh; opacity: 0; pointer-events: none;
-        transition: opacity 0.18s ease;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 16vh 16px 0; box-sizing: border-box; opacity: 0; pointer-events: none;
+        transition: opacity 200ms ease;
+        font-family: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+    }
+    .palette-backdrop[data-theme="light"] {
+        --cmdk-scrim: oklch(0.2 0.008 275 / 0.28);
+        --cmdk-panel: oklch(1 0 0);
+        --cmdk-ring: oklch(0.2 0.008 275 / 0.1);
+        --cmdk-line: oklch(0.2 0.008 275 / 0.08);
+        --cmdk-shadow: 0 40px 120px -20px rgb(15 23 42 / 0.35);
+        --cmdk-text-1: oklch(0.2 0.008 275);
+        --cmdk-text-2: oklch(0.36 0.008 275);
+        --cmdk-text-3: oklch(0.51 0.008 275);
+        --cmdk-text-4: oklch(0.6 0.008 275);
+        --cmdk-selected: oklch(0.2 0.008 275 / 0.055);
+        --cmdk-kbd-bg: oklch(0.2 0.008 275 / 0.04);
+        --cmdk-kbd-edge: oklch(0.2 0.008 275 / 0.06);
+        --cmdk-success: oklch(0.55 0.14 150);
     }
     .palette-backdrop.open { opacity: 1; pointer-events: auto; }
     .palette-container {
         width: 100%; max-width: 560px;
-        background: #141416; border: 1px solid rgba(255,255,255,0.09);
-        border-radius: 8px; overflow: hidden;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.55);
-        transform: scale(0.97) translateY(-6px);
-        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-        color: #fff;
+        background: var(--cmdk-panel);
+        border-radius: 18px; overflow: hidden;
+        box-shadow: 0 0 0 1px var(--cmdk-ring), var(--cmdk-shadow);
+        color: var(--cmdk-text-1);
+        opacity: 0; transform: translateY(-10px) scale(0.97); filter: blur(6px);
+        transition: opacity 320ms var(--cmdk-ease), transform 320ms var(--cmdk-ease), filter 320ms var(--cmdk-ease), max-width 180ms var(--cmdk-ease);
     }
-    .palette-backdrop.open .palette-container { transform: scale(1) translateY(0); }
-    .palette-container.prompt-active { max-width: 460px; }
+    .palette-backdrop.open .palette-container { opacity: 1; transform: none; filter: blur(0); }
+    .palette-container.prompt-active { max-width: 480px; }
     .palette-search-wrap {
-        margin: 8px; padding: 10px 12px; background: rgba(255,255,255,0.025);
-        border: 1px solid rgba(255,255,255,0.07); border-radius: 6px;
-        display: flex; align-items: center; gap: 10px;
+        display: flex; align-items: center; gap: 12px; padding: 0 20px;
+        box-shadow: inset 0 -1px 0 var(--cmdk-line);
     }
-    .palette-search-wrap.prompt-mode { border-color: rgba(255,255,255,0.14); }
-    .palette-search-wrap svg { width: 18px; height: 18px; color: #666; flex-shrink: 0; }
-    .palette-input { flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 15px; }
-    .palette-input::placeholder { color: #555; }
-    .palette-hint { font-size: 11px; color: #737373; padding: 0 16px 8px; font-weight: 600; }
-    .palette-prompt-title { font-size: 12px; color: #d4d4d4; padding: 2px 18px 8px; font-weight: 700; letter-spacing: 0.02em; }
-    .group-title {
-        font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase;
-        letter-spacing: 0.1em; padding: 10px 18px 4px;
+    .palette-search-wrap svg { width: 17px; height: 17px; color: var(--cmdk-text-3); flex-shrink: 0; }
+    .palette-input {
+        flex: 1; min-width: 0; height: 58px; background: transparent; border: none; outline: none; padding: 0;
+        color: var(--cmdk-text-1); font: inherit; font-size: 16px;
     }
-    .palette-results { max-height: 360px; overflow-y: auto; padding-bottom: 12px; scroll-behavior: smooth; }
-    .palette-results.prompt-mode { max-height: 0; padding-bottom: 0; overflow: hidden; }
-    .palette-results.success-mode {
-        max-height: 220px; padding-bottom: 12px; overflow: visible;
+    .palette-input::placeholder { color: var(--cmdk-text-4); }
+    .kbd {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border-radius: 6px;
+        font: inherit; font-size: 11.5px; font-weight: 560; color: var(--cmdk-text-2);
+        background: var(--cmdk-kbd-bg);
+        box-shadow: inset 0 0 0 1px var(--cmdk-ring), inset 0 -1px 0 var(--cmdk-kbd-edge);
     }
+    .palette-hint { font-size: 13px; color: var(--cmdk-text-3); padding: 16px 20px; }
+    .palette-prompt-title { font-size: 12px; font-weight: 540; color: var(--cmdk-text-4); padding: 14px 20px 0; }
+    .group-title { font-size: 12px; font-weight: 540; color: var(--cmdk-text-4); padding: 10px 12px 6px; }
+    .palette-results { max-height: 360px; overflow-y: auto; padding: 8px; scrollbar-width: thin; scrollbar-color: var(--cmdk-ring) transparent; }
+    .palette-results.prompt-mode { max-height: 0; padding: 0; overflow: hidden; }
+    .palette-results.success-mode { max-height: 220px; overflow: visible; }
     .palette-item {
-        display: flex; align-items: center; gap: 12px;
-        padding: 8px 16px; cursor: pointer; color: #a3a3a3; transition: background 0.12s;
+        display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+        color: var(--cmdk-text-2); font-size: 14.5px; transition: background-color 150ms ease, color 150ms ease;
     }
-    .palette-item.selected { background: rgba(255,255,255,0.08); color: #fff; }
-    .palette-item-icon { width: 18px; height: 18px; color: #777; display: flex; }
-    .palette-item.selected .palette-item-icon { color: #e5e5e5; }
-    .palette-item-text { flex: 1; font-size: 14px; font-weight: 500; }
-    .palette-item-sub { font-size: 11px; color: #666; display: block; margin-top: 1px; }
-    .palette-item-meta { font-size: 11px; color: #666; }
-    .palette-item-meta .kbd {
-        background: #252525; border: 1px solid #333; padding: 2px 6px;
-        border-radius: 5px; font-family: ui-monospace, monospace; font-size: 10px;
+    .palette-item.selected { background: var(--cmdk-selected); color: var(--cmdk-text-1); }
+    .palette-item-icon { width: 16px; height: 16px; display: flex; flex-shrink: 0; }
+    .palette-item-icon svg { width: 16px; height: 16px; }
+    .palette-item-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .palette-item-meta { font-size: 12.5px; color: var(--cmdk-text-4); }
+    .palette-item .kbd { visibility: hidden; }
+    .palette-item.selected .kbd { visibility: visible; }
+    .palette-footer {
+        display: flex; align-items: center; gap: 8px; padding: 12px 20px;
+        font-size: 12.5px; color: var(--cmdk-text-4); box-shadow: inset 0 1px 0 var(--cmdk-line);
     }
-    .empty { padding: 24px; text-align: center; color: #555; font-size: 13px; }
+    .empty { padding: 32px 12px; text-align: center; color: var(--cmdk-text-3); font-size: 14px; }
     .palette-success {
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         padding: 36px 24px 40px; gap: 12px;
     }
     .palette-success-icon {
-        width: 56px; height: 56px; border-radius: 50%;
-        background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35);
+        width: 48px; height: 48px; border-radius: 50%;
+        box-shadow: inset 0 0 0 1px currentColor;
         display: flex; align-items: center; justify-content: center;
-        color: #4ade80;
-        animation: palette-check-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+        color: var(--cmdk-success);
+        animation: palette-check-pop 320ms var(--cmdk-ease);
     }
-    .palette-success-icon svg { width: 28px; height: 28px; stroke-width: 2.5; }
-    .palette-success-text { font-size: 15px; font-weight: 700; color: #fff; }
+    .palette-success-icon svg { width: 22px; height: 22px; stroke-width: 2.5; }
+    .palette-success-text { font-size: 14.5px; font-weight: 560; color: var(--cmdk-text-1); margin: 0; }
     @keyframes palette-check-pop {
-        0% { transform: scale(0.5); opacity: 0; }
-        60% { transform: scale(1.08); opacity: 1; }
+        0% { transform: scale(0.6); opacity: 0; }
         100% { transform: scale(1); opacity: 1; }
     }
-    .toast {
-        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-        background: #1a1a1a; color: #fff; padding: 12px 18px; border-radius: 10px;
-        font-size: 13px; font-weight: 600; z-index: 2147483647; border: 1px solid rgba(168,85,247,0.35);
-        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    @media (prefers-reduced-motion: reduce) {
+        .palette-backdrop, .palette-container, .palette-item, .palette-success-icon {
+            transition: none !important; animation: none !important; filter: none !important;
+        }
     }
-    .palette-backdrop[data-theme="light"] {
-        background: rgba(15, 23, 42, 0.28);
-    }
-    .palette-backdrop[data-theme="light"] .palette-container {
-        background: rgba(255,255,255,0.98);
-        border-color: rgba(15,23,42,0.12);
-        box-shadow: 0 24px 70px rgba(15,23,42,0.22), 0 2px 8px rgba(15,23,42,0.08);
-        color: #0f172a;
-    }
-    .palette-backdrop[data-theme="light"] .palette-search-wrap {
-        background: #f8fafc;
-        border-color: rgba(15,23,42,0.1);
-    }
-    .palette-backdrop[data-theme="light"] .palette-search-wrap.prompt-mode {
-        border-color: rgba(37,99,235,0.3);
-        box-shadow: 0 0 0 3px rgba(37,99,235,0.08);
-    }
-    .palette-backdrop[data-theme="light"] .palette-search-wrap svg { color: #64748b; }
-    .palette-backdrop[data-theme="light"] .palette-input { color: #0f172a; }
-    .palette-backdrop[data-theme="light"] .palette-input::placeholder { color: #94a3b8; }
-    .palette-backdrop[data-theme="light"] .palette-hint,
-    .palette-backdrop[data-theme="light"] .palette-item-sub,
-    .palette-backdrop[data-theme="light"] .palette-item-meta,
-    .palette-backdrop[data-theme="light"] .empty { color: #64748b; }
-    .palette-backdrop[data-theme="light"] .palette-prompt-title { color: #334155; }
-    .palette-backdrop[data-theme="light"] .group-title { color: #94a3b8; }
-    .palette-backdrop[data-theme="light"] .palette-item { color: #475569; }
-    .palette-backdrop[data-theme="light"] .palette-item.selected {
-        background: #f1f5f9;
-        color: #0f172a;
-    }
-    .palette-backdrop[data-theme="light"] .palette-item-icon { color: #64748b; }
-    .palette-backdrop[data-theme="light"] .palette-item.selected .palette-item-icon { color: #2563eb; }
-    .palette-backdrop[data-theme="light"] .palette-item-meta .kbd {
-        background: #fff;
-        border-color: #cbd5e1;
-        color: #475569;
-        box-shadow: 0 1px 1px rgba(15,23,42,0.06);
-    }
-    .palette-backdrop[data-theme="light"] .palette-success-text { color: #0f172a; }
 `;
 
 type Cmd = {
@@ -143,7 +144,6 @@ type Cmd = {
     group: string;
     icon: string;
     label: string;
-    sub?: string;
     meta?: string;
     needsInput?: boolean;
     inputPlaceholder?: string;
@@ -152,6 +152,8 @@ type Cmd = {
 
 let togglePalette: (() => void) | null = null;
 let resolvedPaletteTheme: 'light' | 'dark' = 'dark';
+let paletteShadow: ShadowRoot | null = null;
+let isPaletteOpen = () => false;
 
 function showToast(msg: string) {
     const t = document.createElement('div');
@@ -160,20 +162,22 @@ function showToast(msg: string) {
     Object.assign(t.style, {
         position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
         zIndex: '2147483647',
-        background: resolvedPaletteTheme === 'light' ? '#ffffff' : '#171717',
-        color: resolvedPaletteTheme === 'light' ? '#0f172a' : '#f5f5f5',
-        padding: '10px 14px',
-        borderRadius: '8px',
-        border: resolvedPaletteTheme === 'light'
-            ? '1px solid rgba(15,23,42,0.12)'
-            : '1px solid rgba(255,255,255,0.12)',
+        background: resolvedPaletteTheme === 'light' ? 'oklch(1 0 0)' : 'oklch(0.185 0.004 275)',
+        color: resolvedPaletteTheme === 'light' ? 'oklch(0.2 0.008 275)' : 'oklch(0.985 0.002 275)',
+        padding: '11px 16px',
+        borderRadius: '12px',
         boxShadow: resolvedPaletteTheme === 'light'
-            ? '0 10px 32px rgba(15,23,42,0.18)'
-            : '0 8px 32px rgba(0,0,0,0.5)',
-        font: '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            ? '0 0 0 1px oklch(0.2 0.008 275 / 0.1), 0 20px 50px -12px rgb(15 23 42 / 0.3)'
+            : '0 0 0 1px oklch(0.955 0.003 275 / 0.15), 0 20px 50px -12px rgb(0 0 0 / 0.7)',
+        font: '560 12.5px "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     });
-    document.body.appendChild(t);
+    (paletteShadow ?? document.documentElement).appendChild(t);
     setTimeout(() => t.remove(), 3200);
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement
+        && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
 }
 
 function isFocuznowSite(): boolean {
@@ -181,17 +185,13 @@ function isFocuznowSite(): boolean {
     return h === 'focuznow.com' || h.endsWith('.focuznow.com');
 }
 
-export function initCommandPalette() {
-    if (isFocuznowSite()) return;
-
-    if (document.getElementById('focuznow-command-palette-host')) {
-        return;
-    }
-
+/** Builds the palette UI. Only runs the first time it's opened — not on every page load. */
+function buildPalette() {
     const host = document.createElement('div');
     host.id = 'focuznow-command-palette-host';
     document.documentElement.appendChild(host);
     const shadow = host.attachShadow({ mode: 'open' });
+    paletteShadow = shadow;
 
     const hostName = window.location.hostname.replace(/^www\./, '') || 'this site';
 
@@ -199,18 +199,16 @@ export function initCommandPalette() {
         {
             id: 'focus',
             group: 'Actions',
-            icon: ICONS.focus,
-            label: 'Start focus session',
-            sub: 'Action',
-            meta: '25m',
+            icon: ICONS.timer,
+            label: 'Start a focus session',
+            meta: '25 min',
             action: () => sendMsg({ type: 'START_SESSION', duration: 25 }, 'Focus session started (25m)'),
         },
         {
             id: 'todo',
             group: 'Actions',
             icon: ICONS.todo,
-            label: 'Add to-do',
-            sub: 'Action',
+            label: 'Add a to-do',
             needsInput: true,
             inputPlaceholder: 'What do you need to do?',
             action: (val) => {
@@ -234,7 +232,6 @@ export function initCommandPalette() {
             group: 'Actions',
             icon: ICONS.block,
             label: `Block ${hostName}`,
-            sub: 'Action',
             needsInput: true,
             inputPlaceholder: 'Minutes to block (e.g. 25)',
             action: (val) => {
@@ -247,18 +244,17 @@ export function initCommandPalette() {
         },
         {
             id: 'dash',
-            group: 'Navigation',
-            icon: ICONS.dashboard,
-            label: 'Open FocuzNow dashboard',
-            sub: 'Page',
+            group: 'Go to',
+            icon: ICONS.external,
+            label: 'FocuzNow dashboard',
             action: () => sendMsg({ type: 'OPEN_OPTIONS' }, 'Opening dashboard…'),
         },
-        { id: 'today', group: 'Navigation', icon: ICONS.nav, label: 'Go to Dashboard', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'overview' }, 'Opening Dashboard…') },
-        { id: 'cal', group: 'Navigation', icon: ICONS.nav, label: 'Go to Calendar', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'calendar' }, 'Opening Calendar…') },
-        { id: 'blocklist', group: 'Navigation', icon: ICONS.nav, label: 'Go to Block list', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'blocklist' }, 'Opening Block list…') },
-        { id: 'habits', group: 'Navigation', icon: ICONS.nav, label: 'Go to Habits', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'habits' }, 'Opening Habits…') },
-        { id: 'stats', group: 'Navigation', icon: ICONS.nav, label: 'Go to Statistics', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'statistics' }, 'Opening Statistics…') },
-        { id: 'settings', group: 'Navigation', icon: ICONS.nav, label: 'Go to Settings', sub: 'Page', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'settings' }, 'Opening Settings…') },
+        { id: 'today', group: 'Go to', icon: ICONS.grid, label: 'Dashboard', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'overview' }, 'Opening Dashboard…') },
+        { id: 'cal', group: 'Go to', icon: ICONS.calendar, label: 'Calendar', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'calendar' }, 'Opening Calendar…') },
+        { id: 'blocklist', group: 'Go to', icon: ICONS.block, label: 'Block list', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'blocklist' }, 'Opening Block list…') },
+        { id: 'habits', group: 'Go to', icon: ICONS.habits, label: 'Habits', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'habits' }, 'Opening Habits…') },
+        { id: 'stats', group: 'Go to', icon: ICONS.stats, label: 'Statistics', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'statistics' }, 'Opening Statistics…') },
+        { id: 'settings', group: 'Go to', icon: ICONS.settings, label: 'Settings', action: () => sendMsg({ type: 'OPEN_OPTIONS', tab: 'settings' }, 'Opening Settings…') },
     ];
 
     function sendMsg(
@@ -291,14 +287,16 @@ export function initCommandPalette() {
     const backdrop = document.createElement('div');
     backdrop.className = 'palette-backdrop';
     backdrop.innerHTML = `
-        <div class="palette-container">
+        <div class="palette-container" role="dialog" aria-modal="true" aria-label="FocuzNow command palette">
+            <div class="palette-prompt-title" hidden></div>
             <div class="palette-search-wrap">
                 ${ICONS.search}
-                <input type="text" class="palette-input" placeholder="Type a command or search…" spellcheck="false" autocomplete="off" />
+                <input type="text" class="palette-input" placeholder="Search or run a command" spellcheck="false" autocomplete="off" />
+                <span class="kbd">esc</span>
             </div>
             <div class="palette-hint" hidden></div>
-            <div class="palette-prompt-title" hidden></div>
             <div class="palette-results"></div>
+            <div class="palette-footer"><span class="kbd">${PALETTE_SHORTCUT_LABEL}</span> opens this on any site.</div>
         </div>
     `;
 
@@ -325,18 +323,13 @@ export function initCommandPalette() {
         value === 'light' || value === 'dark' || value === 'system';
 
     applyPaletteTheme();
-    chrome.storage.local.get(['dashboardColorMode'], (stored) => {
-        const mode = stored.dashboardColorMode;
-        if (isPaletteColorMode(mode)) paletteColorMode = mode;
-        applyPaletteTheme();
-    });
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName !== 'local') return;
-        const mode = changes.dashboardColorMode?.newValue;
-        if (!isPaletteColorMode(mode)) return;
-        paletteColorMode = mode;
-        applyPaletteTheme();
-    });
+    const refreshPaletteTheme = () => {
+        chrome.storage.local.get(['dashboardColorMode'], (stored) => {
+            const mode = stored.dashboardColorMode;
+            if (isPaletteColorMode(mode)) paletteColorMode = mode;
+            applyPaletteTheme();
+        });
+    };
     colorSchemeMedia.addEventListener('change', () => {
         if (paletteColorMode === 'system') applyPaletteTheme();
     });
@@ -344,8 +337,6 @@ export function initCommandPalette() {
     let selectedIndex = 0;
     let isOpen = false;
     let flatCommands: Cmd[] = [];
-    let selectionMode: 'keyboard' | 'mouse' = 'keyboard';
-    let lastMouseMove = 0;
     let promptCmd: Cmd | null = null;
 
     function buildFlat(query: string) {
@@ -361,15 +352,16 @@ export function initCommandPalette() {
 
     function scrollSelectedIntoView() {
         const el = resultsContainer.querySelector(`[data-idx="${selectedIndex}"]`) as HTMLElement | null;
-        el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        el?.scrollIntoView({ block: 'nearest' });
     }
 
-    function highlightSelection() {
+    /** Scroll only for the keyboard: scrolling under the pointer would pick a new row and scroll again. */
+    function highlightSelection(scroll = true) {
         resultsContainer.querySelectorAll('.palette-item').forEach((item) => {
             const idx = parseInt((item as HTMLElement).dataset.idx || '0', 10);
             item.classList.toggle('selected', idx === selectedIndex);
         });
-        scrollSelectedIntoView();
+        if (scroll) scrollSelectedIntoView();
     }
 
     function renderResults() {
@@ -379,7 +371,7 @@ export function initCommandPalette() {
         flatCommands = buildFlat(query);
 
         if (flatCommands.length === 0) {
-            resultsContainer.innerHTML = '<div class="empty">No commands found</div>';
+            resultsContainer.innerHTML = '<div class="empty">No commands match.</div>';
             return;
         }
 
@@ -396,11 +388,9 @@ export function initCommandPalette() {
             html += `
                 <div class="palette-item ${sel}" data-idx="${idx}">
                     <div class="palette-item-icon">${cmd.icon}</div>
-                    <div class="palette-item-text">
-                        ${cmd.label}
-                        <span class="palette-item-sub">${cmd.sub || cmd.group}</span>
-                    </div>
-                    <div class="palette-item-meta">${cmd.meta || ''}<span class="kbd">↵</span></div>
+                    <div class="palette-item-text">${cmd.label}</div>
+                    ${cmd.meta ? `<div class="palette-item-meta">${cmd.meta}</div>` : ''}
+                    <span class="kbd">↵</span>
                 </div>
             `;
         });
@@ -409,14 +399,14 @@ export function initCommandPalette() {
 
         resultsContainer.querySelectorAll('.palette-item').forEach((el) => {
             const idx = parseInt((el as HTMLElement).dataset.idx || '0', 10);
-            el.addEventListener('mouseenter', () => {
-                if (Date.now() - lastMouseMove < 400 && selectionMode === 'keyboard') return;
-                selectionMode = 'mouse';
+            // mousemove, not mouseenter: rows sliding under a still pointer (arrow keys, scrolling)
+            // shouldn't steal the highlight, but any real pointer movement should, however slow.
+            el.addEventListener('mousemove', () => {
+                if (selectedIndex === idx) return;
                 selectedIndex = idx;
-                highlightSelection();
+                highlightSelection(false);
             });
             el.addEventListener('click', () => {
-                selectionMode = 'mouse';
                 selectedIndex = idx;
                 activateCommand(flatCommands[idx]);
             });
@@ -431,7 +421,7 @@ export function initCommandPalette() {
         searchWrap.classList.add('prompt-mode');
         resultsContainer.classList.add('prompt-mode');
         hintEl.hidden = false;
-        hintEl.textContent = cmd.inputPlaceholder || 'Type your answer, then press Enter';
+        hintEl.innerHTML = 'Press <span class="kbd">↵</span> to confirm, <span class="kbd">esc</span> to go back.';
         promptTitleEl.hidden = false;
         promptTitleEl.textContent = cmd.label;
         input.value = '';
@@ -470,10 +460,9 @@ export function initCommandPalette() {
         hintEl.hidden = true;
         promptTitleEl.hidden = true;
         promptTitleEl.textContent = '';
-        input.placeholder = 'Type a command or search…';
+        input.placeholder = 'Search or run a command';
         input.value = '';
         selectedIndex = 0;
-        selectionMode = 'keyboard';
         renderResults();
     }
 
@@ -483,18 +472,17 @@ export function initCommandPalette() {
             enterPrompt(cmd);
             return;
         }
-        const val = promptCmd ? input.value.trim() : input.value.trim();
-        cmd.action(val);
+        cmd.action(input.value.trim());
     }
 
     function openPalette() {
         if (isOpen) return;
         isOpen = true;
+        refreshPaletteTheme();
         promptCmd = null;
         backdrop.classList.add('open');
         input.value = '';
         selectedIndex = 0;
-        selectionMode = 'keyboard';
         searchWrap.classList.remove('prompt-mode');
         resultsContainer.classList.remove('prompt-mode');
         hintEl.hidden = true;
@@ -516,16 +504,12 @@ export function initCommandPalette() {
     }
 
     togglePalette = () => (isOpen ? closePalette() : openPalette());
+    isPaletteOpen = () => isOpen;
 
     input.addEventListener('input', () => {
         if (promptCmd) return;
         selectedIndex = 0;
-        selectionMode = 'keyboard';
         renderResults();
-    });
-
-    backdrop.addEventListener('mousemove', () => {
-        lastMouseMove = Date.now();
     });
 
     backdrop.addEventListener('click', (e) => {
@@ -533,13 +517,7 @@ export function initCommandPalette() {
     });
 
     const onKey = (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePalette?.();
-            return;
-        }
-        if (!isOpen) return;
+        if (!isOpen || isPaletteShortcut(e)) return;
 
         if (e.key === 'Escape') {
             e.preventDefault();
@@ -558,27 +536,44 @@ export function initCommandPalette() {
 
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            selectionMode = 'keyboard';
             selectedIndex = (selectedIndex + 1) % flatCommands.length;
             highlightSelection();
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            selectionMode = 'keyboard';
             selectedIndex = (selectedIndex - 1 + flatCommands.length) % flatCommands.length;
             highlightSelection();
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            selectionMode = 'keyboard';
             activateCommand(flatCommands[selectedIndex]);
         }
     };
 
     window.addEventListener('keydown', onKey, true);
+}
 
-    chrome.runtime.onMessage.addListener((msg) => {
-        if (msg?.type === 'TOGGLE_COMMAND_PALETTE') togglePalette?.();
+export function initCommandPalette() {
+    if (isFocuznowSite()) return;
+    const w = window as unknown as { __focuznowPaletteReady?: boolean };
+    if (w.__focuznowPaletteReady) return;
+    w.__focuznowPaletteReady = true;
+
+    const toggle = () => {
+        if (!togglePalette) buildPalette();
+        togglePalette?.();
+    };
+    // Alt+K (⌥K). Fallback for when the browser shortcut (chrome.commands) isn't
+    // bound: it runs after the page's own handlers and backs off if the site already
+    // used the key. On a Mac ⌥K types "˚", so leave text fields alone there.
+    window.addEventListener('keydown', (e) => {
+        if (!isPaletteShortcut(e) || e.defaultPrevented) return;
+        if (IS_MAC && !isPaletteOpen() && isEditableTarget(e.target)) return;
+        e.preventDefault();
+        toggle();
     });
-    window.addEventListener('focuznow-toggle-palette', () => togglePalette?.());
+    chrome.runtime.onMessage.addListener((msg) => {
+        if (msg?.type === 'TOGGLE_COMMAND_PALETTE') toggle();
+    });
+    window.addEventListener('focuznow-toggle-palette', toggle);
 }
 
 if (typeof window !== 'undefined') {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
     addDays,
     eachDayOfInterval,
@@ -12,7 +12,7 @@ import {
     startOfWeek,
 } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Link2, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Copy, Link2, Pencil, Plus, Repeat, X } from 'lucide-react';
 
 type CalendarView = 'day' | 'week' | 'month';
 import { useAuthStore } from '../lib/store';
@@ -54,6 +54,10 @@ import GroupEditModal from './GroupEditModal';
 import { useCalendarGrid } from './schedulingCalendar/useCalendarGrid';
 import CalendarWeekStrip from './schedulingCalendar/CalendarWeekStrip';
 import { useSmoothWeekCarousel } from './schedulingCalendar/useSmoothWeekCarousel';
+import { Dialog } from '../components/fz/Dialog';
+import { Button } from '../components/fz/Button';
+import { SegmentedControl } from '../components/fz/SegmentedControl';
+import { IconPanelLeftClose, IconPanelLeftOpen } from '../components/fz/icons';
 import SchedulingLinkPanel, {
     defaultLinkDraft,
     linkDraftFromSchedulingLink,
@@ -189,9 +193,18 @@ export default function SchedulingCalendarPage({
         weekDaysRef.current = weekDays;
     }, [weekDays]);
 
+    // The now-line and its h:mm label only change once a minute, so update on minute
+    // boundaries — a 1s tick re-rendered the whole calendar 60× a minute for nothing.
     useEffect(() => {
-        const tick = window.setInterval(() => setNow(new Date()), 1000);
-        return () => window.clearInterval(tick);
+        let tick = 0;
+        const align = window.setTimeout(() => {
+            setNow(new Date());
+            tick = window.setInterval(() => setNow(new Date()), 60_000);
+        }, 60_000 - (Date.now() % 60_000) + 50);
+        return () => {
+            window.clearTimeout(align);
+            window.clearInterval(tick);
+        };
     }, []);
 
     const persistEventsRef = useRef<string>('');
@@ -336,6 +349,8 @@ export default function SchedulingCalendarPage({
     const miniDays = eachDayOfInterval({ start: miniGridStart, end: miniGridEnd });
 
     const { hourHeight, gridHeight } = grid;
+
+    const gridViewportRef = useRef<HTMLDivElement>(null);
     const weekHighlights = weekHighlightSegments(miniDays, weekDays);
 
     const isGroupEnabled = (groupId?: string) => {
@@ -370,6 +385,23 @@ export default function SchedulingCalendarPage({
         const ds = day.toDateString();
         return visibleEvents.filter((e) => e.date === ds && !e.allDay && isGroupEnabled(e.groupId));
     };
+
+    // Week/day grid scrolls (fixed hour height). Open it on the working day —
+    // from 8 AM, or earlier if it's early now or an event this week starts sooner.
+    useEffect(() => {
+        if (calView === 'month') return;
+        const el = gridViewportRef.current;
+        if (!el) return;
+        const d = new Date();
+        const h = d.getHours() + d.getMinutes() / 60;
+        const days = calView === 'day' ? [dayDate] : weekDays;
+        const earliest = Math.min(24, ...days.flatMap((day) => timedEventsForDay(day).map((ev) => ev.startHour)));
+        const focusHour = Math.max(0, Math.min(h - 2, 8, earliest));
+        // Leave a little headroom so the first hour label isn't clipped by the sticky header.
+        el.scrollTop = Math.max(0, focusHour * hourHeight - 12);
+        // Only on open, view switch and first load — never while events are edited or dragged.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [calView, hourHeight, eventsLoaded]);
 
     const allDayChipsForDay = (day: Date): AllDayChip[] => {
         const chips: AllDayChip[] = [];
@@ -631,7 +663,12 @@ export default function SchedulingCalendarPage({
         }
         setEditingLinkId(null);
         setRightPanel(panel);
-        setDraft(defaultLinkDraft(displayName));
+        const fresh = defaultLinkDraft(displayName);
+        // Second link onward: suggest name-2, name-3… instead of a URL we already own.
+        const taken = new Set(savedLinks.map((l) => l.slug));
+        let slug = fresh.slug;
+        for (let n = 2; taken.has(slug); n++) slug = `${fresh.slug}-${n}`;
+        setDraft({ ...fresh, slug });
         setDirty(false);
     };
 
@@ -858,160 +895,300 @@ export default function SchedulingCalendarPage({
         openModalFromRange(day, snapped, snapped + durationMin);
     };
 
+    const iconBtn =
+        'flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--fz-text-3)] transition-colors hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_var(--fz-focus-ring)]';
+    const eyebrow = 'text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--fz-text-4)]';
+
+    /** Toolbar "New event": next full hour today, else 9:00 on the first visible day. */
+    const createEventNow = () => {
+        const base =
+            calView === 'day'
+                ? dayDate
+                : weekDays.some((d) => isSameDay(d, today))
+                  ? today
+                  : weekStart;
+        const startMin = isSameDay(base, today) ? Math.min(23 * 60, (today.getHours() + 1) * 60) : 9 * 60;
+        openModalFromRange(base, startMin, startMin + 60);
+    };
+
+    const weekEnd = addDays(weekStart, 6);
+    const headerEyebrow =
+        calView === 'week'
+            ? `Week ${format(addDays(weekStart, 1), 'I')} · ${format(weekStart, 'MMM d')} – ${format(weekEnd, isSameMonth(weekStart, weekEnd) ? 'd' : 'MMM d')}`
+            : calView === 'day'
+              ? isSameDay(dayDate, today)
+                  ? 'Today'
+                  : format(dayDate, 'yyyy')
+              : format(miniMonth, 'yyyy');
+    const headerTitle =
+        calView === 'day'
+            ? format(dayDate, 'EEEE, MMMM d')
+            : calView === 'month'
+              ? format(miniMonth, 'MMMM')
+              : format(weekStart, 'MMMM yyyy');
+    const card =
+        'rounded-[10px] border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] shadow-[var(--fz-elev-card)]';
+
     return (
         <div
-            className={`focuznow-calendar relative flex overflow-hidden text-white ${
-                fullscreen ? 'h-full w-full' : 'h-[calc(100vh-8rem)] min-h-[640px] rounded-[20px] border shadow-xl'
+            className={`focuznow-calendar @container/cal relative flex flex-col ${
+                fullscreen ? 'h-full w-full gap-5 px-6 pb-6 pt-5' : 'h-[calc(100vh-8rem)] min-h-[640px] gap-4'
             }`}
-            style={{
-                backgroundColor: 'var(--cal-bg)',
-                borderColor: 'var(--cal-border)',
-            }}
         >
-            {/* Left sidebar */}
-            <aside
-                className={`flex-shrink-0 border-r flex flex-col transition-all duration-200 ${sidebarCollapsed ? 'w-9' : 'w-[224px]'}`}
-                style={{ backgroundColor: 'var(--cal-surface)', borderColor: 'var(--cal-border)' }}
-            >
-                {/* Sidebar toggle */}
-                <div className={`flex items-center border-b border-white/10 ${sidebarCollapsed ? 'justify-center px-0 py-3' : 'justify-between px-3 py-2'}`}>
-                    {!sidebarCollapsed && onBack && (
+            {/* Page header — same rhythm as PageShell (eyebrow + title-1, actions level with it). */}
+            <header className="flex shrink-0 items-center justify-between gap-x-4 gap-y-3">
+                <div className="flex min-w-0 items-center gap-3">
+                    {onBack && (
                         <button
                             type="button"
                             onClick={onBack}
-                            className="flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-white transition-colors"
+                            className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--fz-text-3)] transition-colors hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]"
                         >
-                            <ArrowLeft size={14} />
+                            <ArrowLeft size={14} strokeWidth={1.75} />
                             Back
                         </button>
                     )}
-                    {!sidebarCollapsed && !onBack && <span className="text-xs font-medium text-neutral-400">Calendar</span>}
                     <button
                         type="button"
                         onClick={() => setSidebarCollapsed((v) => !v)}
-                        className="p-1.5 text-neutral-500 hover:text-white transition-colors rounded-md hover:bg-white/5"
-                        title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                        className="sb-icon-btn"
+                        aria-label={sidebarCollapsed ? 'Show calendars panel' : 'Hide calendars panel'}
+                        title={sidebarCollapsed ? 'Show calendars panel' : 'Hide calendars panel'}
                     >
-                        {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+                        {sidebarCollapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
                     </button>
+                    <div className="min-w-0">
+                        <p className="text-meta truncate text-[var(--fz-text-3)]">{headerEyebrow}</p>
+                        <h1 className="text-title-1 mt-0.5 truncate text-[var(--fz-text-1)]">{headerTitle}</h1>
+                    </div>
                 </div>
+                <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex h-8 items-center rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] p-0.5" style={{ boxShadow: 'var(--fz-edge)' }}>
+                        <button type="button" onClick={navBack} className={`${iconBtn} size-7`} aria-label="Previous">
+                            <ChevronLeft size={15} strokeWidth={1.75} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={goToday}
+                            className="h-7 rounded-md px-2.5 text-[12.5px] font-medium text-[var(--fz-text-2)] transition-colors hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]"
+                        >
+                            Today
+                        </button>
+                        <button type="button" onClick={navForward} className={`${iconBtn} size-7`} aria-label="Next">
+                            <ChevronRight size={15} strokeWidth={1.75} />
+                        </button>
+                    </div>
+                    <SegmentedControl
+                        size="sm"
+                        idPrefix="cal-view"
+                        value={calView}
+                        onChange={(v) => {
+                            setCalView(v);
+                            if (v === 'day') {
+                                const inCurrentWeek = weekDays.some((d) => isSameDay(d, today));
+                                const target = inCurrentWeek ? today : weekStart;
+                                setDayDate(target);
+                                setWeekStart(startOfWeek(target));
+                            }
+                        }}
+                        options={[
+                            { value: 'day', label: 'Day' },
+                            { value: 'week', label: 'Week' },
+                            { value: 'month', label: 'Month' },
+                        ]}
+                    />
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        iconLeft={<Plus size={14} strokeWidth={2} />}
+                        onClick={createEventNow}
+                        aria-label="New event"
+                        title="New event"
+                    >
+                        <span className="@max-[760px]/cal:hidden">New event</span>
+                    </Button>
+                </div>
+            </header>
 
-                {!sidebarCollapsed && (
-                    <>
-                        <div className="px-4 py-2.5 border-b border-white/[0.06]">
-                            <p className="text-xs font-medium text-neutral-400 truncate" title={email}>{email}</p>
-                        </div>
-
-                        {/* Mini month — collapsible */}
-                        <div className="border-b border-white/[0.06]">
-                            <button
-                                type="button"
-                                onClick={() => setMiniCalCollapsed((v) => !v)}
-                                className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-semibold text-neutral-500 hover:text-white transition-colors"
-                            >
-                                <span className="uppercase tracking-wider">{format(miniMonth, 'MMMM yyyy')}</span>
-                                <ChevronDown size={12} className={`transition-transform ${miniCalCollapsed ? '-rotate-90' : ''}`} />
-                            </button>
-                            {!miniCalCollapsed && (
-                                <div className="px-3 pb-3">
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <button type="button" onClick={() => setMiniMonth((m) => addDays(startOfMonth(m), -1))} className="p-1 text-neutral-500 hover:text-white transition-colors rounded hover:bg-white/5">
-                                            <ChevronLeft size={12} />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setMiniMonth((m) => addDays(endOfMonth(m), 1))}
-                                            className="p-1 text-neutral-500 hover:text-white transition-colors rounded hover:bg-white/5"
-                                        >
-                                            <ChevronRight size={12} />
-                                        </button>
-                                    </div>
-                                    <div className="grid grid-cols-7 gap-0.5 text-[9px] text-neutral-600 font-medium text-center mb-1">
-                                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                                            <span key={i}>{d}</span>
-                                        ))}
-                                    </div>
-                                    <div className="relative grid grid-cols-7 gap-0.5">
-                                        {weekHighlights.map((seg, i) => (
-                                            <div
-                                                key={`wh-${i}`}
-                                                className="pointer-events-none absolute rounded-lg bg-white/12"
-                                                style={{
-                                                    top: `calc(${seg.row} * (1.75rem + 2px))`,
-                                                    left: `calc(${(seg.colStart / 7) * 100}% + 1px)`,
-                                                    width: `calc(${(seg.colSpan / 7) * 100}% - 2px)`,
-                                                    height: '1.75rem',
-                                                }}
-                                            />
-                                        ))}
-                                        {miniDays.map((day) => {
-                                            const inMonth = isSameMonth(day, miniMonth);
-                                            const isToday = isSameDay(day, today);
-                                            const inWeek = weekDays.some((w) => isSameDay(w, day));
-                                            return (
-                                                <button
-                                                    key={day.toISOString()}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setWeekStart(startOfWeek(day));
-                                                        setMiniMonth(day);
-                                                    }}
-                                                className={`relative z-[1] h-7 text-[10px] font-medium rounded-md transition-colors tabular-nums ${
-                                                        !inMonth ? 'text-neutral-700' : inWeek ? 'text-white' : 'text-neutral-400'
-                                                    } ${isToday ? 'bg-[#ff5a5f] !text-white font-semibold' : 'hover:bg-white/10'}`}
-                                                >
-                                                    {format(day, 'd')}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+            <div className="flex min-h-0 flex-1">
+                {/* Calendars panel */}
+                <aside
+                    className={`flex shrink-0 flex-col overflow-hidden transition-[width,margin,opacity] duration-200 ${card} ${
+                        sidebarCollapsed ? 'mr-0 w-0 border-0 opacity-0' : 'mr-4 w-[260px] opacity-100'
+                    }`}
+                    aria-hidden={sidebarCollapsed || undefined}
+                >
+                    <div className="flex h-full w-[258px] flex-col">
+                        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hide pb-3">
+                            {/* Mini month */}
+                            <div className="px-3 pb-3 pt-3">
+                                <div className="mb-1.5 flex items-center justify-between pl-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setMiniCalCollapsed((v) => !v)}
+                                        className="flex items-center gap-1 text-[13px] font-medium text-[var(--fz-text-1)]"
+                                        aria-expanded={!miniCalCollapsed}
+                                    >
+                                        {format(miniMonth, 'MMMM yyyy')}
+                                        <ChevronDown
+                                            size={13}
+                                            strokeWidth={1.75}
+                                            className={`text-[var(--fz-text-4)] transition-transform ${miniCalCollapsed ? '-rotate-90' : ''}`}
+                                        />
+                                    </button>
+                                    {!miniCalCollapsed && (
+                                        <div className="flex items-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => setMiniMonth((m) => addDays(startOfMonth(m), -1))}
+                                                className={iconBtn}
+                                                aria-label="Previous month"
+                                            >
+                                                <ChevronLeft size={14} strokeWidth={1.75} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setMiniMonth((m) => addDays(endOfMonth(m), 1))}
+                                                className={iconBtn}
+                                                aria-label="Next month"
+                                            >
+                                                <ChevronRight size={14} strokeWidth={1.75} />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-
-                        {/* Scheduling links — collapsible */}
-                        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-                            <div className="border-b border-white/[0.06]">
-                                <button
-                                    type="button"
-                                    onClick={() => setSchedulingCollapsed((v) => !v)}
-                                    className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-semibold text-neutral-500 hover:text-white transition-colors"
-                                >
-                                    <span className="uppercase tracking-wider">Scheduling</span>
-                                    <ChevronDown size={12} className={`transition-transform ${schedulingCollapsed ? '-rotate-90' : ''}`} />
-                                </button>
-                                {!schedulingCollapsed && (
-                                    <div className="px-3 pb-3 space-y-2">
-                                        <button
-                                            ref={scheduleLinkBtnRef}
-                                            type="button"
-                                            onClick={openScheduleMenu}
-                                            className="w-full px-2 py-1.5 text-left text-xs font-medium text-neutral-400 rounded-md hover:bg-white/[0.06] hover:text-white transition-colors"
-                                        >
-                                            + New scheduling link
-                                        </button>
-                                        {savedLinks.length > 0 && (
-                                            <div className="space-y-1 pt-1">
-                                                {savedLinks.map((l) => (
-                                                    <div key={l.id} className="flex gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => copySchedulingUrl(l)}
-                                                            className="flex-1 min-w-0 px-2 py-1.5 text-left text-[11px] text-neutral-400 hover:text-white truncate rounded-lg hover:bg-white/5"
-                                                            title="Copy link"
-                                                        >
-                                                            {l.title}
-                                                        </button>
-                                                        <button type="button" onClick={() => editSchedulingLink(l)} className="px-2 py-1.5 text-[10px] font-medium text-neutral-500 hover:text-white shrink-0">Edit</button>
-                                                        <button type="button" onClick={() => previewSchedulingUrl(l)} className="px-2 py-1.5 text-[10px] font-bold text-blue-400 shrink-0">↗</button>
-                                                    </div>
+                                {!miniCalCollapsed && (
+                                    <>
+                                        <div className="mb-0.5 grid grid-cols-7 gap-0.5 text-center text-[10.5px] font-medium text-[var(--fz-text-4)]">
+                                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                                                <span key={i} className="py-1">
+                                                    {d}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <div className="relative grid grid-cols-7 gap-0.5">
+                                            {calView !== 'month' &&
+                                                weekHighlights.map((seg, i) => (
+                                                    <div
+                                                        key={`wh-${i}`}
+                                                        className="pointer-events-none absolute rounded-lg bg-[var(--fz-bg-active)]"
+                                                        style={{
+                                                            top: `calc(${seg.row} * (1.75rem + 2px))`,
+                                                            left: `calc(${(seg.colStart / 7) * 100}% + 1px)`,
+                                                            width: `calc(${(seg.colSpan / 7) * 100}% - 2px)`,
+                                                            height: '1.75rem',
+                                                        }}
+                                                    />
                                                 ))}
-                                            </div>
-                                        )}
-                                    </div>
+                                            {miniDays.map((day) => {
+                                                const inMonth = isSameMonth(day, miniMonth);
+                                                const isToday = isSameDay(day, today);
+                                                const inWeek = weekDays.some((w) => isSameDay(w, day));
+                                                return (
+                                                    <button
+                                                        key={day.toISOString()}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setWeekStart(startOfWeek(day));
+                                                            setMiniMonth(day);
+                                                            setDayDate(day);
+                                                        }}
+                                                        className={`relative z-[1] flex h-7 items-center justify-center rounded-lg text-[12px] tabular-nums transition-colors ${
+                                                            isToday
+                                                                ? 'bg-[var(--fz-accent)] font-semibold text-[var(--fz-accent-fg)]'
+                                                                : `hover:bg-[var(--fz-bg-hover)] ${
+                                                                      !inMonth
+                                                                          ? 'text-[var(--fz-text-4)] opacity-60'
+                                                                          : inWeek && calView !== 'month'
+                                                                            ? 'font-medium text-[var(--fz-text-1)]'
+                                                                            : 'text-[var(--fz-text-2)]'
+                                                                  }`
+                                                        }`}
+                                                    >
+                                                        {format(day, 'd')}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
                                 )}
                             </div>
-                            <div className="p-3">
+
+                            <div className="mx-3 h-px bg-[var(--fz-border)]" />
+
+                            {/* Scheduling links */}
+                            <div className="px-2 py-2">
+                                <div className="flex h-8 items-center justify-between pl-2 pr-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSchedulingCollapsed((v) => !v)}
+                                        className={`flex items-center gap-1 ${eyebrow} hover:text-[var(--fz-text-2)]`}
+                                        aria-expanded={!schedulingCollapsed}
+                                    >
+                                        Scheduling links
+                                        <ChevronDown
+                                            size={12}
+                                            strokeWidth={1.75}
+                                            className={`transition-transform ${schedulingCollapsed ? '-rotate-90' : ''}`}
+                                        />
+                                    </button>
+                                    <button
+                                        ref={scheduleLinkBtnRef}
+                                        type="button"
+                                        onClick={openScheduleMenu}
+                                        className={iconBtn}
+                                        aria-label="New scheduling link"
+                                        title="New scheduling link"
+                                    >
+                                        <Plus size={14} strokeWidth={1.75} />
+                                    </button>
+                                </div>
+                                {!schedulingCollapsed &&
+                                    (savedLinks.length === 0 ? (
+                                        <button
+                                            type="button"
+                                            onClick={openScheduleMenu}
+                                            className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-[var(--fz-text-3)] hover:bg-[var(--fz-bg-hover)] hover:text-[var(--fz-text-1)]"
+                                        >
+                                            <Link2 size={14} strokeWidth={1.75} className="text-[var(--fz-text-4)]" />
+                                            Create a booking link
+                                        </button>
+                                    ) : (
+                                        <div className="space-y-px">
+                                            {savedLinks.map((l) => (
+                                                <div
+                                                    key={l.id}
+                                                    className="group/link flex h-8 items-center gap-2 rounded-lg pl-2 pr-1 transition-colors hover:bg-[var(--fz-bg-hover)]"
+                                                >
+                                                    <Link2 size={14} strokeWidth={1.75} className="shrink-0 text-[var(--fz-text-4)]" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => copySchedulingUrl(l)}
+                                                        className="min-w-0 flex-1 truncate text-left text-[13px] text-[var(--fz-text-2)] group-hover/link:text-[var(--fz-text-1)]"
+                                                        title="Copy link"
+                                                    >
+                                                        {l.title}
+                                                    </button>
+                                                    <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/link:opacity-100 focus-within:opacity-100">
+                                                        <button type="button" onClick={() => copySchedulingUrl(l)} className={iconBtn} aria-label="Copy link" title="Copy link">
+                                                            <Copy size={12.5} strokeWidth={1.75} />
+                                                        </button>
+                                                        <button type="button" onClick={() => editSchedulingLink(l)} className={iconBtn} aria-label="Edit link" title="Edit">
+                                                            <Pencil size={12.5} strokeWidth={1.75} />
+                                                        </button>
+                                                        <button type="button" onClick={() => previewSchedulingUrl(l)} className={iconBtn} aria-label="Open booking page" title="Open booking page">
+                                                            <ArrowUpRight size={13} strokeWidth={1.75} />
+                                                        </button>
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ))}
+                            </div>
+
+                            <div className="mx-3 h-px bg-[var(--fz-border)]" />
+
+                            <div className="px-2 py-2">
                                 <CalendarGroupsPanel
                                     groups={groups}
                                     openGroupId={openGroupId}
@@ -1022,220 +1199,216 @@ export default function SchedulingCalendarPage({
                                 />
                             </div>
                         </div>
-                    </>
-                )}
-            </aside>
 
-            <AnimatePresence>
-                {openGroup && (
-                    <GroupDetailPanel
-                        group={openGroup}
-                        events={events}
-                        holidayRange={visibleRange}
-                        onClose={() => setOpenGroupId(null)}
-                        onEdit={() => setEditingGroup(openGroup)}
-                        onDeleteGroup={() => deleteGroup(openGroup)}
-                        onAddEvent={() => {
-                            setEventModal({
-                                day: new Date(),
-                                startHour: 9,
-                                startMin: 0,
-                                endHour: 10,
-                                endMin: 0,
-                                defaultGroupId:
-                                    openGroup.kind === 'custom' ? openGroup.id : undefined,
-                            });
-                        }}
-                        onEditEvent={(ev) => {
-                            openModalFromRange(
-                                new Date(ev.date),
-                                ev.startHour * 60 + ev.startMin,
-                                ev.startHour * 60 + ev.startMin + ev.durationMin,
-                                ev,
-                            );
-                        }}
-                        onDeleteEvent={(ev) => deleteEvent(ev, 'series')}
-                    />
-                )}
-            </AnimatePresence>
-
-            <div ref={weekPanRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <header className="calendar-toolbar flex items-center justify-between px-3 py-2 border-b border-white/[0.07] bg-[#202021] flex-shrink-0 gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                        <button type="button" onClick={navBack} className="calendar-nav-control p-1.5 rounded-md hover:bg-white/10 text-neutral-500 transition-colors">
-                            <ChevronLeft size={15} />
-                        </button>
-                        <button type="button" onClick={navForward} className="calendar-nav-control p-1.5 rounded-md hover:bg-white/10 text-neutral-500 transition-colors">
-                            <ChevronRight size={15} />
-                        </button>
-                        <h1 className="text-sm font-medium ml-1">
-                            {calView === 'day' ? format(dayDate, 'EEEE, MMMM d') : format(weekStart, 'MMMM yyyy')}
-                        </h1>
-                        <button type="button" onClick={goToday} className="ml-2 px-2.5 py-1 rounded-md text-[11px] font-medium border border-white/[0.09] text-neutral-400 hover:text-white hover:bg-white/5 transition-colors">
-                            Today
-                        </button>
-                    </div>
-                    <div className="calendar-view-controls flex items-center gap-0.5 p-0.5 rounded-md bg-black/15 border border-white/[0.07]">
-                        {(['day', 'week', 'month'] as CalendarView[]).map((v) => (
-                            <button
-                                key={v}
-                                type="button"
-                                onClick={() => {
-                                    setCalView(v);
-                                    if (v === 'day') {
-                                        const inCurrentWeek = weekDays.some((d) => isSameDay(d, today));
-                                        const target = inCurrentWeek ? today : weekStart;
-                                        setDayDate(target);
-                                        setWeekStart(startOfWeek(target));
-                                    }
-                                }}
-                                className={`px-2.5 py-1 rounded-[4px] text-[11px] font-medium transition-colors capitalize ${
-                                    calView === v ? 'bg-white/[0.12] text-white' : 'text-neutral-500 hover:text-white hover:bg-white/8'
-                                }`}
-                            >
-                                {v}
-                            </button>
-                        ))}
-                    </div>
-                    <span className="text-[11px] font-medium text-neutral-600 px-2 py-1 rounded-lg border border-white/8">
-                        Shift+scroll
-                    </span>
-                </header>
-
-                {copyNotice && (
-                    <p className="text-[11px] text-purple-400 font-bold px-4 py-1">{copyNotice}</p>
-                )}
-
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                    {calView === 'month' ? (
-                        /* Month View */
-                        <div className="flex-1 overflow-y-auto p-3 flex flex-col" style={{ backgroundColor: 'var(--cal-bg)' }}>
-                            <div className="grid grid-cols-7 gap-0.5 mb-1">
-                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                                    <div key={d} className="text-center text-[10px] font-semibold text-neutral-500 uppercase py-1">{d}</div>
-                                ))}
-                            </div>
-                            <div className="grid grid-cols-7 gap-0.5 flex-1 auto-rows-fr min-h-0">
-                                {eachDayOfInterval({
-                                    start: startOfWeek(startOfMonth(miniMonth)),
-                                    end: endOfWeek(endOfMonth(miniMonth)),
-                                }).map((day) => {
-                                    const inMonth = isSameMonth(day, miniMonth);
-                                    const isToday = isSameDay(day, today);
-                                    const dayEvents = timedEventsForDay(day);
-                                    const allDayChips = allDayChipsForDay(day);
-                                    return (
-                                        <div
-                                            key={day.toISOString()}
-                                            onClick={() => {
-                                                setWeekStart(startOfWeek(day));
-                                                setMiniMonth(day);
-                                                setDayDate(day);
-                                                setCalView('day');
-                                            }}
-                                            onDoubleClick={() => {
-                                                setWeekStart(startOfWeek(day));
-                                                setMiniMonth(day);
-                                                openModalFromRange(day, 9 * 60, 10 * 60);
-                                            }}
-                                            className={`min-h-[80px] p-1.5 rounded-lg border cursor-pointer transition-colors ${
-                                                inMonth ? 'border-white/5 hover:bg-white/5' : 'border-transparent opacity-40'
-                                            } ${isToday ? 'border-red-500/40 bg-red-500/5' : ''}`}
-                                        >
-                                            <span className={`text-[11px] font-bold w-6 h-6 inline-flex items-center justify-center rounded-full ${isToday ? 'bg-red-600 text-white' : inMonth ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                                                {format(day, 'd')}
-                                            </span>
-                                            <div className="mt-1 space-y-0.5">
-                                                {allDayChips.slice(0, 2).map((chip, i) => (
-                                                    <div key={i} className="calendar-event-title text-[9px] font-bold px-1 py-0.5 rounded truncate" style={{ backgroundColor: `${chip.color}33`, color: chip.color }}>
-                                                        {chip.label}
-                                                    </div>
-                                                ))}
-                                                {dayEvents.slice(0, 2).map((ev) => (
-                                                    <div key={ev.id} className="calendar-event-title text-[9px] font-bold px-1 py-0.5 rounded truncate" style={{ backgroundColor: `${ev.color || '#a855f7'}33`, color: ev.color || '#a855f7' }}
-                                                        onClick={(e) => { e.stopPropagation(); openModalFromRange(new Date(ev.date), ev.startHour * 60 + ev.startMin, ev.startHour * 60 + ev.startMin + ev.durationMin, ev); }}>
-                                                        {ev.title}
-                                                    </div>
-                                                ))}
-                                                {(dayEvents.length + allDayChips.length) > 2 && (
-                                                    <div className="text-[9px] text-neutral-500 px-1">+{dayEvents.length + allDayChips.length - 2} more</div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                        <div className="shrink-0 border-t border-[var(--fz-border)] px-4 py-2.5">
+                            <p className="truncate text-[11.5px] text-[var(--fz-text-4)]" title={email}>
+                                {email}
+                            </p>
                         </div>
-                    ) : calView === 'day' ? (
-                        /* Day View — single day column using same CalendarWeekStrip but showing only today */
-                        <div style={slideStyle} className="h-full min-h-0">
-                            {weeks.map((ws, weekIdx) => (
-                                <CalendarWeekStrip
-                                    key={ws.toISOString()}
-                                    weekStart={ws}
-                                    interactive={weekIdx === 1}
-                                    today={today}
-                                    now={now}
-                                    hourHeight={hourHeight}
-                                    gridHeight={gridHeight}
-                                    grid={grid}
-                                    groups={groups}
-                                    timedEventsForDay={timedEventsForDay}
-                                    allDayChipsForDay={allDayChipsForDay}
-                                    singleDayMode={addDays(ws, getDay(dayDate))}
-                                    onRightPointerDown={(day, dayIndex, clientY) => {
-                                        rightDragRef.current = { active: true, started: false, day, dayIndex, clientY };
-                                    }}
-                                    onEmptyDoubleClick={(day, dayIndex, clientY) => {
-                                        openSlotAtY(day, dayIndex, clientY, 30);
-                                    }}
-                                    onDeleteEvent={(ev) => deleteEvent(ev)}
-                                    onEventPointerDown={(ev, day, dayIndex, startMin, e) => {
-                                        eventDragMovedRef.current = false;
-                                        eventPointerPendingRef.current = { ev, day, dayIndex, startMin, startX: e.clientX, startY: e.clientY, pointerId: e.pointerId };
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        /* Week View (default) */
-                        <div style={slideStyle} className="h-full min-h-0">
-                            {weeks.map((ws, weekIdx) => (
-                                <CalendarWeekStrip
-                                    key={ws.toISOString()}
-                                    weekStart={ws}
-                                    interactive={weekIdx === 1}
-                                    today={today}
-                                    now={now}
-                                    hourHeight={hourHeight}
-                                    gridHeight={gridHeight}
-                                    grid={grid}
-                                    groups={groups}
-                                    timedEventsForDay={timedEventsForDay}
-                                    allDayChipsForDay={allDayChipsForDay}
-                                    onRightPointerDown={(day, dayIndex, clientY) => {
-                                        rightDragRef.current = { active: true, started: false, day, dayIndex, clientY };
-                                    }}
-                                    onEmptyDoubleClick={(day, dayIndex, clientY) => {
-                                        openSlotAtY(day, dayIndex, clientY, 30);
-                                    }}
-                                    onDeleteEvent={(ev) => deleteEvent(ev)}
-                                    onEventPointerDown={(ev, day, dayIndex, startMin, e) => {
-                                        eventDragMovedRef.current = false;
-                                        eventPointerPendingRef.current = { ev, day, dayIndex, startMin, startX: e.clientX, startY: e.clientY, pointerId: e.pointerId };
-                                    }}
-                                />
-                            ))}
+                    </div>
+                </aside>
+
+                <AnimatePresence>
+                    {openGroup && (
+                        <GroupDetailPanel
+                            group={openGroup}
+                            events={events}
+                            holidayRange={visibleRange}
+                            onClose={() => setOpenGroupId(null)}
+                            onEdit={() => setEditingGroup(openGroup)}
+                            onDeleteGroup={() => deleteGroup(openGroup)}
+                            onAddEvent={() => {
+                                setEventModal({
+                                    day: new Date(),
+                                    startHour: 9,
+                                    startMin: 0,
+                                    endHour: 10,
+                                    endMin: 0,
+                                    defaultGroupId: openGroup.kind === 'custom' ? openGroup.id : undefined,
+                                });
+                            }}
+                            onEditEvent={(ev) => {
+                                openModalFromRange(
+                                    new Date(ev.date),
+                                    ev.startHour * 60 + ev.startMin,
+                                    ev.startHour * 60 + ev.startMin + ev.durationMin,
+                                    ev,
+                                );
+                            }}
+                            onDeleteEvent={(ev) => deleteEvent(ev, 'series')}
+                        />
+                    )}
+                </AnimatePresence>
+
+                <section
+                    ref={weekPanRef}
+                    className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${card}`}
+                >
+
+                    {copyNotice && (
+                        <div
+                            className="pointer-events-none absolute bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-overlay)] px-3 py-1.5 text-[12.5px] text-[var(--fz-text-1)]"
+                            style={{ boxShadow: 'var(--fz-shadow-overlay)' }}
+                            role="status"
+                        >
+                            {copyNotice}
                         </div>
                     )}
-                </div>
+
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                        {calView === 'month' ? (
+                            /* Month view */
+                            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                                <div className="grid shrink-0 grid-cols-7 border-b border-[var(--fz-border)]">
+                                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                                        <div key={d} className={`px-2.5 py-2 ${eyebrow}`}>
+                                            {d}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-7">
+                                    {eachDayOfInterval({
+                                        start: startOfWeek(startOfMonth(miniMonth)),
+                                        end: endOfWeek(endOfMonth(miniMonth)),
+                                    }).map((day, i) => {
+                                        const inMonth = isSameMonth(day, miniMonth);
+                                        const isToday = isSameDay(day, today);
+                                        const dayEvents = timedEventsForDay(day);
+                                        const allDayChips = allDayChipsForDay(day);
+                                        const total = dayEvents.length + allDayChips.length;
+                                        const shownChips = allDayChips.slice(0, 3);
+                                        const shownEvents = dayEvents.slice(0, Math.max(0, 3 - shownChips.length));
+                                        return (
+                                            <div
+                                                key={day.toISOString()}
+                                                onClick={() => {
+                                                    setWeekStart(startOfWeek(day));
+                                                    setMiniMonth(day);
+                                                    setDayDate(day);
+                                                    setCalView('day');
+                                                }}
+                                                onDoubleClick={() => {
+                                                    setWeekStart(startOfWeek(day));
+                                                    setMiniMonth(day);
+                                                    openModalFromRange(day, 9 * 60, 10 * 60);
+                                                }}
+                                                className={`group/cell min-h-[104px] cursor-pointer border-b border-[var(--fz-border)] p-1.5 transition-colors hover:bg-[var(--fz-bg-hover)] ${
+                                                    i % 7 === 0 ? '' : 'border-l'
+                                                }`}
+                                                style={
+                                                    inMonth
+                                                        ? undefined
+                                                        : { backgroundColor: 'color-mix(in oklch, var(--fz-text-1) 1.5%, transparent)' }
+                                                }
+                                            >
+                                                <span
+                                                    className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[12px] font-medium tabular-nums ${
+                                                        isToday
+                                                            ? 'bg-[var(--fz-accent)] text-[var(--fz-accent-fg)]'
+                                                            : inMonth
+                                                              ? 'text-[var(--fz-text-2)]'
+                                                              : 'text-[var(--fz-text-4)]'
+                                                    }`}
+                                                >
+                                                    {format(day, day.getDate() === 1 ? 'MMM d' : 'd')}
+                                                </span>
+                                                <div className={`mt-1 space-y-0.5 ${inMonth ? '' : 'opacity-60'}`}>
+                                                    {shownChips.map((chip, ci) => (
+                                                        <div
+                                                            key={ci}
+                                                            className="cal-chip flex h-5 items-center gap-1.5 overflow-hidden rounded-md pr-1.5"
+                                                            style={{ '--ev': chip.color } as CSSProperties}
+                                                        >
+                                                            <span className="h-full w-[3px] shrink-0" style={{ backgroundColor: chip.color }} />
+                                                            <span className="truncate text-[11.5px] font-medium text-[var(--fz-text-1)]">{chip.label}</span>
+                                                        </div>
+                                                    ))}
+                                                    {shownEvents.map((ev) => {
+                                                        const c = colorForEvent(ev, groups);
+                                                        return (
+                                                            <div
+                                                                key={ev.id}
+                                                                className="flex h-5 items-center gap-1.5 rounded-md px-1 text-[11.5px] hover:bg-[var(--fz-bg-active)]"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    openModalFromRange(
+                                                                        new Date(ev.date),
+                                                                        ev.startHour * 60 + ev.startMin,
+                                                                        ev.startHour * 60 + ev.startMin + ev.durationMin,
+                                                                        ev,
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: c }} />
+                                                                <span className="shrink-0 tabular-nums text-[var(--fz-text-3)]">
+                                                                    {format(new Date(2000, 0, 1, ev.startHour, ev.startMin), ev.startMin ? 'h:mma' : 'ha').toLowerCase()}
+                                                                </span>
+                                                                <span className="truncate text-[var(--fz-text-1)]">{ev.title}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {total > shownChips.length + shownEvents.length && (
+                                                        <div className="px-1 text-[11px] font-medium text-[var(--fz-text-3)]">
+                                                            +{total - shownChips.length - shownEvents.length} more
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : (
+                            /* Week / day view — one vertical scroller; day headers stick inside it */
+                            <div ref={gridViewportRef} className="cal-scroll relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+                                <div style={{ ...slideStyle, height: 'auto', minHeight: '100%' }}>
+                                    {weeks.map((ws, weekIdx) => (
+                                        <CalendarWeekStrip
+                                            key={ws.toISOString()}
+                                            weekStart={ws}
+                                            interactive={weekIdx === 1}
+                                            today={today}
+                                            now={now}
+                                            hourHeight={hourHeight}
+                                            gridHeight={gridHeight}
+                                            grid={grid}
+                                            groups={groups}
+                                            timedEventsForDay={timedEventsForDay}
+                                            allDayChipsForDay={allDayChipsForDay}
+                                            singleDayMode={calView === 'day' ? addDays(ws, getDay(dayDate)) : undefined}
+                                            onRightPointerDown={(day, dayIndex, clientY) => {
+                                                rightDragRef.current = { active: true, started: false, day, dayIndex, clientY };
+                                            }}
+                                            onEmptyDoubleClick={(day, dayIndex, clientY) => {
+                                                openSlotAtY(day, dayIndex, clientY, 30);
+                                            }}
+                                            onDeleteEvent={(ev) => deleteEvent(ev)}
+                                            onEventPointerDown={(ev, day, dayIndex, startMin, e) => {
+                                                eventDragMovedRef.current = false;
+                                                eventPointerPendingRef.current = {
+                                                    ev,
+                                                    day,
+                                                    dayIndex,
+                                                    startMin,
+                                                    startX: e.clientX,
+                                                    startY: e.clientY,
+                                                    pointerId: e.pointerId,
+                                                };
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </section>
             </div>
 
             <AnimatePresence>
                 {leftPanel === 'schedule-menu' && scheduleMenuPos && (
                     <motion.div
                         key="schedule-link-chooser-portal"
-                        className="fixed inset-0 z-[80]"
+                        className="fixed inset-0 z-[40]"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -1258,17 +1431,17 @@ export default function SchedulingCalendarPage({
                             animate={{ opacity: 1, x: 0, scale: 1 }}
                             exit={{ opacity: 0, x: -4, scale: 0.98 }}
                             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                            className="absolute w-[240px] rounded-xl border border-white/10 bg-black/50 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                            className="absolute w-[256px] rounded-xl border border-[var(--fz-border)] bg-[var(--fz-bg-overlay)] p-1.5"
                             style={{
                                 top: scheduleMenuPos.top,
                                 left: scheduleMenuPos.left,
-                                WebkitBackdropFilter: 'blur(20px)',
+                                boxShadow: 'var(--fz-shadow-overlay)',
                             }}
                         >
-                            <div className="flex items-center justify-between">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
-                                    Scheduling
-                                </p>
+                            <div className="flex items-center justify-between pb-2 pl-1.5">
+                                <h2 id="schedule-link-type-title" className="text-[13px] font-semibold text-[var(--fz-text-1)]">
+                                    New booking link
+                                </h2>
                                 <button
                                     type="button"
                                     aria-label="Close"
@@ -1276,50 +1449,36 @@ export default function SchedulingCalendarPage({
                                         setLeftPanel('none');
                                         setScheduleMenuPos(null);
                                     }}
-                                    className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-white/5 hover:text-white"
+                                    className={iconBtn}
                                 >
                                     <X size={14} />
                                 </button>
                             </div>
-                            <h2 id="schedule-link-type-title" className="mt-1.5 text-sm font-semibold tracking-tight text-white">
-                                New Link
-                            </h2>
-                            <div className="mt-2.5 flex flex-col gap-1.5">
+                            {(
+                                [
+                                    { panel: 'recurring', icon: Repeat, label: 'Recurring', hint: 'Same hours every week' },
+                                    { panel: 'oneoff', icon: CalendarDays, label: 'One-off', hint: 'Only on dates you pick' },
+                                ] as const
+                            ).map(({ panel, icon: Icon, label, hint }) => (
                                 <button
+                                    key={panel}
                                     type="button"
                                     onClick={() => {
-                                        openRight('recurring');
+                                        openRight(panel);
                                         setLeftPanel('none');
                                         setScheduleMenuPos(null);
                                     }}
-                                    className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.07]"
+                                    className="flex w-full items-center gap-3 rounded-lg px-1.5 py-2 text-left transition-colors hover:bg-[var(--fz-bg-hover)]"
                                 >
-                                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 text-neutral-200">
-                                        <Link2 size={13} />
+                                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] text-[var(--fz-text-2)]">
+                                        <Icon size={15} strokeWidth={1.75} />
                                     </span>
-                                    <span>
-                                        <span className="block text-xs font-medium text-white">Recurring</span>
-                                        <span className="mt-0.5 block text-[10px] text-neutral-500">Weekly availability</span>
+                                    <span className="min-w-0">
+                                        <span className="block text-[13px] font-medium text-[var(--fz-text-1)]">{label}</span>
+                                        <span className="text-meta block">{hint}</span>
                                     </span>
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        openRight('oneoff');
-                                        setLeftPanel('none');
-                                        setScheduleMenuPos(null);
-                                    }}
-                                    className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2.5 text-left transition-colors hover:border-white/20 hover:bg-white/[0.07]"
-                                >
-                                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 text-neutral-200">
-                                        <Link2 size={13} />
-                                    </span>
-                                    <span>
-                                        <span className="block text-xs font-medium text-white">One-off</span>
-                                        <span className="mt-0.5 block text-[10px] text-neutral-500">Specific dates only</span>
-                                    </span>
-                                </button>
-                            </div>
+                            ))}
                         </motion.div>
                     </motion.div>
                 )}
@@ -1367,30 +1526,20 @@ export default function SchedulingCalendarPage({
                 />
             )}
 
-            {showDiscard && (
-                <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#0a0a0a]/90 p-4">
-                    <div className="glass-edge-card max-w-sm w-full p-6 space-y-4">
-                        <h4 className="text-lg font-bold text-white">Discard changes?</h4>
-                        <p className="text-sm text-neutral-400">You have unsaved edits. Discard them and continue?</p>
-                        <div className="flex gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setShowDiscard(false)}
-                                className="glass-edge-btn flex-1 py-2.5 text-sm font-bold text-white"
-                            >
-                                Keep editing
-                            </button>
-                            <button
-                                type="button"
-                                onClick={confirmDiscard}
-                                className="glass-edge-btn flex-1 py-2.5 text-sm font-bold bg-red-600/80 text-white"
-                            >
-                                Discard
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <Dialog
+                open={showDiscard}
+                onClose={() => setShowDiscard(false)}
+                title="Discard changes?"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setShowDiscard(false)}>Keep editing</Button>
+                        <Button variant="danger-solid" onClick={confirmDiscard}>Discard</Button>
+                    </>
+                }
+            >
+                <p className="text-body-sm text-[var(--fz-text-2)]">You have unsaved edits. Discard them and continue?</p>
+            </Dialog>
         </div>
     );
 }

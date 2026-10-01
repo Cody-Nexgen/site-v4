@@ -80,7 +80,7 @@ export function isChallengeStartResponseStaleOrPartial(
 export const CHALLENGE_DEFINITIONS: ChallengeDefinition[] = [
     {
         id: 'no_shorts_7',
-        title: 'No Shorts for 7 Days',
+        title: 'No Shorts for 7 days',
         description: 'Keep YouTube Shorts blocked for 7 consecutive days',
         icon: '📵',
         metric: 'no_shorts_streak',
@@ -90,7 +90,7 @@ export const CHALLENGE_DEFINITIONS: ChallengeDefinition[] = [
     },
     {
         id: 'deep_work_30h',
-        title: '30 Hours Deep Work',
+        title: '30 hours deep work',
         description: 'Log 30 hours of completed focus sessions',
         icon: '🧠',
         metric: 'focus_minutes',
@@ -100,7 +100,7 @@ export const CHALLENGE_DEFINITIONS: ChallengeDefinition[] = [
     },
     {
         id: 'pomodoro_100',
-        title: '100 Pomodoros',
+        title: '100 pomodoros',
         description: 'Complete 100 focus sessions',
         icon: '🍅',
         metric: 'total_pomodoros',
@@ -110,7 +110,7 @@ export const CHALLENGE_DEFINITIONS: ChallengeDefinition[] = [
     },
     {
         id: 'no_tiktok_week',
-        title: 'No TikTok Week',
+        title: 'No TikTok week',
         description: 'Keep TikTok blocked for 7 consecutive days',
         icon: '🚫',
         metric: 'no_tiktok_streak',
@@ -120,7 +120,7 @@ export const CHALLENGE_DEFINITIONS: ChallengeDefinition[] = [
     },
     {
         id: 'finals_sprint',
-        title: 'Finish School Finals',
+        title: 'Finish school finals',
         description: 'Complete 20 focus sessions during exam season',
         icon: '🎓',
         metric: 'total_pomodoros',

@@ -7,7 +7,7 @@ const DISTRACTION_HINTS = [
     'snapchat.com', 'pinterest.com', 'threads.net', 'linkedin.com/feed',
 ];
 
-function isDistractionDomain(domain: string): boolean {
+export function isDistractionDomain(domain: string): boolean {
     const d = domain.toLowerCase();
     return DISTRACTION_HINTS.some((hint) => d.includes(hint.replace(/^www\./, '')));
 }
@@ -81,7 +81,7 @@ export function computeFocusScore(input: FocusScoreInput): FocusScoreResult {
 
 export function focusScoreColor(score: number): string {
     if (score >= 85) return '#22c55e';
-    if (score >= 70) return '#a855f7';
+    if (score >= 70) return 'var(--fz-accent)';
     if (score >= 50) return '#eab308';
     return '#ef4444';
 }

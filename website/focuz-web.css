@@ -42,7 +42,7 @@ html.focuz-web-dashboard *::after {
 }
 
 html.focuz-web-dashboard .focuz-dashboard :where(button, input, textarea, select):focus-visible {
-  outline: 1px solid rgba(255, 255, 255, 0.28);
+  outline: 1px solid rgba(255, 255, 255, 0.16);
   outline-offset: 1px;
 }
 

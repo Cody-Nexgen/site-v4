@@ -1,12 +1,38 @@
+@import "@fontsource-variable/inter/opsz.css";
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";
 @import "@fontsource/inter/700.css";
 @import "tailwindcss";
+/* The website (/app) compiles this file too; its Tailwind root is website/, so scan the extension sources explicitly. */
+@source "./**/*.{ts,tsx}";
 @import "tw-animate-css";
 @import "./styles/focuzDesign.css";
 
 @custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+ * FocuzNow surface model. Four elevations, one hairline, one accent.
+ * Use these utilities (bg-surface, border-subtle, text-accent, ...) instead of
+ * arbitrary hex or white/alpha values so light mode keeps working for free.
+ * ------------------------------------------------------------------------- */
+@theme inline {
+  --color-page:        var(--fz-bg);
+  --color-surface:     var(--fz-surface);
+  --color-raised:      var(--fz-surface-raised);
+  --color-overlay:     var(--fz-surface-overlay);
+  --color-subtle:      var(--fz-border);
+  --color-strong:      var(--fz-border-strong);
+  --color-ink:         var(--fz-text);
+  --color-ink-2:       var(--fz-text-secondary);
+  --color-ink-3:       var(--fz-text-tertiary);
+  --color-accent-fz:   var(--fz-accent);
+  --color-accent-ink:  var(--fz-accent-fg);
+  --color-accent-wash: var(--fz-accent-muted);
+  --color-good:        var(--fz-success);
+  --color-bad:         var(--fz-danger);
+}
+
 
 body {
   background: transparent;
@@ -16,57 +42,57 @@ body {
 
 .focuz-dashboard {
   /* 21st monochrome theme — dark shell (matches .dark tokens) */
-  --card: oklch(0.14 0 0);
-  --ring: oklch(0.72 0 0);
-  --input: oklch(0.32 0 0);
-  --muted: oklch(0.23 0 0);
-  --accent: oklch(0.32 0 0);
-  --border: oklch(0.26 0 0);
+  --card: #141416;
+  --ring: #5ea2ff;
+  --input: rgba(255, 255, 255, 0.08);
+  --muted: #1c1c1f;
+  --accent: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
   --radius: 0.5rem;
-  --chart-1: oklch(0.81 0.17 75.35);
-  --chart-2: oklch(0.58 0.21 260.84);
-  --chart-3: oklch(0.56 0 0);
-  --chart-4: oklch(0.44 0 0);
-  --chart-5: oklch(0.92 0 0);
-  --popover: oklch(0.18 0 0);
-  --primary: oklch(1.00 0 0);
-  --sidebar: oklch(0.18 0 0);
+  --chart-1: #5ea2ff;
+  --chart-2: #93c5fd;
+  --chart-3: #a1a1a6;
+  --chart-4: #6e6e76;
+  --chart-5: #e5e5e7;
+  --popover: #1c1c1f;
+  --primary: #5ea2ff;
+  --sidebar: #141416;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-sans: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
-  --secondary: oklch(0.25 0 0);
-  --background: oklch(0 0 0);
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+  --secondary: #1c1c1f;
+  --background: #0a0a0b;
   --font-serif: Georgia, serif;
-  --foreground: oklch(1.00 0 0);
-  --destructive: oklch(0.69 0.20 23.91);
+  --foreground: #fafafa;
+  --destructive: #f87171;
   --shadow-blur: 2px;
   --shadow-color: hsl(0 0% 0%);
-  --sidebar-ring: oklch(0.72 0 0);
+  --sidebar-ring: #5ea2ff;
   --shadow-spread: 0px;
   --shadow-opacity: 0.18;
-  --sidebar-accent: oklch(0.32 0 0);
-  --sidebar-border: oklch(0.32 0 0);
-  --card-foreground: oklch(1.00 0 0);
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --card-foreground: #fafafa;
   --shadow-offset-x: 0px;
   --shadow-offset-y: 1px;
-  --sidebar-primary: oklch(1.00 0 0);
-  --muted-foreground: oklch(0.72 0 0);
-  --accent-foreground: oklch(1.00 0 0);
-  --popover-foreground: oklch(1.00 0 0);
-  --primary-foreground: oklch(0 0 0);
-  --sidebar-foreground: oklch(1.00 0 0);
-  --secondary-foreground: oklch(1.00 0 0);
-  --destructive-foreground: oklch(0 0 0);
-  --sidebar-accent-foreground: oklch(1.00 0 0);
-  --sidebar-primary-foreground: oklch(0 0 0);
-  --dashboard-bg: oklch(0 0 0);
-  --dashboard-surface: oklch(0.14 0 0);
-  --dashboard-surface-raised: oklch(0.18 0 0);
-  --dashboard-interactive: oklch(0.32 0 0);
-  --dashboard-interactive-hover: oklch(0.38 0 0);
-  --dashboard-border: oklch(0.26 0 0);
-  --dashboard-text: oklch(1.00 0 0);
-  --dashboard-text-secondary: oklch(0.72 0 0);
-  --dashboard-text-muted: oklch(0.56 0 0);
+  --sidebar-primary: #5ea2ff;
+  --muted-foreground: #a1a1a6;
+  --accent-foreground: #fafafa;
+  --popover-foreground: #fafafa;
+  --primary-foreground: #04121f;
+  --sidebar-foreground: #fafafa;
+  --secondary-foreground: #fafafa;
+  --destructive-foreground: #0a0a0b;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-primary-foreground: #04121f;
+  --dashboard-bg: #0a0a0b;
+  --dashboard-surface: #141416;
+  --dashboard-surface-raised: #1c1c1f;
+  --dashboard-interactive: rgba(255, 255, 255, 0.04);
+  --dashboard-interactive-hover: rgba(255, 255, 255, 0.08);
+  --dashboard-border: rgba(255, 255, 255, 0.08);
+  --dashboard-text: #fafafa;
+  --dashboard-text-secondary: #a1a1a6;
+  --dashboard-text-muted: #6e6e76;
   --dashboard-shadow: var(--shadow-offset-x) var(--shadow-offset-y) var(--shadow-blur) var(--shadow-spread)
     color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
   min-height: 100vh;
@@ -124,7 +150,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .surface-card {
 }
 
 .focuz-dashboard :where(button, input, textarea, select):focus-visible {
-  outline: 1px solid rgba(255, 255, 255, 0.28);
+  outline: 1px solid rgba(255, 255, 255, 0.16);
   outline-offset: 1px;
 }
 
@@ -183,7 +209,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .surface-card {
 .focuz-dashboard .bg-fuchsia-600\/15,
 .focuz-dashboard .bg-pink-500\/10,
 .focuz-dashboard .bg-pink-500\/20 {
-  background-color: rgba(255, 255, 255, 0.055);
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 .focuz-dashboard .bg-purple-600,
@@ -206,14 +232,14 @@ html[data-dashboard-theme="light"] .focuz-dashboard .surface-card {
 .focuz-dashboard .border-violet-500\/30,
 .focuz-dashboard .border-fuchsia-500\/30,
 .focuz-dashboard .border-pink-500\/20 {
-  border-color: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .focuz-dashboard .ring-purple-500\/20,
 .focuz-dashboard .ring-purple-500\/30,
 .focuz-dashboard .ring-violet-500\/20,
 .focuz-dashboard .ring-violet-400\/30 {
-  --tw-ring-color: rgba(255, 255, 255, 0.1);
+  --tw-ring-color: rgba(255, 255, 255, 0.08);
 }
 
 .focuz-dashboard [class*="shadow-purple-"],
@@ -231,19 +257,19 @@ html[data-dashboard-theme="light"] .focuz-dashboard .surface-card {
 .focuz-dashboard .from-fuchsia-600,
 .focuz-dashboard .from-pink-600 {
   --tw-gradient-from: rgba(255, 255, 255, 0.08);
-  --tw-gradient-to: rgba(255, 255, 255, 0);
+  --tw-gradient-to: rgba(255, 255, 255, 0.04);
 }
 
 .focuz-dashboard .via-pink-600,
 .focuz-dashboard .via-purple-600 {
-  --tw-gradient-via: rgba(255, 255, 255, 0.05);
+  --tw-gradient-via: rgba(255, 255, 255, 0.08);
 }
 
 .focuz-dashboard .to-purple-600,
 .focuz-dashboard .to-purple-500,
 .focuz-dashboard .to-violet-800,
 .focuz-dashboard .to-pink-600 {
-  --tw-gradient-to: rgba(255, 255, 255, 0.015);
+  --tw-gradient-to: rgba(255, 255, 255, 0.04);
 }
 
 /* Dashboard appearance is independent from the selected accent theme. */
@@ -310,41 +336,17 @@ html[data-dashboard-theme="light"] .focuz-dashboard .workspace-theme-switcher {
   border-color: var(--dashboard-border) !important;
 }
 
-/* Compatibility layer for dashboard screens that still use dark utility colors. */
-html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#0"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#1"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class*="bg-[#2"] {
-  background-color: var(--dashboard-surface) !important;
-}
-
 html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-black/20"],
 html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-black/30"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/5"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/10"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.018]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.025]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.03]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.035]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.04]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.045]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.05]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.055]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.06]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.07]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.08]"],
-html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/[0.1]"] {
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/4"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/6"],
+html[data-dashboard-theme="light"] .focuz-dashboard [class~="bg-white/10"] {
   background-color: var(--dashboard-interactive) !important;
 }
 
-html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/5:hover,
-html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/10:hover,
-html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.025\]:hover,
-html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.03\]:hover,
-html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.035\]:hover,
-html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.04\]:hover,
-html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.05\]:hover,
-html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.06\]:hover,
-html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/\[0\.08\]:hover {
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/4:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/6:hover,
+html[data-dashboard-theme="light"] .focuz-dashboard .hover\:bg-white\/10:hover {
   background-color: var(--dashboard-interactive-hover) !important;
 }
 
@@ -353,19 +355,14 @@ html[data-dashboard-theme="light"] .focuz-dashboard :where(
   .text-neutral-50,
   .text-neutral-100,
   .text-neutral-200,
-  .text-neutral-300,
-  .text-zinc-100,
-  .text-zinc-200,
-  .text-zinc-300
+  .text-neutral-300
 ) {
   color: var(--dashboard-text) !important;
 }
 
 html[data-dashboard-theme="light"] .focuz-dashboard :where(
   .text-neutral-400,
-  .text-neutral-500,
-  .text-zinc-400,
-  .text-zinc-500
+  .text-neutral-500
 ) {
   color: var(--dashboard-text-secondary) !important;
 }
@@ -373,9 +370,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard :where(
 html[data-dashboard-theme="light"] .focuz-dashboard :where(
   .text-neutral-600,
   .text-neutral-700,
-  .text-neutral-800,
-  .text-zinc-600,
-  .text-zinc-700
+  .text-neutral-800
 ) {
   color: var(--dashboard-text-muted) !important;
 }
@@ -393,11 +388,6 @@ html[data-dashboard-theme="light"] .focuz-dashboard :where(
   color: var(--dashboard-bg) !important;
 }
 
-html[data-dashboard-theme="light"] .focuz-dashboard .pro-shell-vignette {
-  background-color: var(--dashboard-bg);
-  background-image: none;
-}
-
 html[data-dashboard-theme="light"] .focuz-dashboard :where(button, input, textarea, select):focus-visible {
   outline-color: rgba(24, 24, 27, 0.38);
 }
@@ -406,31 +396,15 @@ html[data-dashboard-theme="light"] .focuz-dashboard :where(button, input, textar
   --list-preview-bg: #1d1d1f;
 }
 
+/* Title, text blocks and checklist items read as a document, not a form —
+   the caret is the focus cue, so no outline box around them. */
+.focuz-dashboard .lists-workspace .list-doc-field:focus-visible {
+  outline: none;
+}
+
 html[data-dashboard-theme="light"] .focuz-dashboard .activity-chart-controls {
   background: rgba(24, 24, 27, 0.055) !important;
   border-color: var(--dashboard-border) !important;
-}
-
-html[data-dashboard-theme="light"] .focuznow-calendar .calendar-view-controls {
-  background: rgba(24, 24, 27, 0.055) !important;
-  border-color: var(--cal-border) !important;
-}
-
-html[data-dashboard-theme="light"] .focuznow-calendar .calendar-nav-control {
-  color: #52525b !important;
-}
-
-html[data-dashboard-theme="light"] .focuznow-calendar .calendar-nav-control:hover {
-  color: #18181b !important;
-  background: rgba(24, 24, 27, 0.075) !important;
-}
-
-html[data-dashboard-theme="light"] .focuznow-calendar .calendar-event-title {
-  color: #18181b !important;
-}
-
-html[data-dashboard-theme="light"] .focuznow-calendar .calendar-event-time {
-  color: #52525b !important;
 }
 
 html[data-dashboard-theme="light"] .focuz-dashboard .lists-workspace {
@@ -458,18 +432,15 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 }
 
 .focuznow-calendar *:focus-visible {
-  outline: 1px solid rgba(56, 189, 248, 0.45);
-  outline-offset: 2px;
+  outline: 2px solid var(--fz-focus-ring);
+  outline-offset: 1px;
 }
 
 .focuznow-calendar {
   -webkit-tap-highlight-color: transparent;
 }
 
-.focuznow-calendar ::selection {
-  background: rgba(168, 85, 247, 0.35);
-  color: #fff;
-}
+
 
 /* Embossed edge outline — all dashboard cards & buttons except raw calendar grid */
 .glass-edge-card {
@@ -478,17 +449,17 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
   border-radius: 1.5rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.35),
     0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .glass-edge-btn {
   border-radius: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.2);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -505,7 +476,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 
 /* FocuzNow brand glow */
 .focuz-brand-glow {
-  background: linear-gradient(135deg, #fff 0%, #e9d5ff 45%, #a855f7 100%);
+  background: linear-gradient(135deg, #fff 0%, #dbeafe 45%, #5ea2ff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -516,7 +487,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 .focuz-brand-icon-glow {
   box-shadow:
     0 0 20px rgba(168, 85, 247, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 @keyframes focuz-brand-pulse {
@@ -525,14 +496,13 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 }
 
 .focuz-rotating-word {
-  color: #a855f7;
-  text-shadow: 0 0 16px rgba(168, 85, 247, 0.5);
+  color: var(--fz-accent);
 }
 
 .kbd {
-  font-family: ui-monospace, monospace;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   padding: 1px 4px;
   font-size: 10px;
@@ -541,7 +511,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 /* Onboarding, auth, extension popup — shared polish */
 .focuz-shell,
 .focuz-popup {
-  font-family: Geist, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -582,7 +552,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 .focuz-popup-mark {
   border-radius: 11px;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
     0 8px 20px -10px rgba(0, 0, 0, 0.8);
 }
 
@@ -620,7 +590,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
   gap: 0.45rem;
   border-radius: 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   color: #d4d4d4;
   padding: 0.7rem 1rem;
   font-size: 0.8rem;
@@ -629,7 +599,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 }
 
 .focuz-popup-ghost:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
@@ -637,17 +607,17 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
   position: relative;
   overflow: hidden;
   border-radius: 1.05rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    radial-gradient(ellipse 80% 70% at 50% 0%, rgba(255, 255, 255, 0.07), transparent 60%),
-    rgba(255, 255, 255, 0.025);
+    radial-gradient(ellipse 80% 70% at 50% 0%, rgba(255, 255, 255, 0.08), transparent 60%),
+    rgba(255, 255, 255, 0.04);
   min-height: 8.5rem;
   padding: 1.1rem 0.75rem;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .focuz-popup-focus:hover {
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.16);
   transform: translateY(-1px);
 }
 
@@ -660,7 +630,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.08);
   color: #f5f5f5;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   animation: focuz-popup-pulse 2.8s ease-in-out infinite;
 }
 
@@ -688,10 +658,10 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
   align-items: center;
   gap: 0.2rem;
   border-radius: 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
   padding: 0.65rem 0.35rem 0.7rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .focuz-popup-stat-value {
@@ -704,10 +674,8 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 }
 
 .focuz-popup-stat-label {
-  font-size: 9.5px;
-  font-weight: 550;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 480;
   color: #737373;
 }
 
@@ -726,8 +694,8 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
 }
 
 .focuz-popup-secondary:hover {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
@@ -736,8 +704,8 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
   align-items: center;
   gap: 0.3rem;
   border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.08);
   padding: 0.28rem 0.55rem;
   font-size: 10px;
   font-weight: 650;
@@ -776,7 +744,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
   appearance: none;
   height: 6px;
   border-radius: 9999px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.12));
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.08));
   outline: none;
 }
 
@@ -901,7 +869,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
   --primary: oklch(0 0 0);
   --sidebar: oklch(0.99 0 0);
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-sans: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   --secondary: oklch(0.94 0 0);
   --background: oklch(0.99 0 0);
   --font-serif: Georgia, serif;
@@ -945,7 +913,7 @@ html[data-dashboard-theme="light"] .focuz-dashboard .list-code-input {
   --primary: oklch(1.00 0 0);
   --sidebar: oklch(0.18 0 0);
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-sans: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   --secondary: oklch(0.25 0 0);
   --background: oklch(0 0 0);
   --font-serif: Georgia, serif;
@@ -1334,493 +1302,137 @@ html[data-theme="custom"].custom-motion .glass-edge-card:hover {
   transform: translateY(-1px);
 }
 
-/* Pro Gold theme — maps purple utility classes to gold */
-html[data-theme="pro"] {
-  --pro-gold: #d4af37;
-  --pro-gold-bright: #ffd700;
-  --pro-gold-deep: #8b6914;
+
+/* Neutral motion system (previously Pro Gold — now available to everyone).
+ * Class names kept for compatibility; colors are accent/neutral, never gold. */
+.pro-card-spring,
+.pro-stat-card {
+  animation: fz-card-rise 0.55s var(--fz-ease-out, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 
-html[data-theme="pro"] .bg-purple-600 {
-  background-color: #b8860b !important;
+@keyframes fz-card-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-html[data-theme="pro"] .bg-purple-500 {
-  background-color: #d4af37 !important;
+/* Page enter — all users (was proVisuals-gated pro-page-enter). */
+.fz-page-enter {
+  animation: fz-page-enter 260ms var(--fz-ease-out, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 
-html[data-theme="pro"] .border-purple-500 {
-  border-color: #d4af37 !important;
+@keyframes fz-page-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-html[data-theme="pro"] .border-purple-500\/30 {
-  border-color: rgba(212, 175, 55, 0.35) !important;
+.pro-content-fade {
+  animation: fz-content-fade 160ms ease;
 }
 
-html[data-theme="pro"] .border-purple-500\/20 {
-  border-color: rgba(212, 175, 55, 0.22) !important;
+@keyframes fz-content-fade {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
 }
 
-html[data-theme="pro"] .text-purple-400 {
-  color: #f5e6a8 !important;
+.pro-hero-enter {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s var(--fz-ease-out, cubic-bezier(0.16, 1, 0.3, 1)),
+    transform 0.35s var(--fz-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
 }
 
-html[data-theme="pro"] .text-purple-500 {
-  color: #ffd700 !important;
-}
-
-html[data-theme="pro"] .shadow-purple-600\/20 {
-  box-shadow: 0 4px 24px rgba(212, 175, 55, 0.28) !important;
-}
-
-html[data-theme="pro"] .bg-purple-600\/20 {
-  background-color: rgba(184, 134, 11, 0.22) !important;
-}
-
-html[data-theme="pro"] .bg-purple-600\/10 {
-  background-color: rgba(212, 175, 55, 0.12) !important;
-}
-
-html[data-theme="pro"] .bg-purple-900 {
-  background-color: #1a1408 !important;
-}
-
-html[data-theme="pro"] .selection\:bg-purple-500\/30::selection,
-html[data-theme="pro"] *::selection {
-  background-color: rgba(212, 175, 55, 0.35);
-}
-
-/* Pro Gold — spring / overshoot motion system */
-html[data-theme="pro"] {
-  --pro-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
-  --pro-spring-soft: cubic-bezier(0.22, 1.12, 0.36, 1);
-}
-
-html[data-theme="pro"] .pro-spring-btn {
-  transition:
-    transform 0.35s var(--pro-spring),
-    background-color 0.2s ease,
-    box-shadow 0.25s ease,
-    border-color 0.2s ease,
-    color 0.15s ease;
-}
-
-html[data-theme="pro"] .pro-spring-btn:hover {
-  transform: translateY(-1px) scale(1.02);
-}
-
-html[data-theme="pro"] .pro-spring-btn:active:not(:disabled) {
-  transform: scale(0.94);
-  transition-duration: 0.12s;
-}
-
-html[data-theme="pro"].pro-motion .pro-nav-item.is-active {
-  animation: pro-nav-pop 0.45s var(--pro-spring);
-}
-
-html[data-theme="custom"].custom-motion .pro-nav-item.is-active {
-  animation: pro-nav-pop 0.35s ease;
-}
-
-@keyframes pro-nav-pop {
-  0% { transform: scale(0.96); }
-  55% { transform: scale(1.03); }
-  100% { transform: scale(1); }
-}
-
-html[data-theme="pro"] .glass-edge-card {
-  transition: box-shadow 0.3s ease, border-color 0.25s ease, transform 0.35s var(--pro-spring-soft);
-}
-
-html[data-theme="pro"] .glass-edge-card:hover {
-  box-shadow: 0 0 28px rgba(212, 175, 55, 0.14);
-  border-color: rgba(212, 175, 55, 0.18);
-}
-
-html[data-theme="pro"].pro-motion .glass-edge-card:hover {
-  transform: translateY(-2px) scale(1.005);
-}
-
-html[data-theme="pro"] .pro-card-spring {
-  animation: pro-card-rise 0.55s var(--pro-spring) both;
-}
-
-@keyframes pro-card-rise {
-  0% {
-    opacity: 0;
-    transform: translateY(14px) scale(0.97);
-  }
-  70% {
-    opacity: 1;
-    transform: translateY(-3px) scale(1.01);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-html[data-theme="pro"] .pro-theme-btn:active:not(:disabled) {
-  transform: scale(0.94);
-  transition: transform 0.15s var(--pro-spring);
-}
-
-html[data-theme="pro"].pro-motion .pro-content-fade {
-  animation: pro-content-fade 0.28s var(--pro-spring-soft);
-}
-
-html[data-theme="pro"].pro-motion .pro-page-enter {
-  animation: pro-page-enter 0.5s var(--pro-spring) both;
-}
-
-@keyframes pro-page-enter {
-  0% {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
-  65% {
-    opacity: 1;
-    transform: translateY(-4px) scale(1.01);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes pro-content-fade {
-  from { opacity: 0.55; transform: scale(0.99); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-/* Hero mark — geometric focus ring, not a crown asset */
-.pro-hero-mark {
-  width: 3.5rem;
-  height: 3.5rem;
-  min-width: 3.5rem;
-  position: relative;
-  border-radius: 1rem;
-  background: #12100a;
-  border: 1px solid rgba(212, 175, 55, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  animation: pro-hero-mark-in 0.6s var(--pro-spring, cubic-bezier(0.34, 1.45, 0.64, 1)) both;
-}
-
-.pro-hero-mark-ring {
-  width: 1.35rem;
-  height: 1.35rem;
-  border: 2px solid #c9a227;
-  border-radius: 50%;
-  animation: pro-hero-ring-breathe 2.4s ease-in-out infinite;
-}
-
-.pro-hero-mark-core {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #ffd700;
-  box-shadow: 0 0 10px rgba(255, 215, 0, 0.75);
-  animation: pro-hero-core-pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes pro-hero-mark-in {
-  0% { transform: scale(0.6) rotate(-12deg); opacity: 0; }
-  70% { transform: scale(1.08) rotate(4deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0); opacity: 1; }
-}
-
-@keyframes pro-hero-ring-breathe {
-  0%, 100% { transform: scale(1); opacity: 0.85; }
-  50% { transform: scale(1.12); opacity: 1; }
-}
-
-@keyframes pro-hero-core-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.25); }
-}
-
-.pro-hero-title {
-  animation: pro-hero-title-in 0.55s 0.08s var(--pro-spring-soft, cubic-bezier(0.22, 1.12, 0.36, 1)) both;
-}
-
-@keyframes pro-hero-title-in {
-  0% { opacity: 0; transform: translateX(-8px); }
-  70% { opacity: 1; transform: translateX(2px); }
-  100% { opacity: 1; transform: translateX(0); }
+.pro-hero-visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .pro-badge-star {
   display: inline-block;
-  animation: pro-star-wiggle 3s ease-in-out infinite;
+  animation: fz-star-wiggle 3s ease-in-out infinite;
 }
 
-@keyframes pro-star-wiggle {
+@keyframes fz-star-wiggle {
   0%, 100% { transform: rotate(0deg) scale(1); }
   40% { transform: rotate(-8deg) scale(1.1); }
   60% { transform: rotate(6deg) scale(1.05); }
 }
 
-.pro-gold-text-glow {
-  text-shadow: 0 0 24px rgba(255, 215, 0, 0.35);
-  animation: pro-stat-number-pop 0.5s var(--pro-spring, cubic-bezier(0.34, 1.45, 0.64, 1)) both;
+.pro-check-spin {
+  animation: fz-check-spin 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@keyframes pro-stat-number-pop {
-  0% { transform: scale(0.85); opacity: 0.5; }
-  65% { transform: scale(1.06); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+@keyframes fz-check-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-/* Habit check-in — non-transform visuals only; scale bounce/press now owned by Framer Motion
-   in HabitCheckInButton so the two animation systems don't fight over `transform`. */
-html[data-theme="pro"] .pro-habit-check-btn {
-  transition:
-    background-color 0.25s ease,
-    box-shadow 0.35s var(--pro-spring-soft, cubic-bezier(0.22, 1.12, 0.36, 1)),
-    color 0.2s ease,
-    border-color 0.2s ease;
+.pro-confetti-bit {
+  animation: fz-confetti-fall 0.85s ease-out forwards;
+}
+
+@keyframes fz-confetti-fall {
+  0% { opacity: 1; transform: translateY(0) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(100vh) rotate(720deg); }
 }
 
 .pro-habit-spinner-ring {
   width: 55%;
   height: 55%;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #ffd700;
-  animation: pro-habit-spinner 0.55s linear infinite;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-top-color: var(--fz-accent);
+  animation: fz-habit-spinner 0.55s linear infinite;
 }
 
-@keyframes pro-habit-spinner {
+@keyframes fz-habit-spinner {
   to { transform: rotate(360deg); }
 }
 
 .pro-habit-dot-idle {
-  animation: pro-habit-dot-breathe 2s ease-in-out infinite;
+  animation: fz-habit-dot-breathe 2s ease-in-out infinite;
 }
 
-@keyframes pro-habit-dot-breathe {
+@keyframes fz-habit-dot-breathe {
   0%, 100% { transform: scale(1); opacity: 0.7; }
   50% { transform: scale(1.35); opacity: 1; }
 }
 
-/* Habit day cells on Today grid */
-html[data-theme="pro"] .pro-habit-day-cell {
-  transition:
-    transform 0.4s var(--pro-spring, cubic-bezier(0.34, 1.45, 0.64, 1)),
-    background-color 0.2s ease,
-    box-shadow 0.3s ease,
-    opacity 0.2s ease !important;
+.pro-streak-cell {
+  animation: fz-streak-cell-in 0.45s var(--fz-ease-out, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 
-html[data-theme="pro"] .pro-habit-day-cell:hover:not(.is-done) {
-  transform: scaleY(1.15) scaleX(1.05) !important;
-}
-
-html[data-theme="pro"] .pro-habit-day-cell.is-popping {
-  animation: pro-habit-day-pop 0.55s var(--pro-spring, cubic-bezier(0.34, 1.45, 0.64, 1));
-}
-
-html[data-theme="pro"] .pro-habit-day-cell.is-done {
-  animation: pro-habit-day-done 0.5s var(--pro-spring, cubic-bezier(0.34, 1.45, 0.64, 1));
-}
-
-html[data-theme="pro"] .pro-habit-day-pulse {
-  animation: pro-habit-day-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes pro-habit-day-pop {
-  0% { transform: scale(0.6); }
-  60% { transform: scale(1.2); }
-  100% { transform: scale(1); }
-}
-
-@keyframes pro-habit-day-done {
-  0% { transform: scale(0.85); }
-  55% { transform: scale(1.15); }
-  100% { transform: scale(1); }
-}
-
-@keyframes pro-habit-day-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); border-color: rgba(212, 175, 55, 0.35); }
-  50% { box-shadow: 0 0 12px 2px rgba(255, 215, 0, 0.25); border-color: rgba(255, 215, 0, 0.55); }
-}
-
-/* Preserve Tailwind spin/pulse under pro theme */
-html[data-theme="pro"] .animate-spin {
-  animation: spin 1s linear infinite !important;
-}
-
-html[data-theme="pro"] .animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
-}
-
-html[data-theme="pro"].pro-motion .animate-fade-in-up {
-  animation: fade-in-up 0.5s var(--pro-spring-soft, cubic-bezier(0.22, 1.12, 0.36, 1)) both;
-}
-
-html[data-theme="pro"].pro-motion button[type="button"]:not(.pro-habit-check-btn):not(.pro-habit-day-cell) {
-  transition: transform 0.32s var(--pro-spring), background-color 0.2s ease, box-shadow 0.25s ease;
-}
-
-html[data-theme="pro"].pro-motion button[type="button"]:not(.pro-habit-check-btn):not(.pro-habit-day-cell):active:not(:disabled) {
-  transform: scale(0.93);
-}
-
-html[data-theme="pro"] .pro-streak-cell {
-  animation: pro-streak-cell-in 0.45s var(--pro-spring, cubic-bezier(0.34, 1.45, 0.64, 1)) both;
-}
-
-@keyframes pro-streak-cell-in {
+@keyframes fz-streak-cell-in {
   0% { transform: scaleY(0.3); opacity: 0.4; }
-  70% { transform: scaleY(1.2); opacity: 1; }
+  70% { transform: scaleY(1.15); opacity: 1; }
   100% { transform: scaleY(1); opacity: 1; }
 }
 
-/* Pro dashboard visuals */
-.pro-shell-vignette {
-  background-color: #0a0906;
-  background-image:
-    radial-gradient(ellipse 90% 70% at 100% 0%, rgba(212, 175, 55, 0.14), transparent 55%),
-    radial-gradient(ellipse 60% 50% at 0% 100%, rgba(139, 105, 20, 0.08), transparent 50%);
-}
-
-
-.pro-hero-enter {
-  opacity: 0;
-  transform: translateY(16px) scale(0.98);
-  transition: opacity 0.45s cubic-bezier(0.34, 1.45, 0.64, 1), transform 0.45s cubic-bezier(0.34, 1.45, 0.64, 1);
-}
-
-.pro-hero-visible {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-.pro-stat-card {
-  animation: pro-card-rise 0.55s cubic-bezier(0.34, 1.45, 0.64, 1) both;
-}
-
-html[data-theme="pro"] .pro-stat-card:hover {
-  transform: scale(1.04) translateY(-2px);
-  box-shadow: 0 0 28px rgba(212, 175, 55, 0.45);
-  transition: transform 0.35s cubic-bezier(0.34, 1.45, 0.64, 1), box-shadow 0.3s ease;
-}
-
-html[data-theme="custom"] .pro-stat-card:hover {
-  transform: scale(1.02) translateY(-1px);
-  box-shadow: 0 0 20px var(--theme-shadow);
-}
-
 .pro-xp-fill {
-  background: linear-gradient(90deg, #8b6914, #d4af37, #ffd700);
-}
-
-html[data-theme="pro"] .pro-nav-glow span {
-  text-shadow: 0 0 14px rgba(255, 215, 0, 0.55);
-}
-
-html[data-theme="custom"] .pro-nav-glow span {
-  text-shadow: 0 0 12px var(--theme-shadow);
-}
-
-.pro-content-fade {
-  animation: pro-content-fade 0.28s cubic-bezier(0.34, 1.45, 0.64, 1);
-}
-
-html[data-theme="pro"] .pro-avatar-ring {
-  padding: 2px;
-  border-radius: 0.65rem;
-  background: linear-gradient(135deg, #8b6914, #d4af37, #ffd700);
-  box-shadow: 0 0 12px rgba(212, 175, 55, 0.25);
-  flex-shrink: 0;
-}
-
-html[data-theme="custom"] .pro-avatar-ring {
-  padding: 2px;
-  border-radius: 0.65rem;
-  background: linear-gradient(135deg, var(--theme-primary), var(--theme-accent));
-  box-shadow: 0 0 12px var(--theme-shadow);
-  flex-shrink: 0;
-}
-
-html[data-theme="pro"] .pro-avatar-ring > *,
-html[data-theme="custom"] .pro-avatar-ring > * {
-  border-radius: 0.5rem !important;
-}
-
-.profile-avatar {
-  border-radius: 0.5rem !important;
-}
-
-@keyframes pro-ring-spin {
-  to { transform: rotate(360deg); }
-}
-
-.pro-subscription-trophy {
-  position: relative;
-  padding: 1px;
-  background: linear-gradient(135deg, #8b6914, #ffd700, #d4af37, #8b6914);
-  background-size: 300% 300%;
-  animation: pro-trophy-border 6s ease infinite;
+  background: var(--fz-accent);
 }
 
 .pro-subscription-trophy > * {
   border-radius: 0.65rem;
 }
 
-@keyframes pro-trophy-border {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
-.pro-check-spin {
-  animation: pro-check-spin 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes pro-check-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.pro-confetti-bit {
-  animation: pro-confetti-fall 0.85s ease-out forwards;
-}
-
-@keyframes pro-confetti-fall {
-  0% {
-    opacity: 1;
-    transform: translateY(0) rotate(0deg);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(100vh) rotate(720deg);
-  }
+.profile-avatar {
+  border-radius: 0.5rem !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .pro-badge-pulse,
-  .pro-avatar-ring,
-  .pro-subscription-trophy,
   .pro-check-spin,
   .pro-confetti-bit,
-  .pro-hero-mark,
-  .pro-hero-mark-ring,
-  .pro-hero-mark-core,
-  .pro-hero-title,
   .pro-badge-star,
   .pro-habit-check-btn,
   .pro-habit-day-cell,
+  .pro-habit-dot-idle,
   .pro-card-spring,
-  .pro-stat-card {
+  .pro-stat-card,
+  .pro-streak-cell,
+  .fz-page-enter,
+  .pro-content-fade {
     animation: none !important;
-  }
-  .pro-stat-card:hover,
-  html[data-theme="pro"] .pro-spring-btn:hover {
-    transform: none;
   }
   .pro-hero-enter {
     opacity: 1;
@@ -1828,23 +1440,175 @@ html[data-theme="custom"] .pro-avatar-ring > * {
   }
 }
 
-/* Focus Shop cosmetic frames */
+/* Focus Shop cosmetic frames — Gilt re-skinned neutral. !important: a frame replaces the
+   generic raised-surface edge shadow (.focuz-dashboard [class*="bg-[var(--fz-bg-raised)]"]…),
+   which is more specific and otherwise hides it. */
 .focus-frame-gold,
 .focus-equipped-frame-gold {
-  box-shadow: inset 0 0 0 1px rgba(196, 163, 90, 0.35), 0 0 0 1.5px #c4a35a;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 0 0 1.5px rgba(255, 255, 255, 0.5) !important;
 }
 
 .focus-frame-neon,
 .focus-equipped-frame-neon {
   box-shadow: inset 0 0 0 1px rgba(110, 200, 196, 0.25), 0 0 0 1.5px #6ec8c4,
-    0 0 18px rgba(110, 200, 196, 0.22);
+    0 0 18px rgba(110, 200, 196, 0.22) !important;
 }
 
 .focus-frame-minimal,
 .focus-equipped-frame-minimal {
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55) !important;
 }
 
 .focus-widget-glow {
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.28));
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.16));
+}
+
+/* Light theme: the white rims and glow above disappear on light surfaces. */
+html[data-dashboard-theme="light"] .focus-frame-gold,
+html[data-dashboard-theme="light"] .focus-equipped-frame-gold {
+  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.08), 0 0 0 1.5px rgba(24, 24, 27, 0.55) !important;
+}
+
+html[data-dashboard-theme="light"] .focus-frame-minimal,
+html[data-dashboard-theme="light"] .focus-equipped-frame-minimal {
+  box-shadow: 0 0 0 1px rgba(24, 24, 27, 0.6) !important;
+}
+
+html[data-dashboard-theme="light"] .focus-widget-glow {
+  filter: drop-shadow(0 0 10px rgba(24, 24, 27, 0.14));
+}
+/* ---------------------------------------------------------------------------
+ * Type scale (§1.2) — Inter Variable opsz, single class per tier.
+ * Contrast comes from size + weight + color tier together, not size alone.
+ * ------------------------------------------------------------------------- */
+@utility text-display {
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 640;
+  letter-spacing: -0.022em;
+  color: var(--fz-text-1);
+  font-feature-settings: "cv01", "cv11", "ss03";
+}
+@utility text-title-1 {
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 620;
+  letter-spacing: -0.018em;
+  color: var(--fz-text-1);
+  font-feature-settings: "cv01", "cv11", "ss03";
+}
+@utility text-title-2 {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--fz-text-1);
+  font-feature-settings: "cv01", "cv11", "ss03";
+}
+@utility text-title-3 {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 580;
+  letter-spacing: -0.006em;
+  color: var(--fz-text-1);
+  font-feature-settings: "cv01", "cv11", "ss03";
+}
+@utility text-body {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 450;
+  letter-spacing: -0.003em;
+  color: var(--fz-text-2);
+  font-feature-settings: "cv01", "cv11", "ss03";
+}
+@utility text-body-sm {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 450;
+  color: var(--fz-text-2);
+  font-feature-settings: "cv01", "cv11", "ss03";
+}
+@utility text-meta {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 480;
+  color: var(--fz-text-3);
+  font-feature-settings: "cv01", "cv11", "ss03";
+}
+@utility text-label {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 560;
+  color: var(--fz-text-3);
+  font-feature-settings: "cv01", "cv11", "ss03";
+}
+@utility text-stat {
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--fz-text-1);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "cv01", "cv11", "ss03";
+}
+
+/* fz focus ring + press/hover conventions */
+@utility fz-ring {
+  outline: 2px solid var(--fz-focus-ring);
+  outline-offset: 2px;
+}
+@utility fz-press {
+  transition: transform var(--fz-dur-instant) var(--fz-ease-standard);
+}
+@utility fz-press-active {
+  transform: scale(0.98);
+}
+
+/* ── Legacy calendar (Settings → Page versions): its original look ── */
+.focuznow-calendar.cal-legacy {
+  --cal-event-radius: 4px;
+  background-color: var(--cal-bg);
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar.cal-legacy .calendar-view-controls {
+  background: rgba(24, 24, 27, 0.055) !important;
+  border-color: var(--cal-border) !important;
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar.cal-legacy .calendar-nav-control {
+  color: #52525b !important;
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar.cal-legacy .calendar-nav-control:hover {
+  color: #18181b !important;
+  background: rgba(24, 24, 27, 0.075) !important;
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar.cal-legacy .calendar-event-title {
+  color: #18181b !important;
+}
+
+html[data-dashboard-theme="light"] .focuznow-calendar.cal-legacy .calendar-event-time {
+  color: #52525b !important;
+}
+
+.focuznow-calendar.cal-legacy *:focus-visible {
+  outline: 1px solid rgba(56, 189, 248, 0.45);
+  outline-offset: 2px;
+}
+
+.focuznow-calendar.cal-legacy ::selection {
+  background: rgba(168, 85, 247, 0.35);
+  color: #fff;
+}
+
+/* ── Settings: search hides sections with no matching rows ── */
+.settings-section:not(:has([data-setting-row])) {
+  display: none;
+}
+.settings-results .settings-empty {
+  display: none;
+}
+.settings-results:not(:has([data-setting-row])) .settings-empty {
+  display: block;
 }

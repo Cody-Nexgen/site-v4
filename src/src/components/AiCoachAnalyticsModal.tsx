@@ -19,11 +19,11 @@ export function AiCoachAnalyticsModal({
             <motion.div
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="max-w-md w-full rounded-2xl border border-white/10 bg-[#1a1a1a] p-6 shadow-2xl"
+                className="max-w-md w-full rounded-lg border border-white/8 bg-raised p-6 shadow-2xl"
             >
                 <div className="flex items-start justify-between gap-3 mb-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                             <BarChart3 className="w-5 h-5 text-emerald-400" />
                         </div>
                         <h2 className="text-lg font-semibold text-white">Share analytics with AI Coach?</h2>
@@ -45,14 +45,14 @@ export function AiCoachAnalyticsModal({
                     <button
                         type="button"
                         onClick={onDeny}
-                        className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm text-neutral-300 hover:bg-white/5"
+                        className="flex-1 py-2.5 rounded-lg border border-white/8 text-sm text-neutral-300 hover:bg-white/6"
                     >
                         Not now
                     </button>
                     <button
                         type="button"
                         onClick={onApprove}
-                        className="flex-1 py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-neutral-200"
+                        className="flex-1 py-2.5 rounded-lg bg-white text-black text-sm font-semibold hover:bg-neutral-200"
                     >
                         Approve
                     </button>

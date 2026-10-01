@@ -39,6 +39,16 @@ export function colorFromString(input?: string | null): string {
     return `hsl(${hue}, ${AVATAR_SATURATION}%, ${AVATAR_LIGHTNESS}%)`;
 }
 
+/** Calmer, perceptually even avatar color (fixed OKLCH lightness/chroma) for chrome surfaces. */
+export function avatarColorOklch(input?: string | null): string {
+    const source = (input ?? '').trim() || 'focuznow';
+    let hue = hueFromString(source);
+    // 50°–115° in OKLCH reads as olive/gold — remap that band into the
+    // blue/purple range so initials never look gold-tinted.
+    if (hue >= 50 && hue <= 115) hue = 200 + ((hue - 50) * 100) / 65;
+    return `oklch(0.56 0.1 ${Math.round(hue)})`;
+}
+
 /**
  * A small palette of related hues derived from the same seed used by `colorFromString`, for
  * feeding a MeshGradient (or any multi-stop gradient) so a user's avatar background stays

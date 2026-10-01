@@ -2,15 +2,24 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
     decryptAesGcm,
+    decryptInboxEntry,
     deriveVaultKey,
     encryptAesGcm,
+    encryptForInbox,
+    generateInboxKeyPair,
     randomBytes,
     verifyMasterPassword,
     createVerifier,
+    type InboxEnvelope,
 } from './crypto';
 import {
     FOCUZPASS_PBKDF2_ITERATIONS,
     FOCUZPASS_STORAGE_BLOB,
+    FOCUZPASS_STORAGE_INBOX,
+    FOCUZPASS_STORAGE_INBOX_PUB,
+    FOCUZPASS_STORAGE_SESSION_KEY,
+    type InboxPendingLogin,
+    type VaultSessionRecord,
 } from './types';
 import {
     FocuzPassVault,
@@ -335,6 +344,116 @@ test('FocuzPass vault locks after absolute maximum unlock window', async () => {
     assert.equal(vault.isUnlocked, false);
 });
 
+test('FocuzPass session key survives a simulated SW restart and restores lazily', async () => {
+    const storage = createMemoryStorage();
+    const session = createMemoryStorage();
+    const vault = new FocuzPassVault(storage, session);
+    await vault.setup('session-master-password');
+    await vault.upsert({
+        type: 'login',
+        title: 'Example',
+        identity: 'person@example.com',
+        domain: 'example.com',
+        password: 'SessionSecret123!',
+    });
+    const record = (await session.get([FOCUZPASS_STORAGE_SESSION_KEY]))[FOCUZPASS_STORAGE_SESSION_KEY] as VaultSessionRecord;
+    assert.ok(record?.k, 'raw key written to session storage');
+    assert.ok(record.unlockedAt > 0);
+
+    // New vault instance = service worker restarted; session survives.
+    const vault2 = new FocuzPassVault(storage, session);
+    assert.equal(vault2.isUnlocked, false);
+    const status = await vault2.getStatus();
+    assert.equal(status.unlocked, true, 'lazy restore inside getStatus');
+    assert.equal(vault2.list().find((item) => item.type === 'login')?.password, 'SessionSecret123!');
+});
+
+test('FocuzPass session restore refuses expired sessions and clears them', async () => {
+    const storage = createMemoryStorage();
+    const session = createMemoryStorage();
+    const vault = new FocuzPassVault(storage, session);
+    await vault.setup('expiry-master-password');
+
+    const record = (await session.get([FOCUZPASS_STORAGE_SESSION_KEY]))[FOCUZPASS_STORAGE_SESSION_KEY] as VaultSessionRecord;
+    await session.set({
+        [FOCUZPASS_STORAGE_SESSION_KEY]: { ...record, lastActivityAt: Date.now() - 120 * 60 * 1000 },
+    });
+
+    const vault2 = new FocuzPassVault(storage, session);
+    const status = await vault2.getStatus();
+    assert.equal(status.unlocked, false, 'idle-expired session must not restore');
+    const cleared = (await session.get([FOCUZPASS_STORAGE_SESSION_KEY]))[FOCUZPASS_STORAGE_SESSION_KEY];
+    assert.equal(cleared, undefined, 'expired session record cleared');
+});
+
+test('FocuzPass lock() clears the session key', async () => {
+    const storage = createMemoryStorage();
+    const session = createMemoryStorage();
+    const vault = new FocuzPassVault(storage, session);
+    await vault.setup('lock-clears-session');
+    assert.ok((await session.get([FOCUZPASS_STORAGE_SESSION_KEY]))[FOCUZPASS_STORAGE_SESSION_KEY]);
+    vault.lock();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal((await session.get([FOCUZPASS_STORAGE_SESSION_KEY]))[FOCUZPASS_STORAGE_SESSION_KEY], undefined);
+});
+
+test('FocuzPass inbox encrypts and decrypts a pending login end-to-end', async () => {
+    const pair = await generateInboxKeyPair();
+    const payload: InboxPendingLogin = {
+        domain: 'example.com',
+        title: 'Example',
+        identity: 'person@example.com',
+        password: 'InboxSecret!42',
+        createdAt: new Date().toISOString(),
+    };
+    const envelope = await encryptForInbox(pair.publicJwk, JSON.stringify(payload));
+    assert.equal(envelope.v, 1);
+    assert.ok(envelope.epk.x && envelope.epk.y, 'ephemeral public key stored');
+    assert.equal(JSON.stringify(envelope).includes('InboxSecret'), false);
+    const plain = await decryptInboxEntry(pair.privateJwk, envelope);
+    assert.deepEqual(JSON.parse(plain), payload);
+});
+
+test('FocuzPass inbox rejects a wrong private key', async () => {
+    const pair = await generateInboxKeyPair();
+    const wrong = await generateInboxKeyPair();
+    const envelope = await encryptForInbox(pair.publicJwk, 'top-secret-login');
+    await assert.rejects(() => decryptInboxEntry(wrong.privateJwk, envelope));
+});
+
+test('FocuzPass locked inbox merges on unlock and dedupes by domain+identity', async () => {
+    const storage = createMemoryStorage();
+    const vault = new FocuzPassVault(storage);
+    await vault.setup('inbox-master-password');
+    await vault.upsert({
+        type: 'login',
+        title: 'Example',
+        identity: 'person@example.com',
+        domain: 'example.com',
+        password: 'OldSecret123!',
+    });
+
+    const publicJwk = (await storage.get([FOCUZPASS_STORAGE_INBOX_PUB]))[FOCUZPASS_STORAGE_INBOX_PUB] as JsonWebKey;
+    assert.ok(publicJwk?.x, 'public inbox key stored plaintext');
+
+    const enqueue = async (entry: InboxPendingLogin) => {
+        const envelope = await encryptForInbox(publicJwk, JSON.stringify(entry));
+        const existing = ((await storage.get([FOCUZPASS_STORAGE_INBOX]))[FOCUZPASS_STORAGE_INBOX] as InboxEnvelope[]) || [];
+        await storage.set({ [FOCUZPASS_STORAGE_INBOX]: [...existing, envelope] });
+    };
+    await enqueue({ domain: 'example.com', title: 'Example', identity: 'person@example.com', password: 'NewSecret999!', createdAt: new Date().toISOString() });
+    await enqueue({ domain: 'other.com', title: 'Other', identity: 'two@other.com', password: 'OtherSecret111!', createdAt: new Date().toISOString() });
+
+    vault.lock();
+    const status = await vault.unlock('inbox-master-password');
+    assert.equal(status.inboxMerged, 2);
+    const items = vault.list().filter((item) => item.type === 'login');
+    assert.equal(items.length, 2);
+    assert.equal(items.find((item) => item.domain === 'example.com')?.password, 'NewSecret999!', 'duplicate updates the password');
+    assert.equal(items.find((item) => item.domain === 'other.com')?.identity, 'two@other.com');
+    assert.deepEqual((await storage.get([FOCUZPASS_STORAGE_INBOX]))[FOCUZPASS_STORAGE_INBOX], []);
+});
+
 test('FocuzPass navigation keeps tab under Dashboard', () => {
     assert.deepEqual(PRIMARY_NAV.map((tab) => tab.id), ['overview', 'focuzpass']);
     assert.equal(PRIMARY_NAV[1]?.label, 'FocuzPass');
@@ -350,4 +469,40 @@ test('FocuzPass website companion contract is local-first', () => {
     const modeFor = (web: boolean) => (web ? 'companion' : 'extension-vault');
     assert.equal(modeFor(true), 'companion');
     assert.equal(modeFor(false), 'extension-vault');
+});
+
+test('FocuzPass bridge restores the session so LIST works right after a SW restart', async () => {
+    const local = createMemoryStorage();
+    const session = createMemoryStorage();
+    (globalThis as { chrome?: unknown }).chrome = {
+        runtime: {
+            onMessage: { addListener: () => undefined },
+            sendMessage: () => Promise.resolve(),
+        },
+        storage: {
+            local,
+            session: { ...session, setAccessLevel: () => Promise.resolve() },
+        },
+    };
+    const bridge = await import('../../background/focuzPassBridge');
+
+    const setup = await bridge.handleFocuzPassMessage({ type: 'FOCUZPASS_SETUP', masterPassword: 'restart-master-password' });
+    assert.equal(setup.ok, true);
+    const upsert = await bridge.handleFocuzPassMessage({
+        type: 'FOCUZPASS_UPSERT',
+        item: { type: 'login', title: 'Example', identity: 'person@example.com', domain: 'example.com', password: 'RestartSecret!1' },
+    });
+    assert.equal(upsert.ok, true);
+    assert.ok((await session.get([FOCUZPASS_STORAGE_SESSION_KEY]))[FOCUZPASS_STORAGE_SESSION_KEY], 'session record written');
+
+    // Simulate a service-worker restart: in-memory key gone, session record survives.
+    const internals = bridge.vault as unknown as { vaultKey: unknown; restoreAttempted: boolean; sessionKeyB64: string | null };
+    internals.vaultKey = null;
+    internals.sessionKeyB64 = null;
+    internals.restoreAttempted = false;
+
+    const res = await bridge.handleFocuzPassMessage({ type: 'FOCUZPASS_LIST' });
+    assert.equal(res.ok, true, 'LIST succeeds without a prior STATUS call');
+    const items = res.ok ? (res.data as { domain?: string; password?: string }[]) : [];
+    assert.equal(items.find((item) => item.domain === 'example.com')?.password, 'RestartSecret!1');
 });

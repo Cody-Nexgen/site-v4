@@ -1,7 +1,8 @@
+import { PALETTE_SHORTCUT_LABEL } from '../lib/shortcuts';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GlassCard } from './OptionsApp';
-import { Mail, MessageCircle, BookOpen, ExternalLink, Sparkles, ChevronDown } from 'lucide-react';
+import { Mail, BookOpen, Sparkles, ChevronDown, ArrowRight } from 'lucide-react';
 
 type Props = {
     onOpenAiCoach: () => void;
@@ -13,8 +14,7 @@ const FAQS = [
     { q: 'What counts toward my dashboard streak?', a: 'Your sidebar streak tracks consecutive days you open the FocuzNow dashboard or settings. Opening the extension popup alone does not count — open the full dashboard at least once per day.' },
     { q: 'How do I turn off the site clock?', a: 'Go to Settings → Focus Engine Features → toggle off Site Clock. This hides the per-site time bubble on web pages.' },
     { q: 'What is Nuclear Lockdown?', a: 'Nuclear Lockdown blocks all sites in your blocklist for a set duration with no easy override. Use it when you need maximum focus for deep work.' },
-    { q: 'How does the command palette work?', a: 'Press ⌘K (Mac) or Ctrl+K (Windows) on any webpage to open the command palette. From there you can start focus sessions, add tasks, block sites, and jump to dashboard sections.' },
-    { q: 'Can I sync with Notion or Google Calendar?', a: 'Notion task sync and Google Calendar integration are rolling out. Use the built-in daily planner, Pomodoro timer, and scheduling calendar today.' },
+    { q: 'How does the command palette work?', a: 'Press Alt+K (⌥K on Mac) on any webpage to open the command palette. You can change the key on your browser’s extension shortcuts page. From there you can start focus sessions, add tasks, block sites, and jump to dashboard sections.' },
     { q: 'Where is my data stored?', a: 'Browsing analytics and block settings are stored locally on your device. We do not sell your browsing history. Pro AI Coach sends only the context you consent to share.' },
     { q: 'What is the difference between Patterns and Statistics?', a: 'Patterns shows your focus activity heatmap, trends, and AI-detected procrastination insights. Statistics provides detailed per-site breakdowns and weekly line charts.' },
     { q: 'How do achievements unlock?', a: 'Achievements unlock automatically when you hit milestones — streaks, focus scores, blocks prevented, habits tracked, and pomodoro sessions completed. View them on the Achievements page.' },
@@ -32,7 +32,7 @@ const FAQS = [
 function FaqItem({ q, a }: { q: string; a: string }) {
     const [open, setOpen] = useState(false);
     return (
-        <div className="border-b border-white/5 last:border-0">
+        <div className="border-b border-white/8 last:border-0">
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
@@ -63,61 +63,47 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 export default function SupportTab({ onOpenAiCoach, isPro }: Props) {
     return (
-        <div className="space-y-8 pt-6 animate-fade-in-up max-w-3xl pb-20">
-            <div>
-                <p className="focuz-section-label mb-1">Support</p>
-                <h1 className="text-3xl font-semibold text-white tracking-tight">Need help?</h1>
-                <p className="text-sm text-neutral-500 mt-1">
-                    Ask the AI Coach, browse guides, or reach our team directly.
-                </p>
-            </div>
+        <div className="space-y-6 animate-fade-in-up">
 
-            <GlassCard className="p-6 sm:p-8 border-white/[0.07] bg-[#121214]">
-                <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.07] flex items-center justify-center shrink-0">
-                        <Sparkles size={18} className="text-neutral-500" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <h2 className="text-lg font-semibold text-white mb-1">AI Coach {isPro ? '' : '(Pro)'}</h2>
-                        <p className="text-sm text-neutral-400 mb-4 leading-relaxed">
-                            Your personal focus assistant — block sites, start pomodoro sessions, analyze patterns, and build a daily plan.
+            <div className="grid gap-4 sm:grid-cols-3">
+                <button type="button" onClick={onOpenAiCoach} className="group text-left">
+                    <GlassCard className="flex h-full flex-col p-5 transition-colors group-hover:border-white/16">
+                        <Sparkles size={18} className="text-[var(--fz-text-3)]" />
+                        <h3 className="mt-3 text-title-3">Ask AI Coach{isPro ? '' : ' (Pro)'}</h3>
+                        <p className="mt-1 flex-1 text-body-sm text-[var(--fz-text-3)]">
+                            Your personal focus assistant — block sites, start pomodoros, analyze patterns.
                         </p>
-                        <button
-                            type="button"
-                            onClick={onOpenAiCoach}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-neutral-100 hover:bg-white text-neutral-950 text-sm font-medium transition-colors duration-150"
-                        >
-                            <MessageCircle size={16} />
-                            {isPro ? 'Open AI Coach' : 'Learn about Pro'}
-                        </button>
-                    </div>
-                </div>
-            </GlassCard>
+                        <span className="mt-4 inline-flex items-center gap-1.5 text-meta text-[var(--fz-text-3)] transition-colors group-hover:text-[var(--fz-text-1)]">
+                            {isPro ? 'Open AI Coach' : 'Learn about Pro'} <ArrowRight size={12} />
+                        </span>
+                    </GlassCard>
+                </button>
 
-            <div className="grid sm:grid-cols-2 gap-4">
-                <GlassCard className="p-6">
-                    <Mail size={20} className="text-neutral-400 mb-3" />
-                    <h3 className="font-semibold text-white mb-1">Email support</h3>
-                    <p className="text-sm text-neutral-500 mb-4">We typically respond within 24 hours.</p>
-                    <a
-                        href="mailto:support@focuznow.com?subject=FocuzNow%20Help"
-                        className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 hover:text-neutral-200 transition-colors"
-                    >
-                        support@focuznow.com
-                        <ExternalLink size={14} />
-                    </a>
-                </GlassCard>
+                <a href="https://focuznow.com" target="_blank" rel="noreferrer" className="group">
+                    <GlassCard className="flex h-full flex-col p-5 transition-colors group-hover:border-white/16">
+                        <BookOpen size={18} className="text-[var(--fz-text-3)]" />
+                        <h3 className="mt-3 text-title-3">Guides</h3>
+                        <p className="mt-1 flex-1 text-body-sm text-[var(--fz-text-3)]">
+                            Quick tips: press <kbd className="kbd">{PALETTE_SHORTCUT_LABEL}</kbd> for the palette, manage the site clock, and more.
+                        </p>
+                        <span className="mt-4 inline-flex items-center gap-1.5 text-meta text-[var(--fz-text-3)] transition-colors group-hover:text-[var(--fz-text-1)]">
+                            Browse guides <ArrowRight size={12} />
+                        </span>
+                    </GlassCard>
+                </a>
 
-                <GlassCard className="p-6">
-                    <BookOpen size={20} className="text-neutral-400 mb-3" />
-                    <h3 className="font-semibold text-white mb-1">Quick tips</h3>
-                    <ul className="text-sm text-neutral-400 space-y-2 mt-2">
-                        <li>Press <kbd className="kbd">⌘K</kbd> anywhere to open the command palette</li>
-                        <li>Toggle the site clock in Settings → Site Clock</li>
-                        <li>Check Patterns for activity heatmaps and AI insights</li>
-                        <li>Your data stays local — we never sell browsing history</li>
-                    </ul>
-                </GlassCard>
+                <a href="mailto:support@focuznow.com?subject=FocuzNow%20Help" className="group">
+                    <GlassCard className="flex h-full flex-col p-5 transition-colors group-hover:border-white/16">
+                        <Mail size={18} className="text-[var(--fz-text-3)]" />
+                        <h3 className="mt-3 text-title-3">Contact</h3>
+                        <p className="mt-1 flex-1 text-body-sm text-[var(--fz-text-3)]">
+                            Email support — we typically respond within 24 hours.
+                        </p>
+                        <span className="mt-4 inline-flex items-center gap-1.5 text-meta text-[var(--fz-text-3)] transition-colors group-hover:text-[var(--fz-text-1)]">
+                            support@focuznow.com <ArrowRight size={12} />
+                        </span>
+                    </GlassCard>
+                </a>
             </div>
 
             <GlassCard className="p-6">

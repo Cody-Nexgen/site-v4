@@ -65,6 +65,7 @@ test('summaries and daily mirrors are deterministic and generated once', () => {
     }, yesterday);
     let state: FutureSelfState = {
         ...emptyFutureSelfState(),
+        modeEnabled: true,
         activeContract: contract,
         contracts: [contract],
     };
@@ -90,5 +91,10 @@ test('summaries and daily mirrors are deterministic and generated once', () => {
     const repeated = ensureMirrorForPreviousDay(generated, now);
     equal(generated.mirrors.length, 1);
     deepEqual(repeated.mirrors, generated.mirrors);
-    equal(summarizeActiveContract(state)?.remainingMinutes, 50);
+    // On the day of the commitment: 25 of 50 planned minutes done.
+    equal(summarizeActiveContract(state, yesterday)?.remainingMinutes, 25);
+    // Once that day ends with no new activity, the contract stops blocking.
+    equal(summarizeActiveContract(state, now), null);
+    // Mirrors only exist while Future Self mode is on.
+    equal(ensureMirrorForPreviousDay({ ...state, modeEnabled: false }, now).mirrors.length, 0);
 });

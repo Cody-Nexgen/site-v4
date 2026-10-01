@@ -50,12 +50,12 @@ export default function BookingScheduler({
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 max-w-3xl">
             <div className="shrink-0 w-full lg:w-[252px]">
                 <h2 className="text-sm font-bold text-white mb-3">Select a date</h2>
-                <div className="rounded-2xl border border-white/[0.08] bg-[#141418] p-3">
+                <div className="rounded-lg border border-white/8 bg-[#141418] p-3">
                     <div className="flex items-center justify-between mb-2">
                         <button
                             type="button"
                             onClick={() => setMonth((m) => addDays(startOfMonth(m), -1))}
-                            className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5"
+                            className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/6"
                             aria-label="Previous month"
                         >
                             <ChevronLeft size={16} />
@@ -64,13 +64,13 @@ export default function BookingScheduler({
                         <button
                             type="button"
                             onClick={() => setMonth((m) => addDays(endOfMonth(m), 1))}
-                            className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5"
+                            className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/6"
                             aria-label="Next month"
                         >
                             <ChevronRight size={16} />
                         </button>
                     </div>
-                    <div className="grid grid-cols-7 gap-0.5 text-[9px] text-neutral-600 font-bold text-center mb-1">
+                    <div className="grid grid-cols-7 gap-0.5 text-[11px] text-neutral-600 font-bold text-center mb-1">
                         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
                             <span key={`${d}-${i}`}>{d}</span>
                         ))}
@@ -116,15 +116,15 @@ export default function BookingScheduler({
                 </h2>
 
                 {!selectedDay ? (
-                    <p className="text-sm text-neutral-500 rounded-xl border border-dashed border-white/10 px-4 py-8 text-center">
+                    <p className="text-sm text-neutral-500 rounded-lg border border-dashed border-white/8 px-4 py-8 text-center">
                         Pick a highlighted date to see available times.
                     </p>
                 ) : daySlots.length === 0 ? (
-                    <p className="text-sm text-neutral-500 rounded-xl border border-white/10 px-4 py-6 text-center">
+                    <p className="text-sm text-neutral-500 rounded-lg border border-white/8 px-4 py-6 text-center">
                         No times left on this day.
                     </p>
                 ) : (
-                    <div className="rounded-2xl border border-white/[0.08] bg-[#141418] p-2 max-h-[min(320px,50vh)] overflow-y-auto">
+                    <div className="rounded-lg border border-white/8 bg-[#141418] p-2 max-h-[min(320px,50vh)] overflow-y-auto">
                         <div className="flex flex-col gap-1">
                             {daySlots.map((slot) => {
                                 const sel = selectedStartMin === slot.startMin;
@@ -136,7 +136,7 @@ export default function BookingScheduler({
                                         className={`w-full px-3 py-2.5 rounded-lg text-sm font-semibold text-left transition-all ${
                                             sel
                                                 ? 'bg-blue-600 text-white'
-                                                : 'text-neutral-200 hover:bg-white/[0.06]'
+                                                : 'text-neutral-200 hover:bg-white/6'
                                         }`}
                                     >
                                         {slot.label}

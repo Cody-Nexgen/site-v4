@@ -258,21 +258,14 @@ export interface EngineState {
     pomodoroSettings?: { focusMin: number; breakMin: number; sessionsCompleted: number; lastDate: string };
     habits?: { id: number; name: string; streak: number; checkins: string[] }[];
     scratchpad?: string;
-    dailyPlanner?: { id: number; time: string; task: string; done: boolean; notionId?: string }[];
+    dailyPlanner?: { id: number; time: string; task: string; done: boolean }[];
     savedQuotes?: string[];
-    // Integrations
-    googleCalendarConnected?: boolean;
-    googleCalendarToken?: string;
-    googleClientId?: string;
-    googleProfile?: { email: string; name: string; picture: string };
-    notionConnected?: boolean;
-    notionToken?: string;
-    notionDatabaseId?: string;
-    notionJournalingEnabled?: boolean;
     dashboardLayout?: string[];
     weeklyGoalHours?: number;
     /** When true (default for Pro), enhanced dashboard visuals are shown. */
     proDashboardVisuals?: boolean;
+    /** Per-page 'legacy' opt-ins from Settings → Page versions (missing = new). */
+    pageVersions?: Partial<Record<string, 'new' | 'legacy'>>;
 }
 
 interface AuthState {
@@ -408,7 +401,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         timerScale: 1.0,
         todos: [],
         dailyFocusTarget: {},
-        notionJournalingEnabled: false
     },
 
     setEngineState: (state) => set({ engineState: state }),

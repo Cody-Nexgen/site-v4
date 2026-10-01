@@ -108,7 +108,9 @@ export async function uploadAttachment(
     if (uploadError) {
         const message = /row-level security|policy/i.test(uploadError.message)
             ? 'Attachments are a Pro feature. Upgrade to upload files.'
-            : uploadError.message;
+            : /mime type .* is not supported/i.test(uploadError.message)
+              ? `${fileExtension(file.name).toUpperCase() || 'This'} files can't be uploaded yet (the server only accepts some file types).`
+              : uploadError.message;
         return { ok: false, error: message };
     }
 

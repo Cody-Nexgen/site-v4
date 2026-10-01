@@ -1,14 +1,11 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { IconBrandGoogle, IconEye, IconEyeOff, IconCheck, IconMail, IconLock, IconUser } from "@tabler/icons-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ErrorModal } from "@/components/ui/error-modal";
+import { IconBrandGoogle, IconEye, IconEyeOff, IconCheck, IconArrowLeft } from "@tabler/icons-react";
+import { motion, AnimatePresence, MotionConfig } from "framer-motion";
+import "@fontsource-variable/inter/opsz.css";
+import "./landing/landing.css";
 import { syncSessionWithExtension } from "@/lib/extension-utils";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { NeonButton } from "@/components/ui/NeonButton";
-import { AnimatedInput } from "@/components/ui/AnimatedInput";
-import { AUTH_SLIDES } from "@/lib/auth-slides";
 import { getOAuthRedirectUrl } from "@/lib/auth-redirect";
 import {
   clearAuthErrorFromUrl,
@@ -16,9 +13,17 @@ import {
   googleLoginBlockedMessage,
   passwordLoginBlockedMessage,
 } from "@/lib/auth-providers";
+import { BlurWords } from "@focuz/components/auth/BlurWords";
+import { FocusPull } from "@focuz/components/auth/FocusPull";
+import { loadDisplayFont } from "./landing/fonts";
+import { Mark } from "./landing/Mark";
+
+loadDisplayFont();
 
 // TOGGLE THIS TO FALSE TO STOP LOGS
 const DEBUG_MODE = true;
+
+const EASE = [0.16, 1, 0.3, 1] as const;
 
 interface LoginPageProps {
   onBack: () => void;
@@ -27,9 +32,108 @@ interface LoginPageProps {
   initialLoginState?: boolean;
 }
 
+/** Plain-language versions of the errors people actually hit. Anything else is shown as-is. */
+function friendlyError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("invalid login credentials")) return "That email and password don't match. Try again, or reset your password.";
+  if (m.includes("email not confirmed")) return "Confirm your email first. Check your inbox for the code we sent.";
+  if (m.includes("rate limit") || m.includes("too many")) return "Too many tries in a row. Wait a minute, then try again.";
+  if (m.includes("user already registered")) return "An account with this email already exists. Log in instead.";
+  if (m.includes("token has expired") || (m.includes("otp") && m.includes("invalid"))) return "That code is wrong or has expired. Check the latest email we sent.";
+  return message;
+}
+
+/* ── small form pieces, in the landing page's style ────────────────────── */
+
+const fieldClass =
+  "h-11 w-full rounded-[10px] bg-[oklch(1_0_0/0.035)] px-3.5 text-[15px] text-[var(--l-text-1)] outline-none shadow-[inset_0_0_0_1px_var(--l-border-strong)] transition-shadow duration-200 placeholder:text-[var(--l-text-4)] hover:shadow-[inset_0_0_0_1px_oklch(0.955_0.003_275/0.22)] focus:shadow-[inset_0_0_0_1px_var(--l-text-3),0_0_0_4px_oklch(1_0_0/0.05)] focus-visible:outline-none";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[13px] font-[540] text-[var(--l-text-2)]">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Check({ id, checked, onChange, required, children }: { id: string; checked: boolean; onChange: (v: boolean) => void; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="relative mt-0.5 flex">
+        <input
+          type="checkbox"
+          id={id}
+          required={required}
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="peer size-[18px] cursor-pointer appearance-none rounded-[5px] bg-[oklch(1_0_0/0.035)] shadow-[inset_0_0_0_1px_var(--l-border-strong)] transition-colors checked:bg-[var(--l-text-1)] checked:shadow-none"
+        />
+        <IconCheck size={12} stroke={3} className="pointer-events-none absolute left-[3px] top-[3px] text-[var(--l-on-light)] opacity-0 peer-checked:opacity-100" />
+      </span>
+      <label htmlFor={id} className="cursor-pointer select-none text-[13.5px] leading-[1.5] text-[var(--l-text-3)]">
+        {children}
+      </label>
+    </div>
+  );
+}
+
+function Spinner() {
+  return <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />;
+}
+
+function ErrorNote({ message }: { message: string }) {
+  return (
+    <motion.div
+      role="alert"
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-[10px] bg-[oklch(0.72_0.15_25/0.1)] px-3.5 py-3 text-[14px] leading-[1.45] text-[oklch(0.84_0.09_25)] shadow-[inset_0_0_0_1px_oklch(0.72_0.15_25/0.25)]"
+    >
+      {friendlyError(message)}
+    </motion.div>
+  );
+}
+
+/* ── the stage: shader + "Built for ___" ──────────────────────────────── */
+
+function AuthStage({ onBack }: { onBack: () => void }) {
+  const headlineRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <section aria-label="FocuzNow" className="relative hidden min-w-0 flex-1 overflow-hidden lg:block">
+      <FocusPull className="absolute inset-0" clearRef={headlineRef} ink="oklch(0.118 0.003 275)" paper="oklch(0.83 0.004 275)" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-b from-transparent to-[var(--l-bg)] opacity-80" />
+
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between px-10 py-8">
+        <button type="button" onClick={onBack} className="flex items-center gap-2.5 rounded-lg" aria-label="FocuzNow home">
+          <Mark size={28} />
+          <span className="text-[16px] font-[620] tracking-[-0.03em]">FocuzNow</span>
+        </button>
+        <button type="button" onClick={onBack} className="fzl-link flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[14px] font-[500]">
+          <IconArrowLeft size={15} />
+          Back to site
+        </button>
+      </div>
+
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 px-10 xl:px-16">
+        <div ref={headlineRef} className="inline-block">
+          <h2 className="fzl-display text-[clamp(3rem,5vw,5.25rem)] [text-shadow:0_2px_30px_var(--l-bg)]">
+            <span className="block text-[var(--l-text-3)]">Built for</span>
+            <BlurWords className="block" />
+          </h2>
+        </div>
+      </div>
+
+      <p className="absolute bottom-10 left-10 max-w-[25rem] text-[15px] leading-[1.55] text-[var(--l-text-3)] xl:left-16">
+        Blocks distractions, runs your focus sessions, and keeps your plans and passwords in one place.
+      </p>
+    </section>
+  );
+}
+
 export default function LoginPage({ onBack, onLoginSuccess, onForgotPassword, initialLoginState = true }: LoginPageProps) {
   const [isLogin, setIsLogin] = useState(initialLoginState);
-  const [currentImage, setCurrentImage] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -45,7 +149,6 @@ export default function LoginPage({ onBack, onLoginSuccess, onForgotPassword, in
 
   // Error State
   const [error, setError] = useState<string | null>(null);
-  const [showErrorModal, setShowErrorModal] = useState(false);
 
   // Password Strength
   const [passwordStrength, setPasswordStrength] = useState(0);
@@ -58,15 +161,16 @@ export default function LoginPage({ onBack, onLoginSuccess, onForgotPassword, in
   }, []);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentImage((prev) => (prev + 1) % AUTH_SLIDES.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
     validatePassword(password);
   }, [password]);
+
+  useEffect(() => {
+    const previous = document.title;
+    document.title = isLogin ? "Log in · FocuzNow" : "Create your account · FocuzNow";
+    return () => {
+      document.title = previous;
+    };
+  }, [isLogin]);
 
   const validatePassword = (pass: string) => {
     let score = 0;
@@ -79,12 +183,14 @@ export default function LoginPage({ onBack, onLoginSuccess, onForgotPassword, in
   };
 
   const handleError = (msg: string) => {
-    console.error(msg);
+    if (DEBUG_MODE) console.error(msg);
     setError(msg);
-    if (!showOtpInput) {
-      setShowErrorModal(true);
-    }
     setLoading(false);
+  };
+
+  const switchMode = (login: boolean) => {
+    setIsLogin(login);
+    setError(null);
   };
 
   const handleGoogleLogin = async () => {
@@ -244,295 +350,170 @@ export default function LoginPage({ onBack, onLoginSuccess, onForgotPassword, in
     }
   };
 
+  const strengthLabel =
+    passwordStrength >= 5 ? "Strong password" : passwordStrength >= 4 ? "Good enough" : "Use 8+ characters with upper and lower case, a number and a symbol";
+
   return (
-    <div className="fixed inset-0 z-[200] flex bg-[#09090b] text-white font-sans">
-      <ErrorModal
-        isOpen={showErrorModal}
-        onClose={() => setShowErrorModal(false)}
-        error={error}
-      />
+    <MotionConfig reducedMotion="user">
+      <div className="fzl fixed inset-0 z-[200] flex overflow-hidden">
+        <AuthStage onBack={onBack} />
 
-      {/* Left Side - Image Slider */}
-      <div className="hidden lg:flex w-1/2 relative overflow-hidden bg-black">
-        <button
-          onClick={onBack}
-          className="absolute top-8 left-8 z-20 flex items-center gap-2 px-4 py-2 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-md border border-white/10 transition-colors text-sm font-medium"
-        >
-          ← Back to website
-        </button>
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentImage}
-            initial={{ opacity: 0, scale: 1.1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1.5 }}
-            className="absolute inset-0"
-          >
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 z-10" />
-            <img
-              src={AUTH_SLIDES[currentImage].src}
-              alt=""
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute bottom-20 left-12 z-20 max-w-md">
-              <motion.h2
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                className="text-3xl sm:text-4xl font-bold leading-tight"
-              >
-                {AUTH_SLIDES[currentImage].title}
-              </motion.h2>
-              <motion.p
-                initial={{ y: 12, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.08 }}
-                className="mt-3 text-lg text-zinc-300/90 leading-relaxed"
-              >
-                {AUTH_SLIDES[currentImage].subtitle}
-              </motion.p>
-            </div>
-          </motion.div>
-        </AnimatePresence>
-
-        <div className="absolute bottom-8 left-12 z-20 flex gap-2">
-          {AUTH_SLIDES.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrentImage(idx)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentImage ? "w-8 bg-white" : "w-4 bg-white/30"}`}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Right Side - Form */}
-      <div className="w-full lg:w-1/2 flex flex-col justify-center items-center p-6 sm:p-12 overflow-y-auto relative">
-        {/* Ambient Glow */}
-        <div className="absolute top-[-20%] right-[-20%] w-[80%] h-[60%] bg-purple-900/10 blur-[100px] pointer-events-none" />
-
-        <div className="w-full max-w-md relative z-10">
-          <div className="mb-10 lg:hidden">
-            <span className="text-2xl font-bold tracking-tighter">Focuz<span className="text-purple-500">now</span></span>
+        <main className="relative flex w-full min-w-0 flex-col overflow-y-auto [scrollbar-width:thin] lg:w-[min(560px,44vw)] lg:shrink-0" style={{ boxShadow: "inset 1px 0 0 var(--l-border)" }}>
+          <div className="flex items-center justify-between px-6 py-6 lg:hidden">
+            <button type="button" onClick={onBack} className="flex items-center gap-2.5 rounded-lg" aria-label="FocuzNow home">
+              <Mark size={26} />
+              <span className="text-[16px] font-[620] tracking-[-0.03em]">FocuzNow</span>
+            </button>
           </div>
 
-          {showOtpInput ? (
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-              <h1 className="text-3xl font-bold mb-2">Check your email</h1>
-              <p className="text-neutral-400 mb-8">We sent a verification code to <span className="text-white font-medium">{email}</span></p>
+          <div className="mx-auto flex w-full max-w-[400px] flex-1 flex-col justify-center px-6 py-12">
+            <AnimatePresence mode="wait" initial={false}>
+              {showOtpInput ? (
+                <motion.div key="otp" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.45, ease: EASE }}>
+                  <h1 className="fzl-display text-[40px] leading-[1.02]">Check your email.</h1>
+                  <p className="mt-3 text-[15px] leading-[1.55] text-[var(--l-text-3)]">
+                    We sent a code to <span className="text-[var(--l-text-1)]">{email}</span>. Enter it to finish creating your account.
+                  </p>
 
-              <form onSubmit={handleVerifyOtp} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-sm text-neutral-400">Verification Code</label>
-                  <AnimatedInput
-                    type="text"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    placeholder="12345678"
-                    className="text-center text-2xl tracking-widest"
-                    maxLength={8}
-                  />
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-red-400 text-sm text-center mt-2 bg-red-500/10 py-2 rounded-lg border border-red-500/20"
-                    >
-                      {error}
-                    </motion.div>
-                  )}
-                </div>
-
-                <NeonButton
-                  type="submit"
-                  loading={loading}
-                  className="w-full"
-                  glowColor="rgba(168, 85, 247, 0.5)"
-                >
-                  Verify Code
-                </NeonButton>
-
-                <button
-                  type="button"
-                  onClick={() => setShowOtpInput(false)}
-                  className="w-full text-neutral-500 text-sm hover:text-white transition-colors"
-                >
-                  ← Back to sign up
-                </button>
-              </form>
-            </motion.div>
-          ) : (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-              <h1 className="text-3xl font-bold mb-2">{isLogin ? "Welcome back" : "Create an account"}</h1>
-              <p className="text-neutral-400 mb-8">
-                {isLogin ? "Enter your details to access your workspace." : "Already have an account? "}
-                {!isLogin && (
-                  <button onClick={() => setIsLogin(true)} className="text-purple-400 hover:text-purple-300 underline underline-offset-4">
-                    Log in
-                  </button>
-                )}
-              </p>
-
-              <form onSubmit={handleAuth} className="space-y-5">
-                {!isLogin && (
-                  <div className="flex gap-4">
-                    <div className="space-y-1.5 w-1/2">
-                      <AnimatedInput
+                  <form onSubmit={handleVerifyOtp} className="mt-8 space-y-5">
+                    <Field label="Verification code">
+                      <input
                         type="text"
-                        placeholder="First name"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        icon={<IconUser size={18} />}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        value={token}
+                        onChange={(e) => setToken(e.target.value)}
+                        placeholder="12345678"
+                        maxLength={8}
+                        autoFocus
+                        className={`${fieldClass} h-14 text-center font-mono text-[24px] tracking-[0.35em]`}
                       />
-                    </div>
-                    <div className="space-y-1.5 w-1/2">
-                      <AnimatedInput
-                        type="text"
-                        placeholder="Last name"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        icon={<IconUser size={18} />}
-                      />
-                    </div>
-                  </div>
-                )}
+                    </Field>
+                    {error && <ErrorNote message={error} />}
+                    <button type="submit" disabled={loading} className="fzl-btn fzl-btn-primary w-full disabled:opacity-60">
+                      {loading ? <Spinner /> : "Verify and continue"}
+                    </button>
+                    <button type="button" onClick={() => setShowOtpInput(false)} className="fzl-link flex w-full items-center justify-center gap-1.5 text-[14px]">
+                      <IconArrowLeft size={15} />
+                      Back to sign up
+                    </button>
+                  </form>
+                </motion.div>
+              ) : (
+                <motion.div key={isLogin ? "login" : "signup"} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.45, ease: EASE }}>
+                  <h1 className="fzl-display text-[40px] leading-[1.02]">{isLogin ? "Welcome back." : "Create your account."}</h1>
+                  <p className="mt-3 text-[15px] leading-[1.55] text-[var(--l-text-3)]">
+                    {isLogin ? "Log in to pick up where you left off." : "Free to start. Your blocking works offline; an account syncs it everywhere."}
+                  </p>
 
-                <div className="space-y-1.5">
-                  <AnimatedInput
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    icon={<IconMail size={18} />}
-                  />
-                </div>
-
-                <div className="space-y-1.5 relative">
-                  <AnimatedInput
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    icon={<IconLock size={18} />}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white z-10"
-                  >
-                    {showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+                  <button type="button" onClick={handleGoogleLogin} disabled={loading} className="fzl-btn fzl-btn-ghost mt-8 w-full disabled:opacity-60">
+                    <IconBrandGoogle size={18} />
+                    Continue with Google
                   </button>
 
-                  {isLogin && onForgotPassword && (
-                    <div className="flex justify-end pt-1">
-                      <button
-                        type="button"
-                        onClick={onForgotPassword}
-                        className="text-xs text-neutral-500 hover:text-purple-400 font-medium transition-colors"
-                      >
-                        Forgot password?
-                      </button>
-                    </div>
-                  )}
-
-                  {!isLogin && (
-                    <div className="pt-2 space-y-2">
-                      <div className="flex gap-1 h-1 w-full">
-                        <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength > 0 ? 'bg-red-500' : 'bg-neutral-800'}`} />
-                        <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength > 1 ? 'bg-orange-500' : 'bg-neutral-800'}`} />
-                        <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength > 2 ? 'bg-yellow-500' : 'bg-neutral-800'}`} />
-                        <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength > 3 ? 'bg-green-500' : 'bg-neutral-800'}`} />
-                      </div>
-                      <p className="text-xs text-neutral-500 text-right">
-                        {passwordStrength < 4 ? "Must include uppercase, lowercase, number & symbol" : "Strong password"}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {!isLogin && (
-                  <div className="space-y-4 pt-1">
-                    <div className="flex items-start gap-3">
-                      <div className="relative flex items-center mt-0.5">
-                        <input
-                          type="checkbox"
-                          id="terms"
-                          required
-                          checked={termsAccepted}
-                          onChange={(e) => setTermsAccepted(e.target.checked)}
-                          className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-neutral-600 bg-[#25222e] checked:border-purple-500 checked:bg-purple-500 transition-all"
-                        />
-                        <IconCheck className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 w-3.5 h-3.5" />
-                      </div>
-                      <label htmlFor="terms" className="text-sm text-neutral-400 cursor-pointer select-none leading-relaxed">
-                        I agree to the{" "}
-                        <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">
-                          Terms of Service
-                        </a>{" "}
-                        and{" "}
-                        <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">
-                          Privacy Policy
-                        </a>
-                      </label>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="relative flex items-center mt-0.5">
-                        <input
-                          type="checkbox"
-                          id="marketing"
-                          checked={marketingOptIn}
-                          onChange={(e) => setMarketingOptIn(e.target.checked)}
-                          className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-neutral-600 bg-[#25222e] checked:border-purple-500 checked:bg-purple-500 transition-all"
-                        />
-                        <IconCheck className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 w-3.5 h-3.5" />
-                      </div>
-                      <label htmlFor="marketing" className="text-sm text-neutral-500 cursor-pointer select-none leading-relaxed">
-                        Send me productivity tips, feature updates, and occasional offers by email.
-                      </label>
-                    </div>
+                  <div className="my-6 flex items-center gap-3 text-[12.5px] text-[var(--l-text-4)]">
+                    <span className="h-px flex-1 bg-[var(--l-border)]" />
+                    or with email
+                    <span className="h-px flex-1 bg-[var(--l-border)]" />
                   </div>
-                )}
 
-                <NeonButton
-                  type="submit"
-                  loading={loading}
-                  className="w-full"
-                  glowColor="rgba(168, 85, 247, 0.5)"
-                >
-                  {isLogin ? "Log in" : "Create account"}
-                </NeonButton>
-              </form>
+                  <form onSubmit={handleAuth} className="space-y-4">
+                    {!isLogin && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="First name">
+                          <input type="text" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} className={fieldClass} />
+                        </Field>
+                        <Field label="Last name">
+                          <input type="text" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} className={fieldClass} />
+                        </Field>
+                      </div>
+                    )}
 
-              <div className="my-8 flex items-center gap-4 text-xs text-neutral-600 font-medium uppercase tracking-widest">
-                <div className="h-px bg-white/10 flex-1" />
-                <span>Or continue with</span>
-                <div className="h-px bg-white/10 flex-1" />
-              </div>
+                    <Field label="Email">
+                      <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className={fieldClass} />
+                    </Field>
 
-              <div className="flex gap-4">
-                <NeonButton
-                  variant="secondary"
-                  onClick={handleGoogleLogin}
-                  className="flex-1"
-                >
-                  <IconBrandGoogle className="w-5 h-5 mr-2" />
-                  <span>Google</span>
-                </NeonButton>
-              </div>
+                    <div>
+                      <div className="mb-1.5 flex items-baseline justify-between">
+                        <label htmlFor="fz-password" className="text-[13px] font-[540] text-[var(--l-text-2)]">Password</label>
+                        {isLogin && onForgotPassword && (
+                          <button type="button" onClick={onForgotPassword} className="fzl-link text-[13px]">
+                            Forgot password?
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          id="fz-password"
+                          type={showPassword ? "text" : "password"}
+                          autoComplete={isLogin ? "current-password" : "new-password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className={`${fieldClass} pr-11`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                          className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-[var(--l-text-4)] transition-colors hover:text-[var(--l-text-1)]"
+                        >
+                          {showPassword ? <IconEyeOff size={17} /> : <IconEye size={17} />}
+                        </button>
+                      </div>
 
-              {isLogin && (
-                <p className="mt-8 text-center text-neutral-400 text-sm">
-                  Don't have an account?{" "}
-                  <button onClick={() => setIsLogin(false)} className="text-purple-400 hover:text-purple-300 font-medium underline underline-offset-4">
-                    Sign up
-                  </button>
-                </p>
+                      {!isLogin && (
+                        <div className="mt-2.5">
+                          <div className="flex h-1 gap-1" aria-hidden>
+                            {[1, 2, 3, 4].map((step) => (
+                              <span
+                                key={step}
+                                className="flex-1 rounded-full transition-colors duration-300"
+                                style={{ background: passwordStrength >= step ? "var(--l-text-1)" : "oklch(1 0 0 / 0.08)" }}
+                              />
+                            ))}
+                          </div>
+                          <p className="mt-1.5 text-[12.5px] text-[var(--l-text-4)]">{strengthLabel}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {!isLogin && (
+                      <div className="space-y-3 pt-1">
+                        <Check id="terms" checked={termsAccepted} onChange={setTermsAccepted} required>
+                          I agree to the{" "}
+                          <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="text-[var(--l-text-1)] underline underline-offset-2">
+                            Terms of Service
+                          </a>{" "}
+                          and{" "}
+                          <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-[var(--l-text-1)] underline underline-offset-2">
+                            Privacy Policy
+                          </a>
+                        </Check>
+                        <Check id="marketing" checked={marketingOptIn} onChange={setMarketingOptIn}>
+                          Send me productivity tips, feature updates, and occasional offers by email.
+                        </Check>
+                      </div>
+                    )}
+
+                    {error && <ErrorNote message={error} />}
+
+                    <button type="submit" disabled={loading} className="fzl-btn fzl-btn-primary w-full disabled:opacity-60">
+                      {loading ? <Spinner /> : isLogin ? "Log in" : "Create account"}
+                    </button>
+                  </form>
+
+                  <p className="mt-8 text-center text-[14px] text-[var(--l-text-3)]">
+                    {isLogin ? "New to FocuzNow? " : "Already have an account? "}
+                    <button type="button" onClick={() => switchMode(!isLogin)} className="font-[560] text-[var(--l-text-1)] underline decoration-[var(--l-text-4)] underline-offset-4 transition-colors hover:decoration-[var(--l-text-1)]">
+                      {isLogin ? "Create an account" : "Log in"}
+                    </button>
+                  </p>
+                </motion.div>
               )}
-            </motion.div>
-          )}
-        </div>
+            </AnimatePresence>
+          </div>
+        </main>
       </div>
-    </div>
+    </MotionConfig>
   );
 }

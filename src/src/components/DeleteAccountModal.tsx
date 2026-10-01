@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import SimpleModal from './SimpleModal';
+import { Dialog } from './fz/Dialog';
+import { Button } from './fz/Button';
 
 function GoogleIcon({ className }: { className?: string }) {
     return (
@@ -48,7 +49,7 @@ export default function DeleteAccountModal({
     const [deleting, setDeleting] = useState(false);
     const [googleVerified, setGoogleVerified] = useState(false);
 
-    const confirmOk = confirmText.trim().toLowerCase() === 'delete';
+    const confirmOk = confirmText.trim().toLowerCase() === email.trim().toLowerCase();
     const canDelete = confirmOk && (googleSignIn ? googleVerified : password.length > 0);
 
     useEffect(() => {
@@ -87,15 +88,24 @@ export default function DeleteAccountModal({
     };
 
     return (
-        <SimpleModal
+        <Dialog
             open={open}
             title="Delete account permanently"
-            description="This removes your profile, scheduling links, calendar data, and subscription access. This cannot be undone."
             onClose={onClose}
-            maxWidth="max-w-lg"
-            danger
+            size="sm"
+            footer={
+                <div className="flex gap-2">
+                    <Button variant="secondary" onClick={onClose} disabled={deleting} className="flex-1">Cancel</Button>
+                    <Button variant="danger-solid" onClick={() => void handleDelete()} disabled={!canDelete || deleting} loading={deleting} className="flex-1">
+                        Delete my account
+                    </Button>
+                </div>
+            }
         >
-            <div className="flex gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/25">
+            <p className="text-body-sm text-[var(--fz-text-3)]">
+                This removes your profile, scheduling links, calendar data, and subscription access. This cannot be undone.
+            </p>
+            <div className="flex gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/25">
                 <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                 <ul className="text-xs text-red-200/90 space-y-1 list-disc list-inside">
                     <li>All block lists, habits, and focus history in this extension</li>
@@ -104,18 +114,14 @@ export default function DeleteAccountModal({
                 </ul>
             </div>
 
-            <label className="block space-y-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                    Account email
-                </span>
-                <p className="text-sm text-white font-mono">{email}</p>
-            </label>
+            <div className="mt-4">
+                <span className="text-meta text-[var(--fz-text-3)]">Account email</span>
+                <p className="mt-0.5 text-sm font-medium text-[var(--fz-text-1)]">{email}</p>
+            </div>
 
             {googleSignIn ? (
-                <div className="space-y-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                        Verify identity
-                    </span>
+                <div className="mt-4 space-y-2">
+                    <span className="text-meta text-[var(--fz-text-3)]">Verify identity</span>
                     {googleVerified ? (
                         <p className="text-xs text-emerald-400 font-medium">Verified with Google</p>
                     ) : (
@@ -123,7 +129,7 @@ export default function DeleteAccountModal({
                             type="button"
                             onClick={() => void handleGoogleVerify()}
                             disabled={deleting}
-                            className="w-full py-3 px-4 rounded-xl bg-white text-[#1f1f1f] hover:bg-neutral-100 text-sm font-semibold flex items-center justify-center gap-2.5 disabled:opacity-50"
+                            className="w-full py-3 px-4 rounded-lg bg-white text-[#1f1f1f] hover:bg-neutral-100 text-sm font-semibold flex items-center justify-center gap-2.5 disabled:opacity-50"
                         >
                             <GoogleIcon className="w-5 h-5 shrink-0" />
                             Verify with Google
@@ -131,56 +137,33 @@ export default function DeleteAccountModal({
                     )}
                 </div>
             ) : (
-                <label className="block space-y-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                        Confirm password
-                    </span>
+                <label className="mt-4 block space-y-1.5">
+                    <span className="text-meta text-[var(--fz-text-3)]">Confirm password</span>
                     <input
                         type="password"
                         autoComplete="current-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Your current password"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-neutral-600 outline-none focus:border-red-500/50 text-sm"
+                        className="w-full bg-white/6 border border-white/8 rounded-lg px-4 py-3 text-white placeholder:text-neutral-600 outline-none focus:border-red-500/50 text-sm"
                     />
                 </label>
             )}
 
-            <label className="block space-y-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                    Type <span className="normal-case">delete</span> to confirm
-                </span>
+            <label className="mt-4 block space-y-1.5">
+                <span className="text-meta text-[var(--fz-text-3)]">Type your email to confirm</span>
                 <input
                     value={confirmText}
                     onChange={(e) => setConfirmText(e.target.value)}
-                    placeholder="delete"
+                    placeholder={email}
                     autoCapitalize="off"
                     autoCorrect="off"
                     spellCheck={false}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-neutral-600 outline-none focus:border-red-500/50 text-sm font-mono normal-case"
+                    className="w-full rounded-lg border border-[var(--fz-border)] bg-[var(--fz-bg-raised)] px-3.5 py-2.5 text-sm text-[var(--fz-text-1)] outline-none placeholder:text-[var(--fz-text-4)] focus:border-[var(--fz-danger)]/50"
                 />
             </label>
 
-            {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
-
-            <div className="flex gap-2 pt-1">
-                <button
-                    type="button"
-                    onClick={onClose}
-                    disabled={deleting}
-                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-sm font-bold"
-                >
-                    Cancel
-                </button>
-                <button
-                    type="button"
-                    onClick={() => void handleDelete()}
-                    disabled={!canDelete || deleting}
-                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                    {deleting ? 'Deleting…' : 'Delete my account'}
-                </button>
-            </div>
-        </SimpleModal>
+            {error && <p className="mt-3 text-xs font-medium text-[var(--fz-danger)]">{error}</p>}
+        </Dialog>
     );
 }

@@ -102,31 +102,31 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
     };
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-zinc-950">
+        <div className="absolute inset-0 flex flex-col bg-neutral-950">
             {/* Header - Fixed */}
-            <div className="flex items-center gap-2 p-3 border-b border-white/10 bg-zinc-900/50 backdrop-blur-md flex-shrink-0">
-                <Button variant="ghost" size="icon" onClick={onBack} className="text-zinc-400 hover:text-white">
+            <div className="flex items-center gap-2 p-3 border-b border-white/8 bg-neutral-900/50 backdrop-blur-md flex-shrink-0">
+                <Button variant="ghost" size="icon" onClick={onBack} className="text-neutral-400 hover:text-white">
                     <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <h2 className="text-lg font-semibold text-white">History</h2>
             </div>
 
             {/* Search - Fixed */}
-            <div className="p-3 flex-shrink-0 bg-zinc-950 space-y-2">
+            <div className="p-3 flex-shrink-0 bg-neutral-950 space-y-2">
                 <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
                     <Input
                         placeholder="Search history..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9 bg-zinc-900 border-white/10 text-zinc-100 placeholder:text-zinc-600"
+                        className="pl-9 bg-neutral-900 border-white/8 text-neutral-100 placeholder:text-neutral-600"
                     />
                 </div>
                 {history.length >= maxResults && (
                     <Button
                         variant="outline"
                         size="sm"
-                        className="w-full border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                        className="w-full border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
                         onClick={() => setMaxResults(prev => prev + 50)}
                     >
                         Show More ({history.length} shown)
@@ -137,29 +137,29 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
             {/* History List - Scrollable */}
             <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
                 {loading ? (
-                    <div className="text-center py-8 text-zinc-500">Loading...</div>
+                    <div className="text-center py-8 text-neutral-500">Loading...</div>
                 ) : error ? (
                     <div className="text-center py-8">
                         <p className="text-red-400 text-sm mb-2">{error}</p>
-                        <p className="text-zinc-500 text-xs">Make sure the extension has history permissions in manifest.json</p>
+                        <p className="text-neutral-500 text-xs">Make sure the extension has history permissions in manifest.json</p>
                     </div>
                 ) : history.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-                        <div className="w-16 h-16 rounded-full bg-zinc-800/50 flex items-center justify-center">
-                            <Search className="w-8 h-8 text-zinc-600" />
+                        <div className="w-16 h-16 rounded-full bg-neutral-800/50 flex items-center justify-center">
+                            <Search className="w-8 h-8 text-neutral-600" />
                         </div>
                         <div className="space-y-1">
-                            <p className="text-sm font-medium text-zinc-300">No history found</p>
-                            <p className="text-xs text-zinc-500 max-w-[200px] mx-auto">
+                            <p className="text-sm font-medium text-neutral-300">No history found</p>
+                            <p className="text-xs text-neutral-500 max-w-[200px] mx-auto">
                                 Your browsing journey starts here. Visit some sites!
                             </p>
                         </div>
                     </div>
                 ) : (
                     history.map((item) => (
-                        <div key={item.id} className="group flex items-center justify-between p-3 rounded-lg bg-zinc-900/30 border border-white/5 hover:border-purple-500/30 transition-all">
+                        <div key={item.id} className="group flex items-center justify-between p-3 rounded-lg bg-neutral-900/30 border border-white/8 hover:border-blue-500/30 transition-all">
                             <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                <div className="w-8 h-8 rounded bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                                <div className="w-8 h-8 rounded bg-neutral-800 flex items-center justify-center flex-shrink-0">
                                     <img
                                         src={getFaviconUrl(item.url)}
                                         alt=""
@@ -169,24 +169,24 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
                                             const parent = e.currentTarget.parentElement;
                                             if (parent) {
                                                 const icon = document.createElement('div');
-                                                icon.innerHTML = '<svg class="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>';
+                                                icon.innerHTML = '<svg class="h-4 w-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>';
                                                 parent.appendChild(icon.firstChild!);
                                             }
                                         }}
                                     />
                                 </div>
                                 <div className="flex flex-col overflow-hidden flex-1">
-                                    <p className="text-sm font-medium text-zinc-200 truncate">
+                                    <p className="text-sm font-medium text-neutral-200 truncate">
                                         {item.title || item.url}
                                     </p>
                                     <div className="flex items-center gap-2">
-                                        <p className="text-xs text-zinc-500 truncate">
+                                        <p className="text-xs text-neutral-500 truncate">
                                             {new URL(item.url).hostname} • {formatTime(item.lastVisitTime)}
                                         </p>
                                         {getTimeSpent(item.url) > 0 && (
                                             <>
-                                                <span className="text-xs text-zinc-600">•</span>
-                                                <span className="text-xs text-purple-400 font-medium flex-shrink-0">
+                                                <span className="text-xs text-neutral-600">•</span>
+                                                <span className="text-xs text-blue-400 font-medium flex-shrink-0">
                                                     {formatDuration(getTimeSpent(item.url))}
                                                 </span>
                                             </>
@@ -198,7 +198,7 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
                                 href={item.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-2 text-zinc-500 hover:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                className="p-2 text-neutral-500 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                             >
                                 <ExternalLink className="h-4 w-4" />
                             </a>

@@ -47,20 +47,25 @@ export function CoachActionConfirmCard({
         <motion.div
             initial={{ scale: 0.96, opacity: 0, y: 8 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="mt-3 rounded-xl border border-white/10 bg-[#1e1e1e] overflow-hidden shadow-lg"
+            className="mt-3 rounded-lg border border-white/8 bg-raised overflow-hidden shadow-lg"
         >
             {pending.length > 0 && (
                 <div className="p-4">
                     <p className="text-sm font-semibold text-white mb-1">
                         {analyticsOnly
-                            ? 'Allow AI Coach to access your analytics?'
-                            : 'Allow AI Coach to do this?'}
+                            ? 'Would you like to allow FocuzAI to use your last 7 days of screen time?'
+                            : pending.length === 1
+                                ? describeCoachAction(pending[0].action).title
+                                : 'Would you like to allow FocuzAI to make these changes?'}
                     </p>
                     <p className="text-xs text-neutral-500 mb-4">
                         {analyticsOnly
-                            ? 'Your last 7 days of screen time (sites and minutes, summarized) will be used for personalized advice. Nothing else is shared.'
-                            : 'Review what the coach wants to change in FocuzNow.'}
+                            ? 'Only summarized sites and minutes are used for this chat. Nothing else is shared.'
+                            : pending.length === 1
+                                ? (describeCoachAction(pending[0].action).detail || 'FocuzAI will apply this in your extension after you allow it.')
+                                : 'FocuzAI will only apply the items you allow below.'}
                     </p>
+                    {pending.length > 1 && (
                     <ul className="space-y-2 mb-4">
                         {pending.map((item) => {
                             const { title, detail } = describeCoachAction(item.action);
@@ -68,9 +73,9 @@ export function CoachActionConfirmCard({
                             return (
                                 <li
                                     key={item.id}
-                                    className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06]"
+                                    className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/4 border border-white/8"
                                 >
-                                    <Icon className="w-4 h-4 shrink-0 mt-0.5 text-violet-400" />
+                                    <Icon className="w-4 h-4 shrink-0 mt-0.5 text-blue-400" />
                                     <div className="min-w-0">
                                         <p className="text-xs font-medium text-white">{title}</p>
                                         {detail ? (
@@ -83,12 +88,13 @@ export function CoachActionConfirmCard({
                             );
                         })}
                     </ul>
+                    )}
                     <div className="flex gap-2">
                         <button
                             type="button"
                             disabled={running}
                             onClick={onDenyAll}
-                            className="flex-1 py-2.5 rounded-lg border border-white/10 text-sm text-neutral-300 hover:bg-white/5 disabled:opacity-40"
+                            className="flex-1 py-2.5 rounded-lg border border-white/8 text-sm text-neutral-300 hover:bg-white/6 disabled:opacity-40"
                         >
                             No
                         </button>
@@ -104,7 +110,7 @@ export function CoachActionConfirmCard({
                                     Applying…
                                 </>
                             ) : analyticsOnly ? (
-                                'Yes, share analytics'
+                                'Yes, allow'
                             ) : (
                                 'Yes, allow'
                             )}
@@ -121,7 +127,7 @@ export function CoachActionConfirmCard({
                 return (
                     <div
                         key={item.id}
-                        className={`flex items-center gap-2 px-4 py-2.5 border-t border-white/[0.06] text-xs ${
+                        className={`flex items-center gap-2 px-4 py-2.5 border-t border-white/8 text-xs ${
                             ok ? 'text-emerald-400/90' : 'text-neutral-500'
                         }`}
                     >

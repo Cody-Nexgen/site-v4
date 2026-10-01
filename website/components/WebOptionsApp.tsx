@@ -26,11 +26,12 @@ export default function WebOptionsApp({ onLogout }: Props) {
         const { installWebChromeShim, hydrateWebWorkspaceFromCloud } = await import(
           '@focuz/lib/platform'
         );
+        // Install before any other focuz module evaluates — some register chrome.* listeners at import time.
+        installWebChromeShim();
         const { bindSiteSupabaseClient } = await import('@focuz/lib/supabase');
         const { initializeDashboardColorMode } = await import('@focuz/lib/themes');
 
         document.documentElement.classList.add('focuz-web-dashboard');
-        installWebChromeShim();
         bindSiteSupabaseClient(siteSupabase as never, {
           url: supabaseUrl,
           anonKey: supabaseAnonKey,
@@ -71,7 +72,7 @@ export default function WebOptionsApp({ onLogout }: Props) {
         <p className="max-w-md text-xs text-neutral-500">{error}</p>
         <button
           type="button"
-          className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black"
+          className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black"
           onClick={() => window.location.reload()}
         >
           Reload
@@ -83,7 +84,7 @@ export default function WebOptionsApp({ onLogout }: Props) {
   if (!OptionsApp) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/30 border-t-transparent" />
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/16 border-t-transparent" />
       </div>
     );
   }

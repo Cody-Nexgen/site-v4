@@ -20,7 +20,7 @@ export function Brand({ size = 'md', subtitle, className = '', glow = false, sho
     return (
         <div className={`flex items-center gap-3 min-w-0 ${className}`}>
             <div
-                className={`${s.box} shrink-0 flex items-center justify-center rounded-full font-medium text-neutral-200 bg-neutral-800 border border-white/[0.08]`}
+                className={`${s.box} shrink-0 flex items-center justify-center rounded-full font-medium text-neutral-200 bg-neutral-800 border border-white/8`}
                 aria-hidden
             >
                 F
