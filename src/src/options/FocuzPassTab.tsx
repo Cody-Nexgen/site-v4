@@ -83,6 +83,7 @@ import {
 import { ImportPasswords } from './focuzpass/ImportPasswords';
 import { TransferVault } from './focuzpass/TransferVault';
 import { ChangeMasterPassword } from './focuzpass/ChangeMasterPassword';
+import { COLLECTION_ICON_GROUPS, collectionIcon, searchCollectionIcons } from './focuzpass/collectionIcons';
 import { PasskeySettings } from './focuzpass/PasskeySettings';
 import { CloudSync } from './focuzpass/CloudSync';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
@@ -1212,20 +1213,43 @@ function draftFromItem(item: VaultItem, tagIds = item.tagIds): ItemDraft | null 
 }
 
 const COLLECTION_COLORS = ['#6e8fb8', '#8da9c4', '#78b89a', '#d79ab6', '#b49bd6', '#d5a16f', '#cf7f79', '#80b8bd'];
-const COLLECTION_ICONS = [
-    { id: 'vault' },
-    { id: 'home' },
-    { id: 'work' },
-    { id: 'star' },
-    { id: 'tag' },
-];
-
 const COLLECTION_GLYPHS: Record<string, typeof KeyRound> = { home: Home, work: Briefcase, star: Star, tag: Tag };
 
 function FocusCollectionGlyph({ color, icon, size }: { color: string; icon: string; size: number }) {
     if (icon === 'vault') return <ExactVaultIcon color={color} />;
     if (icon === 'tag') return <TagDot size={size} color={color} />;
-    return <FlatGlyph icon={COLLECTION_GLYPHS[icon] ?? Tag} size={size} color={softTone(color)} />;
+    return <FlatGlyph icon={COLLECTION_GLYPHS[icon] ?? collectionIcon(icon) ?? Tag} size={size} color={softTone(color)} />;
+}
+
+/** The icon choices: the default mark, then a searchable, grouped set (rendered only while the dialog is open). */
+function CollectionIconPicker({ mode, color, value, onChange }: { mode: 'vault' | 'tag'; color: string; value: string; onChange: (id: string) => void }) {
+    const [query, setQuery] = useState('');
+    const results = query.trim() ? searchCollectionIcons(query) : null;
+    const button = (id: string, label: string) => (
+        <button key={id} type="button" className={value === id ? 'is-selected' : ''} onClick={() => onChange(id)} aria-label={`Use ${label} icon`} aria-pressed={value === id} title={label}>
+            <FocusCollectionGlyph color={color} icon={id} size={18} />
+        </button>
+    );
+    return (
+        <div className="vault-icon-picker">
+            <label className="vault-icon-search"><Search size={13} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search icons" aria-label="Search icons" /></label>
+            <div className="vault-icon-scroll">
+                {results ? (
+                    results.length ? <div className="vault-icon-grid">{results.map((entry) => button(entry.id, entry.id))}</div> : <p className="vault-icon-empty">No icons match “{query.trim()}”</p>
+                ) : (
+                    <>
+                        <div className="vault-icon-grid">{button(mode, mode === 'vault' ? 'vault' : 'tag dot')}</div>
+                        {COLLECTION_ICON_GROUPS.map((group) => (
+                            <section key={group.label}>
+                                <p className="vault-icon-group">{group.label}</p>
+                                <div className="vault-icon-grid">{group.icons.map((entry) => button(entry.id, entry.id))}</div>
+                            </section>
+                        ))}
+                    </>
+                )}
+            </div>
+        </div>
+    );
 }
 
 function CollectionMark({ color, icon, size = 14 }: { color: string; icon: string; size?: number }) {
@@ -1261,11 +1285,11 @@ function CollectionModal({ mode, onClose, onCreate, busy }: {
                 </>
             }
         >
-            <form onSubmit={(event) => { event.preventDefault(); create(); }} className="space-y-4">
+            <form onSubmit={(event) => { event.preventDefault(); create(); }} className="vault-collection-form space-y-4">
                 <div className="vault-collection-preview"><CollectionMark color={color} icon={icon} size={20} /><span>{name || (mode === 'vault' ? 'Vault name' : 'Tag name')}</span></div>
                 <label className="vault-field"><span>Name</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder={mode === 'vault' ? 'Family, Work, Personal…' : 'Starter kit, Finance…'} /></label>
                 <div className="vault-choice-group"><span>Color</span><div className="vault-color-grid">{COLLECTION_COLORS.map((value) => <button key={value} type="button" className={color === value ? 'is-selected' : ''} style={{ background: value }} onClick={() => setColor(value)} aria-label={`Use ${value}`} />)}</div></div>
-                <div className="vault-choice-group"><span>Icon</span><div className="vault-icon-grid">{COLLECTION_ICONS.map((option) => <button key={option.id} type="button" className={icon === option.id ? 'is-selected' : ''} onClick={() => setIcon(option.id)} aria-label={`Use ${option.id} icon`}><FocusCollectionGlyph color={color} icon={option.id} size={22} /></button>)}</div></div>
+                <div className="vault-choice-group"><span>Icon</span><CollectionIconPicker mode={mode} color={color} value={icon} onChange={setIcon} /></div>
             </form>
         </Dialog>
     );
@@ -2532,7 +2556,6 @@ export default function FocuzPassTab({
                 <div className="vault-detail-location">
                     <button type="button" className="vault-inspector-close" autoFocus onClick={() => { setSelectedId(''); setActionsOpen(false); }} aria-label="Close item details"><X size={14} /></button>
                     {selectedVault && <><CollectionMark color={selectedVault.color} icon={selectedVault.icon} size={13} /><strong>{selectedVault.name}</strong></>}
-                    <span><ShieldCheck size={13} /> Private <ChevronDown size={11} /></span>
                 </div>
                 <div className="vault-detail-actions" onClick={(event) => event.stopPropagation()}>
                     {selected.deletedAt && <button type="button" onClick={() => void updateSelectedAction('restore')}><ArchiveRestore size={14} /> Restore</button>}
@@ -2741,13 +2764,13 @@ export default function FocuzPassTab({
                     </nav>
 
                     <div className="vault-nav-bottom">
+                        {onExit && <button type="button" className="vault-nav-item vault-nav-exit" onClick={onExit}><ArrowLeft size={18} /><span className="vault-nav-label">Back to FocuzNow</span></button>}
                         <button type="button" className={`vault-nav-item${view.kind === 'archive' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'archive' }); setSelectedId(''); }}><ExactArchiveIcon size={20} /><span className="vault-nav-label">Archive</span></button>
                         <button type="button" className={`vault-nav-item${view.kind === 'deleted' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'deleted' }); setSelectedId(''); }}><ExactRecentlyDeletedIcon size={20} /><span className="vault-nav-label">Recently deleted</span></button>
                     </div>
                 </aside>
 
                 <header className="vault-toolbar">
-                    {onExit && <button type="button" className="vault-back-button" onClick={onExit}><ArrowLeft size={14} /><span>FocuzNow</span></button>}
                     <label className="vault-search">
                         <Search size={14} aria-hidden="true" />
                         <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search in ${viewTitle}`} />
@@ -2811,7 +2834,8 @@ export default function FocuzPassTab({
                                     className="vault-filter-menu"
                                     items={[
                                         { type: 'label', id: 'types', label: 'Item type' },
-                                        ...FILTERS.filter((option) => option.id !== 'all' && option.id !== 'risk').map((option) => ({
+                                        // Only types this view has (or that are already ticked): sixteen rows of zeros pushed the rest off-screen.
+                                        ...FILTERS.filter((option) => option.id !== 'all' && option.id !== 'risk' && (countForFilter(option.id) > 0 || typeFilters.includes(option.id))).map((option) => ({
                                             id: `type-${option.id}`,
                                             label: option.label,
                                             checked: typeFilters.includes(option.id),

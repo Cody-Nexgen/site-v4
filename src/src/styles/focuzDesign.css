@@ -5338,6 +5338,19 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
 .vault-icon-grid button:hover,
 .vault-icon-grid button.is-selected { background: var(--fz-bg-active); color: var(--fz-text-1); }
 
+/* Vault/tag icon picker: searchable, grouped, scrolls inside the dialog. ~150 icons, all small SVGs. */
+.vault-icon-picker { display: flex; flex-direction: column; gap: 8px; }
+.vault-icon-search { display: flex; height: 32px; align-items: center; gap: 7px; border: 1px solid var(--fz-border); border-radius: 8px; background: var(--fz-bg-panel); padding: 0 9px; color: var(--fz-text-4); }
+.vault-icon-search:focus-within { border-color: var(--fz-border-strong); }
+.vault-icon-search input { min-width: 0; flex: 1; border: 0; background: none; color: var(--fz-text-1); font-size: 12.5px; outline: none; }
+.vault-icon-scroll { max-height: 216px; overflow-y: auto; overscroll-behavior: contain; padding: 2px 2px 4px; scrollbar-width: thin; }
+.vault-icon-scroll .vault-icon-grid { gap: 5px; }
+.vault-icon-scroll .vault-icon-grid button { width: 32px; height: 32px; border-color: transparent; }
+.vault-icon-scroll .vault-icon-grid button:hover { background: var(--fz-bg-hover); }
+.vault-icon-scroll .vault-icon-grid button.is-selected { border-color: var(--fz-border-strong); background: var(--fz-bg-active); }
+.vault-icon-group { margin: 10px 0 5px; color: var(--fz-text-4); font-size: 10.5px; font-weight: 560; }
+.vault-icon-empty { padding: 14px 4px; color: var(--fz-text-4); font-size: 12px; }
+
 /* FocuzPass sidebar — matched to the supplied desktop reference. */
 .focuz-pass-ready .vault-shell {
     grid-template-columns: 236px minmax(0, 1fr);
@@ -6188,3 +6201,77 @@ html[data-dashboard-theme="light"] .fz-cmdk {
     .focuz-pass-ready .vault-toolbar .vault-help:active,
     .focuz-pass-ready .vault-toolbar .vault-new-item:active { transform: none; }
 }
+/* "Back to FocuzNow" sits at the foot of the sidebar, set apart from Archive and Recently deleted. */
+.focuz-pass-ready .vault-nav-exit { margin-bottom: 8px; color: var(--fz-text-3); }
+.focuz-pass-ready .vault-nav-exit:hover { color: var(--fz-text-1); }
+
+/* FocuzPass dialogs in the Help-menu style (2026-10-01): quiet rows that light up on hover, muted
+   icons, thin borders, one input style. Overrides the older, boxier rules above. */
+.vault-picker-search {
+    width: 100%;
+    height: 36px;
+    margin: 4px 0 14px;
+    border-radius: 8px;
+    background: var(--fz-bg-panel);
+    padding: 0 10px;
+    color: var(--fz-text-4);
+}
+.vault-picker-search:focus-within { border-color: var(--fz-border-strong); }
+.vault-primary-types,
+.vault-extra-types { gap: 2px; }
+.vault-primary-types > button,
+.vault-extra-types > button {
+    min-height: 40px;
+    gap: 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    padding: 4px 8px;
+    color: var(--fz-text-2);
+    font-size: 13px;
+    transform: none;
+    transition: background-color 90ms ease, color 90ms ease;
+}
+.vault-primary-types > button:hover,
+.vault-extra-types > button:hover,
+.vault-primary-types > button:focus-visible,
+.vault-extra-types > button:focus-visible {
+    border-color: transparent;
+    background: var(--fz-bg-hover);
+    color: var(--fz-text-1);
+    transform: none;
+    outline: none;
+}
+.vault-primary-types > button > span,
+.vault-extra-types > button > span {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 7px;
+    background: var(--fz-bg-active);
+    color: var(--fz-text-3);
+}
+.vault-primary-types strong { font-size: 13px; font-weight: 500; }
+.vault-show-more { margin-top: 10px; padding-top: 10px; color: var(--fz-text-3); }
+.vault-show-more:hover { color: var(--fz-text-1); }
+
+/* New vault / tag: the sections line up with the name field (old 22px insets were for another container). */
+.vault-collection-form { display: flex; flex-direction: column; gap: 16px; }
+.vault-collection-form > * { margin: 0 !important; }
+.vault-collection-form .vault-collection-preview { padding: 2px 0 4px; font-size: 14px; font-weight: 600; }
+.vault-collection-form .vault-field > span,
+.vault-collection-form .vault-choice-group > span { margin-bottom: 6px; color: var(--fz-text-3); font-size: 11.5px; font-weight: 550; }
+.vault-collection-form .vault-field input {
+    height: 36px;
+    border: 1px solid var(--fz-border);
+    border-radius: 8px;
+    background: var(--fz-bg-panel);
+    padding: 0 10px;
+    color: var(--fz-text-1);
+    font-size: 13px;
+    box-shadow: none;
+}
+.vault-collection-form .vault-field input:focus { border-color: var(--fz-border-strong); outline: none; box-shadow: none; }
+.vault-collection-form .vault-color-grid { gap: 6px; }
+.vault-collection-form .vault-color-grid button { width: 22px; height: 22px; border: 2px solid transparent; }
+.vault-collection-form .vault-color-grid button.is-selected { box-shadow: 0 0 0 2px var(--fz-bg-overlay), 0 0 0 4px var(--fz-border-strong); }

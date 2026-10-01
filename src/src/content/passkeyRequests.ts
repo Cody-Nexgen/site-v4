@@ -386,6 +386,40 @@ function siteGuess(op: 'create' | 'get', options: Record<string, unknown>, frame
     }
 }
 
+/**
+ * Passkeys found by this page's sign-in suggestions lookup (sites start it when the page loads).
+ * A sign-in prompt for the same site shows them at once instead of "Checking…"; a fresh check
+ * still runs, and only an account it confirms can be used.
+ */
+let known: { rpId: string; accounts: Account[]; at: number; frameOrigin?: string } | null = null;
+const KNOWN_FOR_MS = 10 * 60_000;
+
+function knownAccounts(options: Record<string, unknown>, frameOrigin?: string): { rpId: string; accounts: Account[] } | null {
+    if (!known || Date.now() - known.at > KNOWN_FOR_MS || known.frameOrigin !== frameOrigin) return null;
+    let rpId = typeof options.rpId === 'string' && options.rpId ? options.rpId : '';
+    if (!rpId) {
+        try {
+            rpId = new URL(frameOrigin ?? location.origin).hostname;
+        } catch {
+            return null;
+        }
+    }
+    if (rpId !== known.rpId) return null;
+    const allow = Array.isArray(options.allowCredentials)
+        ? options.allowCredentials.map((entry) => (entry as { id?: unknown } | null)?.id).filter((id): id is string => typeof id === 'string')
+        : [];
+    const accounts = allow.length ? known.accounts.filter((account) => allow.includes(account.credentialId)) : known.accounts;
+    return accounts.length ? { rpId: known.rpId, accounts } : null;
+}
+
+function sameAccounts(a: Account[], b: Account[]): boolean {
+    return a.length === b.length && a.every((account, i) => account.credentialId === b[i]?.credentialId);
+}
+
+function isPick(choice: Choice): boolean {
+    return choice === 'primary' || typeof choice === 'object';
+}
+
 async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) {
     const { id, op, options } = request;
     const reply = (result: Record<string, unknown>) => {
@@ -404,6 +438,7 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
         try {
             const pre = await preflight();
             if (pre.state !== 'ready' || !pre.rpId || !pre.accounts?.length) return fallback();
+            known = { rpId: pre.rpId, accounts: pre.accounts, at: Date.now(), frameOrigin: request.frameOrigin };
             setPasskeyOffer({
                 id,
                 rpId: pre.rpId,
@@ -436,6 +471,25 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
         card.close();
         then();
     };
+    const signInCard = (site: string, accounts: Account[], lapseNote?: string) => {
+        const one = accounts.length === 1 ? accounts[0]! : null;
+        void card.show({
+            title: signInTitle(site),
+            subtitle: one ? `${one.userName || one.title} · ${relativeDay(one.lastUsedAt)}` : 'Choose a passkey saved in FocuzPass',
+            accounts: one ? undefined : accounts,
+            primary: one ? 'Sign in' : undefined,
+            note: lapseNote,
+            warn: Boolean(lapseNote),
+            secondary: 'Use another device',
+        });
+    };
+    // Already looked up when the page loaded: ask right away, check in the background.
+    const early = op === 'get' ? knownAccounts(options, request.frameOrigin) : null;
+    if (early) {
+        window.clearTimeout(checking);
+        signInCard(early.rpId, early.accounts);
+    }
+    let pendingChoice: Choice | null = null;
 
     let pre: Preflight;
     const checkStarted = performance.now();
@@ -445,9 +499,17 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
         // Diagnostic while the speed fix is confirmed; remove once the owner says it's quick.
         const checkMs = Math.round(performance.now() - checkStarted);
         if (checkMs > 400) console.info(`[FocuzPass] passkey check took ${checkMs} ms`);
-        if ('choice' in first) return leave(() => answer(first.choice));
-        pre = first.pre;
+        if ('choice' in first) {
+            // Picked on the early card before the check finished: finish the check, then use it.
+            if (!early || !isPick(first.choice)) return leave(() => answer(first.choice));
+            pendingChoice = first.choice;
+            void card.show({ title: signInTitle(early.rpId), subtitle: 'With a passkey saved in FocuzPass', busy: 'Signing in…' });
+            pre = await preflight();
+        } else {
+            pre = first.pre;
+        }
         if (pre.state === 'locked') {
+            pendingChoice = null;
             const site = pre.rpId || guess;
             void card.show({ title: op === 'create' ? saveTitle(site) : signInTitle(site), subtitle: 'Unlock FocuzPass to use your passkeys', primary: 'Unlock FocuzPass', secondary: 'Use another device' });
             const choice = await card.next();
@@ -496,18 +558,21 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
 
         const accounts = pre.accounts ?? [];
         if (!accounts.length) return leave(fallback);
-        const one = accounts.length === 1 ? accounts[0]! : null;
-        void card.show({
-            title: signInTitle(site),
-            subtitle: one ? `${one.userName || one.title} · ${relativeDay(one.lastUsedAt)}` : 'Choose a passkey saved in FocuzPass',
-            accounts: one ? undefined : accounts,
-            primary: one ? 'Sign in' : undefined,
-            note: lapseNote,
-            warn: Boolean(pre.lapse),
-            secondary: 'Use another device',
-        });
-        const choice = await card.next();
-        const credentialId = choice === 'primary' && one ? one.credentialId : typeof choice === 'object' ? choice.account : null;
+        // The early card stands if the check found the same passkeys; otherwise show what it found.
+        const shownEarly = early && !pre.lapse && sameAccounts(early.accounts, accounts) ? early.accounts : null;
+        let shown = accounts;
+        let choice: Choice;
+        if (shownEarly) {
+            shown = shownEarly;
+            choice = pendingChoice ?? (await card.next());
+        } else {
+            signInCard(site, accounts, lapseNote);
+            choice = await card.next();
+        }
+        const one = shown.length === 1 ? shown[0]! : null;
+        const picked = choice === 'primary' && one ? one.credentialId : typeof choice === 'object' ? choice.account : null;
+        // Only a passkey the fresh check found can be used.
+        const credentialId = picked && accounts.some((account) => account.credentialId === picked) ? picked : null;
         if (!credentialId) return leave(() => answer(choice));
         void card.show({ title: signInTitle(site), subtitle: 'With a passkey saved in FocuzPass', busy: 'Signing in…' });
         reply(await send<Answer>({ type: 'FOCUZPASS_PASSKEY_GET', options, credentialId, ...from }));
