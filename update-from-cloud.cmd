@@ -9,6 +9,20 @@ if "%BRANCH%"=="" set "BRANCH=codex/focuzpass-distinctive-vibe-1utsv7"
 
 cd /d "%~dp0"
 
+git rev-parse --is-inside-work-tree >nul 2>&1
+if errorlevel 1 (
+    echo This file has to be inside your FocuzNow project folder, next to AGENTS.md.
+    echo It's running from: %CD%
+    echo Move it into the project folder and double-click it there.
+    goto :failed
+)
+if not exist "AGENTS.md" (
+    echo This folder is a git project, but not FocuzNow: it has no AGENTS.md.
+    echo It's running from: %CD%
+    echo Move this file next to AGENTS.md in your FocuzNow folder.
+    goto :failed
+)
+
 rem Sign in to GitHub once in the browser and Git remembers it (Git Credential Manager ships with Git for Windows).
 for /f "delims=" %%H in ('git config --global credential.helper') do set "HELPER=%%H"
 if "%HELPER%"=="" (
