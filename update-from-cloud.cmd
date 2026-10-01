@@ -4,10 +4,16 @@ rem Gets the latest changes from a Claude cloud session and rebuilds the extensi
 rem Double-click it, or run:  update-from-cloud.cmd [branch]
 rem Afterwards, reload FocuzNow in vivaldi://extensions.
 
-set "BRANCH=%~1"
+rem Run from a copy: the update can change this file, and Windows reads a .cmd while it runs.
+if /i not "%~1"=="--from-copy" (
+    copy /y "%~f0" "%TEMP%\focuznow-update-from-cloud.cmd" >nul
+    "%TEMP%\focuznow-update-from-cloud.cmd" --from-copy "%~dp0." %1
+)
+
+set "BRANCH=%~3"
 if "%BRANCH%"=="" set "BRANCH=codex/focuzpass-distinctive-vibe-1utsv7"
 
-cd /d "%~dp0"
+cd /d "%~2"
 
 git rev-parse --is-inside-work-tree >nul 2>&1
 if errorlevel 1 (
@@ -38,8 +44,8 @@ if errorlevel 1 goto :failed
 git merge --ff-only FETCH_HEAD
 if errorlevel 1 (
     echo.
-    echo Your copy has changes the cloud branch doesn't have, so it can't just fast-forward.
-    echo Nothing was changed. Ask Claude to merge them, or run:  git merge FETCH_HEAD
+    echo Git couldn't bring the update in on top of your copy; the reason is above.
+    echo Nothing was changed. Copy the messages above into Claude.
     goto :failed
 )
 
