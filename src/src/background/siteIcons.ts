@@ -10,9 +10,17 @@ export type SiteIcon = {
     src: string;
     /** A full-bleed app icon (apple-touch-icon): fill the tile instead of centring it. */
     bleed: boolean;
+    /**
+     * Set for raster icons with a see-through background: they're drawn on the theme's own tile
+     * instead of white. `tone` says what the visible part is, so a black logo can be flipped to
+     * white on a dark tile (and a white one to black on a light tile) instead of vanishing.
+     */
+    transparent?: boolean;
+    tone?: 'dark' | 'light' | 'color';
 };
 
-const SESSION_KEY = 'focuzpass.siteIcons.v1';
+// v2: icons now carry `transparent` and `tone`; v1 entries are fetched again.
+const SESSION_KEY = 'focuzpass.siteIcons.v2';
 const MAX_PARALLEL = 4;
 const PAGE_BYTES = 512 * 1024;
 const ICON_BYTES = 400 * 1024;
@@ -114,6 +122,40 @@ function toBase64(bytes: Uint8Array): string {
     return btoa(binary);
 }
 
+/**
+ * How an icon looks, from its RGBA pixels: whether a good part of it is see-through, and whether the
+ * visible part is a dark mark, a light mark, or coloured.
+ */
+export function iconLook(rgba: Uint8ClampedArray | Uint8Array): { transparent: boolean; tone: 'dark' | 'light' | 'color' } {
+    let clear = 0;
+    let seen = 0;
+    let lum = 0;
+    let sat = 0;
+    for (let i = 0; i < rgba.length; i += 4) {
+        const a = rgba[i + 3]!;
+        if (a < 24) {
+            clear++;
+            continue;
+        }
+        const r = rgba[i]! / 255;
+        const g = rgba[i + 1]! / 255;
+        const b = rgba[i + 2]! / 255;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        lum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        sat += max - min;
+        seen++;
+    }
+    const total = rgba.length / 4;
+    // A quarter or more see-through counts: corners of a round logo already make ~20%.
+    const transparent = total > 0 && clear / total >= 0.25 && seen > 0;
+    if (!seen) return { transparent, tone: 'color' };
+    const avgLum = lum / seen;
+    const avgSat = sat / seen;
+    const tone = avgSat > 0.18 ? 'color' : avgLum < 0.32 ? 'dark' : avgLum > 0.78 ? 'light' : 'color';
+    return { transparent, tone };
+}
+
 async function toIcon(file: { bytes: Uint8Array; type: string }, bleed: boolean): Promise<SiteIcon | null> {
     const svg = file.type.includes('svg') || /^\s*(<\?xml[^>]*>\s*)?<svg\b/i.test(new TextDecoder().decode(file.bytes.subarray(0, 200)));
     if (svg) {
@@ -130,8 +172,9 @@ async function toIcon(file: { bytes: Uint8Array; type: string }, bleed: boolean)
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(bitmap, 0, 0, RASTER_PX, RASTER_PX);
         bitmap.close();
+        const look = iconLook(ctx.getImageData(0, 0, RASTER_PX, RASTER_PX).data);
         const png = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());
-        return { src: `data:image/png;base64,${toBase64(png)}`, bleed };
+        return { src: `data:image/png;base64,${toBase64(png)}`, bleed, ...(look.transparent ? { transparent: true, tone: look.tone } : {}) };
     } catch {
         return null;
     }

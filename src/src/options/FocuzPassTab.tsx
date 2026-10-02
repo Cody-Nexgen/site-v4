@@ -831,7 +831,7 @@ function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean })
     return (
         <span
             ref={markRef}
-            className={`vault-item-mark${typeIconKind || isCard ? ' is-type-icon' : ''}${isCard ? ' is-card-brand' : ''}${favicon ? ' has-favicon' : ''} relative ${large ? 'h-[60px] w-[60px] rounded-lg text-lg' : 'h-8 w-8 rounded-lg text-[11px]'} flex shrink-0 items-center justify-center overflow-hidden border font-bold tracking-[-0.03em]`}
+            className={`vault-item-mark${typeIconKind || isCard ? ' is-type-icon' : ''}${isCard ? ' is-card-brand' : ''}${favicon ? ' has-favicon' : ''}${favicon?.transparent ? ` is-see-through tone-${favicon.tone ?? 'color'}` : ''} relative ${large ? 'h-[60px] w-[60px] rounded-lg text-lg' : 'h-8 w-8 rounded-lg text-[11px]'} flex shrink-0 items-center justify-center overflow-hidden border font-bold tracking-[-0.03em]`}
             style={typeIconKind || isCard || favicon ? ({ '--item-tone': tone } as CSSProperties) : ({ '--tile-h': tileHue(item.title) } as CSSProperties)}
             data-letter-tile={typeIconKind || isCard || favicon ? undefined : ''}
             aria-hidden="true"

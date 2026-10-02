@@ -6598,3 +6598,16 @@ html[data-dashboard-theme="light"] .focuz-pass-ready .vault-row:hover:not(.is-se
 .focuz-pass-ready .vault-toolbar .vault-new-item.is-primary { background: var(--fp-accent-strong); color: var(--fp-accent-fg); }
 .focuz-pass-ready .vault-toolbar .vault-new-item.is-primary:hover { opacity: 1; background: var(--fp-accent); }
 .focuz-pass-ready .vault-month-group > p { color: var(--fz-text-3); font-weight: 650; }
+
+/* Site icons with a see-through background: drawn on the theme's own tile, not on white. A dark
+   one-colour mark turns light on a dark tile (and a light mark dark on a light tile) so it stays
+   visible; coloured logos are left as they are. */
+:root .focuz-pass .vault-item-mark.has-favicon.is-see-through {
+    background: oklch(0.955 0.003 275 / 0.07);
+}
+html[data-dashboard-theme="light"] .focuz-pass .vault-item-mark.has-favicon.is-see-through {
+    background: oklch(0.2 0.008 275 / 0.045);
+}
+.vault-item-mark.has-favicon.is-see-through::after { box-shadow: inset 0 0 0 1px var(--fz-border); }
+html:not([data-dashboard-theme="light"]) .vault-item-mark.is-see-through.tone-dark .vault-site-icon,
+html[data-dashboard-theme="light"] .vault-item-mark.is-see-through.tone-light .vault-site-icon { filter: invert(1); }
