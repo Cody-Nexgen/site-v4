@@ -27,7 +27,6 @@ import {
     TH as FlagTH, TR as FlagTR, UA as FlagUA, US as FlagUS, VN as FlagVN, ZA as FlagZA,
 } from 'country-flag-icons/react/3x2';
 import {
-    Archive,
     ArchiveRestore,
     ArrowLeft,
     ArrowRight,
@@ -91,7 +90,7 @@ import { markLetters, readableTitle, tileHue } from '../lib/focuzPass/displayNam
 import { PLACES_MIN_CHARS, newPlacesSession, placesDetails, placesSuggest, type PlaceSuggestion } from '../lib/focuzPass/places';
 import { PasskeySettings } from './focuzpass/PasskeySettings';
 import { CloudSync } from './focuzpass/CloudSync';
-import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { FormEvent, Fragment, useCallback, useId, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import ModalPortal from '../components/ModalPortal';
 import { Toast } from '../components/fz/Toast';
 import { Dialog } from '../components/fz/Dialog';
@@ -678,22 +677,38 @@ function ExactSidebarPlusIcon({ size = 16 }: { size?: number }) {
     );
 }
 
-/** Flat line icon in a fixed box, so it lines up where the old art sat. */
 /**
- * FocuzPass's "soft duotone" icons: the outline plus a light fill of the same colour inside, so
- * icons have some weight instead of being thin grey strokes. `tone` colours icons that mean
- * something (favourites, deleted); the rest follow the text colour.
+ * FocuzPass's own solid sidebar icons: filled shapes with details cut out (masks, so the cut-outs
+ * show whatever is behind them), drawn on a 20px grid. Solid reads friendlier than thin outlines.
  */
-function FlatGlyph({ icon: Icon, size = 20, color, tone }: { icon: typeof KeyRound; size?: number; color?: string; tone?: string }) {
+function SolidIcon({ size = 20, tone, children, mask }: { size?: number; tone?: string; children: ReactNode; mask?: ReactNode }) {
+    const id = useId().replace(/:/g, '');
     return (
-        <span className={`fp-flat-glyph is-duotone${tone ? ` tone-${tone}` : ''}`} style={{ width: size, height: size, color }} aria-hidden="true">
-            <Icon strokeWidth={1.75} fill="currentColor" fillOpacity={0.18} />
+        <span className={`fp-flat-glyph fp-solid-icon${tone ? ` tone-${tone}` : ''}`} style={{ width: size, height: size }} aria-hidden="true">
+            <svg viewBox="0 0 20 20" width="84%" height="84%">
+                {mask && (
+                    <defs>
+                        <mask id={`m${id}`}>
+                            <rect width="20" height="20" fill="#fff" />
+                            <g fill="#000">{mask}</g>
+                        </mask>
+                    </defs>
+                )}
+                <g fill="currentColor" mask={mask ? `url(#m${id})` : undefined}>{children}</g>
+            </svg>
         </span>
     );
 }
 
 function ExactAllItemsIcon({ size = 20 }: { size?: number }) {
-    return <FlatGlyph icon={LayoutGrid} size={size} />;
+    return (
+        <SolidIcon size={size}>
+            <rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1.9" />
+            <rect x="11" y="2.5" width="6.5" height="6.5" rx="1.9" opacity="0.5" />
+            <rect x="2.5" y="11" width="6.5" height="6.5" rx="1.9" opacity="0.5" />
+            <rect x="11" y="11" width="6.5" height="6.5" rx="1.9" />
+        </SolidIcon>
+    );
 }
 
 /** Pull a collection colour toward the text ramp so it sits calmly in the flat UI. */
@@ -720,28 +735,50 @@ function ExactTagIcon({ size = 20, color }: { size?: number; color?: string }) {
 }
 
 function ExactFavoritesIcon({ size = 20 }: { size?: number }) {
-    return <FlatGlyph icon={Star} size={size} tone="favorite" />;
+    return (
+        <SolidIcon size={size} tone="favorite">
+            <path d="M10 2.3c.4 0 .75.23.92.6l1.8 3.82 4.16.55c.83.11 1.17 1.13.56 1.71l-3.05 2.9.78 4.13c.16.82-.71 1.46-1.45 1.06L10 15.06l-3.72 2c-.74.4-1.6-.23-1.45-1.05l.78-4.14-3.05-2.9c-.6-.58-.27-1.6.56-1.7l4.16-.56 1.8-3.82c.17-.37.53-.6.92-.6Z" />
+        </SolidIcon>
+    );
 }
 
-/** A vault: a small glass tile in its colour with its icon in white, like an app icon. */
+/** A vault: its icon in its own colour, duotone like the rest of the sidebar (no tile behind it). */
 function VaultChip({ color, icon: Icon, size = 20 }: { color: string; icon: typeof KeyRound; size?: number }) {
     return (
-        <span className="fp-vault-chip" style={{ width: size, height: size, '--chip-color': color } as CSSProperties} aria-hidden="true">
-            <Icon strokeWidth={2.1} size={Math.round(size * 0.6)} />
+        <span className="fp-flat-glyph is-duotone fp-vault-glyph" style={{ width: size, height: size, color }} aria-hidden="true">
+            <Icon strokeWidth={1.75} fill="currentColor" fillOpacity={0.28} />
         </span>
     );
 }
 
+/** The default vault mark: a solid safe with a keyhole, in the vault's colour. */
 function ExactVaultIcon({ color, size = 20 }: { color: string; size?: number }) {
-    return <VaultChip color={color} icon={LockKeyhole} size={size} />;
+    return (
+        <span style={{ color, display: 'inline-flex' }}>
+            <SolidIcon size={size} mask={<><circle cx="10" cy="9.3" r="2" /><rect x="9.15" y="9.6" width="1.7" height="4" rx="0.85" /></>}>
+                <rect x="2.6" y="3" width="14.8" height="14" rx="3.4" />
+            </SolidIcon>
+        </span>
+    );
 }
 
 function ExactArchiveIcon({ size = 20 }: { size?: number }) {
-    return <FlatGlyph icon={Archive} size={size} tone="archive" />;
+    return (
+        <SolidIcon size={size} tone="archive" mask={<rect x="7.6" y="9.4" width="4.8" height="1.8" rx="0.9" />}>
+            <rect x="2" y="3" width="16" height="4.4" rx="1.6" />
+            <path d="M3.3 8.6h13.4v6.2a2.4 2.4 0 0 1-2.4 2.4H5.7a2.4 2.4 0 0 1-2.4-2.4V8.6Z" />
+        </SolidIcon>
+    );
 }
 
 function ExactRecentlyDeletedIcon({ size = 20 }: { size?: number }) {
-    return <FlatGlyph icon={Trash2} size={size} tone="deleted" />;
+    return (
+        <SolidIcon size={size} tone="deleted" mask={<><rect x="7.4" y="8.4" width="1.5" height="6" rx="0.75" /><rect x="11.1" y="8.4" width="1.5" height="6" rx="0.75" /></>}>
+            <rect x="7.3" y="2.2" width="5.4" height="2.4" rx="1.1" />
+            <rect x="2.6" y="4" width="14.8" height="2.4" rx="1.2" />
+            <path d="M4.2 7.2h11.6l-.75 8.6a2 2 0 0 1-2 1.8H6.95a2 2 0 0 1-2-1.8L4.2 7.2Z" />
+        </SolidIcon>
+    );
 }
 
 function VaultProfileAvatar({ avatarUrl, fallbackUrl, name }: { avatarUrl?: string | null; fallbackUrl?: string | null; name: string }) {

@@ -6607,12 +6607,18 @@ html[data-dashboard-theme="light"] .focuz-pass-ready .vault-row:hover:not(.is-se
    Liquid glass: tiles get a bright 1px rim that catches the light at the top-left and bottom-right
    corners, and a soft gloss over the top half, like Apple's glass. Site icons sit on frosted white.
    ─────────────────────────────────────────────────────────────────────────────────────────────── */
-.fp-flat-glyph.is-duotone.tone-favorite { color: oklch(0.82 0.14 80); }
-.fp-flat-glyph.is-duotone.tone-archive { color: oklch(0.74 0.035 250); }
-.fp-flat-glyph.is-duotone.tone-deleted { color: oklch(0.74 0.12 15); }
-html[data-dashboard-theme="light"] .fp-flat-glyph.is-duotone.tone-favorite { color: oklch(0.7 0.15 70); }
-html[data-dashboard-theme="light"] .fp-flat-glyph.is-duotone.tone-archive { color: oklch(0.52 0.04 250); }
-html[data-dashboard-theme="light"] .fp-flat-glyph.is-duotone.tone-deleted { color: oklch(0.58 0.15 15); }
+.fp-flat-glyph.is-duotone.tone-favorite,
+.fp-flat-glyph.fp-solid-icon.tone-favorite { color: oklch(0.82 0.14 80); }
+.fp-flat-glyph.is-duotone.tone-archive,
+.fp-flat-glyph.fp-solid-icon.tone-archive { color: oklch(0.74 0.035 250); }
+.fp-flat-glyph.is-duotone.tone-deleted,
+.fp-flat-glyph.fp-solid-icon.tone-deleted { color: oklch(0.74 0.12 15); }
+html[data-dashboard-theme="light"] .fp-flat-glyph.is-duotone.tone-favorite,
+html[data-dashboard-theme="light"] .fp-flat-glyph.fp-solid-icon.tone-favorite { color: oklch(0.7 0.15 70); }
+html[data-dashboard-theme="light"] .fp-flat-glyph.is-duotone.tone-archive,
+html[data-dashboard-theme="light"] .fp-flat-glyph.fp-solid-icon.tone-archive { color: oklch(0.52 0.04 250); }
+html[data-dashboard-theme="light"] .fp-flat-glyph.is-duotone.tone-deleted,
+html[data-dashboard-theme="light"] .fp-flat-glyph.fp-solid-icon.tone-deleted { color: oklch(0.58 0.15 15); }
 
 /* The glass rim, shared by every tile below. */
 .vault-item-mark.has-favicon::after,
@@ -6682,3 +6688,40 @@ html[data-dashboard-theme="light"] .focuz-pass .vault-item-mark.has-favicon {
 
 /* Tags: the tag shape's hole picks up the surface behind it. */
 .fp-tag-shape { display: block; filter: drop-shadow(0 0.5px 0.5px rgb(0 0 0 / 0.2)); --fp-tag-hole: var(--fp-sidebar, var(--fz-bg-app)); }
+
+/* Sidebar, friendlier (2026-10-02): neutral charcoal (the blue-black felt harsh), icons with a
+   fuller duotone fill so they read as shapes, and a clearer highlight on the current place. */
+.focuz-pass-ready { --fp-sidebar: oklch(0.19 0.002 275); --fp-main: oklch(0.205 0.002 275); --fp-card: oklch(0.232 0.003 275); }
+html[data-dashboard-theme="light"] .focuz-pass-ready { --fp-sidebar: oklch(0.963 0.002 275); --fp-main: oklch(0.993 0.001 275); --fp-card: oklch(1 0 0); }
+.focuz-pass-ready .vault-nav .fp-flat-glyph.is-duotone svg { fill-opacity: 0.32; }
+.focuz-pass-ready .vault-nav .vault-nav-item {
+    min-height: 32px;
+    border-radius: 9px;
+    color: oklch(0.88 0.003 275);
+    font-weight: 500;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav .vault-nav-item { color: oklch(0.3 0.006 275); }
+.focuz-pass-ready .vault-nav .vault-nav-item:hover { background: oklch(0.955 0.003 275 / 0.06); color: var(--fz-text-1); }
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav .vault-nav-item:hover { background: oklch(0.2 0.008 275 / 0.05); }
+.focuz-pass-ready .vault-nav-item.is-active,
+.focuz-pass-ready .vault-nav-item.is-active-subtle,
+.focuz-pass-ready .vault-primary-nav > button.is-active,
+.focuz-pass-ready .vault-primary-nav > button.is-active-subtle,
+.focuz-pass-ready .vault-nav-section .vault-nav-item.is-active-subtle,
+.focuz-pass-ready .vault-nav-bottom .vault-nav-item.is-active-subtle {
+    background: oklch(0.955 0.003 275 / 0.115);
+    color: var(--fz-text-1);
+    font-weight: 600;
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav-item.is-active,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav-item.is-active-subtle,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-primary-nav > button.is-active,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav-section .vault-nav-item.is-active-subtle {
+    background: oklch(0.2 0.008 275 / 0.085);
+}
+.focuz-pass-ready .vault-nav-section-label { color: var(--fz-text-3); font-weight: 600; }
+
+/* Solid sidebar icons (SolidIcon): filled shapes, a touch dimmer at rest, full strength when picked. */
+.fp-solid-icon svg { display: block; overflow: visible; }
+.vault-nav button:not(.is-active) .fp-solid-icon:not([class*="tone-"]) { opacity: 0.82; }
