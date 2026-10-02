@@ -279,7 +279,7 @@ export async function focuzPassImportPackage(
     return send({ type: 'FOCUZPASS_IMPORT_PACKAGE', package: pkg, masterPassword, importOptions: options });
 }
 
-export type SiteIcon = { src: string; bleed: boolean; transparent?: boolean; tone?: 'dark' | 'light' | 'color' };
+export type SiteIcon = { src: string; bleed: boolean };
 const siteIcons = new Map<string, Promise<SiteIcon | null>>();
 
 /** The website's own icon for a login (fetched by the extension from the site; null if none). */

@@ -6599,15 +6599,86 @@ html[data-dashboard-theme="light"] .focuz-pass-ready .vault-row:hover:not(.is-se
 .focuz-pass-ready .vault-toolbar .vault-new-item.is-primary:hover { opacity: 1; background: var(--fp-accent); }
 .focuz-pass-ready .vault-month-group > p { color: var(--fz-text-3); font-weight: 650; }
 
-/* Site icons with a see-through background: drawn on the theme's own tile, not on white. A dark
-   one-colour mark turns light on a dark tile (and a light mark dark on a light tile) so it stays
-   visible; coloured logos are left as they are. */
-:root .focuz-pass .vault-item-mark.has-favicon.is-see-through {
-    background: oklch(0.955 0.003 275 / 0.07);
+
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   Soft duotone icons + liquid glass (2026-10-02).
+   Duotone: outline plus a light fill of the same colour (set on the SVG in FlatGlyph). Colour only
+   where it means something: favourites amber, archive slate, deleted rose.
+   Liquid glass: tiles get a bright 1px rim that catches the light at the top-left and bottom-right
+   corners, and a soft gloss over the top half, like Apple's glass. Site icons sit on frosted white.
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.fp-flat-glyph.is-duotone.tone-favorite { color: oklch(0.82 0.14 80); }
+.fp-flat-glyph.is-duotone.tone-archive { color: oklch(0.74 0.035 250); }
+.fp-flat-glyph.is-duotone.tone-deleted { color: oklch(0.74 0.12 15); }
+html[data-dashboard-theme="light"] .fp-flat-glyph.is-duotone.tone-favorite { color: oklch(0.7 0.15 70); }
+html[data-dashboard-theme="light"] .fp-flat-glyph.is-duotone.tone-archive { color: oklch(0.52 0.04 250); }
+html[data-dashboard-theme="light"] .fp-flat-glyph.is-duotone.tone-deleted { color: oklch(0.58 0.15 15); }
+
+/* The glass rim, shared by every tile below. */
+.vault-item-mark.has-favicon::after,
+.vault-item-mark[data-letter-tile]::after,
+.vault-editor-site-mark.has-favicon::after,
+.fp-vault-chip::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg,
+        rgb(255 255 255 / 0.95) 0%,
+        rgb(255 255 255 / 0.3) 20%,
+        rgb(255 255 255 / 0) 42%,
+        rgb(255 255 255 / 0) 62%,
+        rgb(255 255 255 / 0.35) 84%,
+        rgb(255 255 255 / 0.85) 100%);
+    box-shadow: none;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
 }
-html[data-dashboard-theme="light"] .focuz-pass .vault-item-mark.has-favicon.is-see-through {
-    background: oklch(0.2 0.008 275 / 0.045);
+/* The gloss over the top half. */
+.vault-item-mark.has-favicon::before,
+.vault-item-mark[data-letter-tile]::before,
+.fp-vault-chip::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0) 52%);
+    pointer-events: none;
 }
-.vault-item-mark.has-favicon.is-see-through::after { box-shadow: inset 0 0 0 1px var(--fz-border); }
-html:not([data-dashboard-theme="light"]) .vault-item-mark.is-see-through.tone-dark .vault-site-icon,
-html[data-dashboard-theme="light"] .vault-item-mark.is-see-through.tone-light .vault-site-icon { filter: invert(1); }
+
+/* Site icons: frosted white glass instead of a flat white box. */
+:root .focuz-pass .vault-item-mark.has-favicon {
+    background: linear-gradient(160deg, oklch(1 0 0), oklch(0.93 0.004 275));
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.22), 0 6px 14px -8px rgb(0 0 0 / 0.45);
+}
+html[data-dashboard-theme="light"] .focuz-pass .vault-item-mark.has-favicon {
+    box-shadow: 0 1px 2px rgb(20 20 40 / 0.12), 0 6px 14px -8px rgb(20 20 40 / 0.25), inset 0 0 0 1px rgb(20 20 40 / 0.06);
+}
+.vault-site-icon { z-index: 0; }
+
+/* Letter tiles: the same glass on their pastel colour. */
+.vault-item-mark[data-letter-tile] {
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 6px 14px -8px rgb(0 0 0 / 0.35) !important;
+}
+
+/* Vaults: a glass chip in the vault's colour with its icon in white. */
+.fp-vault-chip {
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 30%;
+    background: linear-gradient(160deg, color-mix(in oklch, var(--chip-color) 82%, white), var(--chip-color));
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.28);
+}
+.fp-vault-chip > svg { position: relative; z-index: 3; filter: drop-shadow(0 0.5px 0.5px rgb(0 0 0 / 0.25)); }
+
+/* Tags: the tag shape's hole picks up the surface behind it. */
+.fp-tag-shape { display: block; filter: drop-shadow(0 0.5px 0.5px rgb(0 0 0 / 0.2)); --fp-tag-hole: var(--fp-sidebar, var(--fz-bg-app)); }

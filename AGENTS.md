@@ -21,7 +21,7 @@ Read this first, then `docs/focuzpass-cloud-plan.md` (the FocuzPass Cloud plan a
 ```
 node node_modules/typescript/bin/tsc -b
 node node_modules/eslint/bin/eslint.js <files>
-node ./scripts/run-tests.mjs            # unit tests (193 passing, lib + background); `npm test` fails under cmd
+node ./scripts/run-tests.mjs            # unit tests (192 passing, lib + background); `npm test` fails under cmd
 node node_modules/vite/bin/vite.js build   # writes src/dist; the owner then reloads it in vivaldi://extensions
 ```
 Known lint errors that aren't ours: `vaultCore.ts` `inboxPublicJwk` (`_d`, `_ops`, `_ext`), two in `FocuzPassTab.tsx`.

@@ -51,7 +51,6 @@ import {
     Funnel,
     GripVertical,
     HeartPulse,
-    History,
     Home,
     IdCard,
     KeyRound,
@@ -400,7 +399,7 @@ function SoftItemTypeIcon({ kind, size = 32 }: { kind: EditableItemKind; size?: 
     const Icon = ITEM_DEFINITIONS[kind].icon;
     return (
         <span className={`vault-type-icon vault-type-icon--${kind} is-flat`} style={{ '--item-type-icon-size': `${size}px` } as CSSProperties} aria-hidden="true">
-            <Icon strokeWidth={1.75} />
+            <Icon strokeWidth={1.75} fill="currentColor" fillOpacity={0.16} />
         </span>
     );
 }
@@ -680,10 +679,15 @@ function ExactSidebarPlusIcon({ size = 16 }: { size?: number }) {
 }
 
 /** Flat line icon in a fixed box, so it lines up where the old art sat. */
-function FlatGlyph({ icon: Icon, size = 20, color }: { icon: typeof KeyRound; size?: number; color?: string }) {
+/**
+ * FocuzPass's "soft duotone" icons: the outline plus a light fill of the same colour inside, so
+ * icons have some weight instead of being thin grey strokes. `tone` colours icons that mean
+ * something (favourites, deleted); the rest follow the text colour.
+ */
+function FlatGlyph({ icon: Icon, size = 20, color, tone }: { icon: typeof KeyRound; size?: number; color?: string; tone?: string }) {
     return (
-        <span className="fp-flat-glyph" style={{ width: size, height: size, color }} aria-hidden="true">
-            <Icon strokeWidth={1.75} />
+        <span className={`fp-flat-glyph is-duotone${tone ? ` tone-${tone}` : ''}`} style={{ width: size, height: size, color }} aria-hidden="true">
+            <Icon strokeWidth={1.75} fill="currentColor" fillOpacity={0.18} />
         </span>
     );
 }
@@ -698,12 +702,15 @@ function softTone(color?: string) {
     return color || undefined;
 }
 
-/** Tags are a small softened colour dot (like labels elsewhere), not a saturated glyph. */
+/** A tag: a small tag shape in its colour (a bare dot read like a status light). */
 function TagDot({ size = 20, color }: { size?: number; color?: string }) {
-    const dot = Math.max(6, Math.round(size * 0.4));
+    const shape = Math.max(10, Math.round(size * 0.72));
     return (
         <span className="fp-flat-glyph" style={{ width: size, height: size }} aria-hidden="true">
-            <span className="fp-tag-dot" style={{ width: dot, height: dot, background: softTone(color) ?? 'var(--fz-text-3)' }} />
+            <svg className="fp-tag-shape" width={shape} height={shape} viewBox="0 0 16 16">
+                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h4.38a1.5 1.5 0 0 1 1.06.44l4.62 4.62a1.5 1.5 0 0 1 0 2.12l-4.38 4.38a1.5 1.5 0 0 1-2.12 0L2.44 8.94A1.5 1.5 0 0 1 2 7.88V3.5Z" fill={softTone(color) ?? 'var(--fz-text-3)'} />
+                <circle cx="5.25" cy="5.25" r="1.15" style={{ fill: 'var(--fp-tag-hole, rgb(0 0 0 / 0.35))' }} />
+            </svg>
         </span>
     );
 }
@@ -713,23 +720,28 @@ function ExactTagIcon({ size = 20, color }: { size?: number; color?: string }) {
 }
 
 function ExactFavoritesIcon({ size = 20 }: { size?: number }) {
-    return <FlatGlyph icon={Star} size={size} />;
+    return <FlatGlyph icon={Star} size={size} tone="favorite" />;
 }
 
-function ExactVaultIcon({ color }: { color: string }) {
+/** A vault: a small glass tile in its colour with its icon in white, like an app icon. */
+function VaultChip({ color, icon: Icon, size = 20 }: { color: string; icon: typeof KeyRound; size?: number }) {
     return (
-        <span className="fp-flat-glyph is-fill" aria-hidden="true">
-            <span className="fp-vault-swatch" style={{ background: color }} />
+        <span className="fp-vault-chip" style={{ width: size, height: size, '--chip-color': color } as CSSProperties} aria-hidden="true">
+            <Icon strokeWidth={2.1} size={Math.round(size * 0.6)} />
         </span>
     );
 }
 
+function ExactVaultIcon({ color, size = 20 }: { color: string; size?: number }) {
+    return <VaultChip color={color} icon={LockKeyhole} size={size} />;
+}
+
 function ExactArchiveIcon({ size = 20 }: { size?: number }) {
-    return <FlatGlyph icon={Archive} size={size} />;
+    return <FlatGlyph icon={Archive} size={size} tone="archive" />;
 }
 
 function ExactRecentlyDeletedIcon({ size = 20 }: { size?: number }) {
-    return <FlatGlyph icon={History} size={size} />;
+    return <FlatGlyph icon={Trash2} size={size} tone="deleted" />;
 }
 
 function VaultProfileAvatar({ avatarUrl, fallbackUrl, name }: { avatarUrl?: string | null; fallbackUrl?: string | null; name: string }) {
@@ -831,7 +843,7 @@ function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean })
     return (
         <span
             ref={markRef}
-            className={`vault-item-mark${typeIconKind || isCard ? ' is-type-icon' : ''}${isCard ? ' is-card-brand' : ''}${favicon ? ' has-favicon' : ''}${favicon?.transparent ? ` is-see-through tone-${favicon.tone ?? 'color'}` : ''} relative ${large ? 'h-[60px] w-[60px] rounded-lg text-lg' : 'h-8 w-8 rounded-lg text-[11px]'} flex shrink-0 items-center justify-center overflow-hidden border font-bold tracking-[-0.03em]`}
+            className={`vault-item-mark${typeIconKind || isCard ? ' is-type-icon' : ''}${isCard ? ' is-card-brand' : ''}${favicon ? ' has-favicon' : ''} relative ${large ? 'h-[60px] w-[60px] rounded-lg text-lg' : 'h-8 w-8 rounded-lg text-[11px]'} flex shrink-0 items-center justify-center overflow-hidden border font-bold tracking-[-0.03em]`}
             style={typeIconKind || isCard || favicon ? ({ '--item-tone': tone } as CSSProperties) : ({ '--tile-h': tileHue(item.title) } as CSSProperties)}
             data-letter-tile={typeIconKind || isCard || favicon ? undefined : ''}
             aria-hidden="true"
@@ -1243,9 +1255,9 @@ const COLLECTION_COLORS = ['#6e8fb8', '#8da9c4', '#78b89a', '#d79ab6', '#b49bd6'
 const COLLECTION_GLYPHS: Record<string, typeof KeyRound> = { home: Home, work: Briefcase, star: Star, tag: Tag };
 
 function FocusCollectionGlyph({ color, icon, size }: { color: string; icon: string; size: number }) {
-    if (icon === 'vault') return <ExactVaultIcon color={color} />;
+    if (icon === 'vault') return <ExactVaultIcon color={color} size={size} />;
     if (icon === 'tag') return <TagDot size={size} color={color} />;
-    return <FlatGlyph icon={COLLECTION_GLYPHS[icon] ?? collectionIcon(icon) ?? Tag} size={size} color={softTone(color)} />;
+    return <VaultChip color={color} icon={COLLECTION_GLYPHS[icon] ?? collectionIcon(icon) ?? Tag} size={size} />;
 }
 
 /** The icon choices: the default mark, then a searchable, grouped set (rendered only while the dialog is open). */

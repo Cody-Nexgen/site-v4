@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { iconCandidates, iconHost, iconLook } from './siteIcons';
+import { iconCandidates, iconHost } from './siteIcons';
 
 test('Site icons: declared icons are ranked apple-touch-icon, then SVG, then by size', () => {
     const html = `<head>
@@ -33,18 +33,3 @@ test('Site icons: only public web hosts are looked up', () => {
     }
 });
 
-/** n pixels of one RGBA colour. */
-function px(n: number, r: number, g: number, b: number, a: number): number[] {
-    return Array.from({ length: n }, () => [r, g, b, a]).flat();
-}
-
-test('Site icons: see-through icons and what their visible part looks like', () => {
-    // Black logo on a clear background (Apple, GitHub): transparent, dark.
-    assert.deepEqual(iconLook(new Uint8Array([...px(60, 0, 0, 0, 0), ...px(40, 10, 10, 10, 255)])), { transparent: true, tone: 'dark' });
-    // White logo on clear: light.
-    assert.deepEqual(iconLook(new Uint8Array([...px(60, 0, 0, 0, 0), ...px(40, 250, 250, 250, 255)])), { transparent: true, tone: 'light' });
-    // Coloured logo on clear: colour.
-    assert.deepEqual(iconLook(new Uint8Array([...px(60, 0, 0, 0, 0), ...px(40, 230, 40, 40, 255)])), { transparent: true, tone: 'color' });
-    // An app icon with its own background: not transparent.
-    assert.equal(iconLook(new Uint8Array([...px(10, 0, 0, 0, 0), ...px(90, 30, 120, 220, 255)])).transparent, false);
-});
