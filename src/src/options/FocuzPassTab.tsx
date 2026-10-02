@@ -681,15 +681,15 @@ function ExactSidebarPlusIcon({ size = 16 }: { size?: number }) {
  * FocuzPass's own solid sidebar icons: filled shapes with details cut out (masks, so the cut-outs
  * show whatever is behind them), drawn on a 20px grid. Solid reads friendlier than thin outlines.
  */
-function SolidIcon({ size = 20, tone, children, mask }: { size?: number; tone?: string; children: ReactNode; mask?: ReactNode }) {
+function SolidIcon({ size = 20, tone, color, grid = 20, children, mask }: { size?: number; tone?: string; color?: string; grid?: number; children: ReactNode; mask?: ReactNode }) {
     const id = useId().replace(/:/g, '');
     return (
-        <span className={`fp-flat-glyph fp-solid-icon${tone ? ` tone-${tone}` : ''}`} style={{ width: size, height: size }} aria-hidden="true">
-            <svg viewBox="0 0 20 20" width="84%" height="84%">
+        <span className={`fp-flat-glyph fp-solid-icon${tone ? ` tone-${tone}` : ''}`} style={{ width: size, height: size, color }} aria-hidden="true">
+            <svg viewBox={`0 0 ${grid} ${grid}`} width={grid === 20 ? '84%' : '100%'} height={grid === 20 ? '84%' : '100%'}>
                 {mask && (
                     <defs>
                         <mask id={`m${id}`}>
-                            <rect width="20" height="20" fill="#fff" />
+                            <rect width={grid} height={grid} fill="#fff" />
                             <g fill="#000">{mask}</g>
                         </mask>
                     </defs>
@@ -728,15 +728,12 @@ function softTone(color?: string) {
     return color || undefined;
 }
 
-/** A tag: one tag outline in the tag's colour, centred in its box. */
+/** A tag: one solid tag in the tag's colour with its hole cut out, centred in its box. */
 function TagDot({ size = 20, color }: { size?: number; color?: string }) {
     return (
-        <LineIcon size={size} color={softTone(color) ?? 'var(--fz-text-3)'}>
-            <g transform="translate(1.9 -1)">
-                <path d="M3 8v4.172a2 2 0 0 0 .586 1.414l5.71 5.71a2.41 2.41 0 0 0 3.408 0l3.592-3.592a2.41 2.41 0 0 0 0-3.408l-5.71-5.71A2 2 0 0 0 9.172 6H5a2 2 0 0 0-2 2" />
-                <path d="M7 10h-.01" />
-            </g>
-        </LineIcon>
+        <SolidIcon size={size} grid={24} color={softTone(color) ?? 'var(--fz-text-3)'} mask={<circle cx="8.9" cy="9" r="1.7" />}>
+            <path transform="translate(1.9 -1)" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" d="M3 8v4.172a2 2 0 0 0 .586 1.414l5.71 5.71a2.41 2.41 0 0 0 3.408 0l3.592-3.592a2.41 2.41 0 0 0 0-3.408l-5.71-5.71A2 2 0 0 0 9.172 6H5a2 2 0 0 0-2 2Z" />
+        </SolidIcon>
     );
 }
 
@@ -761,13 +758,17 @@ function VaultChip({ color, icon: Icon, size = 20 }: { color: string; icon: type
     );
 }
 
-/** The default vault mark: a safe with its dial, in the vault's colour. */
+/** The default vault mark: a solid safe in the vault's colour with its dial cut out. */
 function ExactVaultIcon({ color, size = 20 }: { color: string; size?: number }) {
     return (
-        <LineIcon size={size} color={color}>
-            <path d="M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z" />
-            <path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0m.75-2.25L8 8m6.25 1.75L16 8m-1.75 6.25L16 16m-6.25-1.75L8 16" />
-        </LineIcon>
+        <SolidIcon
+            size={size}
+            grid={24}
+            color={color}
+            mask={<g fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3" /><path d="M9.75 9.75L8 8m6.25 1.75L16 8m-1.75 6.25L16 16m-6.25-1.75L8 16" /></g>}
+        >
+            <rect x="2.5" y="2.5" width="19" height="19" rx="4.2" />
+        </SolidIcon>
     );
 }
 
