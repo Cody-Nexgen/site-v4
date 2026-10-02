@@ -700,14 +700,25 @@ function SolidIcon({ size = 20, tone, children, mask }: { size?: number; tone?: 
     );
 }
 
+/**
+ * Line icons for the sidebar, on a 24px grid with round 2px strokes (the owner's pick: friendlier
+ * than our first solid set). They follow the text colour unless given one.
+ */
+function LineIcon({ size = 20, color, children }: { size?: number; color?: string; children: ReactNode }) {
+    return (
+        <span className="fp-flat-glyph fp-line-icon" style={{ width: size, height: size, color }} aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+        </span>
+    );
+}
+
+/** All Items: a wallet holding everything. */
 function ExactAllItemsIcon({ size = 20 }: { size?: number }) {
     return (
-        <SolidIcon size={size}>
-            <rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1.9" />
-            <rect x="11" y="2.5" width="6.5" height="6.5" rx="1.9" opacity="0.5" />
-            <rect x="2.5" y="11" width="6.5" height="6.5" rx="1.9" opacity="0.5" />
-            <rect x="11" y="11" width="6.5" height="6.5" rx="1.9" />
-        </SolidIcon>
+        <LineIcon size={size}>
+            <path d="M2 12c0-3.771 0-5.657 1.172-6.828S6.229 4 10 4h4c3.771 0 5.657 0 6.828 1.172S22 8.229 22 12s0 5.657-1.172 6.828S17.771 20 14 20h-4c-3.771 0-5.657 0-6.828-1.172S2 15.771 2 12" />
+            <path d="M2 10h4.197c.715 0 1.072 0 1.393.112a2 2 0 0 1 .545.292c.27.204.469.501.865 1.096s.595.892.865 1.096q.25.189.546.292c.32.112.677.112 1.392.112h.394c.715 0 1.072 0 1.393-.112a2 2 0 0 0 .544-.292c.271-.204.47-.501.866-1.096s.595-.892.866-1.096c.165-.125.349-.224.544-.292c.32-.112.678-.112 1.393-.112H22" />
+        </LineIcon>
     );
 }
 
@@ -717,16 +728,15 @@ function softTone(color?: string) {
     return color || undefined;
 }
 
-/** A tag: a small tag shape in its colour (a bare dot read like a status light). */
+/** A tag: one tag outline in the tag's colour, centred in its box. */
 function TagDot({ size = 20, color }: { size?: number; color?: string }) {
-    const shape = Math.max(10, Math.round(size * 0.72));
     return (
-        <span className="fp-flat-glyph" style={{ width: size, height: size }} aria-hidden="true">
-            <svg className="fp-tag-shape" width={shape} height={shape} viewBox="0 0 16 16">
-                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h4.38a1.5 1.5 0 0 1 1.06.44l4.62 4.62a1.5 1.5 0 0 1 0 2.12l-4.38 4.38a1.5 1.5 0 0 1-2.12 0L2.44 8.94A1.5 1.5 0 0 1 2 7.88V3.5Z" fill={softTone(color) ?? 'var(--fz-text-3)'} />
-                <circle cx="5.25" cy="5.25" r="1.15" style={{ fill: 'var(--fp-tag-hole, rgb(0 0 0 / 0.35))' }} />
-            </svg>
-        </span>
+        <LineIcon size={size} color={softTone(color) ?? 'var(--fz-text-3)'}>
+            <g transform="translate(1.9 -1)">
+                <path d="M3 8v4.172a2 2 0 0 0 .586 1.414l5.71 5.71a2.41 2.41 0 0 0 3.408 0l3.592-3.592a2.41 2.41 0 0 0 0-3.408l-5.71-5.71A2 2 0 0 0 9.172 6H5a2 2 0 0 0-2 2" />
+                <path d="M7 10h-.01" />
+            </g>
+        </LineIcon>
     );
 }
 
@@ -751,14 +761,13 @@ function VaultChip({ color, icon: Icon, size = 20 }: { color: string; icon: type
     );
 }
 
-/** The default vault mark: a solid safe with a keyhole, in the vault's colour. */
+/** The default vault mark: a safe with its dial, in the vault's colour. */
 function ExactVaultIcon({ color, size = 20 }: { color: string; size?: number }) {
     return (
-        <span style={{ color, display: 'inline-flex' }}>
-            <SolidIcon size={size} mask={<><circle cx="10" cy="9.3" r="2" /><rect x="9.15" y="9.6" width="1.7" height="4" rx="0.85" /></>}>
-                <rect x="2.6" y="3" width="14.8" height="14" rx="3.4" />
-            </SolidIcon>
-        </span>
+        <LineIcon size={size} color={color}>
+            <path d="M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z" />
+            <path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0m.75-2.25L8 8m6.25 1.75L16 8m-1.75 6.25L16 16m-6.25-1.75L8 16" />
+        </LineIcon>
     );
 }
 

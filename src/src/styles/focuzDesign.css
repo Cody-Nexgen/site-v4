@@ -6687,7 +6687,6 @@ html[data-dashboard-theme="light"] .focuz-pass .vault-item-mark.has-favicon {
 .fp-vault-chip > svg { position: relative; z-index: 3; filter: drop-shadow(0 0.5px 0.5px rgb(0 0 0 / 0.25)); }
 
 /* Tags: the tag shape's hole picks up the surface behind it. */
-.fp-tag-shape { display: block; filter: drop-shadow(0 0.5px 0.5px rgb(0 0 0 / 0.2)); --fp-tag-hole: var(--fp-sidebar, var(--fz-bg-app)); }
 
 /* Sidebar, friendlier (2026-10-02): neutral charcoal (the blue-black felt harsh), icons with a
    fuller duotone fill so they read as shapes, and a clearer highlight on the current place. */
@@ -6725,3 +6724,93 @@ html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav-section .vault-n
 /* Solid sidebar icons (SolidIcon): filled shapes, a touch dimmer at rest, full strength when picked. */
 .fp-solid-icon svg { display: block; overflow: visible; }
 .vault-nav button:not(.is-active) .fp-solid-icon:not([class*="tone-"]) { opacity: 0.82; }
+
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   Calm Glass (2026-10-02). FocuzPass's own layout: the sidebar and the list float as rounded glass
+   panels on a slightly darker backdrop instead of edge-to-edge columns; warm stone greys instead
+   of cool slate; and a "beam" (from the Beam Z mark): a soft light on the selected item and a
+   faint glow at the top of the sidebar. The accent stays white/ink; colour comes from the items.
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.focuz-pass-ready {
+    --fp-backdrop: oklch(0.158 0.005 70);
+    --fp-sidebar: oklch(0.198 0.005 70);
+    --fp-main: oklch(0.203 0.005 70);
+    --fp-card: oklch(0.236 0.006 70);
+    --fp-line: oklch(0.96 0.012 80 / 0.07);
+    --fp-rim: oklch(1 0 0 / 0.075);
+    --fp-beam: oklch(0.98 0.012 85);
+    --fp-accent-soft: oklch(0.98 0.012 85 / 0.09);
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready {
+    --fp-backdrop: oklch(0.938 0.006 75);
+    --fp-sidebar: oklch(0.978 0.004 75);
+    --fp-main: oklch(0.996 0.002 75);
+    --fp-card: oklch(1 0 0);
+    --fp-line: oklch(0.32 0.02 60 / 0.085);
+    --fp-rim: oklch(1 0 0 / 0.9);
+    --fp-beam: oklch(0.22 0.01 60);
+    --fp-accent-soft: oklch(0.22 0.01 60 / 0.06);
+}
+
+/* The backdrop, with the panels floating on it. */
+.focuz-pass-ready .vault-shell { background: var(--fp-backdrop); padding: 8px; column-gap: 8px; row-gap: 4px; }
+.focuz-pass-ready .vault-nav,
+.focuz-pass-ready .vault-list,
+.focuz-pass-ready .vault-library-layout .vault-list {
+    border: 1px solid var(--fp-line);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 var(--fp-rim), 0 10px 30px -18px oklch(0 0 0 / 0.6);
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-list {
+    box-shadow: inset 0 1px 0 var(--fp-rim), 0 1px 2px oklch(0.3 0.02 60 / 0.06), 0 10px 30px -20px oklch(0.3 0.02 60 / 0.25);
+}
+/* The sidebar's beam: a faint light falling from the top. */
+.focuz-pass-ready .vault-nav {
+    background: radial-gradient(130% 50% at 30% -12%, oklch(0.98 0.012 85 / 0.075), transparent 62%), var(--fp-sidebar);
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav {
+    background: radial-gradient(130% 50% at 30% -12%, oklch(1 0 0 / 0.9), transparent 62%), var(--fp-sidebar);
+}
+/* The toolbar sits on the backdrop; the search is its own little glass pill. */
+.focuz-pass-ready .vault-toolbar { border-bottom: 0; background: transparent; padding-inline: 2px 0; }
+.focuz-pass-ready .vault-search {
+    border: 1px solid var(--fp-line);
+    border-radius: 12px;
+    background: var(--fp-main);
+    box-shadow: inset 0 1px 0 var(--fp-rim);
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-search { background: var(--fp-main); }
+.focuz-pass-ready .vault-search:focus-within { border-color: oklch(0.98 0.012 85 / 0.35); background: var(--fp-main); box-shadow: inset 0 1px 0 var(--fp-rim), 0 0 0 3px var(--fp-accent-soft); }
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-search:focus-within { border-color: oklch(0.22 0.01 60 / 0.3); }
+.focuz-pass-ready .vault-inspector { box-shadow: inset 0 1px 0 var(--fp-rim), 0 24px 60px -30px oklch(0 0 0 / 0.6), 0 2px 10px -4px oklch(0 0 0 / 0.25); }
+
+/* The beam on the current place: a soft light with a bright edge on the left. */
+.focuz-pass-ready .vault-row { border-radius: 12px; }
+.focuz-pass-ready .vault-row.is-selected {
+    background: linear-gradient(90deg, oklch(0.98 0.012 85 / 0.12), oklch(0.98 0.012 85 / 0.05) 55%, oklch(0.98 0.012 85 / 0.025)) !important;
+    box-shadow: inset 0 0 0 1px oklch(0.98 0.012 85 / 0.07), inset 2px 0 0 oklch(0.98 0.012 85 / 0.9), inset 14px 0 18px -14px oklch(0.98 0.012 85 / 0.45);
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-row.is-selected {
+    background: linear-gradient(90deg, oklch(0.22 0.01 60 / 0.07), oklch(0.22 0.01 60 / 0.035) 55%, oklch(0.22 0.01 60 / 0.02)) !important;
+    box-shadow: inset 0 0 0 1px oklch(0.22 0.01 60 / 0.06), inset 2px 0 0 oklch(0.22 0.01 60 / 0.85);
+}
+.focuz-pass-ready .vault-nav-item.is-active,
+.focuz-pass-ready .vault-nav-item.is-active-subtle,
+.focuz-pass-ready .vault-primary-nav > button.is-active,
+.focuz-pass-ready .vault-primary-nav > button.is-active-subtle,
+.focuz-pass-ready .vault-nav-section .vault-nav-item.is-active-subtle,
+.focuz-pass-ready .vault-nav-bottom .vault-nav-item.is-active-subtle {
+    background: linear-gradient(180deg, oklch(0.98 0.012 85 / 0.13), oklch(0.98 0.012 85 / 0.08));
+    box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.08), inset 0 0 0 1px oklch(0.98 0.012 85 / 0.05);
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav-item.is-active,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav-item.is-active-subtle,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-primary-nav > button.is-active,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-primary-nav > button.is-active-subtle,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav-section .vault-nav-item.is-active-subtle,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-nav-bottom .vault-nav-item.is-active-subtle {
+    background: oklch(1 0 0);
+    box-shadow: 0 0 0 1px oklch(0.32 0.02 60 / 0.07), 0 1px 3px oklch(0.32 0.02 60 / 0.1);
+}
