@@ -6,6 +6,7 @@
  */
 
 import { holdExtensionAnchor, releaseExtensionAnchor } from './extensionAnchor';
+import { markLetters, readableTitle, tileHue } from '../lib/focuzPass/displayName';
 import { currentPasskeyOffer, watchPasskeyOffer, type PasskeyOffer } from './passkeyOffer';
 
 type AutofillItem = {
@@ -248,6 +249,7 @@ const OVERLAY_STYLE = `
     .tile img { width: 18px; height: 18px; object-fit: contain; display: block; }
     .tile .ic { width: 14px; height: 14px; }
     .tile.is-card { font-size: 8.5px; letter-spacing: .04em; }
+    .tile.is-letter { border-color: transparent; background: oklch(0.8 0.075 var(--tile-h, 230)); color: oklch(0.32 0.08 var(--tile-h, 230)); font-size: 11px; letter-spacing: -.01em; }
     .copy { min-width: 0; flex: 1; display: grid; gap: 1px; }
     .title { color: var(--text-1); font-size: 12.5px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sub { color: var(--text-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1155,6 +1157,8 @@ class FocuzPassPageOverlay {
     private observer: MutationObserver | null = null;
     private controlState: ControlState = 'checking';
     private dismissedFor: HTMLElement | null = null;
+    /** No auto-open until then (just filled a login; the page is about to change). */
+    private quietUntil = 0;
     private remoteSourceFrameId: number | null = null;
     private pageContext: PageContext | null = null;
     private pageContextAt = 0;
@@ -1653,7 +1657,7 @@ class FocuzPassPageOverlay {
      * moving between fields glides it and swaps its content instead of replaying it.
      */
     private openFromField(target: HTMLElement) {
-        if (this.dismissedFor === target || readDismissed()) return;
+        if (this.dismissedFor === target || readDismissed() || Date.now() < this.quietUntil) return;
         const context = this.pageContext;
         if (context?.state === 'ready' && this.isNewPasswordField(target)) {
             void this.openSignupPanel(target);
@@ -1955,17 +1959,25 @@ class FocuzPassPageOverlay {
             tile.innerHTML = icon('userRound');
             return tile;
         }
-        const mark = match.mark || siteMark(match.title);
+        // Same letters and colour as the item's tile in FocuzPass ("Ho" on a pastel tile).
+        const name = readableTitle(match.title || match.domain || location.hostname);
+        const mark = markLetters(name);
+        const letterTile = () => {
+            tile.classList.add('is-letter');
+            tile.style.setProperty('--tile-h', String(tileHue(name)));
+            tile.textContent = mark;
+        };
         if (favicon && match.type === 'login') {
             const image = createElement('img');
             image.alt = '';
             image.src = favicon;
             image.addEventListener('error', () => {
-                tile.textContent = mark;
+                image.remove();
+                letterTile();
             }, { once: true });
             tile.appendChild(image);
         } else {
-            tile.textContent = mark;
+            letterTile();
         }
         return tile;
     }
@@ -2172,6 +2184,9 @@ class FocuzPassPageOverlay {
             const passwordInput = controls.find((control): control is HTMLInputElement => control instanceof HTMLInputElement && classifyField(control) === 'password');
             if (passwordInput) fillRelatedPasswordConfirmation(passwordInput, match.password);
         }
+        // Filling (and refocusing) the fields would auto-open the panel again right after it closes,
+        // and the site is usually about to sign in: stay quiet for a moment.
+        this.quietUntil = Date.now() + 4000;
         activeInput?.focus({ preventScroll: true });
         void this.send<null>({ type: 'FOCUZPASS_MARK_USED', id: match.id }).catch(() => undefined);
         this.closePopover();
@@ -2275,6 +2290,12 @@ class FocuzPassPageOverlay {
             || this.activeControl?.target;
         if (!anchor) return;
         const rect = overlayAnchorRect(anchor);
+        // The field went away (the site signed in, or re-rendered the form): close instead of
+        // sliding to the corner where a field with no box measures.
+        if (!anchor.isConnected || (rect.width === 0 && rect.height === 0)) {
+            this.closePopover();
+            return;
+        }
         const origin = fixedOverlayOrigin();
         // §5.4: match the field width within 280–360px, sit 6px below the field,
         // flip above when there's no room, and never overlap the field itself.

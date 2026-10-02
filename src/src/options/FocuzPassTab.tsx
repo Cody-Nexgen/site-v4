@@ -448,7 +448,7 @@ function toUiItem(item: DecryptedVaultItem): VaultItem {
         kind: item.type === 'custom' ? item.kind : undefined,
         title,
         identity: item.identity,
-        domain: item.type === 'login' || item.type === 'passkey' ? item.domain : undefined,
+        domain: item.type === 'login' || item.type === 'passkey' || (item.type === 'custom' && item.kind === 'password') ? (item as { domain?: string }).domain : undefined,
         password: item.type === 'login' ? item.password : undefined,
         cardNumber: item.type === 'card' ? item.cardNumber : undefined,
         expiry: item.type === 'card' ? item.expiry : undefined,
@@ -821,10 +821,12 @@ function focusWithoutScroll(element: HTMLElement | null) {
 
 function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean }) {
     const markRef = useRef<HTMLSpanElement>(null);
-    const favicon = useSiteIcon(item.type === 'login' || item.type === 'passkey' ? item.domain : undefined, markRef);
+    // A plain "Password" item is a site login too: its site's icon, or a letter tile, not a generic glyph.
+    const siteLike = item.type === 'login' || item.type === 'passkey' || (item.type === 'custom' && item.kind === 'password');
+    const favicon = useSiteIcon(siteLike ? item.domain : undefined, markRef);
     const definition = itemDefinition(item);
     const tone = item.markTone === '#e5e5e5' ? definition.tone : item.markTone;
-    const typeIconKind = item.type === 'custom' && item.kind ? item.kind : null;
+    const typeIconKind = item.type === 'custom' && item.kind && item.kind !== 'password' ? item.kind : null;
     const isCard = item.type === 'card';
     return (
         <span

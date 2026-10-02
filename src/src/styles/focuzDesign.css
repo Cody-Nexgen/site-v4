@@ -6524,26 +6524,27 @@ html:not([data-dashboard-theme="light"]) .vault-item-mark[data-letter-tile] {
    the eye should go: the current place in the sidebar, the selected item, field labels, New item.
    ─────────────────────────────────────────────────────────────────────────────────────────────── */
 .focuz-pass-ready {
-    --fp-hue: var(--fz-accent-hue, 255);
+    /* Neutral on purpose: FocuzNow's accent is white/ink; colour comes from the items themselves. */
     --fp-sidebar: oklch(0.165 0.006 275);
     --fp-main: oklch(0.195 0.006 275);
     --fp-card: oklch(0.225 0.007 275);
     --fp-line: oklch(0.955 0.003 275 / 0.075);
-    --fp-accent: oklch(0.7 0.15 var(--fp-hue));
-    --fp-accent-strong: oklch(0.62 0.17 var(--fp-hue));
-    --fp-accent-soft: oklch(0.7 0.15 var(--fp-hue) / 0.16);
-    --fp-accent-text: oklch(0.8 0.11 var(--fp-hue));
-    --fp-accent-fg: oklch(0.99 0.005 var(--fp-hue));
+    --fp-accent: oklch(0.955 0.003 275);
+    --fp-accent-strong: oklch(0.955 0.003 275);
+    --fp-accent-soft: oklch(0.955 0.003 275 / 0.085);
+    --fp-accent-text: oklch(0.72 0.005 275);
+    --fp-accent-fg: oklch(0.17 0.004 275);
 }
 html[data-dashboard-theme="light"] .focuz-pass-ready {
     --fp-sidebar: oklch(0.965 0.004 275);
     --fp-main: oklch(0.995 0.001 275);
     --fp-card: oklch(1 0 0);
     --fp-line: oklch(0.2 0.008 275 / 0.08);
-    --fp-accent: oklch(0.6 0.17 var(--fp-hue));
-    --fp-accent-strong: oklch(0.54 0.18 var(--fp-hue));
-    --fp-accent-soft: oklch(0.6 0.17 var(--fp-hue) / 0.11);
-    --fp-accent-text: oklch(0.5 0.16 var(--fp-hue));
+    --fp-accent: oklch(0.2 0.008 275);
+    --fp-accent-strong: oklch(0.2 0.008 275);
+    --fp-accent-soft: oklch(0.2 0.008 275 / 0.06);
+    --fp-accent-text: oklch(0.45 0.008 275);
+    --fp-accent-fg: oklch(0.99 0.002 275);
 }
 
 /* Surfaces */
