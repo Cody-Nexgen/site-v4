@@ -6204,26 +6204,22 @@ html[data-dashboard-theme="light"] .fz-cmdk {
     .focuz-pass-ready .vault-toolbar .vault-new-item:active { transform: none; }
 }
 /* "Back to FocuzNow" sits at the foot of the sidebar, set apart from Archive and Recently deleted. */
-/* Breadcrumb at the top of the sidebar: "← FocuzNow / FocuzPass". */
-.focuz-pass-ready .vault-brand-trail { display: inline-flex; min-width: 0; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; }
+/* Sidebar header: [←] FocuzPass …… [collapse]. The back button is a small square like the toggle. */
+.focuz-pass-ready .vault-brand-trail { display: inline-flex; min-width: 0; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 650; letter-spacing: -0.01em; }
 .focuz-pass-ready .vault-brand-row .vault-brand-back {
-    width: auto;
-    display: inline-flex;
+    display: grid;
+    width: 26px;
     height: 26px;
-    align-items: center;
-    gap: 5px;
+    flex: none;
+    place-items: center;
     border: 1px solid var(--fz-border);
     border-radius: 7px;
-    background: var(--fz-bg-active);
-    padding: 0 8px 0 6px;
+    background: var(--fz-bg-panel);
     color: var(--fz-text-2);
-    font-size: 12px;
-    font-weight: 550;
     transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 .focuz-pass-ready .vault-brand-row .vault-brand-back:hover { border-color: var(--fz-border-strong); background: var(--fz-bg-hover); color: var(--fz-text-1); }
 .focuz-pass-ready .vault-brand-back:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 2px; }
-.focuz-pass-ready .vault-brand-sep { color: var(--fz-text-4); }
 
 /* FocuzPass dialogs in the Help-menu style (2026-10-01): quiet rows that light up on hover, muted
    icons, thin borders, one input style. Overrides the older, boxier rules above. */
@@ -6339,36 +6335,29 @@ html[data-dashboard-theme="light"] .fz-cmdk {
 .vault-floating-credit { padding: 6px 8px 3px; color: var(--fz-text-4); font-size: 10.5px; text-align: right; }
 @media (prefers-reduced-motion: reduce) { .vault-floating-panel { animation: none; } }
 
-/* Vault/tag colour picker: presets, a custom swatch, and the custom panel (square + hue + inputs). */
-.vault-color-picker { display: flex; flex-direction: column; gap: 10px; }
-.vault-color-picker .vault-color-grid { align-items: center; gap: 6px; }
-.vault-color-picker .vault-color-grid button { width: 22px; height: 22px; border: 2px solid transparent; border-radius: 50%; }
-.vault-color-picker .vault-color-grid button.is-selected { box-shadow: 0 0 0 2px var(--fz-bg-overlay), 0 0 0 4px var(--fz-border-strong); }
-.vault-color-picker .vault-color-custom {
+/* Vault/tag colour: preset swatches and a custom swatch that opens a popover (square, vertical hue
+   strip, one hex-or-RGB field). */
+.vault-collection-form .vault-color-grid,
+.vault-color-grid[role="radiogroup"] { align-items: center; gap: 6px; }
+.vault-color-grid[role="radiogroup"] > button { width: 22px; height: 22px; border: 2px solid transparent; border-radius: 50%; }
+.vault-color-grid[role="radiogroup"] > button.is-selected { box-shadow: 0 0 0 2px var(--fz-bg-overlay), 0 0 0 4px var(--fz-border-strong); }
+.vault-color-grid[role="radiogroup"] > .vault-color-custom {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     background: conic-gradient(from 0deg, #e8807a, #e6c06e, #8fcf8a, #7cc4d4, #8a9fe0, #c690d8, #e8807a);
     color: #fff;
 }
-.vault-color-custom-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    border: 1px solid var(--fz-border);
-    border-radius: 10px;
-    background: var(--fz-bg-panel);
-    padding: 10px;
-}
+.vault-color-popover { width: 236px !important; padding: 10px; }
+.vault-color-pickers { display: grid; grid-template-columns: minmax(0, 1fr) 14px; gap: 10px; }
 .vault-color-area {
     position: relative;
-    height: 140px;
+    height: 150px;
     border-radius: 8px;
     background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
     cursor: crosshair;
     touch-action: none;
 }
-.vault-color-area:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 2px; }
 .vault-color-dot {
     position: absolute;
     width: 16px;
@@ -6379,40 +6368,41 @@ html[data-dashboard-theme="light"] .fz-cmdk {
     transform: translate(-50%, -50%);
     pointer-events: none;
 }
-.vault-color-hue {
-    width: 100%;
-    height: 12px;
-    appearance: none;
+.vault-color-hue-strip {
+    position: relative;
     border-radius: 999px;
-    background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
-    cursor: pointer;
+    background: linear-gradient(to bottom, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+    cursor: ns-resize;
+    touch-action: none;
 }
-.vault-color-hue::-webkit-slider-thumb {
+.vault-color-hue-strip > span {
+    position: absolute;
+    left: 50%;
     width: 16px;
     height: 16px;
-    appearance: none;
     border: 2px solid #fff;
     border-radius: 50%;
-    background: transparent;
     box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 1px 4px rgb(0 0 0 / 0.3);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
 }
-.vault-color-hue:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 3px; }
-.vault-color-inputs { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
-.vault-color-inputs label { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
-.vault-color-inputs label > span { color: var(--fz-text-4); font-size: 11px; font-weight: 550; }
-.vault-color-inputs input {
-    width: 100%;
-    min-width: 0;
-    height: 30px;
+.vault-color-area:focus-visible,
+.vault-color-hue-strip:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 2px; }
+.vault-color-field {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
     border: 1px solid var(--fz-border);
-    border-radius: 7px;
-    background: var(--fz-bg-overlay);
-    padding: 0 8px;
-    color: var(--fz-text-1);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
+    border-radius: 8px;
+    background: var(--fz-bg-panel);
+    padding: 0 9px;
 }
-.vault-color-inputs input:focus { border-color: var(--fz-border-strong); outline: none; }
+.vault-color-field:focus-within { border-color: var(--fz-border-strong); }
+.vault-color-field-swatch { width: 18px; height: 18px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15); }
+.vault-color-field input { min-width: 0; height: 32px; border: 0; background: none; color: var(--fz-text-1); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; outline: none; }
+.vault-color-field small { color: var(--fz-text-4); font-size: 10.5px; }
 
 /* FocuzPass locked / setup screens in the Help-menu style (2026-10-01): a compact card on the
    overlay surface, a left-aligned message, one clear button, and quiet note rows under it. */
@@ -6455,3 +6445,155 @@ html[data-dashboard-theme="light"] .fz-cmdk {
 .vault-access-notes li > svg { margin-top: 1px; color: var(--fz-text-3); }
 .vault-access-notes li > span { color: var(--fz-text-4); font-size: 11.5px; line-height: 1.45; }
 .vault-access-notes li strong { display: block; color: var(--fz-text-2); font-size: 12.5px; font-weight: 550; }
+
+/* Items with no site icon: a pastel tile in a colour picked from the name, darker letters in the same hue. */
+.vault-item-mark[data-letter-tile] {
+    border-color: transparent !important;
+    background: oklch(0.87 0.07 var(--tile-h, 230)) !important;
+    color: oklch(0.38 0.09 var(--tile-h, 230)) !important;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+html:not([data-dashboard-theme="light"]) .vault-item-mark[data-letter-tile] {
+    background: oklch(0.8 0.075 var(--tile-h, 230)) !important;
+    color: oklch(0.32 0.08 var(--tile-h, 230)) !important;
+}
+
+/* FocuzPass date picker: a field-like trigger and a calendar popover in the Help-menu style. */
+.vault-date-trigger {
+    display: flex;
+    width: 100%;
+    min-height: 26px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--fz-text-1);
+    font-size: 13px;
+    text-align: left;
+}
+.vault-date-trigger > svg { flex: none; color: var(--fz-text-4); }
+.vault-date-trigger:hover > svg { color: var(--fz-text-2); }
+.vault-date-trigger .is-placeholder { color: var(--fz-text-4); }
+.vault-date-trigger:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 2px; }
+.vault-filter-menu-range .vault-date-trigger { height: 28px; border: 1px solid var(--fz-border); background: var(--fz-bg-panel); padding: 0 7px; font-size: 12px; }
+.vault-date-popover { width: 268px !important; padding: 10px; }
+.vault-date-head { display: grid; grid-template-columns: 28px minmax(0, 1fr) 78px 28px; align-items: center; gap: 4px; margin-bottom: 8px; }
+.vault-date-head > button { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 7px; color: var(--fz-text-3); }
+.vault-date-head > button:hover { background: var(--fz-bg-hover); color: var(--fz-text-1); }
+.vault-date-head select {
+    height: 28px;
+    appearance: none;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    padding: 0 6px;
+    color: var(--fz-text-1);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+}
+.vault-date-head select:hover { background: var(--fz-bg-hover); }
+.vault-date-head select option { background: var(--fz-bg-overlay); color: var(--fz-text-1); }
+.vault-date-weekdays,
+.vault-date-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.vault-date-weekdays span { padding: 4px 0; color: var(--fz-text-4); font-size: 10.5px; font-weight: 550; text-align: center; }
+.vault-date-grid button {
+    height: 32px;
+    border-radius: 8px;
+    color: var(--fz-text-2);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    transition: background-color 90ms ease, color 90ms ease;
+}
+.vault-date-grid button:hover:not(:disabled) { background: var(--fz-bg-hover); color: var(--fz-text-1); }
+.vault-date-grid button.is-outside { color: var(--fz-text-4); opacity: 0.6; }
+.vault-date-grid button.is-today { box-shadow: inset 0 0 0 1px var(--fz-border-strong); color: var(--fz-text-1); font-weight: 600; }
+.vault-date-grid button.is-selected { background: var(--fz-text-1); color: var(--fz-bg); font-weight: 600; }
+.vault-date-grid button:disabled { opacity: 0.3; cursor: default; }
+.vault-date-grid button:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 1px; }
+.vault-date-foot { display: flex; justify-content: space-between; margin-top: 8px; border-top: 1px solid var(--fz-border); padding-top: 8px; }
+.vault-date-foot button { border-radius: 6px; padding: 4px 8px; color: var(--fz-text-3); font-size: 12px; font-weight: 550; }
+.vault-date-foot button:hover:not(:disabled) { background: var(--fz-bg-hover); color: var(--fz-text-1); }
+
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   FocuzPass, lively (2026-10-02). FocuzNow's own look: layered greys (a darker sidebar, the list,
+   the item panel lifted as a card) and one FocuzPass accent from the user's accent hue, used where
+   the eye should go: the current place in the sidebar, the selected item, field labels, New item.
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.focuz-pass-ready {
+    --fp-hue: var(--fz-accent-hue, 255);
+    --fp-sidebar: oklch(0.165 0.006 275);
+    --fp-main: oklch(0.195 0.006 275);
+    --fp-card: oklch(0.225 0.007 275);
+    --fp-line: oklch(0.955 0.003 275 / 0.075);
+    --fp-accent: oklch(0.7 0.15 var(--fp-hue));
+    --fp-accent-strong: oklch(0.62 0.17 var(--fp-hue));
+    --fp-accent-soft: oklch(0.7 0.15 var(--fp-hue) / 0.16);
+    --fp-accent-text: oklch(0.8 0.11 var(--fp-hue));
+    --fp-accent-fg: oklch(0.99 0.005 var(--fp-hue));
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready {
+    --fp-sidebar: oklch(0.965 0.004 275);
+    --fp-main: oklch(0.995 0.001 275);
+    --fp-card: oklch(1 0 0);
+    --fp-line: oklch(0.2 0.008 275 / 0.08);
+    --fp-accent: oklch(0.6 0.17 var(--fp-hue));
+    --fp-accent-strong: oklch(0.54 0.18 var(--fp-hue));
+    --fp-accent-soft: oklch(0.6 0.17 var(--fp-hue) / 0.11);
+    --fp-accent-text: oklch(0.5 0.16 var(--fp-hue));
+}
+
+/* Surfaces */
+.focuz-pass-ready .vault-shell { background: var(--fp-main); }
+.focuz-pass-ready .vault-nav { border-right-color: var(--fp-line); background: var(--fp-sidebar); }
+.focuz-pass-ready .vault-toolbar { border-bottom-color: var(--fp-line); background: var(--fp-main); }
+.focuz-pass-ready .vault-list,
+.focuz-pass-ready .vault-library-layout .vault-list { background: var(--fp-main); }
+.focuz-pass-ready .vault-inspector {
+    border-color: var(--fp-line);
+    background: var(--fp-card);
+    box-shadow: 0 24px 60px -30px oklch(0 0 0 / 0.55), 0 2px 10px -4px oklch(0 0 0 / 0.25);
+}
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-inspector { box-shadow: 0 24px 50px -30px oklch(0.2 0.02 275 / 0.22), 0 2px 8px -4px oklch(0.2 0.02 275 / 0.08); }
+.focuz-pass-ready .vault-search { border-color: transparent; background: oklch(0.955 0.003 275 / 0.055); }
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-search { background: oklch(0.2 0.008 275 / 0.045); }
+.focuz-pass-ready .vault-search:focus-within { border-color: var(--fp-accent); background: transparent; box-shadow: 0 0 0 3px var(--fp-accent-soft); }
+
+/* Where you are: the sidebar item and the selected row carry the accent. */
+.focuz-pass-ready .vault-nav-item.is-active,
+.focuz-pass-ready .vault-nav-item.is-active-subtle,
+.focuz-pass-ready .vault-primary-nav > button.is-active,
+.focuz-pass-ready .vault-primary-nav > button.is-active-subtle,
+.focuz-pass-ready .vault-nav-section .vault-nav-item.is-active-subtle,
+.focuz-pass-ready .vault-nav-bottom .vault-nav-item.is-active-subtle {
+    background: var(--fp-accent-soft);
+    color: var(--fz-text-1);
+}
+.focuz-pass-ready .vault-nav-item.is-active > svg,
+.focuz-pass-ready .vault-nav-item.is-active-subtle > svg { color: var(--fp-accent-text); }
+.focuz-pass-ready .vault-row.is-selected {
+    background: var(--fp-accent-soft) !important;
+    box-shadow: inset 3px 0 0 var(--fp-accent);
+}
+.focuz-pass-ready .vault-row:hover:not(.is-selected) { background: oklch(0.955 0.003 275 / 0.04); }
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-row:hover:not(.is-selected) { background: oklch(0.2 0.008 275 / 0.035); }
+
+/* Item tiles: a touch larger and rounder, crisper letters. */
+.focuz-pass-ready .vault-row .vault-item-mark { width: 34px !important; height: 34px !important; border-radius: 9px !important; font-size: 12px !important; }
+.focuz-pass-ready .vault-row-copy strong { font-weight: 600; }
+
+/* Item panel: field labels in the accent, so the details read at a glance. */
+.focuz-pass-ready .vault-credential-card { border-color: var(--fp-line); background: var(--fp-main); }
+.focuz-pass-ready .vault-credential-card .vault-detail-field > p:first-child,
+.focuz-pass-ready .vault-website-link > span,
+.focuz-pass-ready .vault-passkey-row span { color: var(--fp-accent-text) !important; }
+.focuz-pass-ready .vault-website-link strong { color: var(--fp-accent-text); }
+.focuz-pass-ready .vault-passkey-row > svg { color: var(--fp-accent-text); }
+
+/* Primary actions in the accent. */
+.focuz-pass-ready .vault-toolbar .vault-new-item.is-primary { background: var(--fp-accent-strong); color: var(--fp-accent-fg); }
+.focuz-pass-ready .vault-toolbar .vault-new-item.is-primary:hover { opacity: 1; background: var(--fp-accent); }
+.focuz-pass-ready .vault-month-group > p { color: var(--fz-text-3); font-weight: 650; }

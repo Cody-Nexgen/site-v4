@@ -261,6 +261,8 @@ export function Menu({
         const onDown = (e: MouseEvent) => {
             const t = e.target as Node;
             if (panelRef.current?.contains(t) || anchor?.current?.contains(t)) return;
+            // A popover opened from inside the menu (a date picker, say) is part of it.
+            if (t instanceof Element && t.closest('[data-fz-floating]')) return;
             onCloseRef.current();
         };
         const onKey = (e: globalThis.KeyboardEvent) => {

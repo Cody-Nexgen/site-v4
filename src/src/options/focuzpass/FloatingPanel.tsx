@@ -86,7 +86,7 @@ export function FloatingPanel({
 
     if (!open) return null;
     return createPortal(
-        <div ref={panelRef} role={role} className={`vault-floating-panel${className ? ` ${className}` : ''}`} style={{ position: 'fixed', visibility: 'hidden' }}>
+        <div ref={panelRef} role={role} data-fz-floating="" className={`vault-floating-panel${className ? ` ${className}` : ''}`} style={{ position: 'fixed', visibility: 'hidden' }}>
             {children}
         </div>,
         document.body,

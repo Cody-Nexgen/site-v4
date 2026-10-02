@@ -1660,7 +1660,9 @@ export class FocuzPassVault {
         const item = this.passkeysFor(check.rpId).find((candidate) => candidate.passkey!.credentialId === credentialId);
         if (!item) throw new PasskeyError('NotAllowedError', 'That passkey isn\'t in FocuzPass anymore.');
         const response = await getAssertion(options, origin, item.passkey!, this.passkeyFlags(), topOrigin);
-        await this.markUsed(item.id).catch(() => undefined);
+        // "Last used" is bookkeeping (no counter to keep in step): save it after the site has its
+        // answer, not before. Saving re-encrypts the whole vault, and every sign-in waited on it.
+        void this.markUsed(item.id).catch(() => undefined);
         return response;
     }
 

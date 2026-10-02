@@ -500,8 +500,22 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
         window.clearTimeout(checking);
         timing.check = Math.round(performance.now() - checkStarted);
         if ('choice' in first) {
-            // Picked on the early card before the check finished: finish the check, then use it.
             if (!early || !isPick(first.choice)) return leave(() => answer(first.choice));
+            // Picked on the early card: sign straight away, exactly as the autofill suggestion does.
+            // The worker checks the site, the passkey and the lock as it signs; if that fails (the
+            // vault locked meanwhile, say), carry on with the full check below.
+            const one = early.accounts.length === 1 ? early.accounts[0]! : null;
+            const picked = first.choice === 'primary' && one ? one.credentialId : typeof first.choice === 'object' ? first.choice.account : null;
+            if (picked && early.accounts.some((account) => account.credentialId === picked)) {
+                const clickedAt = performance.now();
+                void card.show({ title: signInTitle(early.rpId), subtitle: 'With a passkey saved in FocuzPass', busy: 'Signing in…' });
+                const fast = await send<Answer>({ type: 'FOCUZPASS_PASSKEY_GET', options, credentialId: picked, ...from }).catch(() => null);
+                if (fast?.credential) {
+                    reply(fast);
+                    console.info(`[FocuzPass] passkey sign-in: prompt shown at once; signed in ${Math.round(performance.now() - clickedAt)} ms after your click`);
+                    return leave(() => undefined);
+                }
+            }
             pendingChoice = first.choice;
             void card.show({ title: signInTitle(early.rpId), subtitle: 'With a passkey saved in FocuzPass', busy: 'Signing in…' });
             pre = await preflight();

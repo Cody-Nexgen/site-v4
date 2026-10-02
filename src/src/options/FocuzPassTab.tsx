@@ -87,6 +87,8 @@ import { ChangeMasterPassword } from './focuzpass/ChangeMasterPassword';
 import { COLLECTION_ICON_GROUPS, collectionIcon, searchCollectionIcons } from './focuzpass/collectionIcons';
 import { FloatingPanel } from './focuzpass/FloatingPanel';
 import { ColorPicker } from './focuzpass/ColorPicker';
+import { DatePicker } from './focuzpass/DatePicker';
+import { markLetters, readableTitle, tileHue } from '../lib/focuzPass/displayName';
 import { PLACES_MIN_CHARS, newPlacesSession, placesDetails, placesSuggest, type PlaceSuggestion } from '../lib/focuzPass/places';
 import { PasskeySettings } from './focuzpass/PasskeySettings';
 import { CloudSync } from './focuzpass/CloudSync';
@@ -408,7 +410,7 @@ function authMethodLabel(item: DecryptedVaultItem): string {
         const last4 = item.cardNumber?.slice(-4);
         return last4 ? `Card •••• ${last4}` : 'Card';
     }
-    if (item.type === 'passkey') return 'Passkey (experimental)';
+    if (item.type === 'passkey') return 'Passkey';
     if (item.type === 'custom') return ITEM_DEFINITIONS[item.kind].label;
     const map: Record<string, string> = {
         PASSWORD: 'Password',
@@ -426,12 +428,25 @@ function authMethodLabel(item: DecryptedVaultItem): string {
     return map[item.authMethod] || item.authMethod;
 }
 
+/** The site part of a saved address: "https://www.discord.com/login" -> "discord.com". */
+function siteHost(domain?: string): string {
+    return (domain || '').trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').split(/[/?#:]/)[0] || '';
+}
+
+/** One account on one site: a login and the passkey saved for it share this. */
+function accountKey(item: { domain?: string; identity: string }): string {
+    const host = siteHost(item.domain);
+    return host && item.identity ? `${host}|${item.identity.trim().toLowerCase()}` : '';
+}
+
 function toUiItem(item: DecryptedVaultItem): VaultItem {
+    // A raw address saved as the title ("account.hoyolab.com") reads as the site's name ("Hoyolab").
+    const title = readableTitle(item.title);
     return {
         id: item.id,
         type: item.type,
         kind: item.type === 'custom' ? item.kind : undefined,
-        title: item.title,
+        title,
         identity: item.identity,
         domain: item.type === 'login' || item.type === 'passkey' ? item.domain : undefined,
         password: item.type === 'login' ? item.password : undefined,
@@ -447,7 +462,7 @@ function toUiItem(item: DecryptedVaultItem): VaultItem {
         createdAt: item.createdAt,
         sortOrder: item.sortOrder,
         note: item.note,
-        mark: item.mark,
+        mark: markLetters(title),
         markTone: item.markTone,
         credentialId: item.type === 'passkey' ? item.credentialId : undefined,
         experimental: item.type === 'passkey' ? true : undefined,
@@ -678,8 +693,9 @@ function ExactAllItemsIcon({ size = 20 }: { size?: number }) {
 }
 
 /** Pull a collection colour toward the text ramp so it sits calmly in the flat UI. */
+/** The colour as chosen: blending it toward grey turned a picked red into pink. Presets are already soft. */
 function softTone(color?: string) {
-    return color ? `color-mix(in oklch, ${color} 72%, var(--fz-text-3))` : undefined;
+    return color || undefined;
 }
 
 /** Tags are a small softened colour dot (like labels elsewhere), not a saturated glyph. */
@@ -814,11 +830,8 @@ function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean })
         <span
             ref={markRef}
             className={`vault-item-mark${typeIconKind || isCard ? ' is-type-icon' : ''}${isCard ? ' is-card-brand' : ''}${favicon ? ' has-favicon' : ''} relative ${large ? 'h-[60px] w-[60px] rounded-lg text-lg' : 'h-8 w-8 rounded-lg text-[11px]'} flex shrink-0 items-center justify-center overflow-hidden border font-bold tracking-[-0.03em]`}
-            style={typeIconKind || isCard || favicon ? ({ '--item-tone': tone } as CSSProperties) : {
-                color: 'var(--fz-text-2)',
-                background: 'var(--fz-bg-active)',
-                borderColor: 'var(--fz-border)',
-            }}
+            style={typeIconKind || isCard || favicon ? ({ '--item-tone': tone } as CSSProperties) : ({ '--tile-h': tileHue(item.title) } as CSSProperties)}
+            data-letter-tile={typeIconKind || isCard || favicon ? undefined : ''}
             aria-hidden="true"
         >
             {isCard ? <CardBrandMark number={item.cardNumber} compact={!large} /> : typeIconKind ? <SoftItemTypeIcon kind={typeIconKind} size={large ? 60 : 32} /> : item.mark}
@@ -873,7 +886,7 @@ function SortableVaultRow({ item, vaultName, selected, draggable, onSelect, onCo
             <ItemMark item={item} />
             <span className="vault-row-copy">
                 <strong>{item.title}</strong>
-                <small>{item.authMethod === 'Password' ? item.identity : item.authMethod}</small>
+                <small>{item.authMethod === 'Password' || (item.type === 'passkey' && item.identity) ? item.identity : item.authMethod}</small>
             </span>
             <span className="vault-row-type">{typeLabel}</span>
             <span className="vault-row-vault">{vaultName}</span>
@@ -1750,6 +1763,8 @@ function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, savedAddres
                                                 <textarea value={values[field.key] || ''} onChange={(event) => setValue(field, event.target.value)} onBlur={() => validateField(field)} placeholder={field.placeholder} rows={field.key === 'recoveryPhrase' || field.key.toLowerCase().includes('key') ? 4 : 2} />
                                             ) : isPhone ? (
                                                 <InternationalPhoneInput value={values[field.key] || ''} onChange={(value) => setValue(field, value)} onBlur={() => validateField(field)} invalid={Boolean(fieldErrors[field.key])} />
+                                            ) : field.type === 'date' ? (
+                                                <DatePicker value={values[field.key] || ''} onChange={(value) => { setValue(field, value); validateField(field, value); }} placeholder={field.placeholder} ariaLabel={field.label} />
                                             ) : isAddress ? (
                                                 <AddressAutocompleteInput value={values.address || ''} onChange={setAddressValue} onBlur={() => validateField(field)} invalid={Boolean(fieldErrors[field.key])} saved={savedAddresses} />
                                             ) : (
@@ -2347,7 +2362,11 @@ export default function FocuzPassTab({
                         : 0;
         const customFrom = createdFrom ? new Date(`${createdFrom}T00:00:00`).getTime() : 0;
         const customTo = createdTo ? new Date(`${createdTo}T23:59:59.999`).getTime() : 0;
+        // A passkey saved for an account that also has a login shows as part of that login, not twice.
+        const loginAccounts = new Set(items.filter((item) => item.type === 'login' && !item.deletedAt).map(accountKey).filter(Boolean));
+        const onlyPasskeys = typeFilters.length === 1 && typeFilters[0] === 'passkey';
         return items.filter((item) => {
+            if (item.type === 'passkey' && !onlyPasskeys && !item.deletedAt && loginAccounts.has(accountKey(item))) return false;
             const active = !item.archivedAt && !item.deletedAt;
             const matchesView =
                 (view.kind === 'all' && active) ||
@@ -2379,7 +2398,8 @@ export default function FocuzPassTab({
     }, [createdFilter, createdFrom, createdTo, favoritesOnly, items, query, riskOnly, sortMode, typeFilters, view]);
 
     const groupedItems = useMemo(() => {
-        if (sortMode === 'custom') return [['Custom order', filteredItems] as [string, VaultItem[]]];
+        // Your own order is one list with no heading (the sort menu already says what it is).
+        if (sortMode === 'custom') return [['', filteredItems] as [string, VaultItem[]]];
         const groups = new Map<string, VaultItem[]>();
         filteredItems.forEach((item) => {
             const label = monthLabel(sortMode.startsWith('created-') ? item.createdAt : item.sortDate);
@@ -2419,7 +2439,7 @@ export default function FocuzPassTab({
     const selected = selectedId ? filteredItems.find((item) => item.id === selectedId) : undefined;
     const rowMenuItem = rowMenu ? items.find((item) => item.id === rowMenu.itemId) : undefined;
     const associatedPasskey = selected?.type === 'login'
-        ? items.find((item) => item.type === 'passkey' && !item.deletedAt && !item.archivedAt && item.domain?.toLowerCase() === selected.domain?.toLowerCase() && item.identity.toLowerCase() === selected.identity.toLowerCase())
+        ? items.find((item) => item.type === 'passkey' && !item.deletedAt && !item.archivedAt && accountKey(item) !== '' && accountKey(item) === accountKey(selected))
         : undefined;
     const selectedVault = selected ? vaults.find((vault) => vault.id === selected.vaultId) : undefined;
     // Only fields that have something in them show; empty ones just aren't listed.
@@ -2660,7 +2680,7 @@ export default function FocuzPassTab({
                     )}
                     {selected.type === 'card' && (selected.identity || selected.cardNumber || selected.expiry || selected.cvv) && <div className="vault-credential-card">{selected.identity && <DetailField label="Cardholder" value={selected.identity} onCopy={() => copyText(selected.identity, setCopied, 'identity')} copied={copied === 'identity'} />}{selected.cardNumber && <DetailField label="Card number" value={selected.cardNumber} secret reveal={revealed} onToggleReveal={() => setRevealed((value) => !value)} onCopy={() => copyText(selected.cardNumber || '', setCopied, 'card')} copied={copied === 'card'} />}{selected.expiry && <DetailField label="Expiry" value={selected.expiry} />}{selected.cvv && <DetailField label="Security code" value={selected.cvv} secret reveal={revealed} onToggleReveal={() => setRevealed((value) => !value)} onCopy={() => copyText(selected.cvv || '', setCopied, 'cvv')} copied={copied === 'cvv'} />}</div>}
                     {selected.type === 'custom' && selected.kind && filledCustomFields.length > 0 && <div className="vault-credential-card">{filledCustomFields.map((field) => <DetailField key={field.key} label={field.label} value={selected.fields[field.key]!} secret={isSensitiveField(field)} reveal={revealed} onToggleReveal={isSensitiveField(field) ? () => setRevealed((value) => !value) : undefined} onCopy={() => copyText(selected.fields[field.key]!, setCopied, field.key)} copied={copied === field.key} />)}</div>}
-                    {selected.type === 'passkey' && <div className="vault-credential-card">{selected.identity && <DetailField label="Username" value={selected.identity} />}<DetailField label="Passkey" value={selected.credentialId || 'Browser-managed credential'} /></div>}
+                    {selected.type === 'passkey' && <><div className="vault-credential-card">{selected.identity && <DetailField label="Username" value={selected.identity} onCopy={() => copyText(selected.identity, setCopied, 'identity')} copied={copied === 'identity'} />}<div className="vault-passkey-row"><div><span>Passkey</span><strong>Created {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(selected.createdAt))}</strong></div><Fingerprint size={19} /></div></div>{selected.domain && <a className="vault-website-link" href={selected.domain.includes('://') ? selected.domain : `https://${selected.domain}`} target="_blank" rel="noreferrer"><span>Website</span><strong>{selected.domain}</strong></a>}</>}
                     {selected.note && <div className="vault-detail-note"><span>Notes</span><p>{selected.note}</p></div>}
                     {selected.tagIds.length > 0 && <div className="vault-detail-tags"><span>Tags</span><div>{selected.tagIds.map((tagId) => { const tag = tags.find((candidate) => candidate.id === tagId); return tag ? <span key={tag.id} className="vault-detail-tag" style={{ '--tag-tone': tag.color } as CSSProperties}><button type="button" className="vault-detail-tag-link" onClick={() => { setView({ kind: 'tag', id: tag.id }); setSelectedId(''); }}><ExactTagIcon size={12} color={tag.color} /> {tag.name}</button>{selected.type !== 'passkey' && <button type="button" className="vault-detail-tag-remove" onClick={() => void removeSelectedTag(tag.id)} disabled={busy} aria-label={`Remove ${tag.name} tag`}><X size={11} /></button>}</span> : null; })}</div></div>}
                 </div>
@@ -2755,8 +2775,7 @@ export default function FocuzPassTab({
                     <div className="vault-brand-row">
                         {onExit ? (
                             <span className="vault-brand-trail">
-                                <button type="button" className="vault-brand-back" onClick={onExit} title="Back to FocuzNow"><ArrowLeft size={13} /><span>FocuzNow</span></button>
-                                <span className="vault-brand-sep" aria-hidden="true">/</span>
+                                <button type="button" className="vault-brand-back" onClick={onExit} title="Back to FocuzNow" aria-label="Back to FocuzNow"><ArrowLeft size={14} /></button>
                                 <span>FocuzPass</span>
                             </span>
                         ) : <span>FocuzPass</span>}
@@ -2894,7 +2913,7 @@ export default function FocuzPassTab({
                         <div className="vault-list-toolbar">
                             <div className="vault-category-summary">
                                 <span>{viewTitle}</span>
-                                <span className="vault-list-count">{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}{activeFilterCount > 0 || query.trim() ? ' · filtered' : ''}</span>
+                                <span className="vault-list-count">{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}</span>
                             </div>
                             <div className="vault-list-actions">
                                 <button ref={filterRef} type="button" className={filtersOpen || activeFilterCount ? 'is-active' : ''} onClick={() => { setFiltersOpen((open) => !open); setSortOpen(false); }} aria-label={`Filter items${activeFilterCount ? `, ${activeFilterCount} active` : ''}`} aria-haspopup="menu" aria-expanded={filtersOpen}><Funnel size={13} />{activeFilterCount > 0 && <small>{activeFilterCount}</small>}</button>
@@ -2930,9 +2949,9 @@ export default function FocuzPassTab({
                                             id: 'added-range',
                                             node: (
                                                 <div className="vault-filter-menu-range">
-                                                    <input type="date" aria-label="Added from" value={createdFrom} onChange={(event) => { setCreatedFrom(event.target.value); setCreatedFilter('any'); }} />
+                                                    <DatePicker value={createdFrom} placeholder="From" ariaLabel="Added from" onChange={(value) => { setCreatedFrom(value); setCreatedFilter('any'); }} />
                                                     <span>to</span>
-                                                    <input type="date" aria-label="Added until" value={createdTo} min={createdFrom || undefined} onChange={(event) => { setCreatedTo(event.target.value); setCreatedFilter('any'); }} />
+                                                    <DatePicker value={createdTo} placeholder="Until" ariaLabel="Added until" min={createdFrom || undefined} onChange={(value) => { setCreatedTo(value); setCreatedFilter('any'); }} />
                                                 </div>
                                             ),
                                         },
@@ -2975,9 +2994,6 @@ export default function FocuzPassTab({
                             </div>
                         )}
 
-                        <div className="vault-library-columns" aria-hidden="true">
-                            <span /><span /><span>Item</span><span>Type</span><span>Vault</span><span>Activity</span><span />
-                        </div>
 
                         <div className="vault-list-scroll">
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => { void handleDragEnd(event); }}>
@@ -2985,7 +3001,7 @@ export default function FocuzPassTab({
                             <AnimatePresence initial={false}>
                                 {filteredItems.length > 0 ? groupedItems.map(([group, groupItems]) => (
                                     <motion.section key={group} className={`vault-month-group${sortMode === 'custom' ? ' is-custom-order' : ''}`} initial={false} animate={{ opacity: 1 }}>
-                                        <p>{group}</p>
+                                        {group && <p>{group}</p>}
                                         {groupItems.map((item) => {
                                             const isSelected = selected?.id === item.id;
                                             return (

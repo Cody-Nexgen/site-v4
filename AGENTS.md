@@ -21,7 +21,7 @@ Read this first, then `docs/focuzpass-cloud-plan.md` (the FocuzPass Cloud plan a
 ```
 node node_modules/typescript/bin/tsc -b
 node node_modules/eslint/bin/eslint.js <files>
-node ./scripts/run-tests.mjs            # unit tests (187 passing); `npm test` fails under cmd
+node ./scripts/run-tests.mjs            # unit tests (190 passing); `npm test` fails under cmd
 node node_modules/vite/bin/vite.js build   # writes src/dist; the owner then reloads it in vivaldi://extensions
 ```
 Known lint errors that aren't ours: `vaultCore.ts` `inboxPublicJwk` (`_d`, `_ops`, `_ext`), two in `FocuzPassTab.tsx`.
@@ -42,6 +42,7 @@ FocuzPass acts as a passkey provider inside the browser:
 - **Speed (2026-10-01):** the top-centre prompt used to sit on "Checking…" because a service worker restarted by the browser had to restore and decrypt the vault from session storage when the site asked. Now `FOCUZPASS_PING` (sent on login fields, on the page script's WARM cue when a site checks passkey support, and on pointerdown on buttons) also starts `vault.restoreFromSession()` in the background, so the vault is back before the click. A temporary line logs `[FocuzPass] passkey check took N ms` when the check takes over 400 ms (`passkeyRequests.ts`); remove it once the owner confirms it's quick.
 - "This passkey is already in FocuzPass" offers **Save to another device** (hands off to the browser's own passkeys).
 - **Instant sign-in prompt (2026-10-01, second fix):** the page-load sign-in-suggestions lookup is remembered per page (`known` in `passkeyRequests.ts`, 10 min). A sign-in prompt for the same site shows those accounts at once; the fresh preflight still runs and only an account it confirms can be used (a pick made before it finishes waits for it).
+- **Sign-in speed (2026-10-02, third fix, the real one):** picking on the early card sends `FOCUZPASS_PASSKEY_GET` straight away, exactly like the autofill suggestion (the worker's `passkeyGet` checks site, passkey and lock itself); the full preflight only runs if that fails. `passkeyGet` saves "last used" after answering instead of before (no signature counter is kept, so nothing depends on it).
 - **Checking the UI without the owner:** `website/dist/demo.html?tab=focuzpass` runs the real FocuzPass UI on demo data (`src/src/mockChrome.ts`). Serve `website/dist` and drive it with the global Playwright (`$(npm root -g)/playwright`) to screenshot or measure layout.
 
 ## Open items
