@@ -2812,6 +2812,8 @@ html[data-dashboard-theme="light"] .focuz-dashboard--focuzpass .workspace-main {
     position: relative;
     isolation: isolate;
     grid-template-columns: minmax(0, 1fr);
+    /* Never scrollable: focusing the item panel while it slides in used to scroll it sideways. */
+    overflow: clip;
 }
 
 .focuz-pass-ready .vault-library-layout .vault-list {
@@ -6202,8 +6204,26 @@ html[data-dashboard-theme="light"] .fz-cmdk {
     .focuz-pass-ready .vault-toolbar .vault-new-item:active { transform: none; }
 }
 /* "Back to FocuzNow" sits at the foot of the sidebar, set apart from Archive and Recently deleted. */
-.focuz-pass-ready .vault-nav-exit { margin-bottom: 8px; color: var(--fz-text-3); }
-.focuz-pass-ready .vault-nav-exit:hover { color: var(--fz-text-1); }
+/* Breadcrumb at the top of the sidebar: "← FocuzNow / FocuzPass". */
+.focuz-pass-ready .vault-brand-trail { display: inline-flex; min-width: 0; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; }
+.focuz-pass-ready .vault-brand-row .vault-brand-back {
+    width: auto;
+    display: inline-flex;
+    height: 26px;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--fz-border);
+    border-radius: 7px;
+    background: var(--fz-bg-active);
+    padding: 0 8px 0 6px;
+    color: var(--fz-text-2);
+    font-size: 12px;
+    font-weight: 550;
+    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.focuz-pass-ready .vault-brand-row .vault-brand-back:hover { border-color: var(--fz-border-strong); background: var(--fz-bg-hover); color: var(--fz-text-1); }
+.focuz-pass-ready .vault-brand-back:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 2px; }
+.focuz-pass-ready .vault-brand-sep { color: var(--fz-text-4); }
 
 /* FocuzPass dialogs in the Help-menu style (2026-10-01): quiet rows that light up on hover, muted
    icons, thin borders, one input style. Overrides the older, boxier rules above. */
@@ -6218,15 +6238,15 @@ html[data-dashboard-theme="light"] .fz-cmdk {
 }
 .vault-picker-search:focus-within { border-color: var(--fz-border-strong); }
 .vault-primary-types,
-.vault-extra-types { gap: 2px; }
+.vault-extra-types { gap: 6px; }
 .vault-primary-types > button,
 .vault-extra-types > button {
-    min-height: 40px;
+    min-height: 46px;
     gap: 10px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    padding: 4px 8px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: var(--fz-bg-panel);
+    padding: 6px 10px;
     color: var(--fz-text-2);
     font-size: 13px;
     transform: none;
@@ -6236,7 +6256,7 @@ html[data-dashboard-theme="light"] .fz-cmdk {
 .vault-extra-types > button:hover,
 .vault-primary-types > button:focus-visible,
 .vault-extra-types > button:focus-visible {
-    border-color: transparent;
+    border-color: var(--fz-border);
     background: var(--fz-bg-hover);
     color: var(--fz-text-1);
     transform: none;
@@ -6244,11 +6264,11 @@ html[data-dashboard-theme="light"] .fz-cmdk {
 }
 .vault-primary-types > button > span,
 .vault-extra-types > button > span {
-    width: 28px;
-    height: 28px;
-    border: 0;
-    border-radius: 7px;
-    background: var(--fz-bg-active);
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--fz-border);
+    border-radius: 8px;
+    background: var(--fz-bg-overlay);
     color: var(--fz-text-3);
 }
 .vault-primary-types strong { font-size: 13px; font-weight: 500; }
@@ -6275,3 +6295,163 @@ html[data-dashboard-theme="light"] .fz-cmdk {
 .vault-collection-form .vault-color-grid { gap: 6px; }
 .vault-collection-form .vault-color-grid button { width: 22px; height: 22px; border: 2px solid transparent; }
 .vault-collection-form .vault-color-grid button.is-selected { box-shadow: 0 0 0 2px var(--fz-bg-overlay), 0 0 0 4px var(--fz-border-strong); }
+
+/* Dropdowns drawn over everything (FloatingPanel): address suggestions, phone countries. Same look as
+   the Help menu: overlay surface, thin border, quiet rows that light up. */
+.vault-floating-panel {
+    z-index: 80;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--fz-border);
+    border-radius: 10px;
+    background: var(--fz-bg-overlay);
+    padding: 4px;
+    box-shadow: var(--fz-shadow-overlay);
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    scrollbar-width: thin;
+    animation: vault-floating-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.vault-floating-panel[data-side="top"] { animation-name: vault-floating-in-up; }
+@keyframes vault-floating-in { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes vault-floating-in-up { from { opacity: 0; transform: translateY(4px); } }
+.vault-floating-list > button {
+    display: grid;
+    width: 100%;
+    min-height: 34px;
+    grid-template-columns: 18px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 9px;
+    border-radius: 7px;
+    padding: 5px 8px;
+    color: var(--fz-text-2);
+    text-align: left;
+    font-size: 13px;
+}
+.vault-floating-list > button:hover,
+.vault-floating-list > button.is-active { background: var(--fz-bg-hover); color: var(--fz-text-1); }
+.vault-floating-list > button > svg { color: var(--fz-text-4); }
+.vault-floating-list > button > span { display: flex; min-width: 0; flex-direction: column; }
+.vault-floating-list > button strong { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.vault-floating-list > button span > small { overflow: hidden; color: var(--fz-text-4); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.vault-floating-list > button > small { color: var(--fz-text-4); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.vault-floating-list > button .vault-country-flag { width: 18px; height: 13px; border-radius: 2px; }
+.vault-floating-heading { padding: 6px 8px 4px; color: var(--fz-text-4); font-size: 11px; font-weight: 550; }
+.vault-floating-credit { padding: 6px 8px 3px; color: var(--fz-text-4); font-size: 10.5px; text-align: right; }
+@media (prefers-reduced-motion: reduce) { .vault-floating-panel { animation: none; } }
+
+/* Vault/tag colour picker: presets, a custom swatch, and the custom panel (square + hue + inputs). */
+.vault-color-picker { display: flex; flex-direction: column; gap: 10px; }
+.vault-color-picker .vault-color-grid { align-items: center; gap: 6px; }
+.vault-color-picker .vault-color-grid button { width: 22px; height: 22px; border: 2px solid transparent; border-radius: 50%; }
+.vault-color-picker .vault-color-grid button.is-selected { box-shadow: 0 0 0 2px var(--fz-bg-overlay), 0 0 0 4px var(--fz-border-strong); }
+.vault-color-picker .vault-color-custom {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: conic-gradient(from 0deg, #e8807a, #e6c06e, #8fcf8a, #7cc4d4, #8a9fe0, #c690d8, #e8807a);
+    color: #fff;
+}
+.vault-color-custom-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border: 1px solid var(--fz-border);
+    border-radius: 10px;
+    background: var(--fz-bg-panel);
+    padding: 10px;
+}
+.vault-color-area {
+    position: relative;
+    height: 140px;
+    border-radius: 8px;
+    background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+    cursor: crosshair;
+    touch-action: none;
+}
+.vault-color-area:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 2px; }
+.vault-color-dot {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 1px 4px rgb(0 0 0 / 0.3);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+.vault-color-hue {
+    width: 100%;
+    height: 12px;
+    appearance: none;
+    border-radius: 999px;
+    background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+    cursor: pointer;
+}
+.vault-color-hue::-webkit-slider-thumb {
+    width: 16px;
+    height: 16px;
+    appearance: none;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 1px 4px rgb(0 0 0 / 0.3);
+}
+.vault-color-hue:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 3px; }
+.vault-color-inputs { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+.vault-color-inputs label { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.vault-color-inputs label > span { color: var(--fz-text-4); font-size: 11px; font-weight: 550; }
+.vault-color-inputs input {
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    border: 1px solid var(--fz-border);
+    border-radius: 7px;
+    background: var(--fz-bg-overlay);
+    padding: 0 8px;
+    color: var(--fz-text-1);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+}
+.vault-color-inputs input:focus { border-color: var(--fz-border-strong); outline: none; }
+
+/* FocuzPass locked / setup screens in the Help-menu style (2026-10-01): a compact card on the
+   overlay surface, a left-aligned message, one clear button, and quiet note rows under it. */
+.vault-access-card {
+    width: min(400px, 100%);
+    border-radius: 14px;
+    background: var(--fz-bg-overlay);
+    padding: 26px 24px 20px;
+    text-align: left;
+    box-shadow: var(--fz-shadow-overlay);
+}
+.vault-access-card .vault-access-symbol {
+    width: 40px;
+    height: 40px;
+    margin: 0 0 16px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--fz-bg-active);
+    color: var(--fz-text-1);
+}
+.vault-access-card .vault-access-symbol svg { width: 19px; height: 19px; }
+.vault-access-card .vault-access-kicker { margin: 0 0 6px; color: var(--fz-text-4); font-size: 11.5px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.vault-access-card .vault-access-heading { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+.vault-access-card .vault-access-copy { max-width: none; margin: 8px 0 0; color: var(--fz-text-3); font-size: 13px; line-height: 1.55; }
+.vault-access-card .vault-access-submit {
+    display: inline-flex;
+    width: 100%;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 20px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 550;
+}
+.vault-access-card .vault-access-footnote { justify-content: flex-start; margin-top: 14px; }
+.vault-access-notes { display: flex; flex-direction: column; gap: 2px; margin: 16px -8px 0; padding: 10px 0 0; border-top: 1px solid var(--fz-border); list-style: none; }
+.vault-access-notes li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; border-radius: 8px; padding: 7px 8px; }
+.vault-access-notes li > svg { margin-top: 1px; color: var(--fz-text-3); }
+.vault-access-notes li > span { color: var(--fz-text-4); font-size: 11.5px; line-height: 1.45; }
+.vault-access-notes li strong { display: block; color: var(--fz-text-2); font-size: 12.5px; font-weight: 550; }

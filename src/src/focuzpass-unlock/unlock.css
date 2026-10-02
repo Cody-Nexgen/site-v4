@@ -116,3 +116,55 @@ body {
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* 2026-10-01: the form sits on a card in the Help-menu style (overlay surface, thin border, soft
+   shadow) with the privacy note under it, instead of floating in an empty window. */
+:root { --fz-bg-overlay: oklch(0.205 0.004 275); --fz-shadow-overlay: 0 18px 48px -18px oklch(0 0 0 / 0.65), 0 2px 8px oklch(0 0 0 / 0.3); }
+html[data-dashboard-theme="light"] { --fz-bg-overlay: oklch(1 0 0); --fz-shadow-overlay: 0 18px 44px -20px oklch(0.2 0.02 275 / 0.28), 0 2px 6px oklch(0.2 0.02 275 / 0.08); }
+.access-window { grid-template-rows: 54px minmax(0, 1fr); }
+.access-window__content { width: min(100% - 40px, 372px); padding: 20px 0 24px; }
+.access-window__card {
+    border: 1px solid var(--fz-border);
+    border-radius: 14px;
+    background: var(--fz-bg-overlay);
+    padding: 24px 22px 22px;
+    box-shadow: var(--fz-shadow-overlay);
+}
+.access-window__lock { width: 40px; height: 40px; margin-bottom: 18px; border-radius: 10px; background: var(--fz-bg-active); }
+.access-window__lock svg { width: 19px; height: 19px; }
+.access-window__content h1 { font-size: 20px; }
+.access-window__card > p:not(.access-window__eyebrow):not(.access-window__error) { max-width: 320px; margin: 8px 0 0; color: var(--fz-text-3); font-size: 12.5px; line-height: 1.55; }
+.access-window form { gap: 12px; margin-top: 20px; }
+.access-window__password { position: relative; display: block; }
+.access-window__password input { padding-right: 40px; }
+.access-window__password button {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--fz-text-4);
+    cursor: pointer;
+    transform: translateY(-50%);
+    transition: background 120ms ease, color 120ms ease;
+}
+.access-window__password button:hover { background: var(--fz-bg-hover); color: var(--fz-text-1); }
+.access-window__password button:focus-visible { outline: 2px solid var(--fz-focus-ring); outline-offset: 1px; }
+.access-window__caps { display: inline-flex; align-items: center; gap: 5px; color: oklch(0.78 0.12 75); font-size: 11.5px; }
+html[data-dashboard-theme="light"] .access-window__caps { color: oklch(0.55 0.13 70); }
+.access-window__primary { min-height: 40px; border-radius: 9px; font-size: 13px; }
+.access-window__note {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 9px;
+    margin: 14px 4px 0;
+    color: var(--fz-text-4);
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+.access-window__note svg { margin-top: 1px; color: var(--fz-text-3); }
+.access-window__note strong { display: block; color: var(--fz-text-2); font-size: 12px; font-weight: 550; }

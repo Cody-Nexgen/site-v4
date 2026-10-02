@@ -59,6 +59,7 @@ import {
     Laptop,
     LayoutGrid,
     Lock,
+    LockKeyhole,
     Mail,
     MapPin,
     MoreHorizontal,
@@ -84,9 +85,12 @@ import { ImportPasswords } from './focuzpass/ImportPasswords';
 import { TransferVault } from './focuzpass/TransferVault';
 import { ChangeMasterPassword } from './focuzpass/ChangeMasterPassword';
 import { COLLECTION_ICON_GROUPS, collectionIcon, searchCollectionIcons } from './focuzpass/collectionIcons';
+import { FloatingPanel } from './focuzpass/FloatingPanel';
+import { ColorPicker } from './focuzpass/ColorPicker';
+import { PLACES_MIN_CHARS, newPlacesSession, placesDetails, placesSuggest, type PlaceSuggestion } from '../lib/focuzPass/places';
 import { PasskeySettings } from './focuzpass/PasskeySettings';
 import { CloudSync } from './focuzpass/CloudSync';
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import ModalPortal from '../components/ModalPortal';
 import { Toast } from '../components/fz/Toast';
 import { Dialog } from '../components/fz/Dialog';
@@ -791,6 +795,14 @@ function EditorSiteMark({ domain, children }: { domain: string; children: ReactN
     );
 }
 
+/**
+ * Focus on mount without scrolling. The item panel slides in from off-screen, and plain autoFocus
+ * made the browser scroll the list sideways to reach it: every row jumped left and back.
+ */
+function focusWithoutScroll(element: HTMLElement | null) {
+    element?.focus({ preventScroll: true });
+}
+
 function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean }) {
     const markRef = useRef<HTMLSpanElement>(null);
     const favicon = useSiteIcon(item.type === 'login' || item.type === 'passkey' ? item.domain : undefined, markRef);
@@ -1288,7 +1300,7 @@ function CollectionModal({ mode, onClose, onCreate, busy }: {
             <form onSubmit={(event) => { event.preventDefault(); create(); }} className="vault-collection-form space-y-4">
                 <div className="vault-collection-preview"><CollectionMark color={color} icon={icon} size={20} /><span>{name || (mode === 'vault' ? 'Vault name' : 'Tag name')}</span></div>
                 <label className="vault-field"><span>Name</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder={mode === 'vault' ? 'Family, Work, Personal…' : 'Starter kit, Finance…'} /></label>
-                <div className="vault-choice-group"><span>Color</span><div className="vault-color-grid">{COLLECTION_COLORS.map((value) => <button key={value} type="button" className={color === value ? 'is-selected' : ''} style={{ background: value }} onClick={() => setColor(value)} aria-label={`Use ${value}`} />)}</div></div>
+                <div className="vault-choice-group"><span>Color</span><ColorPicker value={color} presets={COLLECTION_COLORS} onChange={setColor} /></div>
                 <div className="vault-choice-group"><span>Icon</span><CollectionIconPicker mode={mode} color={color} value={icon} onChange={setIcon} /></div>
             </form>
         </Dialog>
@@ -1370,6 +1382,7 @@ function InternationalPhoneInput({ value, onChange, onBlur, invalid }: {
 }) {
     const [country, setCountry] = useState<PhoneCountry>(() => phoneCountryFromValue(value));
     const [open, setOpen] = useState(false);
+    const fieldRef = useRef<HTMLDivElement>(null);
     const selectCountry = (next: PhoneCountry) => {
         const localDigits = phoneLocalDigits(value, country);
         setCountry(next);
@@ -1377,7 +1390,7 @@ function InternationalPhoneInput({ value, onChange, onBlur, invalid }: {
         setOpen(false);
     };
     return (
-        <div className="vault-phone-input" onBlur={(event) => {
+        <div ref={fieldRef} className="vault-phone-input" onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 setOpen(false);
                 onBlur();
@@ -1395,15 +1408,13 @@ function InternationalPhoneInput({ value, onChange, onBlur, invalid }: {
                 autoComplete="tel-national"
                 aria-invalid={invalid}
             />
-            <AnimatePresence>{open && (
-                <motion.div className="vault-phone-country-menu" role="listbox" initial={{ opacity: 0, y: -5, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.99 }}>
-                    {PHONE_COUNTRIES.map((option) => (
-                        <button key={option.iso} type="button" role="option" aria-selected={option.iso === country.iso} onClick={() => selectCountry(option)}>
-                            <CountryFlagIcon iso={option.iso} /><strong>{option.name}</strong><small>{option.dialCode}</small>{option.iso === country.iso && <Check size={12} />}
-                        </button>
-                    ))}
-                </motion.div>
-            )}</AnimatePresence>
+            <FloatingPanel anchor={fieldRef} open={open} onClose={() => setOpen(false)} className="vault-floating-list" minWidth={300}>
+                {PHONE_COUNTRIES.map((option) => (
+                    <button key={option.iso} type="button" role="option" aria-selected={option.iso === country.iso} className={option.iso === country.iso ? 'is-active' : ''} onMouseDown={(event) => event.preventDefault()} onClick={() => selectCountry(option)}>
+                        <CountryFlagIcon iso={option.iso} /><span><strong>{option.name}</strong></span><small>{option.dialCode}</small>{option.iso === country.iso && <Check size={12} />}
+                    </button>
+                ))}
+            </FloatingPanel>
         </div>
     );
 }
@@ -1431,6 +1442,10 @@ function savedAddressesFrom(items: VaultItem[], excludeId?: string): SavedAddres
     return out;
 }
 
+type AddressOption =
+    | { kind: 'saved'; key: string; label: string; detail?: string; address: SavedAddress }
+    | { kind: 'place'; key: string; label: string; detail?: string; place: PlaceSuggestion };
+
 function AddressAutocompleteInput({ value, onChange, onBlur, invalid, saved = [] }: {
     value: string;
     onChange: (value: string, parts?: Record<string, string>) => void;
@@ -1438,19 +1453,66 @@ function AddressAutocompleteInput({ value, onChange, onBlur, invalid, saved = []
     invalid?: boolean;
     saved?: SavedAddress[];
 }) {
+    const fieldRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(0);
+    const [places, setPlaces] = useState<PlaceSuggestion[]>([]);
+    // One Places session per typing session; a new one starts after an address is picked.
+    const sessionRef = useRef('');
+    const timerRef = useRef(0);
+    const lookupRef = useRef<AbortController | null>(null);
     const typed = value.trim().toLowerCase();
-    const matches = saved
+    const savedMatches = saved
         .filter((address) => address.label.toLowerCase() !== typed && (!typed || address.label.toLowerCase().includes(typed)))
-        .slice(0, 5);
-    const showing = open && matches.length > 0;
-    const choose = (address: SavedAddress) => {
-        onChange(address.label, address.parts);
-        setOpen(false);
+        .slice(0, 4);
+    const options: AddressOption[] = [
+        ...savedMatches.map((address) => ({ kind: 'saved' as const, key: `s:${address.label}`, label: address.label, address })),
+        ...places
+            .filter((place) => !savedMatches.some((address) => address.label.toLowerCase().startsWith(place.main.toLowerCase())))
+            .map((place) => ({ kind: 'place' as const, key: `p:${place.placeId}`, label: place.main, detail: place.secondary, place })),
+    ];
+    const showing = open && options.length > 0;
+
+    const lookUp = (text: string) => {
+        window.clearTimeout(timerRef.current);
+        lookupRef.current?.abort();
+        if (text.trim().length < PLACES_MIN_CHARS) {
+            setPlaces([]);
+            return;
+        }
+        timerRef.current = window.setTimeout(() => {
+            sessionRef.current ||= newPlacesSession();
+            const controller = new AbortController();
+            lookupRef.current = controller;
+            void placesSuggest(text, sessionRef.current, controller.signal).then((found) => {
+                if (!controller.signal.aborted) setPlaces(found);
+            });
+        }, 300);
     };
+    useEffect(() => () => {
+        window.clearTimeout(timerRef.current);
+        lookupRef.current?.abort();
+    }, []);
+
+    const choose = async (option: AddressOption) => {
+        setOpen(false);
+        setPlaces([]);
+        if (option.kind === 'saved') {
+            onChange(option.address.label, option.address.parts);
+            return;
+        }
+        const label = [option.place.main, option.place.secondary].filter(Boolean).join(', ');
+        onChange(label);
+        const token = sessionRef.current;
+        sessionRef.current = '';
+        const address = token ? await placesDetails(option.place.placeId, token) : null;
+        if (!address) return;
+        const { formatted, ...parts } = address;
+        onChange(formatted || label, parts);
+    };
+
     return (
-        <div className="vault-address-autocomplete">
+        <div ref={fieldRef} className="vault-address-autocomplete">
             <MapPin size={14} />
             <input
                 value={value}
@@ -1458,6 +1520,7 @@ function AddressAutocompleteInput({ value, onChange, onBlur, invalid, saved = []
                     onChange(event.target.value);
                     setOpen(true);
                     setActive(0);
+                    lookUp(event.target.value);
                 }}
                 onFocus={() => setOpen(true)}
                 onBlur={() => {
@@ -1469,17 +1532,17 @@ function AddressAutocompleteInput({ value, onChange, onBlur, invalid, saved = []
                     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                         event.preventDefault();
                         const step = event.key === 'ArrowDown' ? 1 : -1;
-                        setActive((current) => (current + step + matches.length) % matches.length);
+                        setActive((current) => (current + step + options.length) % options.length);
                     } else if (event.key === 'Enter') {
                         event.preventDefault();
-                        choose(matches[Math.min(active, matches.length - 1)]);
+                        void choose(options[Math.min(active, options.length - 1)]!);
                     } else if (event.key === 'Escape') {
                         event.stopPropagation();
                         setOpen(false);
                     }
                 }}
                 name="street-address"
-                placeholder={saved.length ? 'Type or choose a saved address…' : 'Street, city, postal code, country'}
+                placeholder="Start typing an address…"
                 autoComplete="street-address"
                 autoCapitalize="words"
                 spellCheck={false}
@@ -1488,26 +1551,29 @@ function AddressAutocompleteInput({ value, onChange, onBlur, invalid, saved = []
                 aria-autocomplete="list"
                 aria-invalid={invalid}
             />
-            <AnimatePresence>{showing && (
-                <motion.div className="vault-phone-country-menu vault-address-menu" role="listbox" initial={{ opacity: 0, y: -5, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.99 }}>
-                    <p className="vault-address-menu-heading">Saved addresses</p>
-                    {matches.map((address, index) => (
+            <FloatingPanel anchor={fieldRef} open={showing} onClose={() => setOpen(false)} className="vault-floating-list" minWidth={320}>
+                {options.map((option, index) => (
+                    <Fragment key={option.key}>
+                        {(index === 0 || options[index - 1]!.kind !== option.kind) && (
+                            <p className="vault-floating-heading">{option.kind === 'saved' ? 'Saved addresses' : 'Suggestions'}</p>
+                        )}
                         <button
-                            key={address.label}
                             type="button"
                             role="option"
                             aria-selected={index === active}
                             className={index === active ? 'is-active' : ''}
-                            // Keep focus in the field, so picking doesn't blur it first.
+                            // Keep focus in the field so picking doesn't blur it first.
                             onMouseDown={(event) => event.preventDefault()}
                             onMouseEnter={() => setActive(index)}
-                            onClick={() => choose(address)}
+                            onClick={() => void choose(option)}
                         >
-                            <MapPin size={13} /><strong>{address.label}</strong>
+                            <MapPin size={13} />
+                            <span><strong>{option.label}</strong>{option.detail && <small>{option.detail}</small>}</span>
                         </button>
-                    ))}
-                </motion.div>
-            )}</AnimatePresence>
+                    </Fragment>
+                ))}
+                {options.some((option) => option.kind === 'place') && <p className="vault-floating-credit">Address suggestions by Google</p>}
+            </FloatingPanel>
         </div>
     );
 }
@@ -2554,7 +2620,7 @@ export default function FocuzPassTab({
         <div key={selected.id} className="vault-detail-page">
             <div className="vault-detail-topbar">
                 <div className="vault-detail-location">
-                    <button type="button" className="vault-inspector-close" autoFocus onClick={() => { setSelectedId(''); setActionsOpen(false); }} aria-label="Close item details"><X size={14} /></button>
+                    <button ref={focusWithoutScroll} type="button" className="vault-inspector-close" onClick={() => { setSelectedId(''); setActionsOpen(false); }} aria-label="Close item details"><X size={14} /></button>
                     {selectedVault && <><CollectionMark color={selectedVault.color} icon={selectedVault.icon} size={13} /><strong>{selectedVault.name}</strong></>}
                 </div>
                 <div className="vault-detail-actions" onClick={(event) => event.stopPropagation()}>
@@ -2666,15 +2732,17 @@ export default function FocuzPassTab({
                     <div className="vault-lock-orbit vault-access-symbol">
                         <FocuzPassAccessLockIcon />
                     </div>
-                    <p className="vault-access-kicker">Secure extension window</p>
-                    <h2 className="vault-access-heading">Your vault is locked</h2>
-                    <p className="vault-access-copy">Enter your master password in the separate FocuzPass window. This page will unlock automatically when it succeeds.</p>
+                    <h2 className="vault-access-heading">FocuzPass is locked</h2>
+                    <p className="vault-access-copy">Unlock it with your master password. This page opens your vault as soon as you do.</p>
                     {error && <p className="vault-access-error" role="alert">{error}</p>}
                     <button type="button" disabled={accessWindowBusy} className="vault-button vault-button-primary vault-access-submit" onClick={() => void launchAccessWindow()}>
-                        {accessWindowBusy ? 'Opening secure window…' : 'Reopen unlock window'}
-                        {!accessWindowBusy && <ArrowRight size={14} />}
+                        <KeyRound size={14} />
+                        {accessWindowBusy ? 'Opening…' : 'Unlock FocuzPass'}
                     </button>
-                    <p className="vault-access-footnote"><Laptop size={13} /> Decrypted only for this browser session</p>
+                    <ul className="vault-access-notes">
+                        <li><LockKeyhole size={14} aria-hidden="true" /><span><strong>Unlocks in its own window</strong>Your master password is typed there, never into this page.</span></li>
+                        <li><Laptop size={14} aria-hidden="true" /><span><strong>Open for this browser session</strong>It locks again when you're away or close the browser.</span></li>
+                    </ul>
                 </motion.div>
             </section>
         );
@@ -2685,7 +2753,13 @@ export default function FocuzPassTab({
             <div className={`vault-shell${navCollapsed ? ' is-nav-collapsed' : ''}`}>
                 <aside className="vault-nav">
                     <div className="vault-brand-row">
-                        <span>FocuzPass</span>
+                        {onExit ? (
+                            <span className="vault-brand-trail">
+                                <button type="button" className="vault-brand-back" onClick={onExit} title="Back to FocuzNow"><ArrowLeft size={13} /><span>FocuzNow</span></button>
+                                <span className="vault-brand-sep" aria-hidden="true">/</span>
+                                <span>FocuzPass</span>
+                            </span>
+                        ) : <span>FocuzPass</span>}
                         <button type="button" onClick={() => setNavCollapsed((collapsed) => !collapsed)} aria-label={navCollapsed ? 'Expand FocuzPass sidebar' : 'Collapse FocuzPass sidebar'} title={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
                             <ExactSidebarDrawerCloseIcon size={15} />
                         </button>
@@ -2764,7 +2838,6 @@ export default function FocuzPassTab({
                     </nav>
 
                     <div className="vault-nav-bottom">
-                        {onExit && <button type="button" className="vault-nav-item vault-nav-exit" onClick={onExit}><ArrowLeft size={18} /><span className="vault-nav-label">Back to FocuzNow</span></button>}
                         <button type="button" className={`vault-nav-item${view.kind === 'archive' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'archive' }); setSelectedId(''); }}><ExactArchiveIcon size={20} /><span className="vault-nav-label">Archive</span></button>
                         <button type="button" className={`vault-nav-item${view.kind === 'deleted' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'deleted' }); setSelectedId(''); }}><ExactRecentlyDeletedIcon size={20} /><span className="vault-nav-label">Recently deleted</span></button>
                     </div>

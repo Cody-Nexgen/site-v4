@@ -1,8 +1,8 @@
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
-import { ArrowLeft, ArrowRight, Check, Cloud, LockKeyhole, ShieldCheck, X } from 'lucide-react';
-import { FormEvent, useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight, Check, Cloud, Eye, EyeOff, LockKeyhole, ShieldCheck, TriangleAlert, X } from 'lucide-react';
+import { FormEvent, useEffect, useState, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
     focuzPassCloudAccount,
@@ -25,6 +25,41 @@ function announceAccessChange() {
     } catch {
         /* the opener also polls status */
     }
+}
+
+/** Master password field: show/hide, and a warning while Caps Lock is on (the usual "wrong password"). */
+function PasswordField({ value, onChange, autoComplete, placeholder, autoFocus }: {
+    value: string;
+    onChange: (value: string) => void;
+    autoComplete: string;
+    placeholder: string;
+    autoFocus?: boolean;
+}) {
+    const [shown, setShown] = useState(false);
+    const [capsLock, setCapsLock] = useState(false);
+    const readCaps = (event: KeyboardEvent<HTMLInputElement>) => setCapsLock(event.getModifierState('CapsLock'));
+    return (
+        <>
+            <span className="access-window__password">
+                <input
+                    type={shown ? 'text' : 'password'}
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    onKeyDown={readCaps}
+                    onKeyUp={readCaps}
+                    onBlur={() => setCapsLock(false)}
+                    autoComplete={autoComplete}
+                    placeholder={placeholder}
+                    autoFocus={autoFocus}
+                    spellCheck={false}
+                />
+                <button type="button" onClick={() => setShown((current) => !current)} aria-label={shown ? 'Hide password' : 'Show password'} aria-pressed={shown}>
+                    {shown ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+            </span>
+            {capsLock && <small className="access-window__caps"><TriangleAlert size={12} /> Caps Lock is on</small>}
+        </>
+    );
 }
 
 function AccessWindow() {
@@ -122,6 +157,7 @@ function AccessWindow() {
             </header>
 
             <section className={`access-window__content is-${mode}`} aria-live="polite">
+                <div className="access-window__card">
                 <div className="access-window__lock" aria-hidden="true">
                     {mode === 'success' ? <Check size={30} /> : <LockKeyhole size={30} />}
                 </div>
@@ -157,7 +193,7 @@ function AccessWindow() {
                                     </label>
                                     <label>
                                         <span>Master password</span>
-                                        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" placeholder="Your FocuzPass Cloud master password" />
+                                        <PasswordField value={password} onChange={setPassword} autoComplete="current-password" placeholder="Your FocuzPass Cloud master password" />
                                     </label>
                                     {error && <p className="access-window__error" role="alert">{error}</p>}
                                     <button className="access-window__primary" type="submit" disabled={busy || !secretKey || !password}>
@@ -182,10 +218,9 @@ function AccessWindow() {
                         <form onSubmit={submit}>
                             <label>
                                 <span>Master password</span>
-                                <input
-                                    type="password"
+                                <PasswordField
                                     value={password}
-                                    onChange={(event) => setPassword(event.target.value)}
+                                    onChange={setPassword}
                                     autoComplete={isSetup ? 'new-password' : 'current-password'}
                                     placeholder={isSetup ? 'At least 8 characters' : 'Enter master password'}
                                     autoFocus
@@ -194,7 +229,7 @@ function AccessWindow() {
                             {isSetup && (
                                 <label>
                                     <span>Confirm password</span>
-                                    <input type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" placeholder="Repeat master password" />
+                                    <PasswordField value={confirmation} onChange={setConfirmation} autoComplete="new-password" placeholder="Repeat master password" />
                                 </label>
                             )}
                             {error && <p className="access-window__error" role="alert">{error}</p>}
@@ -210,9 +245,12 @@ function AccessWindow() {
                         )}
                     </>
                 )}
+                </div>
+                <p className="access-window__note">
+                    <ShieldCheck size={14} aria-hidden="true" />
+                    <span><strong>Only you can open your vault</strong>Your master password never leaves this device, and FocuzNow can&apos;t read your vault.</span>
+                </p>
             </section>
-
-            <footer><ShieldCheck size={14} /><span>Your master password never leaves this device</span></footer>
         </main>
     );
 }

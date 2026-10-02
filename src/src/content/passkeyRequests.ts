@@ -493,12 +493,12 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
 
     let pre: Preflight;
     const checkStarted = performance.now();
+    // Diagnostic while passkey speed is being confirmed with the owner; remove after.
+    const timing: { shown?: number; check?: number; clicked?: number } = early ? { shown: 0 } : {};
     try {
         const first = await Promise.race([preflight().then((value) => ({ pre: value })), card.next().then((choice) => ({ choice }))]);
         window.clearTimeout(checking);
-        // Diagnostic while the speed fix is confirmed; remove once the owner says it's quick.
-        const checkMs = Math.round(performance.now() - checkStarted);
-        if (checkMs > 400) console.info(`[FocuzPass] passkey check took ${checkMs} ms`);
+        timing.check = Math.round(performance.now() - checkStarted);
         if ('choice' in first) {
             // Picked on the early card before the check finished: finish the check, then use it.
             if (!early || !isPick(first.choice)) return leave(() => answer(first.choice));
@@ -567,8 +567,10 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
             choice = pendingChoice ?? (await card.next());
         } else {
             signInCard(site, accounts, lapseNote);
+            timing.shown ??= Math.round(performance.now() - checkStarted);
             choice = await card.next();
         }
+        const clickedAt = performance.now();
         const one = shown.length === 1 ? shown[0]! : null;
         const picked = choice === 'primary' && one ? one.credentialId : typeof choice === 'object' ? choice.account : null;
         // Only a passkey the fresh check found can be used.
@@ -576,6 +578,7 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
         if (!credentialId) return leave(() => answer(choice));
         void card.show({ title: signInTitle(site), subtitle: 'With a passkey saved in FocuzPass', busy: 'Signing in…' });
         reply(await send<Answer>({ type: 'FOCUZPASS_PASSKEY_GET', options, credentialId, ...from }));
+        console.info(`[FocuzPass] passkey sign-in: prompt shown ${timing.shown ?? '?'} ms after the site asked (check ${timing.check ?? '?'} ms); signed in ${Math.round(performance.now() - clickedAt)} ms after your click`);
         card.close();
     } catch (error) {
         card.close();
