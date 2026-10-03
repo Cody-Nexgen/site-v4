@@ -244,9 +244,12 @@ Rough size: Phase 0–2 is the core (weeks). The whole list is months.
 - Thanks to folder-synchronized groups, new files appear in Xcode without project edits. If a build fails, paste the error and Claude fixes it.
 - Test steps come with every change, as with the extension. Screen Time features are tested on a real device only.
 
-## 11. Decisions the owner needs to make
-1. `supabase-swift` (dependency) or plain `URLSession`?
-2. Coach math rendering: WebView with KaTeX (no dependency) or Swift packages?
-3. `focus_sessions` table for cross-device stats (a migration)?
-4. Bundle ID: `com.focuznow.app`? (It must be final before the Family Controls request.)
-5. Pro on iOS: StoreKit only, or StoreKit plus the US web link?
+## 11. Decisions (owner, 2026-10-03)
+1. **Supabase client:** `supabase-swift` (SPM). Packages are approved for the iOS app.
+2. **Coach Markdown + math:** native. Apple's `swift-markdown` parser plus a SwiftUI renderer, with **SwiftMath** for LaTeX equations (no web view per message). MarkdownUI was skipped because it's in maintenance mode.
+3. **`focus_sessions` table:** approved in principle. Write the migration as its own file and show it before applying (never a plain `supabase db push`).
+4. **Bundle IDs:** `com.focuznow.app`, extensions `com.focuznow.app.FocusMonitor`, `.FocusShield`, `.FocusShieldAction`, `.FocusReport`, `.Widgets`, `.PassAutoFill`. App Group `group.com.focuznow.shared`.
+5. **Pro:**
+   - In the app it's **StoreKit 2 in-app purchase only**. Pro bought on the website also unlocks the app for that account (allowed: "multiplatform services", guideline 3.1.3(b)).
+   - **No "buy on our website" text, links or price comparisons anywhere in the app** (the owner doesn't want an Epic/Spotify situation).
+   - Apple purchases reach Supabase through App Store Server Notifications v2 (new edge function).
