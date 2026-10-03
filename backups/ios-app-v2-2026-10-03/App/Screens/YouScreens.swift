@@ -208,9 +208,8 @@ struct ShopView: View {
     }
 }
 
-// MARK: Settings: account things only. Focus, Pass and looks live where they're used.
+// MARK: Settings (spec §4.16): account things only. Focus, Pass and looks live where they're used.
 
-/// Themed like the rest of FocuzNow: a lighthouse card on top, then quiet grouped rows.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("appearance") private var appearance = "system"
@@ -219,66 +218,50 @@ struct SettingsView: View {
     @State private var confirmDelete = false
     @State private var nudges = true
     @State private var cheers = true
-    @State private var haptics = true
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                profile.riseIn()
-
-                group("Notifications") {
-                    SettingsToggle(symbol: "bell", title: "Session reminders", isOn: $nudges)
-                    SettingsToggle(symbol: "party.popper", title: "Heads-up when you finish", isOn: $cheers)
-                    SettingsToggle(symbol: "iphone.radiowaves.left.and.right", title: "Haptics", isOn: $haptics)
-                }
-                .riseIn(delay: 0.08)
-
-                group("Appearance") {
-                    HStack(spacing: 8) {
-                        ForEach(["system", "light", "dark"], id: \.self) { option in
-                            Button { withAnimation(.spring(duration: 0.35)) { appearance = option } } label: {
-                                VStack(spacing: 6) {
-                                    Image(systemName: option == "light" ? "sun.max" : option == "dark" ? "moon" : "circle.lefthalf.filled").font(.title3)
-                                    Text(option == "light" ? "Light" : option == "dark" ? "Dark" : "Auto").font(.caption.weight(.semibold))
-                                }
-                                .foregroundStyle(appearance == option ? Color.fzBg : Color.fzInk)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(appearance == option ? Color.fzInk : Color.fzInk.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            }
-                            .buttonStyle(.pressable)
-                        }
+        List {
+            Section {
+                HStack(spacing: 14) {
+                    Avatar(name: model.userName, size: 52)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(model.userName).font(.headline)
+                        Text(model.isPro ? "FocuzNow Pro" : "Free plan").font(.subheadline).foregroundStyle(.secondary)
                     }
-                    .padding(10)
-                    .sensoryFeedback(.selection, trigger: appearance)
+                    Spacer()
+                    if !model.isPro {
+                        Button("Go Pro") { showPro = true }
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Color.fzBg)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(Color.fzInk, in: Capsule())
+                            .buttonStyle(.plain)
+                    }
                 }
-                .riseIn(delay: 0.16)
-
-                group("About") {
-                    NavigationLink { AboutView() } label: { SettingsRow(symbol: "light.beacon.max", title: "About FocuzNow") }
-                    NavigationLink { GuestPassView() } label: { SettingsRow(symbol: "ticket", title: "Send a guest pass") }
-                    Button { onboarded = false } label: { SettingsRow(symbol: "arrow.counterclockwise", title: "Replay the intro", chevron: false) }
-                }
-                .riseIn(delay: 0.24)
-
-                group("Account") {
-                    Button {} label: { SettingsRow(symbol: "rectangle.portrait.and.arrow.right", title: "Sign out", chevron: false) }
-                    Button { confirmDelete = true } label: { SettingsRow(symbol: "trash", title: "Delete account", chevron: false, destructive: true) }
-                }
-                .riseIn(delay: 0.32)
-
-                Text("FocuzNow 0.1 · Your passwords and photos stay encrypted on your devices.")
-                    .font(.footnote)
-                    .foregroundStyle(Color.fzInk3)
-                    .frame(maxWidth: .infinity)
             }
-            .padding(20)
-            .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity)
+            Section("Notifications") {
+                Toggle("Session reminders", isOn: $nudges)
+                Toggle("Cheers when you finish", isOn: $cheers)
+            }
+            Section("Appearance") {
+                Picker("Theme", selection: $appearance) {
+                    Text("System").tag("system")
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
+                }
+            }
+            Section("Account") {
+                Button("Sign out") {}
+                Button("Delete account", role: .destructive) { confirmDelete = true }
+            }
+            Section {
+                Button("Replay the intro") { onboarded = false }
+            } footer: {
+                Text("FocuzNow 0.1 · Your passwords and photos stay encrypted on your devices.")
+            }
         }
-        .scrollIndicators(.hidden)
-        .background(SkyBackground())
-        .buttonStyle(.plain)
+        .tint(Color.fzInk)
         .navigationTitle("Settings")
         .sheet(isPresented: $showPro) { ProView().environment(model) }
         .confirmationDialog("Delete your FocuzNow account?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -287,171 +270,81 @@ struct SettingsView: View {
             Text("This deletes your account, sessions, lists and FocuzPass vault from the cloud. It can't be undone.")
         }
     }
-
-    private var profile: some View {
-        ZStack(alignment: .bottomLeading) {
-            LighthouseView(scene: LighthouseScene(power: Theme.lampPower(model.focusScore), phase: 3.2, speed: 0.7, x: 0.78, waterline: 0.12, horizon: 0.18, scale: 1.0))
-                .frame(height: 190)
-                .overlay(LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom))
-            HStack(spacing: 12) {
-                Avatar(name: model.userName, size: 48)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.userName).font(.fzDisplay(22, weight: .bold)).foregroundStyle(.white)
-                    Text(model.isPro ? "FocuzNow Pro" : "Free plan · \(model.streakDays)-day streak").font(.subheadline).foregroundStyle(.white.opacity(0.7))
-                }
-                Spacer()
-                if !model.isPro {
-                    Button("Go Pro") { showPro = true }
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.white, in: Capsule())
-                }
-            }
-            .padding(16)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-    }
-
-    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(title).padding(.leading, 4)
-            VStack(spacing: 0) { content() }
-                .fzSurface(cornerRadius: 20)
-        }
-    }
 }
 
-private struct SettingsRow: View {
-    let symbol: String
-    let title: String
-    var chevron = true
-    var destructive = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(destructive ? Theme.danger : Color.fzInk)
-                .frame(width: 30, height: 30)
-                .background(Color.fzInk.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text(title).foregroundStyle(destructive ? Theme.danger : Color.fzInk)
-            Spacer()
-            if chevron {
-                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Color.fzInk3)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
-    }
-}
-
-private struct SettingsToggle: View {
-    let symbol: String
-    let title: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Toggle(isOn: $isOn) {
-            HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.fzInk)
-                    .frame(width: 30, height: 30)
-                    .background(Color.fzInk.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                Text(title).foregroundStyle(Color.fzInk)
-            }
-        }
-        .tint(Color.fzInk)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .sensoryFeedback(.selection, trigger: isOn)
-    }
-}
-
-// MARK: Pro. StoreKit in Phase 7; never mentions website pricing.
+// MARK: Pro (spec §4.17). StoreKit in Phase 7; never mentions website pricing.
 
 struct ProView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var yearly = true
-    @State private var bright = false
+    @State private var focus = 0.3
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.black.ignoresSafeArea()
-            LighthouseView(scene: LighthouseScene(power: bright ? 1.25 : 0.4, phase: 3.1, speed: 1.2, x: 0.7, waterline: 0.55, horizon: 0.6, scale: 0.6))
-                .frame(height: 420)
-                .mask(LinearGradient(stops: [.init(color: .black, location: 0.6), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
-                .ignoresSafeArea()
+        ZStack {
+            SkyBackground(mood: .night, intensity: 1.5)
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Spacer().frame(height: 230)
+                VStack(spacing: 22) {
+                    FocusField(focus: focus)
+                        .frame(width: 200, height: 200)
+                        .padding(.top, 20)
                     Text("FocuzNow Pro")
-                        .font(.fzDisplay(40))
-                        .fzTight(40)
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                        .riseIn(delay: 0.3)
-                    VStack(alignment: .leading, spacing: 14) {
+                        .riseIn(delay: 0.5)
+                    VStack(alignment: .leading, spacing: 16) {
                         perk("infinity", "Unlimited block lists and schedules")
                         perk("brain.head.profile", "Coach Pro, which thinks deeper")
                         perk("key.fill", "FocuzPass on all your devices")
-                        perk("photo.on.rectangle.angled", "Every scene and your own backgrounds")
+                        perk("photo.on.rectangle.angled", "Every scene and custom backgrounds")
                     }
-                    .riseIn(delay: 0.45)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .riseIn(delay: 0.7)
                     HStack(spacing: 10) {
                         plan("Monthly", "$3.99 / month", selected: !yearly) { yearly = false }
                         plan("Yearly", "$29.99 / year", selected: yearly) { yearly = true }
                     }
-                    .riseIn(delay: 0.6)
-                    HoldButton(title: "Hold to go Pro", holdingTitle: "Almost…", duration: 0.8) {
+                    .riseIn(delay: 0.85)
+                    Button("Continue") {
                         model.isPro = true
                         dismiss()
                     }
-                    .riseIn(delay: 0.75)
+                    .buttonStyle(.beam)
                     Button("Restore purchases") {}
-                        .buttonStyle(.ghost)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.6))
                 }
                 .padding(24)
                 .frame(maxWidth: 520)
                 .frame(maxWidth: .infinity)
             }
-            .scrollIndicators(.hidden)
         }
         .environment(\.colorScheme, .dark)
-        .task {
-            try? await Task.sleep(for: .milliseconds(300))
-            bright = true
-        }
+        .onAppear { withAnimation(.smooth(duration: 1.6)) { focus = 1 } }
     }
 
     private func perk(_ symbol: String, _ text: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.fzOnBone)
-                .frame(width: 30, height: 30)
-                .background(Color.fzBone, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        Label {
             Text(text).foregroundStyle(.white)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(Theme.accent)
         }
     }
 
     private func plan(_ title: String, _ price: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-                Text(price).font(.caption).opacity(0.65)
+                Text(title).font(.headline).foregroundStyle(.white)
+                Text(price).font(.caption).foregroundStyle(.white.opacity(0.6))
             }
-            .foregroundStyle(selected ? Color.fzOnBone : .white)
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? Color.fzBone : Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(selected ? 0 : 0.12)))
+            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(selected ? Color.white : .clear, lineWidth: 2))
         }
-        .buttonStyle(.pressable)
-        .sensoryFeedback(.selection, trigger: selected)
+        .buttonStyle(.plain)
     }
 }
 
@@ -462,73 +355,35 @@ struct YouSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+            List {
+                Section {
                     HStack(spacing: 14) {
-                        Avatar(name: model.userName, size: 56)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(model.userName).font(.fzDisplay(24, weight: .bold)).foregroundStyle(Color.fzInk)
+                        Avatar(name: model.userName, size: 54)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(model.userName).font(.title3.weight(.bold))
                             Text("\(model.coins) coins · \(model.streakDays)-day streak")
                                 .font(.subheadline)
-                                .foregroundStyle(Color.fzInk3)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .riseIn()
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                        tile("chart.bar.fill", "Stats") { StatsView() }
-                        tile("person.2.fill", "Friends") { FriendsView() }
-                        tile("tree.fill", "Forest") { ForestView() }
-                        tile("bag.fill", "Shop") { ShopView() }
-                        tile("paintbrush.fill", "Customize") { CustomizeView() }
-                        tile("ticket.fill", "Guest pass") { GuestPassView() }
-                    }
-                    .riseIn(delay: 0.1)
-                    VStack(spacing: 0) {
-                        NavigationLink { SettingsView() } label: { row("gearshape.fill", "Settings") }
-                        Divider().overlay(Color.fzLine).padding(.leading, 54)
-                        NavigationLink { AboutView() } label: { row("light.beacon.max", "About FocuzNow") }
-                    }
-                    .fzSurface(cornerRadius: 20)
-                    .riseIn(delay: 0.2)
+                    .padding(.vertical, 6)
                 }
-                .padding(20)
+                Section {
+                    NavigationLink { StatsView() } label: { Label("Stats", systemImage: "chart.bar.fill") }
+                    NavigationLink { FriendsView() } label: { Label("Friends", systemImage: "person.2.fill") }
+                    NavigationLink { ForestView() } label: { Label("Forest", systemImage: "tree.fill") }
+                    NavigationLink { ShopView() } label: { Label("Focuz Shop", systemImage: "bag.fill") }
+                    NavigationLink { CustomizeView() } label: { Label("Customize", systemImage: "paintbrush.fill") }
+                }
+                Section {
+                    NavigationLink { SettingsView() } label: { Label("Settings", systemImage: "gearshape.fill") }
+                }
             }
-            .buttonStyle(.pressable)
-            .background(Color.fzBg)
+            .tint(Color.fzInk)
+            .navigationTitle("You")
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
-        .presentationCornerRadius(32)
-    }
-
-    private func tile<Destination: View>(_ symbol: String, _ title: String, @ViewBuilder destination: @escaping () -> Destination) -> some View {
-        NavigationLink(destination: destination) {
-            VStack(alignment: .leading, spacing: 14) {
-                Image(systemName: symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.fzBone)
-                    .frame(width: 32, height: 32)
-                    .background(Color.fzOnBone, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                Text(title).font(.headline).foregroundStyle(Color.fzOnBone)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(Color.fzBone, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        }
-    }
-
-    private func row(_ symbol: String, _ title: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.fzInk)
-                .frame(width: 30, height: 30)
-                .background(Color.fzInk.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text(title).foregroundStyle(Color.fzInk)
-            Spacer()
-            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Color.fzInk3)
-        }
-        .padding(12)
-        .contentShape(Rectangle())
+        .presentationBackground(.ultraThinMaterial)
     }
 }

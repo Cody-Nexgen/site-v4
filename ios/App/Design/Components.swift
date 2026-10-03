@@ -2,42 +2,60 @@ import SwiftUI
 
 // MARK: Buttons
 
-/// The primary action: a solid capsule (white on dark, ink on light) with a soft glow of the
-/// accent light underneath. One per screen. `gold` keeps the old name for the Pro screen.
+/// The primary action, like focuznow.com: a solid white button with black text on dark (ink with
+/// white on light), 16pt corners. One per screen. `gold` keeps the old name for the Pro screen.
 struct BeamButtonStyle: ButtonStyle {
     var gold = false
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
             .foregroundStyle(scheme == .dark ? Color.black : Color.white)
-            .padding(.vertical, 17)
             .frame(maxWidth: .infinity)
-            .background(Capsule().fill(scheme == .dark ? Color.white : Color(hex: 0x0B0B0F)))
-            .background(
-                Capsule()
-                    .fill(Theme.accent.opacity(gold ? 0.9 : 0.55))
-                    .blur(radius: 22)
-                    .offset(y: 10)
-                    .padding(.horizontal, 30)
-            )
+            .frame(height: 56)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(scheme == .dark ? Color.white : Color.fzInk))
+            .opacity(enabled ? 1 : 0.35)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.smooth(duration: 0.2), value: configuration.isPressed)
+            .animation(.spring(duration: 0.25), value: configuration.isPressed)
     }
 }
 
-/// A secondary capsule: glass on iOS 26, frosted on 18.
+/// A secondary button: a quiet outline (glass on iOS 26).
 struct GlassPillStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
             .foregroundStyle(Color.fzInk)
-            .padding(.vertical, 16)
             .frame(maxWidth: .infinity)
-            .fzGlass(in: Capsule(), interactive: true)
+            .frame(height: 54)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.fzInk.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.fzLine))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.smooth(duration: 0.2), value: configuration.isPressed)
+            .animation(.spring(duration: 0.25), value: configuration.isPressed)
+    }
+}
+
+/// Text-only button ("End early", "Not now").
+struct GhostButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline.weight(.medium))
+            .foregroundStyle(Color.fzInk2)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.5 : 1)
+    }
+}
+
+/// Any tappable card: it gives a little when pressed.
+struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(duration: 0.25), value: configuration.isPressed)
     }
 }
 
@@ -48,6 +66,14 @@ extension ButtonStyle where Self == BeamButtonStyle {
 
 extension ButtonStyle where Self == GlassPillStyle {
     static var glassPill: GlassPillStyle { GlassPillStyle() }
+}
+
+extension ButtonStyle where Self == GhostButtonStyle {
+    static var ghost: GhostButtonStyle { GhostButtonStyle() }
+}
+
+extension ButtonStyle where Self == PressableStyle {
+    static var pressable: PressableStyle { PressableStyle() }
 }
 
 /// A round floating glass button (add, close, help).
@@ -64,13 +90,13 @@ struct GlassCircleButton: View {
                 .frame(width: size, height: size)
                 .fzGlass(in: Circle(), interactive: true)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 }
 
 // MARK: Text
 
-/// `NOW`, `SCREEN TIME`: small caps labels (spec §2).
+/// `FOCUS SCORE`, `UP NEXT`: small caps labels.
 struct SectionLabel: View {
     let text: String
 
@@ -79,8 +105,40 @@ struct SectionLabel: View {
     var body: some View {
         Text(text.uppercased())
             .font(.caption2.weight(.semibold))
-            .tracking(1.2)
+            .tracking(1.3)
             .foregroundStyle(Color.fzInk3)
+    }
+}
+
+/// A screen title in the headline face: "Focus", "Plan".
+struct ScreenTitle: View {
+    let text: String
+    var size: CGFloat = 36
+
+    init(_ text: String, size: CGFloat = 36) {
+        self.text = text
+        self.size = size
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.fzDisplay(size))
+            .fzTight(size)
+            .foregroundStyle(Color.fzInk)
+    }
+}
+
+/// The Beam Z mark in its tile, like the website's header.
+struct ZMark: View {
+    var size: CGFloat = 30
+
+    var body: some View {
+        Text("Z")
+            .font(.fzDisplay(size * 0.55))
+            .foregroundStyle(Color.fzInk)
+            .frame(width: size, height: size)
+            .background(Color.fzSurface, in: RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous).strokeBorder(Color.fzLine))
     }
 }
 
@@ -98,23 +156,54 @@ struct StatTrio: View {
     var body: some View {
         HStack(alignment: .top) {
             ForEach(items) { item in
-                VStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 4) {
                     SectionLabel(item.label)
                     HStack(spacing: 3) {
                         if let trend = item.trend {
-                            Image(systemName: trend >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(trend >= 0 ? Theme.good : Theme.danger)
+                            Image(systemName: trend >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.fzInk2)
                         }
                         Text(item.value)
-                            .font(.fzNumber(20, weight: .semibold))
+                            .font(.fzNumber(22))
                             .foregroundStyle(Color.fzInk)
                             .contentTransition(.numericText())
                     }
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+}
+
+// MARK: Bone tiles (the website's feature card)
+
+/// A tile inside a bone card: black icon square, title, detail.
+struct BoneTile: View {
+    let symbol: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.fzBone)
+                .frame(width: 30, height: 30)
+                .background(Color.fzOnBone, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Spacer(minLength: 14)
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(Color.fzOnBone)
+                .lineLimit(1)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(Color.fzOnBone2)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+        .padding(12)
+        .background(Color.fzBoneTile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -141,6 +230,7 @@ struct Chip: View {
                 Capsule().fill(Color.fzSurface).overlay(Capsule().strokeBorder(Color.fzLine))
             }
         }
+        .animation(.spring(duration: 0.3), value: selected)
     }
 }
 
@@ -176,40 +266,36 @@ struct AppIcon: View {
             .font(.system(size: size * 0.5, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .background(LinearGradient(colors: [app.color, app.color.opacity(0.75)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: size * 0.26, style: .continuous).strokeBorder(.black.opacity(0.25), lineWidth: 1.5))
+            .background(app.color, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: size * 0.26, style: .continuous).strokeBorder(Color.fzBg, lineWidth: 1.5))
     }
 }
 
+/// A bone circle with the initial, like the website's account button.
 struct Avatar: View {
     let name: String
     var size: CGFloat = 34
 
     var body: some View {
         Text(String(name.prefix(1)).uppercased())
-            .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
-            .foregroundStyle(.white)
+            .font(.fzDisplay(size * 0.44, weight: .bold))
+            .foregroundStyle(Color.fzOnBone)
             .frame(width: size, height: size)
-            .background(LinearGradient(colors: [Theme.tileColor(for: name), Theme.tileColor(for: name + "x").opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
-            .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+            .background(Color.fzBone, in: Circle())
     }
 }
 
-/// A letter tile for vault items, in the pastel hue of its name.
+/// A letter tile for vault items.
 struct LetterTile: View {
     let title: String
     var size: CGFloat = 40
 
     var body: some View {
         Text(String(title.prefix(2)))
-            .font(.system(size: size * 0.36, weight: .bold, design: .rounded))
-            .foregroundStyle(Color.black.opacity(0.72))
+            .font(.fzDisplay(size * 0.36, weight: .bold))
+            .foregroundStyle(Color.fzOnBone)
             .frame(width: size, height: size)
-            .background(
-                LinearGradient(colors: [Theme.tileColor(for: title).mix(with: .white, by: 0.25), Theme.tileColor(for: title)], startPoint: .top, endPoint: .bottom),
-                in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-            )
-            .overlay(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(.white.opacity(0.5), lineWidth: 1))
+            .background(Color.fzBoneTile, in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
     }
 }
 
@@ -223,24 +309,24 @@ struct SessionBar: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 HStack(spacing: 12) {
                     Circle()
-                        .fill(session.isOnBreak(at: context.date) ? Theme.warn : Theme.good)
-                        .frame(width: 8, height: 8)
-                        .shadow(color: Theme.good.opacity(0.8), radius: 4)
+                        .fill(Color.fzInk)
+                        .frame(width: 7, height: 7)
+                        .phaseAnimator([0.35, 1.0]) { dot, phase in dot.opacity(phase) } animation: { _ in .easeInOut(duration: 1.2) }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(session.isOnBreak(at: context.date) ? "On a break" : "In session · \(session.blockedCount) blocked")
                             .font(.caption2)
                             .foregroundStyle(Color.fzInk3)
-                        Label(session.title, systemImage: session.symbol)
+                        Text(session.title)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Color.fzInk)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 8)
                     Text(FocusSession.clock(session.remaining(at: context.date)))
-                        .font(.fzNumber(17, weight: .semibold))
+                        .font(.fzNumber(18))
                         .monospacedDigit()
                         .foregroundStyle(Color.fzInk)
-                        .contentTransition(.numericText())
+                        .contentTransition(.numericText(countsDown: true))
                     Image(systemName: "chevron.up")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(Color.fzInk2)
@@ -251,5 +337,23 @@ struct SessionBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open your focus session")
+    }
+}
+
+/// A small lamp: a bright core with a soft halo that breathes. Coach's "thinking" and empty state.
+struct LampGlow: View {
+    var size: CGFloat = 40
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Theme.accent.opacity(0.35)).blur(radius: size * 0.25)
+            Circle().fill(Theme.accent).frame(width: size * 0.32, height: size * 0.32)
+                .shadow(color: Theme.accent.opacity(0.8), radius: size * 0.12)
+        }
+        .frame(width: size, height: size)
+        .phaseAnimator([0.82, 1.0]) { lamp, phase in
+            lamp.scaleEffect(phase).opacity(0.7 + 0.3 * phase)
+        } animation: { _ in .easeInOut(duration: 1.4) }
+        .accessibilityHidden(true)
     }
 }

@@ -67,7 +67,7 @@ final class AppModel {
         Friend(name: "Zoe", minutesThisWeek: 214, focusingNow: false),
     ]
     // Customize
-    var sessionBackground: SessionBackground = .lighthouse
+    var sessionBackground: SessionBackground = .scene(.nightLake)
     var backgroundPhoto: UIImage?
     var timerStyle: TimerStyle = .big
     var showQuote = true
@@ -78,7 +78,6 @@ final class AppModel {
     var phoneHoursGuess = 5.0
     var distraction = ""
     var focusFor = ""
-    var hardestTime = ""
 
     var trees: [ForestTree] = (0..<17).map { index in ForestTree(minutes: [25, 50, 30, 45, 90, 25, 60][index % 7], kind: index % 3) }
     var shop: [ShopItem] = [

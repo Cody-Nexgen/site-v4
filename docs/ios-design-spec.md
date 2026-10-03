@@ -1,116 +1,110 @@
-# FocuzNow iOS: design spec ("Into focus")
+# FocuzNow iOS: design spec v3 ("Lighthouse")
 
-v2, 2026-10-03. It replaces the v1 "Beam/skies" spec, which the owner found too colourful and too "AI".
-- Built in `ios/App/`.
-- Tech plan: `docs/focuznow-ios-plan.md`.
+v3 (2026-10-03) replaces v2 "Into focus". The owner's feedback on v2: it was too close to Opal, the
+dots-into-a-Z intro was weird and hard to read, animations were choppy (~15 fps), and every
+onboarding answer got the same reply. The website (focuznow.com) is pure black and white with a
+lighthouse, and the app has to feel like the same product. The v2 code is backed up in
+`backups/ios-app-v2-2026-10-03/` (RESTORE.md).
 
 ## 1. The story
-**FocuzNow = coming into focus.**
-- When you're pulled in ten directions, everything is **out of focus**: soft bokeh lights drifting apart, blurry words.
-- When you focus, the lights **sharpen and gather** into one line of light: the **Beam Z**.
 
-This is our own metaphor (optics), not Opal's (geology: a rock becoming a gem). It runs through the whole app:
-- **Onboarding** opens out of focus and sharpens with each tap.
-- **Today's hero** is your Focus Score made visible: scattered at 2.0, a crisp glowing Z at 9.5.
-- **Thinking** in the coach is the lights gathering.
-- **Finishing a session** gathers them into the Z.
+FocuzNow is a lighthouse. Everything else is dark sea and noise; the lamp is your attention.
+- The lamp is **as bright as your focus**: dim at a low score, the full beam at a high one.
+- Starting something important is **lighting the lamp** (hold to commit).
+- A session is the lamp staying on; it grows brighter as the session goes on.
+- "Everything else can wait." is the line, everywhere.
 
-## 2. Restraint (the rule that stops it looking "AI")
-- **Black and white.** Dark is pure black; light is warm off-white `#F6F5F2`. Text is ink, at 100/70/42% opacity.
-- **One light.** A single accent the person picks in Customize:
-  - **Warm** `#FFD49A` (default), Ice `#A8D8FF`, Mint `#9FF0CF`, Rose `#FFB3C1`.
-  - Use it for **one thing per screen**: the glow, a highlighted number (*"23 days"*), the progress fill.
-- **No gradients on controls.**
-  - The primary button is a solid white capsule (ink in light mode) with a soft glow of the light underneath.
-  - Secondary buttons are glass.
-- **The background** is one soft, slowly breathing radial glow of the light at the top of the screen. That's it.
-- **Glass only floats:** tab bar, top buttons, the session bar, answer pills, the composer.
+## 2. Brand (from the website)
 
-## 3. Motion language
-- **Blur-rise:** things arrive out of focus, 26pt low, transparent, then rise, sharpen and fade in (`.blurRise`, `.riseIn(delay:)`). Staggered 60–150 ms in lists.
-- **Gather:** `FocusField` is animatable. `withAnimation { focus = 1 }` plays the lights gathering into the Z.
-- **Conversation:** new lines blur-rise. Older lines dim and blur more the further back they are.
-- **Numbers** roll (`.numericText`), and the session clock counts down.
-- **Haptics:** a light tap per onboarding beat, selection ticks on choices, success on finishing.
-- **Reduce Motion:** everything appears sharp and still.
+- Colours: black `#0A0A0B`, text `#F5F3EE`, **bone** `#ECE8DF` cards with `#E1DDD3` tiles and
+  `#111` ink (the website's feature card), white buttons with black text, 16pt corners.
+  Light mode: bone-white `#F3F0E9` background, ink buttons. The lighthouse stays a night scene in both.
+- Type: **Satoshi** (Black/Bold/Medium) for headlines and numbers, tight tracking (-3%); system for
+  body. Satoshi files go in `ios/App/Fonts` (see README); until then a heavy system face is used.
+- The lamp colour is the only "colour" (Customize → Lamp: bone, warm, white, ice).
+- No gradients on controls, no rainbow, no pixel/ASCII art on the phone.
 
-## 4. Screens
+## 3. The lighthouse (`Design/Lighthouse.metal`, `Design/LighthouseView.swift`)
 
-### Onboarding (`OnboardingFlow.swift`)
-```
-1. LENS                         2. TALK                          3. PAYOFF
-┌──────────────────────┐        ┌──────────────────────┐        ┌──────────────────────┐
-│  ◌    ◯      ◌   ◯   │        │          Z           │        │          Z           │
-│     ◯    ◌      ◯    │        │ Hey. I'm FocuzNow.   │ (blur) │ Maya,                │
-│  Everything's blurry │        │ I'll ask a few…      │ (dim)  │ FocuzNow can give you│
-│  when ten things are │        │ What should I call   │        │ back 23 days this yr │
-│  pulling at you.     │        │ you?                 │        │ ⌛ 30% less screen…  │
-│   ◯     ◌    ◯       │        │ Maya ←accent         │        │ ◎ Deeper focus…      │
-│      TAP TO FOCUS    │        │ [Under 2h][2–4h]…    │        │ [   Let's do it   ]  │
-└──────────────────────┘        └──────────────────────┘        └──────────────────────┘
-```
-1. **Lens:** 3 taps. The text sharpens with each tap, the lights gather, the Z ignites, then "FocuzNow · Your time, in focus." appears.
-2. **Talk:**
-   - The questions: name (inline field) → phone time (5 pills) → what pulls you → what you want time for.
-   - Each answer gets a reaction ("Okay… we should talk.").
-   - Then "Building your setup…" with a progress fill.
-3. **Payoff:** "{name}, FocuzNow can give you back **N days** this year". N = hours × 30% × 365 / 24, and it counts up. Three benefits rise in, built from the answers.
-4. **Account:** "Quick check, have we met before?" → Continue with Apple (white system button), Google (glass), email (expands inline).
-5. **Screen Time → apps** (Apple's picker) **→ notifications**, each said as two conversational lines with a white primary button and a quiet "Not now".
-6. **Finale:** the Z grows large and bright. "You're in focus, {name}." → Start.
+A real-time render, not a drawing: a moonlit round tower with black bands, gallery and railing, a
+glass lantern room and dome; a beam that sweeps in 3D (foreshortened, flashes when it faces you)
+through sea fog and low cloud; a rocky headland with foam; a perspective ocean with mirror
+reflections and a glitter path; stars; film grain and vignette.
+- Drawn by an `MTKView` at 60 fps with a 1.5x internal scale (cheap on battery), paused when the
+  app isn't active, frozen with Reduce Motion.
+- `LighthouseScene` sets framing and brightness (`.hero`, `.header`, `.session`). Changes to
+  power, exposure and framing **glide** (~0.35 s), so one lighthouse can move from full screen to a
+  header like a camera move.
+- Honest limit: code can't look like a photo. For photoreal, a real night-lighthouse photo or video
+  loop can replace the backdrop later, with only the beam and water animated on top.
 
-### Today
-- Header: "Evening, Maya" plus an avatar (which opens You).
-- **Hero:** a `FocusField` gathered to *score / 10* (it animates in on appear), with `NOW` and the score in 72pt rounded beneath, then the score word and "**1h 14m** of 2h today · 6-day streak".
-- Below that: the stats trio, the day wave (optional), up next (event + to-dos), and friends focusing now (optional).
-- A white "Start focus" button floats at the bottom.
+## 4. Motion language (`Design/Motion.swift`)
 
-### Session (`ActiveSessionView.swift`)
-- **Background:** *your photo* (Customize, stays on the device) or a drawn scene.
-  - It fills the screen and **blurs progressively** into black from about 40% down: the same image, blurred, masked by a gradient, under a black gradient.
-- **Panel:**
-  - the Edit session pill;
-  - the title;
-  - the **clock in the chosen style** (big / minimal / ring);
-  - **one progress track** (6pt, accent fill, a glowing head; no tick lines under it);
-  - start/end times;
-  - cards: Block list | **Breaks (tap to edit the length)**;
-  - Take a break (white) and Leave early (red text). Locked in hides both.
-- **Edit session:** +5/10/15/30 min.
-- **Break:** an accent ring countdown and "Back to focus".
-- **Complete:** the lights gather into the Z, then "50 minutes" and chips rise in.
+- **Rise**: things arrive 18pt low and settle with a spring; at most a 4pt blur, so text is always
+  readable. `riseIn(delay:)` staggers a screen's parts.
+- **Hold to commit** (`HoldButton`): the fill sweeps across, haptic ticks speed up, success haptic
+  when full; letting go drains it. Used for: lighting the lamp in onboarding, starting a session,
+  taking a break, going Pro.
+- **3D tilt** (`tilt3D`): drag to tilt with a moving sheen; springs back (guest pass).
+- **Write-on** (`writeOn`): a signature reveals left to right like a pen (About).
+- **Scroll rise** (`scrollRise`): rows rise in as they scroll into view (About).
+- **Parallax**: lighthouse headers stretch on pull-down and drift slower than the page (Today, About).
+- Smooth by default: no `TimelineView` frame caps anywhere (that was the v2 choppiness).
 
-### Coach (`CoachView.swift`)
-- **Top bar:** ≡ (library) · "Coach **Flash** ⌄" (model sheet) · ✎ (new chat).
-- **Empty:** a small Z plus "Ready when you are, Maya", and suggestion chips rising in.
-- **Thread:** your messages in soft bubbles; coach replies sit on the page (no bubble), and everything blur-rises. Thinking shows the lights gathering plus a shimmering "Thinking".
-- **Library:** slides from the left, with New chat, search, and recent chats (title + relative time) plus your profile.
-- **Model sheet:** cards (Flash: fast; Pro: thinks deeper, with a PRO badge) and a checkmark.
+## 5. Screens
 
-### Forest (`ForestView.swift`, SceneKit)
-- A floating low-poly island: grass top, earthy cone underneath, rocks, a pond.
-- Three tree kinds (pine, round, birch), sized by session length and spread on a spiral.
-- A warm sun with soft shadows over a dusk sky. It turns slowly and bobs, and you can drag to rotate.
+### Splash (`SplashView.swift`), every launch once you're set up
+Black → the scene fades up → the lamp switches on (haptic) → "FocuzNow" + "Everything else can wait."
+rise → the camera flies into the lamp (scale 7x around the lamp, exposure white-out) and the app
+appears out of the light.
 
-### Customize (`CustomizeView.swift`), new
-- **Session background:** your photo (PhotosPicker) or one of the scenes.
-- **Clock style:** a live preview over your background.
-- **Your light:** 4 swatches; the whole app re-tints live.
-- **Home:** show the day wave / friends; a quote during sessions.
+### Onboarding (`Onboarding/OnboardingFlow.swift`)
+One lighthouse for the whole flow.
+1. **Intro**: full-screen lighthouse, the lamp switches on. "Everything else can wait.", subtitle,
+   Get started / I already have an account.
+2. **Questions**: the lighthouse rises into a header. Name, then four questions (phone time, what
+   pulls you, hardest time, what you want time for). Pick an answer: the others step aside, and a
+   **reply written for that exact answer** rises in on a bone card (`Asks.all`, 20+ replies).
+   Every answer lights the lamp a bit more; the progress bar fills.
+3. **Your plan**: full-screen again. A bone card: daily focus goal (from phone time), what's
+   blocked (from what pulls you), your focus block (from hardest time), days a year it adds up to.
+   **Hold to light the lamp**: the beam brightens while you hold, flashes when it fires.
+4. **Save your plan** (Apple, Google, email) → **Screen Time** (a bone card of the system prompt,
+   privacy line) → **Pick apps** (FamilyActivityPicker) → **Notifications** (a bone notification
+   preview).
+5. **All set**: the beam spins up, "You're all set, Maya." → Enter: flash and fly into the app.
 
-### Settings
-Only account things:
-- profile and Pro;
-- notifications;
-- theme;
-- sign out and delete account;
-- replay the intro.
+### Today (`Screens/TodayView.swift`)
+Lighthouse header (brightness = focus score, parallax), greeting + avatar on it. Focus score in
+Satoshi 84 counting up, word, minutes/goal/streak, goal track. Bone **Up next** card with four tiles
+(next event, next to-do, blocked, screen time). Stats card (last hour, pickups, coins, the day
+wave). Friends focusing now. White "Start focus" button.
 
-Focus defaults live in Focus; Face ID lives in Pass; looks live in Customize.
+### Focus (`Screens/FocusSetupView.swift`)
+Presets, the time ring (ink arc, Satoshi clock), Screen Time prompt, block list, difficulty,
+breaks, background. **Hold to start**.
 
-Focus rooms are removed (dropped from the product earlier).
+### Session (`Screens/ActiveSessionView.swift`)
+Full-screen lighthouse (or your photo / a scene), lamp brightening with progress. Small-caps session
+name, Satoshi clock (96pt), thin white progress with a glowing head, start/end times, block list and
+breaks cards, **Hold for a break** (shorter hold on Easy), End early. Break: white ring countdown.
 
-## 5. Art still to come (code can't fake these)
-1. **A 3D Beam Z**, made in Spline (its official SwiftUI package) or Blender, to replace the drawn Z in the hero and the finale.
-2. **A curated photo pack** for session backgrounds (free-license photos are allowed in apps).
-3. Sound: a soft chime on finish (optional).
+### Session complete
+The lamp flashes, minutes count up in Satoshi 58, "The lamp stayed on the whole time", a bone log
+card (focused, score before → after, coins, tree), Share / Another / Done.
+
+### You (sheet), Settings, About, Guest pass, Pro
+- **You**: avatar, bone tiles (Stats, Friends, Forest, Shop, Customize, Guest pass), Settings, About.
+- **Settings**: a lighthouse profile card (brightness = score) with Go Pro, grouped rows with
+  icon squares, an appearance picker (Auto/Light/Dark tiles), About, guest pass, replay intro, account.
+- **About**: parallax lighthouse, why FocuzNow exists, feature rows that rise and bounce their icons
+  as they scroll in, a bone card signed "The FocuzNow team" that writes itself.
+- **Guest pass**: a ticket with the lighthouse inside, perforation, pass number, "From" in a
+  handwriting face; flips up on arrival, floats, tilts in 3D when dragged; Send shares a code (no
+  website links in the app).
+- **Pro**: the lamp brightens as the sheet opens; bone perk icons, plan cards (selected = bone),
+  hold to go Pro. Never mentions website pricing.
+
+### Plan, Pass, Coach, Stats, Friends, Shop, Forest, Customize
+Same tokens (titles in Satoshi). Coach's lamp glow replaces the dots. Customize adds the
+Lighthouse background tile and the Lamp colour.

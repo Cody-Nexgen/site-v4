@@ -73,11 +73,11 @@ struct CoachView: View {
     private var emptyState: some View {
         VStack(spacing: 18) {
             Spacer()
-            LampGlow(size: 90)
+            FocusField(focus: 1, lights: 24, markScale: 0.5)
                 .frame(width: 90, height: 90)
                 .riseIn()
             Text("Ready when you are, \(model.userName)")
-                .font(.fzDisplay(28))
+                .font(.system(size: 28, weight: .semibold))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Color.fzInk)
                 .riseIn(delay: 0.15)
@@ -202,7 +202,7 @@ private struct Bubble: View {
 private struct ThinkingLine: View {
     var body: some View {
         HStack(spacing: 10) {
-            LampGlow(size: 28)
+            FocusField(focus: 0.55, lights: 12, markScale: 0.4)
                 .frame(width: 28, height: 28)
             Text("Thinking")
                 .font(.subheadline.weight(.semibold))

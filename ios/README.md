@@ -24,24 +24,33 @@ Native SwiftUI, iOS/iPadOS 18+, Liquid Glass on iOS 26. The plan and every quirk
 5. **Your iPhone/iPad:** plug it in, trust the Mac, then on the device: Settings → Privacy & Security → **Developer Mode** → on (it restarts).
 6. Pick your device at the top of Xcode and press **▶ Run**.
 
-## What you should see (UI v2 "Into focus", mock data)
+## Fonts (do this once)
 
-Design spec: [`docs/ios-design-spec.md`](../docs/ios-design-spec.md).
+The headlines use **Satoshi**, the same font as focuznow.com. Download it free from
+https://www.fontshare.com/fonts/satoshi ("Download family"), and copy `Satoshi-Medium.otf`,
+`Satoshi-Bold.otf` and `Satoshi-Black.otf` from its OTF folder into `ios/App/Fonts/`. Run `xcodegen`
+again. Without them the app still works with a heavy system font.
 
-1. **Intro:**
-   - blurry lights and blurry text; **tap 3×**: it sharpens, the lights gather into a glowing Z, then "FocuzNow".
-   - Then a **conversation**: name, phone time, what pulls you, what you want time for. Each answer gets a reaction, and older lines blur away upward.
-   - "Building your setup…" → **"Maya, FocuzNow can give you back N days this year"**.
-   - Then account → Screen Time → apps → notifications → "You're in focus".
-2. **Today:** the lights gather to your Focus Score (sharp at a high score), with the score, stats, the day wave, up next, and friends focusing now.
-3. **Focus → Start:**
-   - your **photo** (or a scene) blurs into black;
-   - one clean progress track;
-   - tap **Breaks** to change the length, and **Edit session** to add time;
-   - the paintbrush opens Customize.
-4. **Coach:** ≡ opens the chat library, "Coach Flash ⌄" opens the model cards, and messages rise in.
-5. **You → Forest:** a 3D island with trees; drag it around.
-6. **You → Customize:** pick a session photo, the clock style, and **your light** (the whole app re-tints).
+## What you should see (UI v3 "Lighthouse", mock data)
+
+Design spec: [`docs/ios-design-spec.md`](../docs/ios-design-spec.md). The old v2 is in
+`backups/ios-app-v2-2026-10-03/` if you want it back (see RESTORE.md there).
+
+1. **Intro:** a rendered lighthouse at night; the lamp switches on (you feel a tap) and the beam
+   sweeps through the fog. "Everything else can wait." → **Get started**.
+2. **Questions:** the lighthouse glides up into a header. Answer each one: the other answers slide
+   away and **a reply for that exact answer** appears. Try different answers, they all say
+   something different. The lamp gets brighter with every answer.
+3. **Your plan** → press and **hold** "Hold to light the lamp": the beam brightens while you hold,
+   the phone ticks faster, then a flash.
+4. Save your plan → Screen Time → apps → notifications → "You're all set" → Enter flies into the app.
+5. **Next launches:** the splash (lamp switches on, then the camera flies into the light).
+6. **Today:** the lighthouse on top is as bright as your focus score; pull down to stretch it.
+   The score counts up, the bone "Up next" card.
+7. **Focus → hold to start.** The session has the lighthouse behind a huge clock; **hold for a break**.
+8. Avatar → **Guest pass** (drag the ticket to tilt it), **About** (scroll down, the signature writes
+   itself), **Settings**.
+9. Everything should feel smooth (60 fps). If the lighthouse stutters or the phone gets warm, say so.
 
 **First run on a phone is slow** ("LLDB is reading from device memory"): Xcode is copying debug symbols for your iOS version once. Press Continue and wait. To skip the debugger: Product → Scheme → Edit Scheme → Run → untick **Debug executable**.
 

@@ -12,7 +12,9 @@ struct FocusSetupView: View {
         @Bindable var model = model
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
-                ScreenTitle("Focus")
+                Text("Focus")
+                    .font(.system(size: 34, weight: .bold))
+                    .foregroundStyle(Color.fzInk)
                     .padding(.horizontal, 20)
 
                 ScrollView(.horizontal) {
@@ -83,7 +85,7 @@ struct FocusSetupView: View {
                             Text("\(model.selectedPreset.breakMinutes) min when you need one").font(.caption).foregroundStyle(Color.fzInk3)
                         }
                     }
-                    .tint(Color.fzInk)
+                    .tint(Theme.violet)
                     .padding(16)
                     .fzSurface()
                     .disabled(model.difficulty == .lockedIn)
@@ -108,12 +110,16 @@ struct FocusSetupView: View {
         .background { SkyBackground(mood: .dusk) }
         .overlay(alignment: .bottom) {
             if model.session == nil {
-                HoldButton(title: "Hold to start \(GoalDial.format(model.sessionMinutes))", holdingTitle: "Lighting the lamp…", symbol: "light.beacon.max", duration: 0.9) {
+                Button {
                     model.startSession()
+                } label: {
+                    Label("Start \(GoalDial.format(model.sessionMinutes)) session", systemImage: "play.fill")
                 }
+                .buttonStyle(.beam)
                 .frame(maxWidth: 420)
-                .padding(.horizontal, 22)
+                .padding(.horizontal, 24)
                 .padding(.bottom, 12)
+                .sensoryFeedback(.impact(weight: .medium), trigger: model.session?.id)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -141,13 +147,13 @@ struct TimeRing: View {
                 }
                 Circle()
                     .trim(from: 0, to: max(0.01, fraction))
-                    .stroke(Color.fzInk, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .stroke(Theme.beamGradient, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .padding(28)
+                    .shadow(color: Theme.violet.opacity(0.6), radius: 10)
                 VStack(spacing: 0) {
                     Text(FocusSession.clock(TimeInterval(minutes * 60)))
-                        .font(.fzDisplay(64))
-                        .fzTight(64)
+                        .font(.fzHero(64))
                         .foregroundStyle(Color.fzInk)
                         .contentTransition(.numericText())
                         .monospacedDigit()

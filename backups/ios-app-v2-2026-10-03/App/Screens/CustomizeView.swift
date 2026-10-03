@@ -11,14 +11,8 @@ struct CustomizeView: View {
         @Bindable var model = model
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
-                section("Session background", detail: "The lighthouse, or a place you love. Your photo stays on this device.") {
+                section("Session background", detail: "A place you love works better than any wallpaper. Your photo stays on this device.") {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 12) {
-                        Button { withAnimation(.smooth) { model.sessionBackground = .lighthouse } } label: {
-                            tile(selected: model.sessionBackground == .lighthouse, title: "Lighthouse") {
-                                LighthouseView(scene: LighthouseScene(power: 1, phase: 3.3, speed: 0.6, x: 0.6, waterline: 0.18, horizon: 0.24, scale: 0.9))
-                            }
-                        }
-                        .buttonStyle(.plain)
                         PhotosPicker(selection: $photoItem, matching: .images) {
                             tile(selected: model.sessionBackground == .photo, title: model.backgroundPhoto == nil ? "Your photo" : "Your photo ✓") {
                                 if let photo = model.backgroundPhoto {
@@ -59,7 +53,7 @@ struct CustomizeView: View {
                     .animation(.smooth, value: model.timerStyle)
                 }
 
-                section("Lamp", detail: "The colour of the lighthouse's light. Everything else stays black, bone and white.") {
+                section("Your light", detail: "One colour for focus glows and highlights. Everything else stays black and white.") {
                     HStack(spacing: 18) {
                         ForEach(AccentLight.allCases) { light in
                             let picked = AccentStore.shared.light == light
@@ -68,7 +62,6 @@ struct CustomizeView: View {
                                     Circle()
                                         .fill(light.color)
                                         .frame(width: 46, height: 46)
-                                        .overlay(Circle().strokeBorder(Color.fzLine))
                                         .shadow(color: light.color.opacity(0.7), radius: picked ? 14 : 0)
                                         .overlay(Circle().strokeBorder(Color.fzInk, lineWidth: picked ? 2.5 : 0).padding(-5))
                                     Text(light.title).font(.caption.weight(.semibold)).foregroundStyle(Color.fzInk2)
@@ -88,7 +81,7 @@ struct CustomizeView: View {
                         Divider().overlay(Color.fzLine)
                         Toggle("A quote during sessions", isOn: $model.showQuote).padding(16)
                     }
-                    .tint(Color.fzInk)
+                    .tint(Theme.accent)
                     .fzSurface()
                 }
             }

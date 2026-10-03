@@ -47,6 +47,12 @@ targets:
       properties:
         CFBundleDisplayName: FocuzNow
         NSFaceIDUsageDescription: FocuzPass uses Face ID to unlock your passwords.
+        # Satoshi (fontshare.com, free licence): drop the three .otf files into App/Fonts.
+        # Until then the app falls back to a heavy system font.
+        UIAppFonts:
+          - Satoshi-Medium.otf
+          - Satoshi-Bold.otf
+          - Satoshi-Black.otf
         UILaunchScreen:
           UIColorName: ""
         UIUserInterfaceStyle: Automatic

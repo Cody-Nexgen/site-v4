@@ -44,7 +44,7 @@ struct PlanView: View {
 
     private var header: some View {
         HStack {
-            ScreenTitle("Plan")
+            Text("Plan").font(.system(size: 34, weight: .bold)).foregroundStyle(Color.fzInk)
             Spacer()
             Picker("View", selection: $mode) {
                 ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }

@@ -11,29 +11,19 @@ struct RootView: View {
     @AppStorage("onboarded") private var onboarded = false
     @AppStorage("appearance") private var appearance = "system"
 
-    /// Only on launches where you're already set up (onboarding opens on its own lighthouse).
-    @State private var splash = UserDefaults.standard.bool(forKey: "onboarded")
-
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        ZStack {
-            Group {
-                if onboarded {
-                    MainTabs()
-                        .transition(.opacity.combined(with: .scale(scale: 1.04)))
-                } else {
-                    OnboardingFlow()
-                        .transition(.opacity)
-                }
-            }
-            .animation(.smooth(duration: 0.8), value: onboarded)
-            if splash {
-                SplashView { splash = false }
-                    .zIndex(1)
+        Group {
+            if onboarded {
+                MainTabs()
+                    .transition(.opacity)
+            } else {
+                OnboardingFlow()
+                    .transition(.opacity)
             }
         }
-        .background(Color.black)
+        .animation(.smooth(duration: 0.6), value: onboarded)
         .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
         .onReceive(clock) { _ in model.tick() }
     }

@@ -192,9 +192,8 @@ enum CoachModel: String, CaseIterable, Identifiable {
     var needsPro: Bool { self == .pro }
 }
 
-/// What's behind a running session: the lighthouse, one of your photos, or a drawn scene.
+/// What's behind a running session: one of your photos, or a drawn scene.
 enum SessionBackground: Hashable {
-    case lighthouse
     case photo
     case scene(SceneKind)
 }

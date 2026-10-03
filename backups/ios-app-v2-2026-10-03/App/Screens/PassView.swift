@@ -35,7 +35,7 @@ private struct PassLock: View {
                         .frame(width: 104, height: 104)
                         .fzGlass(in: RoundedRectangle(cornerRadius: 30, style: .continuous))
                 }
-                ScreenTitle("FocuzPass", size: 32)
+                Text("FocuzPass").font(.system(size: 32, weight: .bold)).foregroundStyle(Color.fzInk)
                 Text("Your passwords, encrypted on this device.\nOnly you can open them.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color.fzInk2)
@@ -187,7 +187,7 @@ private struct EntryDetail: View {
                 HStack(spacing: 16) {
                     EntryTile(entry: entry, size: 64)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(entry.title).font(.fzDisplay(30)).foregroundStyle(Color.fzInk)
+                        Text(entry.title).font(.system(size: 30, weight: .bold)).foregroundStyle(Color.fzInk)
                         Label(entry.vault, systemImage: "lock.square.fill").font(.subheadline).foregroundStyle(Color.fzInk3)
                     }
                 }

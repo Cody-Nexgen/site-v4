@@ -86,10 +86,9 @@ struct ActiveSessionView: View {
             }
             .padding(.bottom, 14)
 
-            Text(session.title.uppercased())
-                .font(.caption.weight(.semibold))
-                .tracking(1.4)
-                .foregroundStyle(.white.opacity(0.75))
+            Label(session.title, systemImage: session.symbol)
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(.white)
 
             SessionClock(remaining: session.remaining(at: now), progress: session.progress(at: now), style: model.timerStyle)
                 .padding(.top, 6)
@@ -118,13 +117,14 @@ struct ActiveSessionView: View {
             .padding(.top, 20)
 
             if session.difficulty != .lockedIn {
-                HoldButton(title: "Hold for a break", holdingTitle: "Okay, breathe…", duration: session.difficulty == .easy ? 0.5 : 1.2) {
-                    withAnimation(.spring(duration: 0.6)) { model.takeBreak() }
-                }
-                .padding(.top, 20)
-                Button("End early") { confirmEnd = true }
-                    .buttonStyle(.ghost)
-                    .padding(.top, 2)
+                Button("Take a break") { withAnimation(.smooth) { model.takeBreak() } }
+                    .buttonStyle(.beam)
+                    .padding(.top, 20)
+                Button("Leave early") { confirmEnd = true }
+                    .font(.headline)
+                    .foregroundStyle(Theme.danger)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
             } else {
                 Label("Locked in until \(session.end.formatted(date: .omitted, time: .shortened))", systemImage: "lock.fill")
                     .font(.subheadline.weight(.semibold))
@@ -145,12 +145,13 @@ struct ActiveSessionView: View {
                 Circle().stroke(.white.opacity(0.12), lineWidth: 8)
                 Circle()
                     .trim(from: 0, to: fraction)
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    .stroke(Theme.accent, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .rotationEffect(.degrees(-90))
+                    .shadow(color: Theme.accent.opacity(0.7), radius: 10)
                 VStack(spacing: 4) {
                     SectionLabel("Break")
                     Text(FocusSession.clock(left))
-                        .font(.fzDisplay(52))
+                        .font(.fzHero(52))
                         .monospacedDigit()
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
@@ -193,17 +194,6 @@ struct SessionBackdrop: View {
     var progress: Double = 0
 
     var body: some View {
-        if model.sessionBackground == .lighthouse || (model.sessionBackground == .photo && model.backgroundPhoto == nil) {
-            // The lamp grows brighter as the session goes on.
-            LighthouseView(scene: LighthouseScene.session.with(power: 0.75 + 0.45 * progress))
-                .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: .black.opacity(0.7), location: 1)], startPoint: .top, endPoint: .bottom))
-                .ignoresSafeArea()
-        } else {
-            picture
-        }
-    }
-
-    private var picture: some View {
         GeometryReader { proxy in
             ZStack {
                 content
@@ -228,13 +218,11 @@ struct SessionBackdrop: View {
     @ViewBuilder
     private var content: some View {
         switch model.sessionBackground {
-        case .lighthouse:
-            Color.black
         case .photo:
             if let photo = model.backgroundPhoto {
                 Image(uiImage: photo).resizable().scaledToFill()
             } else {
-                Color.black
+                LandscapeScene(kind: .nightLake, progress: progress)
             }
         case .scene(let kind):
             LandscapeScene(kind: kind, progress: progress)
@@ -252,10 +240,7 @@ struct SessionClock: View {
         switch style {
         case .big:
             Text(FocusSession.clock(remaining))
-                .font(.fzDisplay(remaining >= 3600 ? 72 : 96))
-                .fzTight(96)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .font(.system(size: 64, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)
                 .contentTransition(.numericText(countsDown: true))
@@ -297,13 +282,13 @@ struct SessionProgress: View {
             let width = proxy.size.width
             let filled = max(6, width * min(1, max(0, progress)))
             ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.18)).frame(height: 4)
-                Capsule().fill(.white).frame(width: filled, height: 4)
+                Capsule().fill(.white.opacity(0.14)).frame(height: 6)
+                Capsule().fill(Theme.accent).frame(width: filled, height: 6)
                 Circle()
                     .fill(.white)
-                    .frame(width: 12, height: 12)
-                    .shadow(color: .white.opacity(0.8), radius: 6)
-                    .offset(x: min(width - 12, max(0, filled - 6)))
+                    .frame(width: 14, height: 14)
+                    .shadow(color: Theme.accent.opacity(0.9), radius: 8)
+                    .offset(x: min(width - 14, max(0, filled - 7)))
             }
             .frame(height: 14)
         }
@@ -379,71 +364,45 @@ struct SessionCompleteView: View {
     let close: () -> Void
     let again: () -> Void
 
-    @State private var flash = true
-    @State private var shownMinutes = 0
+    @State private var focus = 0.2
 
     var body: some View {
         ZStack {
-            LighthouseView(scene: LighthouseScene(power: 1.25, exposure: flash ? 2.4 : 1, phase: 3.0, speed: 1.4))
-                .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.25), .init(color: .black.opacity(0.85), location: 0.75)], startPoint: .top, endPoint: .bottom))
-                .ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 0) {
+            SkyBackground(mood: .night, intensity: 1.4)
+            VStack(spacing: 18) {
                 Spacer()
-                SectionLabel("Session complete").riseIn(delay: 0.4)
-                Text("\(shownMinutes) minutes")
-                    .font(.fzDisplay(58))
-                    .fzTight(58)
-                    .foregroundStyle(.white)
-                    .contentTransition(.numericText(value: Double(shownMinutes)))
-                    .riseIn(delay: 0.5)
-                Text("of \(result.title.lowercased()). The lamp stayed on the whole time.")
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .padding(.top, 4)
-                    .riseIn(delay: 0.6)
-                VStack(spacing: 0) {
-                    logRow("Focused", "\(result.minutes) min")
-                    logRow("Focus score", String(format: "%.1f → %.1f", result.scoreBefore, result.scoreAfter))
-                    if result.coins > 0 {
-                        logRow("Coins", "+\(result.coins)")
-                        logRow("Forest", "A tree grew")
-                    }
+                FocusField(focus: focus)
+                    .frame(width: 280, height: 280)
+                VStack(spacing: 6) {
+                    Text("\(result.minutes) minutes")
+                        .font(.fzHero(52))
+                        .foregroundStyle(.white)
+                        .riseIn(delay: 0.9)
+                    Text("of \(result.title.lowercased()), in focus.")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .riseIn(delay: 1.1)
                 }
-                .fzBoneCard(cornerRadius: 22, padding: 8)
-                .padding(.top, 22)
-                .riseIn(delay: 0.8)
                 HStack(spacing: 10) {
-                    ShareLink(item: "I just focused for \(result.minutes) minutes with FocuzNow. Everything else can wait.") {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                    if result.coins > 0 {
+                        Chip(title: "+\(result.coins) coins", symbol: "circle.hexagongrid.fill")
+                        Chip(title: "A tree grew", symbol: "tree.fill")
                     }
-                    .buttonStyle(.glassPill)
+                    Chip(title: String(format: "Score %.1f → %.1f", result.scoreBefore, result.scoreAfter), symbol: "sparkles")
+                }
+                .riseIn(delay: 1.4)
+                Spacer()
+                HStack(spacing: 12) {
+                    Button("Done", action: close).buttonStyle(.glassPill)
                     Button("Another", action: again).buttonStyle(.beam)
                 }
-                .padding(.top, 22)
-                .riseIn(delay: 1.0)
-                Button("Done", action: close)
-                    .buttonStyle(.ghost)
-                    .padding(.bottom, 4)
+                .frame(maxWidth: 520)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+                .riseIn(delay: 1.7)
             }
-            .frame(maxWidth: 520)
-            .padding(.horizontal, 24)
         }
-        .environment(\.colorScheme, .dark)
-        .sensoryFeedback(.success, trigger: flash)
-        .task {
-            try? await Task.sleep(for: .milliseconds(350))
-            flash = false
-            withAnimation(.spring(duration: 1.2)) { shownMinutes = result.minutes }
-        }
-    }
-
-    private func logRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label).foregroundStyle(Color.fzOnBone2)
-            Spacer()
-            Text(value).font(.headline).foregroundStyle(Color.fzOnBone)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
+        .sensoryFeedback(.success, trigger: focus)
+        .onAppear { withAnimation(.smooth(duration: 1.6)) { focus = 1 } }
     }
 }
