@@ -2,7 +2,7 @@ import SwiftUI
 
 enum AppTab: Hashable {
     case today, focus, plan, pass, coach
-    case stats, friends, forest, shop, settings
+    case stats, friends, forest, shop, customize, settings
 }
 
 /// Onboarding the first time, then the app. Also drives the session clock.
@@ -43,7 +43,7 @@ private struct MainTabs: View {
             Tab("Today", systemImage: "sun.max.fill", value: AppTab.today) {
                 NavigationStack { TodayView(showYou: $showYou, startFocus: { tab = .focus }) }
             }
-            Tab("Focus", systemImage: "timer", value: AppTab.focus) {
+            Tab("Focus", systemImage: "scope", value: AppTab.focus) {
                 NavigationStack { FocusSetupView() }
             }
             Tab("Plan", systemImage: "checklist", value: AppTab.plan) {
@@ -71,6 +71,10 @@ private struct MainTabs: View {
                 .defaultVisibility(.hidden, for: .tabBar)
                 Tab("Shop", systemImage: "bag.fill", value: AppTab.shop) {
                     NavigationStack { ShopView() }
+                }
+                .defaultVisibility(.hidden, for: .tabBar)
+                Tab("Customize", systemImage: "paintbrush.fill", value: AppTab.customize) {
+                    NavigationStack { CustomizeView() }
                 }
                 .defaultVisibility(.hidden, for: .tabBar)
                 Tab("Settings", systemImage: "gearshape.fill", value: AppTab.settings) {

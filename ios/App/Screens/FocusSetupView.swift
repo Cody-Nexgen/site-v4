@@ -5,6 +5,7 @@ import SwiftUI
 struct FocusSetupView: View {
     @Environment(AppModel.self) private var model
     @State private var picking = false
+    @State private var customizing = false
     @State private var screenTime = AuthorizationCenter.shared.authorizationStatus
 
     var body: some View {
@@ -89,7 +90,14 @@ struct FocusSetupView: View {
                     .fzSurface()
                     .disabled(model.difficulty == .lockedIn)
 
-                    SceneStrip(selection: $model.scene)
+                    Button { customizing = true } label: {
+                        SettingCard(label: "Background", trailing: nil) {
+                            SessionBackdrop(progress: 0.5)
+                                .frame(width: 120, height: 70)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 20)
             }
@@ -116,6 +124,7 @@ struct FocusSetupView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .familyActivityPicker(isPresented: $picking, selection: $model.selection)
+        .sheet(isPresented: $customizing) { NavigationStack { CustomizeView() }.environment(model) }
     }
 }
 
@@ -199,33 +208,5 @@ struct SettingCard<Content: View>: View {
         }
         .padding(16)
         .fzSurface()
-    }
-}
-
-/// Pick the session's scene.
-struct SceneStrip: View {
-    @Binding var selection: SceneKind
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Scene")
-            ScrollView(.horizontal) {
-                HStack(spacing: 10) {
-                    ForEach(SceneKind.allCases) { kind in
-                        Button { withAnimation(.smooth) { selection = kind } } label: {
-                            LandscapeScene(kind: kind, progress: 1)
-                                .frame(width: 120, height: 84)
-                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                .overlay(alignment: .bottomLeading) {
-                                    Text(kind.title).font(.caption.weight(.semibold)).foregroundStyle(.white).padding(8)
-                                }
-                                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(selection == kind ? Color.white : Color.clear, lineWidth: 2))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .scrollIndicators(.hidden)
-        }
     }
 }

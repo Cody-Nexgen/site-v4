@@ -1,23 +1,25 @@
 import SwiftUI
 
-/// Home (spec §4.5): the Beam and Focus Score up top, the day's stats and wave, then what's next.
+/// Home (spec §4.5). The hero is your focus, literally: scattered and blurry when your score is
+/// low, sharp and gathered into the Beam Z when it's high.
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Binding var showYou: Bool
     let startFocus: () -> Void
+    @State private var fieldFocus = 0.0
 
     var body: some View {
         ScrollView {
             if sizeClass == .regular {
-                HStack(alignment: .top, spacing: 28) {
+                HStack(alignment: .top, spacing: 32) {
                     hero.frame(maxWidth: .infinity)
-                    VStack(spacing: 24) { stats; upNext; friendsNow }
+                    VStack(spacing: 28) { stats; upNext; friendsNow }
                         .frame(maxWidth: .infinity)
                 }
                 .padding(28)
             } else {
-                VStack(spacing: 26) { hero; stats; upNext; friendsNow }
+                VStack(spacing: 30) { hero; stats; upNext; friendsNow }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 110)
             }
@@ -28,55 +30,66 @@ struct TodayView: View {
         .overlay(alignment: .bottom) {
             if model.session == nil {
                 Button(action: startFocus) {
-                    Label("Start focus", systemImage: "bolt.fill")
+                    Label("Start focus", systemImage: "scope")
                 }
                 .buttonStyle(.beam)
                 .frame(maxWidth: 420)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(.blurRise)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            fieldFocus = 0
+            withAnimation(.smooth(duration: 1.8).delay(0.2)) { fieldFocus = model.focusScore / 10 }
+        }
     }
 
     private var header: some View {
         HStack {
-            Text("FocuzNow")
-                .font(.system(size: 26, weight: .heavy, design: .rounded))
+            Text(greeting)
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(Color.fzInk)
             Spacer()
-            Button { showYou = true } label: {
-                HStack(spacing: 8) {
-                    Text(model.userName).font(.subheadline.weight(.semibold)).foregroundStyle(Color.fzInk)
-                    Avatar(name: model.userName, size: 34)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("You")
+            Button { showYou = true } label: { Avatar(name: model.userName, size: 36) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("You")
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
         .padding(.bottom, 4)
     }
 
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: .now)
+        let part = hour < 12 ? "Morning" : hour < 18 ? "Afternoon" : "Evening"
+        return "\(part), \(model.userName)"
+    }
+
     private var hero: some View {
-        VStack(spacing: 6) {
-            BeamView(fill: model.goalProgress, score: model.focusScore, active: model.session != nil)
-                .padding(.top, 8)
-                .padding(.bottom, 14)
-            SectionLabel("Now")
-            Text(model.focusScore, format: .number.precision(.fractionLength(1)))
-                .font(.fzHero(76))
-                .foregroundStyle(Color.fzInk)
-                .contentTransition(.numericText())
+        VStack(spacing: 4) {
+            FocusField(focus: fieldFocus)
+                .frame(height: 300)
+                .overlay(alignment: .bottom) {
+                    VStack(spacing: 2) {
+                        SectionLabel("Now")
+                        Text(model.focusScore, format: .number.precision(.fractionLength(1)))
+                            .font(.fzHero(72))
+                            .foregroundStyle(Color.fzInk)
+                            .contentTransition(.numericText())
+                    }
+                    .offset(y: 70)
+                }
+                .padding(.bottom, 64)
             Text(Theme.scoreWord(model.focusScore))
                 .font(.headline)
                 .foregroundStyle(Color.fzInk2)
-            Text("\(GoalDial.format(model.focusedMinutesToday)) of \(GoalDial.format(model.goalMinutes)) · 🔥 \(model.streakDays)-day streak")
+                .riseIn(delay: 0.6)
+            (Text(GoalDial.format(model.focusedMinutesToday)).foregroundStyle(Theme.accent) + Text(" of \(GoalDial.format(model.goalMinutes)) today · \(model.streakDays)-day streak").foregroundStyle(Color.fzInk3))
                 .font(.footnote)
-                .foregroundStyle(Color.fzInk3)
                 .padding(.top, 2)
+                .riseIn(delay: 0.75)
         }
     }
 
@@ -87,9 +100,12 @@ struct TodayView: View {
                 .init(label: "Screen time", value: GoalDial.format(model.screenTimeMinutes)),
                 .init(label: "Pickups", value: "\(model.pickups)"),
             ])
-            DayWave(points: model.wave)
-                .frame(height: 130)
+            if model.homeShowsWave {
+                DayWave(points: model.wave)
+                    .frame(height: 120)
+            }
         }
+        .riseIn(delay: 0.9)
     }
 
     private var upNext: some View {
@@ -98,13 +114,12 @@ struct TodayView: View {
             VStack(spacing: 0) {
                 if let event = model.events.first {
                     HStack(spacing: 12) {
-                        RoundedRectangle(cornerRadius: 2).fill(event.color).frame(width: 4, height: 34)
+                        RoundedRectangle(cornerRadius: 2).fill(event.color).frame(width: 3, height: 32)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(event.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.fzInk)
                             Text("\(PlanView.time(event.startHour)) · \(event.place ?? "")").font(.caption).foregroundStyle(Color.fzInk3)
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Color.fzInk3)
                     }
                     .padding(14)
                     Divider().overlay(Color.fzLine)
@@ -112,36 +127,32 @@ struct TodayView: View {
                 ForEach(model.todos.filter { !$0.done }.prefix(3)) { todo in
                     TodoRow(todo: todo)
                         .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 11)
                 }
             }
             .fzSurface()
         }
+        .riseIn(delay: 1.0)
     }
 
+    @ViewBuilder
     private var friendsNow: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Focusing now")
-            ScrollView(.horizontal) {
-                HStack(spacing: 14) {
-                    ForEach(model.friends.filter { $0.focusingNow }) { friend in
+        let focusing = model.friends.filter { $0.focusingNow && !$0.isMe }
+        if model.homeShowsFriends && !focusing.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionLabel("Focusing now")
+                HStack(spacing: 16) {
+                    ForEach(focusing) { friend in
                         VStack(spacing: 6) {
-                            Avatar(name: friend.name, size: 50)
-                                .overlay(Circle().strokeBorder(Theme.good, lineWidth: 2).padding(-4))
+                            Avatar(name: friend.name, size: 48)
+                                .overlay(Circle().strokeBorder(Theme.accent, lineWidth: 2).padding(-4))
                             Text(friend.name).font(.caption.weight(.semibold)).foregroundStyle(Color.fzInk2)
                         }
                     }
-                    ForEach(model.rooms) { room in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(room.name).font(.subheadline.weight(.semibold)).foregroundStyle(Color.fzInk)
-                            Text("\(room.people.count) focusing · \(room.minutesLeft) min left").font(.caption).foregroundStyle(Color.fzInk3)
-                        }
-                        .padding(14)
-                        .fzSurface(cornerRadius: 18)
-                    }
                 }
             }
-            .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .riseIn(delay: 1.1)
         }
     }
 }
@@ -159,7 +170,7 @@ struct TodoRow: View {
             HStack(spacing: 12) {
                 Image(systemName: todo.done ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(todo.done ? AnyShapeStyle(Theme.beamGradient) : AnyShapeStyle(Color.fzInk3))
+                    .foregroundStyle(todo.done ? Theme.accent : Color.fzInk3)
                     .contentTransition(.symbolEffect(.replace))
                 Text(todo.title)
                     .strikethrough(todo.done)

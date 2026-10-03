@@ -1,6 +1,7 @@
 import FamilyControls
 import Observation
 import SwiftUI
+import UIKit
 
 /// Everything the screens show. Mock data until the backend phases wire it to Supabase and Screen Time.
 @MainActor
@@ -24,7 +25,6 @@ final class AppModel {
     var sessionMinutes = 50
     var difficulty: Difficulty = .normal
     var breaksOn = true
-    var scene: SceneKind = .nightLake
     var selection = FamilyActivitySelection()
     var blockedApps = Array(DistractionApp.samples.prefix(5))
     var session: FocusSession?
@@ -47,9 +47,18 @@ final class AppModel {
     ]
     var vault = VaultEntry.samples
     var vaultUnlocked = false
-    var chat: [ChatMessage] = [
-        ChatMessage(role: .coach, text: "Hey Maya 👋 You focused **74 minutes** so far today, that's ahead of your usual Saturday. What should we tackle next?"),
+    var conversations: [Conversation] = [
+        Conversation(title: "Study plan for finals", messages: [
+            ChatMessage(role: .user, text: "Make me a study plan for finals"),
+            ChatMessage(role: .coach, text: "Here's a two-week plan: **mornings** for math, **afternoons** for bio flashcards, and one rest day each week."),
+        ], updated: .now.addingTimeInterval(-3600 * 20)),
+        Conversation(title: "Why I can't stop scrolling", messages: [
+            ChatMessage(role: .user, text: "Why can't I stop scrolling at night?"),
+            ChatMessage(role: .coach, text: "Late-night scrolling is mostly about **winding down**. Let's swap it for something just as easy."),
+        ], updated: .now.addingTimeInterval(-3600 * 72)),
     ]
+    var currentConversationID: Conversation.ID?
+    var coachModel: CoachModel = .flash
     var friends: [Friend] = [
         Friend(name: "Ava", minutesThisWeek: 412, focusingNow: true),
         Friend(name: "Leo", minutesThisWeek: 368, focusingNow: false),
@@ -57,10 +66,19 @@ final class AppModel {
         Friend(name: "Kai", minutesThisWeek: 290, focusingNow: true),
         Friend(name: "Zoe", minutesThisWeek: 214, focusingNow: false),
     ]
-    var rooms: [FocusRoom] = [
-        FocusRoom(name: "Study hall", people: ["Ava", "Kai", "Noor", "Eli"], minutesLeft: 32),
-        FocusRoom(name: "Late night grind", people: ["Leo", "Sam"], minutesLeft: 48),
-    ]
+    // Customize
+    var sessionBackground: SessionBackground = .scene(.nightLake)
+    var backgroundPhoto: UIImage?
+    var timerStyle: TimerStyle = .big
+    var showQuote = true
+    var homeShowsFriends = true
+    var homeShowsWave = true
+
+    // Onboarding answers
+    var phoneHoursGuess = 5.0
+    var distraction = ""
+    var focusFor = ""
+
     var trees: [ForestTree] = (0..<17).map { index in ForestTree(minutes: [25, 50, 30, 45, 90, 25, 60][index % 7], kind: index % 3) }
     var shop: [ShopItem] = [
         ShopItem(title: "Night Lake", detail: "Moonlit water", price: 0, scene: .nightLake, owned: true),
@@ -102,6 +120,38 @@ final class AppModel {
         // Phase 2: apply the ManagedSettings shield and schedule DeviceActivity.
     }
 
+    func extendSession(minutes: Int) {
+        guard var current = session else { return }
+        current.duration += TimeInterval(minutes * 60)
+        session = current
+    }
+
+    func setBreakLength(minutes: Int) {
+        guard var current = session, current.difficulty != .lockedIn else { return }
+        current.breakLength = TimeInterval(minutes * 60)
+        session = current
+    }
+
+    // MARK: Customize
+
+    private static var photoURL: URL {
+        URL.documentsDirectory.appending(path: "session-background.jpg")
+    }
+
+    init() {
+        if let data = try? Data(contentsOf: Self.photoURL), let image = UIImage(data: data) {
+            backgroundPhoto = image
+            sessionBackground = .photo
+        }
+    }
+
+    func setBackgroundPhoto(_ data: Data) {
+        guard let image = UIImage(data: data) else { return }
+        backgroundPhoto = image
+        sessionBackground = .photo
+        if let jpeg = image.jpegData(compressionQuality: 0.85) { try? jpeg.write(to: Self.photoURL, options: .atomic) }
+    }
+
     func takeBreak() {
         guard var current = session, current.breakStartedAt == nil, current.difficulty != .lockedIn else { return }
         current.breakStartedAt = .now
@@ -141,11 +191,36 @@ final class AppModel {
 
     // MARK: Coach (mock replies until Phase 4)
 
+    var currentConversation: Conversation? {
+        conversations.first { $0.id == currentConversationID }
+    }
+
+    func newChat() { currentConversationID = nil }
+
     func send(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        chat.append(ChatMessage(role: .user, text: trimmed))
-        try? await Task.sleep(for: .milliseconds(900))
-        chat.append(ChatMessage(role: .coach, text: "Here's a plan for the next two hours:\n\n1. **Lab report** · 50 min deep work (I'll block TikTok and YouTube)\n2. 10 min break, stretch and water\n3. **Chapter 4** · 30 min reading\n\nWant me to start the first session?"))
+        let id: Conversation.ID
+        if let current = currentConversationID, conversations.contains(where: { $0.id == current }) {
+            id = current
+        } else {
+            let title = trimmed.count > 34 ? String(trimmed.prefix(34)) + "…" : trimmed
+            let conversation = Conversation(title: title, messages: [], updated: .now)
+            conversations.insert(conversation, at: 0)
+            id = conversation.id
+            currentConversationID = id
+        }
+        append(ChatMessage(role: .user, text: trimmed), to: id)
+        try? await Task.sleep(for: .milliseconds(1100))
+        append(ChatMessage(role: .coach, text: "Here's a plan for the next two hours:\n\n1. **Lab report** · 50 min deep work (I'll block TikTok and YouTube)\n2. 10 min break, stretch and water\n3. **Chapter 4** · 30 min reading\n\nWant me to start the first session?"), to: id)
     }
+
+    private func append(_ message: ChatMessage, to id: Conversation.ID) {
+        guard let index = conversations.firstIndex(where: { $0.id == id }) else { return }
+        conversations[index].messages.append(message)
+        conversations[index].updated = .now
+    }
+
+    /// Days a year FocuzNow could give back, from the onboarding answers (30% less phone time).
+    var daysBack: Int { Int((phoneHoursGuess * 0.3 * 365 / 24).rounded()) }
 }

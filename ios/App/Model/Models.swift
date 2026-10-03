@@ -160,13 +160,6 @@ struct Friend: Identifiable, Hashable {
     var isMe = false
 }
 
-struct FocusRoom: Identifiable, Hashable {
-    let id = UUID()
-    let name: String
-    let people: [String]
-    let minutesLeft: Int
-}
-
 struct ForestTree: Identifiable, Hashable {
     let id = UUID()
     let minutes: Int
@@ -180,4 +173,40 @@ struct ShopItem: Identifiable, Hashable {
     let price: Int
     let scene: SceneKind?
     var owned = false
+}
+
+struct Conversation: Identifiable, Hashable {
+    let id = UUID()
+    var title: String
+    var messages: [ChatMessage]
+    var updated: Date
+}
+
+enum CoachModel: String, CaseIterable, Identifiable {
+    case flash, pro
+
+    var id: String { rawValue }
+    var title: String { self == .flash ? "Flash" : "Pro" }
+    var detail: String { self == .flash ? "Fast answers for everyday questions" : "Thinks deeper on hard problems and plans" }
+    var symbol: String { self == .flash ? "bolt.fill" : "brain.head.profile" }
+    var needsPro: Bool { self == .pro }
+}
+
+/// What's behind a running session: one of your photos, or a drawn scene.
+enum SessionBackground: Hashable {
+    case photo
+    case scene(SceneKind)
+}
+
+enum TimerStyle: String, CaseIterable, Identifiable {
+    case big, minimal, ring
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .big: "Big clock"
+        case .minimal: "Minimal"
+        case .ring: "Ring"
+        }
+    }
 }

@@ -2,19 +2,26 @@ import SwiftUI
 
 // MARK: Buttons
 
-/// The primary action: a capsule in the Beam gradient. One per screen.
+/// The primary action: a solid capsule (white on dark, ink on light) with a soft glow of the
+/// accent light underneath. One per screen. `gold` keeps the old name for the Pro screen.
 struct BeamButtonStyle: ButtonStyle {
     var gold = false
+    @Environment(\.colorScheme) private var scheme
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(gold ? Color(hex: 0x3A2200) : .white)
+            .foregroundStyle(scheme == .dark ? Color.black : Color.white)
             .padding(.vertical, 17)
             .frame(maxWidth: .infinity)
-            .background(Capsule().fill(gold ? Theme.goldGradient : Theme.beamGradient))
-            .overlay(Capsule().strokeBorder(.white.opacity(0.28), lineWidth: 1))
-            .shadow(color: (gold ? Theme.gold : Theme.violet).opacity(0.45), radius: 18, y: 8)
+            .background(Capsule().fill(scheme == .dark ? Color.white : Color(hex: 0x0B0B0F)))
+            .background(
+                Capsule()
+                    .fill(Theme.accent.opacity(gold ? 0.9 : 0.55))
+                    .blur(radius: 22)
+                    .offset(y: 10)
+                    .padding(.horizontal, 30)
+            )
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.smooth(duration: 0.2), value: configuration.isPressed)
     }
@@ -126,10 +133,10 @@ struct Chip: View {
         .font(.subheadline.weight(.semibold))
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .foregroundStyle(selected ? Color.white : Color.fzInk)
+        .foregroundStyle(selected ? Color.fzBg : Color.fzInk)
         .background {
             if selected {
-                Capsule().fill(Theme.beamGradient)
+                Capsule().fill(Color.fzInk)
             } else {
                 Capsule().fill(Color.fzSurface).overlay(Capsule().strokeBorder(Color.fzLine))
             }

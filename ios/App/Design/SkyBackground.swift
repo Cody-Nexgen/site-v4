@@ -1,55 +1,51 @@
 import SwiftUI
 
-/// The living gradient sky behind every screen (spec §1). Follows the time of day unless a mood is given.
+/// Behind every screen: black (or warm off-white in light mode) with one soft, slowly breathing
+/// glow of the accent light. Restraint: no rainbow skies. `mood` only moves where the glow sits.
 enum SkyMood: CaseIterable {
     case dawn, day, dusk, night, violet
 
-    static var now: SkyMood {
-        switch Calendar.current.component(.hour, from: .now) {
-        case 5..<9: .dawn
-        case 9..<17: .day
-        case 17..<20: .dusk
-        default: .night
-        }
-    }
+    static var now: SkyMood { .night }
 
-    /// 3×3 mesh colours, row by row (top → bottom).
-    func colors(dark: Bool) -> [Color] {
-        let hex: [UInt32]
+    var glowCenter: UnitPoint {
         switch self {
-        case .dawn: hex = [0x2B2550, 0x3A2F66, 0x4A3A78, 0x6E4C8C, 0xB06A8E, 0x8C5A9A, 0xF2A07B, 0xFFC9A8, 0xE89A8C]
-        case .day: hex = [0x10224A, 0x1E3A70, 0x18306A, 0x2E5AB0, 0x3D6FD0, 0x4A7FE0, 0x6FA8F0, 0x8FC0FF, 0x7AB0F5]
-        case .dusk: hex = [0x120E30, 0x1A1440, 0x221650, 0x4A2266, 0x6B2E7A, 0x8A3A80, 0xE0607A, 0xFF7A6B, 0xFF9A6B]
-        case .night: hex = [0x04060F, 0x070A18, 0x0A0E22, 0x0E1430, 0x121A3A, 0x1A1A48, 0x1E1848, 0x2A1F5C, 0x14183C]
-        case .violet: hex = [0x0C0A24, 0x16103A, 0x1C1248, 0x2C1A66, 0x4A2A8C, 0x3A2280, 0x5B3AB0, 0x7A4ACC, 0x4A30A0]
+        case .dawn: UnitPoint(x: 0.2, y: -0.05)
+        case .day: UnitPoint(x: 0.5, y: -0.1)
+        case .dusk: UnitPoint(x: 0.85, y: -0.05)
+        case .night: UnitPoint(x: 0.5, y: -0.08)
+        case .violet: UnitPoint(x: 0.5, y: 0.0)
         }
-        if dark { return hex.map { Color(hex: $0) } }
-        // Light mode: the same hues, soft, under a white veil.
-        return hex.map { Color(hex: $0).mix(with: .white, by: 0.78) }
     }
 }
 
 struct SkyBackground: View {
-    var mood: SkyMood = .now
+    var mood: SkyMood = .night
+    var intensity: Double = 1
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+        TimelineView(.animation(minimumInterval: 1 / 20, paused: reduceMotion)) { context in
             let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            MeshGradient(width: 3, height: 3, points: Self.points(t), colors: mood.colors(dark: scheme == .dark))
+            let breathe = 0.85 + 0.15 * sin(t / 3)
+            let light = Theme.accent
+            ZStack {
+                Color.fzBg
+                RadialGradient(
+                    colors: [light.opacity((scheme == .dark ? 0.32 : 0.45) * breathe * intensity), light.opacity(0.06 * intensity), .clear],
+                    center: mood.glowCenter,
+                    startRadius: 0,
+                    endRadius: 520
+                )
+                // A second, fainter glow low on the screen for depth.
+                RadialGradient(
+                    colors: [light.opacity(0.08 * intensity * (2 - breathe)), .clear],
+                    center: UnitPoint(x: 0.5, y: 1.15),
+                    startRadius: 0,
+                    endRadius: 420
+                )
+            }
         }
         .ignoresSafeArea()
-    }
-
-    static func points(_ t: Double) -> [SIMD2<Float>] {
-        let a = Float(sin(t / 6)) * 0.09
-        let b = Float(cos(t / 7.5)) * 0.08
-        let c = Float(sin(t / 9 + 1)) * 0.07
-        return [
-            [0, 0], [0.5 + c, 0], [1, 0],
-            [0, 0.45 + a], [0.5 + b, 0.5 - a], [1, 0.5 + c],
-            [0, 1], [0.5 - b, 1], [1, 1],
-        ]
     }
 }

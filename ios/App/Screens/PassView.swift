@@ -28,7 +28,7 @@ private struct PassLock: View {
             VStack(spacing: 18) {
                 Spacer()
                 ZStack {
-                    Circle().fill(Theme.beamGradient).frame(width: 120, height: 120).blur(radius: 40).opacity(0.7)
+                    Circle().fill(Theme.accent).frame(width: 120, height: 120).blur(radius: 50).opacity(0.45)
                     Image(systemName: "lock.fill")
                         .font(.system(size: 52, weight: .semibold))
                         .foregroundStyle(.white)

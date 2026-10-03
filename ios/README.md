@@ -24,29 +24,24 @@ Native SwiftUI, iOS/iPadOS 18+, Liquid Glass on iOS 26. The plan and every quirk
 5. **Your iPhone/iPad:** plug it in, trust the Mac, then on the device: Settings → Privacy & Security → **Developer Mode** → on (it restarts).
 6. Pick your device at the top of Xcode and press **▶ Run**.
 
-## What you should see (UI v1, mock data)
+## What you should see (UI v2 "Into focus", mock data)
 
-Design spec: [`docs/ios-design-spec.md`](../docs/ios-design-spec.md). Everything runs on mock data for now.
+Design spec: [`docs/ios-design-spec.md`](../docs/ios-design-spec.md).
 
-1. **Onboarding** (first launch):
-   - four intro pages on living gradient skies (the Beam filling up, apps getting shielded, Plan/Pass/Coach orbiting, friends);
-   - **account** (Sign in with Apple, Google, or email; any button continues for now);
-   - **goal** (drag the dial) → **Screen Time** → **pick apps** (the real Apple picker) → **notifications**;
-   - **"You're set"** with a burst.
-2. **Today:** the glowing **Beam** fills toward your goal, with the big Focus Score, the stats row, the day wave chart, up next, and friends focusing now. The **Start focus** button floats at the bottom.
-3. **Focus:**
-   - presets, a drag ring for the length;
-   - block list (opens Apple's picker);
-   - difficulty, breaks, and the scene picker.
-4. **Start a session** → full-screen **scene** (Night Lake by default: stars, moon on the lake) with the countdown, timeline, block list, difficulty, **Take a break** (a calm countdown) and **End early**. Swipe it down (⌄): on iOS 26 a glass session bar sits in the tab bar; on iOS 18 it floats above it.
-5. When it ends: **celebration** (sparks, the Beam jumps, coins, a tree).
-6. **Plan:** week strip plus a day timeline with a "now" line; Lists; the + button adds a to-do.
-7. **Pass:** Face ID lock → vault list with filters and search → item detail (copy, reveal, strength).
-8. **Coach:** chat with suggestion chips and a typing indicator (a canned reply for now).
-9. **You** (the avatar on Today; the sidebar on iPad): Stats (score ring, week chart, best hours), Friends (rooms and leaderboard), Forest, Shop (scenes for coins), Settings (theme, **Show onboarding again**), and Pro (paywall).
-10. **iPad:** a sidebar instead of tabs, a two-column Today, list and detail side by side in Pass and Plan.
-
-Tip: Settings → **Show onboarding again** replays the first-launch flow.
+1. **Intro:**
+   - blurry lights and blurry text; **tap 3×**: it sharpens, the lights gather into a glowing Z, then "FocuzNow".
+   - Then a **conversation**: name, phone time, what pulls you, what you want time for. Each answer gets a reaction, and older lines blur away upward.
+   - "Building your setup…" → **"Maya, FocuzNow can give you back N days this year"**.
+   - Then account → Screen Time → apps → notifications → "You're in focus".
+2. **Today:** the lights gather to your Focus Score (sharp at a high score), with the score, stats, the day wave, up next, and friends focusing now.
+3. **Focus → Start:**
+   - your **photo** (or a scene) blurs into black;
+   - one clean progress track;
+   - tap **Breaks** to change the length, and **Edit session** to add time;
+   - the paintbrush opens Customize.
+4. **Coach:** ≡ opens the chat library, "Coach Flash ⌄" opens the model cards, and messages rise in.
+5. **You → Forest:** a 3D island with trees; drag it around.
+6. **You → Customize:** pick a session photo, the clock style, and **your light** (the whole app re-tints).
 
 **First run on a phone is slow** ("LLDB is reading from device memory"): Xcode is copying debug symbols for your iOS version once. Press Continue and wait. To skip the debugger: Product → Scheme → Edit Scheme → Run → untick **Debug executable**.
 

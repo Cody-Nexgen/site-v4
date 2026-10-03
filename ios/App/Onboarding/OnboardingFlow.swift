@@ -3,606 +3,564 @@ import FamilyControls
 import SwiftUI
 import UserNotifications
 
-/// First launch (spec §4.2–4.4): intro pages → account → name and goal → Screen Time → apps → notifications → done.
+/// First launch, "Into focus" (spec §4.1–4.4):
+/// 1. The lens: everything is out of focus; each tap sharpens it until the lights gather into the Beam Z.
+/// 2. A conversation: FocuzNow asks a few questions; older lines blur and drift up as new ones arrive.
+/// 3. The payoff: what FocuzNow can give back, from the answers.
+/// 4. Account, Screen Time, apps, notifications, said the same way, then into the app.
 struct OnboardingFlow: View {
-    enum Step: Int, CaseIterable {
-        case intro, account, goal, screenTime, apps, notifications, done
-    }
+    enum Stage { case lens, talk, payoff }
 
-    @Environment(AppModel.self) private var model
-    @AppStorage("onboarded") private var onboarded = false
-    @State private var step: Step = .intro
+    @State private var stage: Stage = .lens
 
     var body: some View {
         ZStack {
-            SkyBackground(mood: mood)
-                .animation(.easeInOut(duration: 0.8), value: step)
-
-            Group {
-                switch step {
-                case .intro: IntroPager(next: { go(.account) })
-                case .account: AccountView(back: { go(.intro) }, next: { go(.goal) })
-                case .goal: GoalSetupView(next: { go(.screenTime) })
-                case .screenTime: ScreenTimeSetupView(next: { go(.apps) })
-                case .apps: AppsSetupView(next: { go(.notifications) })
-                case .notifications: NotificationsSetupView(next: { go(.done) })
-                case .done: SetupDoneView(finish: { onboarded = true })
-                }
-            }
-            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
-            .id(step)
-
-            if (Step.goal.rawValue...Step.notifications.rawValue).contains(step.rawValue) {
-                VStack {
-                    SetupProgress(step: step.rawValue - Step.goal.rawValue, total: 4)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 8)
-                    Spacer()
-                }
+            Color.black.ignoresSafeArea()
+            switch stage {
+            case .lens:
+                LensIntro { withAnimation(.smooth(duration: 0.9)) { stage = .talk } }
+                    .transition(.opacity)
+            case .talk:
+                TalkView(done: { withAnimation(.smooth(duration: 0.9)) { stage = .payoff } })
+                    .transition(.blurRise)
+            case .payoff:
+                PayoffAndSetup()
+                    .transition(.blurRise)
             }
         }
-        .animation(.smooth(duration: 0.45), value: step)
-    }
-
-    private var mood: SkyMood {
-        switch step {
-        case .intro: .night
-        case .account: .violet
-        case .goal: .dawn
-        case .screenTime, .apps: .dusk
-        case .notifications: .day
-        case .done: .violet
-        }
-    }
-
-    private func go(_ next: Step) { step = next }
-}
-
-private struct SetupProgress: View {
-    let step: Int
-    let total: Int
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<total, id: \.self) { index in
-                Capsule()
-                    .fill(index <= step ? AnyShapeStyle(Theme.beamGradient) : AnyShapeStyle(Color.fzLine))
-                    .frame(height: 4)
-            }
-        }
+        .preferredColorScheme(.dark)
     }
 }
 
-// MARK: Intro pages
+// MARK: 1. The lens
 
-private struct IntroPager: View {
+private struct LensIntro: View {
     let next: () -> Void
-    @State private var page = 0
+    @State private var focus = 0.0
+    @State private var step = 0
 
-    private let pages: [(title: String, body: String)] = [
-        ("Your focus,\nmade visible.", "Every minute you focus fills the Beam. Watch it glow as your day comes together."),
-        ("Block what\npulls you away.", "Pick the apps and sites that steal your time. FocuzNow shields them while you work."),
-        ("Your plan and\npasswords, too.", "Lists, calendar, an AI coach and FocuzPass, all in one calm app that syncs with your browser."),
-        ("Friends keep\nyou honest.", "Focus together in rooms, climb the weekly board, and grow a forest along the way."),
+    private let lines = [
+        "Everything's blurry when ten things are pulling at you.",
+        "Notifications. Feeds. One more video.",
+        "Let's bring it back into focus.",
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                PageDots(count: pages.count, index: page)
-                Spacer()
-                Button("Skip", action: next)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.fzInk2)
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 12)
-
-            TabView(selection: $page) {
-                ForEach(pages.indices, id: \.self) { index in
-                    VStack(spacing: 28) {
-                        Spacer(minLength: 10)
-                        IntroArt(page: index)
-                            .frame(height: 320)
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(pages[index].title)
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundStyle(Color.fzInk)
-                            Text(pages[index].body)
-                                .font(.body)
-                                .foregroundStyle(Color.fzInk2)
-                        }
-                        .frame(maxWidth: 520, alignment: .leading)
-                        .padding(.horizontal, 28)
-                        Spacer(minLength: 10)
-                    }
-                    .tag(index)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-
-            Button(page == pages.count - 1 ? "Get started" : "Continue") {
-                if page == pages.count - 1 { next() } else { withAnimation(.smooth) { page += 1 } }
-            }
-            .buttonStyle(.beam)
-            .frame(maxWidth: 520)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 16)
-        }
-    }
-}
-
-private struct PageDots: View {
-    let count: Int
-    let index: Int
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<count, id: \.self) { i in
-                Capsule()
-                    .fill(i == index ? Color.fzInk : Color.fzInk3)
-                    .frame(width: i == index ? 22 : 7, height: 7)
-            }
-        }
-        .animation(.smooth, value: index)
-    }
-}
-
-private struct IntroArt: View {
-    let page: Int
-    @State private var appear = false
-
-    var body: some View {
         ZStack {
-            switch page {
-            case 0:
-                BeamView(fill: appear ? 0.72 : 0.1, score: 8.4, active: true, width: 140, height: 270)
-            case 1:
-                ZStack {
-                    ForEach(Array(DistractionApp.samples.prefix(5).enumerated()), id: \.offset) { index, app in
-                        AppIcon(app: app, size: 64)
-                            .offset(x: CGFloat(index - 2) * 58, y: CGFloat(abs(index - 2)) * 14)
-                            .rotationEffect(.degrees(Double(index - 2) * 6))
-                            .opacity(appear ? 0.25 : 1)
-                            .blur(radius: appear ? 2 : 0)
+            FocusField(focus: focus)
+                .ignoresSafeArea()
+
+            VStack {
+                Spacer()
+                if step < lines.count {
+                    Text(lines[step])
+                        .font(.system(size: 26, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white)
+                        .blur(radius: (1 - focus) * 7)
+                        .padding(.horizontal, 36)
+                        .id(step)
+                        .transition(.blurRise)
+                } else {
+                    VStack(spacing: 6) {
+                        Text("FocuzNow")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text("Your time, in focus.")
+                            .font(.headline)
+                            .foregroundStyle(.white.opacity(0.6))
                     }
-                    Image(systemName: "shield.lefthalf.filled")
-                        .font(.system(size: 96, weight: .semibold))
-                        .foregroundStyle(Theme.beamGradient)
-                        .shadow(color: Theme.violet.opacity(0.6), radius: 24)
-                        .scaleEffect(appear ? 1 : 0.6)
-                        .opacity(appear ? 1 : 0)
+                    .offset(y: 170)
+                    .transition(.blurRise)
                 }
-            case 2:
-                ZStack {
-                    BeamView(fill: 0.5, score: 6, width: 90, height: 170)
-                    orbit("checklist", "Plan", angle: -150)
-                    orbit("key.fill", "Pass", angle: -30)
-                    orbit("sparkles", "Coach", angle: 90)
-                }
-            default:
-                ZStack {
-                    ForEach(Array(["Ava", "Leo", "Kai", "Zoe", "Noor"].enumerated()), id: \.offset) { index, name in
-                        let angle = Double(index) / 5 * 2 * .pi - .pi / 2
-                        Avatar(name: name, size: 62)
-                            .offset(x: cos(angle) * 110, y: sin(angle) * 110)
-                            .scaleEffect(appear ? 1 : 0.4)
-                    }
-                    Avatar(name: "Maya", size: 92)
-                        .overlay(Circle().strokeBorder(Theme.beamGradient, lineWidth: 3).padding(-6))
+                Spacer()
+                if step < lines.count {
+                    (Text("TAP TO ").foregroundStyle(.white.opacity(0.8)) + Text("FOCUS").foregroundStyle(Theme.accent))
+                        .font(.footnote.weight(.semibold))
+                        .tracking(2)
+                        .padding(.bottom, 26)
+                        .transition(.opacity)
                 }
             }
         }
-        .onAppear { withAnimation(.smooth(duration: 1.1).delay(0.15)) { appear = true } }
-        .onDisappear { appear = false }
+        .contentShape(Rectangle())
+        .onTapGesture { advance() }
+        .sensoryFeedback(.impact(weight: .light), trigger: step)
     }
 
-    private func orbit(_ symbol: String, _ title: String, angle: Double) -> some View {
-        let radians = angle * .pi / 180
-        return Label(title, systemImage: symbol)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(Color.fzInk)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .fzGlass(in: Capsule())
-            .offset(x: cos(radians) * 120 * (appear ? 1 : 0.5), y: sin(radians) * 120 * (appear ? 1 : 0.5))
-            .opacity(appear ? 1 : 0)
+    private func advance() {
+        guard step < lines.count else { return }
+        withAnimation(.smooth(duration: 1.1)) {
+            step += 1
+            focus = step >= lines.count ? 1 : Double(step) * 0.34
+        }
+        if step >= lines.count {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { next() }
+        }
     }
 }
 
-// MARK: Account
+// MARK: 2. The conversation
 
-private struct AccountView: View {
-    let back: () -> Void
-    let next: () -> Void
+/// One thing said in the conversation.
+private struct Line: Identifiable, Equatable {
+    enum Who { case app, person }
+    let id = UUID()
+    let who: Who
+    let text: String
+}
 
-    @Environment(\.colorScheme) private var scheme
+/// Lines arrive by blur-rise; older ones dim and blur the further back they are.
+private struct Transcript: View {
+    let lines: [Line]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(Array(lines.enumerated()), id: \.element.id) { index, line in
+                let age = Double(lines.count - 1 - index)
+                Text(line.text)
+                    .font(.system(size: 21, weight: line.who == .person ? .semibold : .regular))
+                    .foregroundStyle(line.who == .person ? Theme.accent : Color.white)
+                    .opacity(age == 0 ? 1 : max(0.12, 0.55 - age * 0.12))
+                    .blur(radius: min(6, age * 1.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.blurRise)
+            }
+        }
+        .animation(.smooth(duration: 0.6), value: lines)
+    }
+}
+
+private struct TalkView: View {
+    let done: () -> Void
+
+    enum Ask { case none, name, hours, pull, purpose, reviewing }
+
+    @Environment(AppModel.self) private var model
+    @State private var lines: [Line] = []
+    @State private var ask: Ask = .none
+    @State private var name = ""
+    @State private var progress = 0.0
+    @FocusState private var nameFocused: Bool
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            SkyBackground(mood: .night)
+            VStack(spacing: 0) {
+                FocusField(focus: 1, lights: 30, markScale: 0.5)
+                    .frame(width: 120, height: 120)
+                    .padding(.top, 12)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 22) {
+                            Transcript(lines: lines)
+                            answers
+                                .id("answers")
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.top, 20)
+                        .padding(.bottom, 40)
+                        .frame(maxWidth: 560)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .scrollIndicators(.hidden)
+                    .defaultScrollAnchor(.bottom)
+                    .onChange(of: lines.count) {
+                        withAnimation(.smooth) { proxy.scrollTo("answers", anchor: .bottom) }
+                    }
+                }
+            }
+        }
+        .task { await opening() }
+    }
+
+    @ViewBuilder
+    private var answers: some View {
+        switch ask {
+        case .none:
+            EmptyView()
+        case .name:
+            HStack {
+                TextField("", text: $name, prompt: Text("Your name").foregroundStyle(.white.opacity(0.35)))
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .textContentType(.givenName)
+                    .submitLabel(.continue)
+                    .focused($nameFocused)
+                    .onSubmit { Task { await answeredName() } }
+                Button { Task { await answeredName() } } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.headline)
+                        .foregroundStyle(.black)
+                        .frame(width: 40, height: 40)
+                        .background(.white, in: Circle())
+                }
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                .opacity(name.trimmingCharacters(in: .whitespaces).isEmpty ? 0.3 : 1)
+            }
+            .padding(.vertical, 6)
+            .transition(.blurRise)
+            .onAppear { nameFocused = true }
+        case .hours:
+            Choices(options: ["Under 2 hours", "2–4 hours", "4–6 hours", "6–8 hours", "8+ hours"]) { choice in
+                Task { await answeredHours(choice) }
+            }
+        case .pull:
+            Choices(options: ["Social media", "Short videos", "Games", "Messages", "Honestly, everything"]) { choice in
+                Task { await answeredPull(choice) }
+            }
+        case .purpose:
+            Choices(options: ["School and studying", "Work", "Creative projects", "All of it"]) { choice in
+                Task { await answeredPurpose(choice) }
+            }
+        case .reviewing:
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Building your setup…")
+                    .font(.system(size: 21))
+                    .foregroundStyle(.white)
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.12))
+                        Capsule().fill(Theme.accent).frame(width: max(8, proxy.size.width * progress))
+                    }
+                }
+                .frame(height: 6)
+            }
+            .transition(.blurRise)
+        }
+    }
+
+    // MARK: Script
+
+    private func say(_ text: String, pause: Double = 0.9) async {
+        withAnimation(.smooth(duration: 0.6)) { lines.append(Line(who: .app, text: text)) }
+        try? await Task.sleep(for: .seconds(pause))
+    }
+
+    private func echo(_ text: String) {
+        withAnimation(.smooth(duration: 0.5)) {
+            ask = .none
+            lines.append(Line(who: .person, text: text))
+        }
+    }
+
+    private func opening() async {
+        guard lines.isEmpty else { return }
+        try? await Task.sleep(for: .seconds(0.4))
+        await say("Hey. I'm FocuzNow.")
+        await say("I'll ask you a few quick questions. No need to overthink it.", pause: 1.3)
+        await say("First, what should I call you?", pause: 0.4)
+        withAnimation(.smooth) { ask = .name }
+    }
+
+    private func answeredName() async {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        nameFocused = false
+        model.userName = trimmed
+        echo(trimmed)
+        try? await Task.sleep(for: .seconds(0.6))
+        await say("Nice to meet you, \(trimmed).")
+        await say("How much time do you spend on your phone a day? Best guess is fine.", pause: 0.4)
+        withAnimation(.smooth) { ask = .hours }
+    }
+
+    private func answeredHours(_ choice: String) async {
+        let hours: [String: Double] = ["Under 2 hours": 1.5, "2–4 hours": 3, "4–6 hours": 5, "6–8 hours": 7, "8+ hours": 9]
+        model.phoneHoursGuess = hours[choice] ?? 5
+        echo(choice)
+        try? await Task.sleep(for: .seconds(0.6))
+        switch model.phoneHoursGuess {
+        case ..<2: await say("Honestly? That's already good. Let's make it count.")
+        case ..<6: await say("That's pretty normal. And pretty normal is a lot.")
+        default: await say("Okay… we should talk.")
+        }
+        await say("What pulls you away the most?", pause: 0.4)
+        withAnimation(.smooth) { ask = .pull }
+    }
+
+    private func answeredPull(_ choice: String) async {
+        model.distraction = choice
+        echo(choice)
+        try? await Task.sleep(for: .seconds(0.6))
+        await say(choice == "Honestly, everything" ? "Respect for being honest. We can work with that." : "Got it. That one's built to be hard to put down.")
+        await say("And what do you want more time for?", pause: 0.4)
+        withAnimation(.smooth) { ask = .purpose }
+    }
+
+    private func answeredPurpose(_ choice: String) async {
+        model.focusFor = choice
+        echo(choice)
+        try? await Task.sleep(for: .seconds(0.6))
+        await say("Perfect. Give me a second.", pause: 0.5)
+        withAnimation(.smooth) { ask = .reviewing }
+        withAnimation(.easeInOut(duration: 2.6)) { progress = 1 }
+        try? await Task.sleep(for: .seconds(2.9))
+        done()
+    }
+}
+
+/// Answer options, arriving one after another.
+private struct Choices: View {
+    let options: [String]
+    let pick: (String) -> Void
+    @State private var picked: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(options.enumerated()), id: \.element) { index, option in
+                Button {
+                    guard picked == nil else { return }
+                    picked = option
+                    pick(option)
+                } label: {
+                    Text(option)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 13)
+                        .fzGlass(in: Capsule(), interactive: true)
+                }
+                .buttonStyle(.plain)
+                .riseIn(delay: 0.08 * Double(index))
+            }
+        }
+        .sensoryFeedback(.selection, trigger: picked)
+    }
+}
+
+// MARK: 3. Payoff and setup
+
+private struct PayoffAndSetup: View {
+    enum Step { case payoff, account, screenTime, apps, notifications, finale }
+
+    @Environment(AppModel.self) private var model
+    @AppStorage("onboarded") private var onboarded = false
+    @State private var step: Step = .payoff
+    @State private var count = 0
+    @State private var picking = false
+    @State private var showEmail = false
     @State private var email = ""
     @State private var password = ""
-    @State private var signingIn = false
+    @State private var focus = 0.6
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                GlassCircleButton(symbol: "chevron.left", size: 40, action: back)
-                    .padding(.bottom, 8)
-                Text(signingIn ? "Welcome back" : "Create your account")
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(Color.fzInk)
-                Text("Sync your focus, lists and FocuzPass with the FocuzNow extension.")
-                    .foregroundStyle(Color.fzInk2)
-                    .padding(.bottom, 8)
-
-                SignInWithAppleButton(signingIn ? .signIn : .signUp) { request in
-                    request.requestedScopes = [.fullName, .email]
-                } onCompletion: { _ in
-                    next()
-                }
-                .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
-                .frame(height: 54)
-                .clipShape(Capsule())
-
-                Button(action: next) {
-                    HStack(spacing: 10) {
-                        Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
-                            .foregroundStyle(LinearGradient(colors: [Color(hex: 0x4285F4), Color(hex: 0xEA4335), Color(hex: 0xFBBC05), Color(hex: 0x34A853)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        Text("Continue with Google")
+        @Bindable var model = model
+        ZStack {
+            SkyBackground(mood: .night, intensity: step == .finale ? 1.6 : 1)
+            VStack(spacing: 0) {
+                FocusField(focus: step == .finale ? 1 : focus, lights: 30, markScale: 0.5)
+                    .frame(width: step == .finale ? 260 : 120, height: step == .finale ? 260 : 120)
+                    .padding(.top, step == .finale ? 80 : 12)
+                Group {
+                    switch step {
+                    case .payoff: payoff
+                    case .account: account
+                    case .screenTime: screenTime
+                    case .apps: apps
+                    case .notifications: notifications
+                    case .finale: finale
                     }
                 }
-                .buttonStyle(.glassPill)
+                .id(step)
+                .transition(.blurRise)
+                .frame(maxWidth: 560)
+                .padding(.horizontal, 28)
+            }
+        }
+        .animation(.smooth(duration: 0.8), value: step)
+        .familyActivityPicker(isPresented: $picking, selection: $model.selection)
+        .onChange(of: picking) { _, open in
+            if !open, !model.selection.applicationTokens.isEmpty || !model.selection.categoryTokens.isEmpty { step = .notifications }
+        }
+    }
 
-                HStack {
-                    Rectangle().fill(Color.fzLine).frame(height: 1)
-                    Text("or").font(.footnote).foregroundStyle(Color.fzInk3)
-                    Rectangle().fill(Color.fzLine).frame(height: 1)
+    // "Maya, FocuzNow can give you back 23 days this year."
+    private var payoff: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            Spacer(minLength: 20)
+            (Text("\(model.userName),\nFocuzNow can give you back\n") + Text("\(count) days").foregroundStyle(Theme.accent) + Text(" this year."))
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(.white)
+                .contentTransition(.numericText())
+            VStack(alignment: .leading, spacing: 20) {
+                benefit("hourglass", "30% less screen time", "About \(GoalDial.format(Int(model.phoneHoursGuess * 0.7 * 60))) a day instead of \(GoalDial.format(Int(model.phoneHoursGuess * 60))).")
+                    .riseIn(delay: 0.5)
+                benefit("scope", "Deeper focus", "\(model.distraction.isEmpty ? "Distractions" : model.distraction) stay blocked while you work.")
+                    .riseIn(delay: 0.8)
+                benefit("sparkles", "More time for what matters", model.focusFor.isEmpty ? "Your goals, not your feed." : "\(model.focusFor), with your full attention.")
+                    .riseIn(delay: 1.1)
+            }
+            Spacer()
+            Text("Let's make it official.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(maxWidth: .infinity)
+            Button("Let's do it") { step = .account }
+                .buttonStyle(.beam)
+                .padding(.bottom, 12)
+        }
+        .onAppear {
+            let target = model.daysBack
+            for i in 0...target {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3 + Double(i) * (1.1 / Double(max(1, target)))) {
+                    withAnimation(.snappy) { count = i }
                 }
-                .padding(.vertical, 4)
+            }
+        }
+    }
 
+    private func benefit(_ symbol: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline).foregroundStyle(.white)
+                Text(detail).font(.subheadline).foregroundStyle(.white.opacity(0.6))
+            }
+        }
+    }
+
+    private var account: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Spacer(minLength: 20)
+            Text("Quick check, have we met before?")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.bottom, 10)
+            SignInWithAppleButton(.continue) { request in
+                request.requestedScopes = [.fullName, .email]
+            } onCompletion: { _ in
+                step = .screenTime
+            }
+            .signInWithAppleButtonStyle(.white)
+            .frame(height: 54)
+            .clipShape(Capsule())
+            HStack {
+                Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+                Text("or").font(.footnote).foregroundStyle(.white.opacity(0.4))
+                Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+            }
+            .padding(.vertical, 4)
+            Button { step = .screenTime } label: {
+                Label("Continue with Google", systemImage: "g.circle.fill")
+            }
+            .buttonStyle(.glassPill)
+            if showEmail {
                 VStack(spacing: 0) {
-                    TextField("Email", text: $email)
+                    TextField("", text: $email, prompt: Text("Email").foregroundStyle(.white.opacity(0.35)))
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .padding(16)
-                    Divider().overlay(Color.fzLine)
-                    SecureField("Password", text: $password)
-                        .textContentType(signingIn ? .password : .newPassword)
+                    Rectangle().fill(.white.opacity(0.1)).frame(height: 1)
+                    SecureField("", text: $password, prompt: Text("Password").foregroundStyle(.white.opacity(0.35)))
+                        .textContentType(.newPassword)
                         .padding(16)
                 }
-                .foregroundStyle(Color.fzInk)
-                .fzSurface(cornerRadius: 18)
-
-                Button(signingIn ? "Sign in" : "Create account", action: next)
+                .foregroundStyle(.white)
+                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .transition(.blurRise)
+                Button("Continue") { step = .screenTime }
                     .buttonStyle(.beam)
-                    .padding(.top, 4)
-
-                Button {
-                    withAnimation(.smooth) { signingIn.toggle() }
-                } label: {
-                    Text(LocalizedStringKey(signingIn ? "New here? **Create an account**" : "Have an account? **Sign in**"))
-                        .font(.footnote)
-                        .foregroundStyle(Color.fzInk2)
-                        .frame(maxWidth: .infinity)
+                    .disabled(email.isEmpty || password.count < 8)
+            } else {
+                Button { withAnimation(.smooth) { showEmail = true } } label: {
+                    Label("Sign up with email", systemImage: "envelope.fill")
                 }
-                .padding(.top, 4)
+                .buttonStyle(.glassPill)
             }
-            .frame(maxWidth: 520)
-            .padding(24)
-            .frame(maxWidth: .infinity)
-        }
-        .scrollDismissesKeyboard(.interactively)
-    }
-}
-
-// MARK: Setup steps
-
-private struct SetupScaffold<Art: View, Extra: View>: View {
-    let title: String
-    let message: String
-    let primary: String
-    var secondary: String? = nil
-    let onPrimary: () -> Void
-    var onSecondary: (() -> Void)? = nil
-    @ViewBuilder var art: Art
-    @ViewBuilder var extra: Extra
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 40)
-            art.frame(maxHeight: 300)
-            Spacer(minLength: 20)
-            VStack(alignment: .leading, spacing: 12) {
-                Text(title)
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(Color.fzInk)
-                Text(message)
-                    .foregroundStyle(Color.fzInk2)
-                extra
-            }
-            .frame(maxWidth: 520, alignment: .leading)
-            .padding(.horizontal, 28)
-            Spacer(minLength: 20)
-            VStack(spacing: 10) {
-                Button(primary, action: onPrimary).buttonStyle(.beam)
-                if let secondary, let onSecondary {
-                    Button(secondary, action: onSecondary)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.fzInk2)
-                        .padding(.vertical, 8)
-                }
-            }
-            .frame(maxWidth: 520)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 16)
+            Spacer()
         }
     }
-}
 
-private struct GoalSetupView: View {
-    let next: () -> Void
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        @Bindable var model = model
-        SetupScaffold(
-            title: "What's your daily goal?",
-            message: "How much focused time feels right for a normal day. You can change it any time.",
-            primary: "Continue",
-            onPrimary: next
+    private var screenTime: some View {
+        setupStep(
+            lines: ["To block what pulls you away, I need Screen Time.", "I never see which apps you use or what you do in them."],
+            primary: "Allow Screen Time",
+            secondary: "Not now"
         ) {
-            GoalDial(minutes: $model.goalMinutes)
-        } extra: {
-            TextField("Your name", text: $model.userName)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.fzInk)
-                .padding(16)
-                .fzSurface(cornerRadius: 16)
-                .padding(.top, 8)
+            Task {
+                try? await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+                step = .apps
+            }
+        } onSecondary: {
+            step = .apps
+        }
+    }
+
+    private var apps: some View {
+        setupStep(
+            lines: ["Now pick what pulls you away.", "Apps, whole categories, even websites."],
+            primary: "Choose apps",
+            secondary: "Skip for now"
+        ) {
+            picking = true
+        } onSecondary: {
+            step = .notifications
+        }
+    }
+
+    private var notifications: some View {
+        setupStep(
+            lines: ["Last thing.", "Can I nudge you when a session starts, and cheer when you finish one?"],
+            primary: "Turn on notifications",
+            secondary: "Not now"
+        ) {
+            Task {
+                _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+                step = .finale
+            }
+        } onSecondary: {
+            step = .finale
+        }
+    }
+
+    private var finale: some View {
+        VStack(spacing: 10) {
+            Spacer(minLength: 30)
+            Text("You're in focus, \(model.userName).")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+            Text("Let's get some time back.")
+                .font(.headline)
+                .foregroundStyle(.white.opacity(0.6))
+            Spacer()
+            Button("Start") { onboarded = true }
+                .buttonStyle(.beam)
+                .padding(.bottom, 12)
+        }
+        .sensoryFeedback(.success, trigger: step)
+    }
+
+    private func setupStep(lines: [String], primary: String, secondary: String, onPrimary: @escaping () -> Void, onSecondary: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Spacer(minLength: 30)
+            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                Text(line)
+                    .font(.system(size: index == 0 ? 26 : 19, weight: index == 0 ? .semibold : .regular))
+                    .foregroundStyle(index == 0 ? Color.white : Color.white.opacity(0.6))
+                    .riseIn(delay: 0.2 + 0.35 * Double(index))
+            }
+            Spacer()
+            Button(primary, action: onPrimary).buttonStyle(.beam)
+            Button(secondary, action: onSecondary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
         }
     }
 }
 
-/// A Beam-styled dial: drag around the ring to set the goal (30 min to 8 h, 15-minute steps).
-struct GoalDial: View {
-    @Binding var minutes: Int
-    let range = 30...480
-
-    var body: some View {
-        GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
-            let fraction = Double(minutes - range.lowerBound) / Double(range.upperBound - range.lowerBound)
-            ZStack {
-                Circle().stroke(Color.fzLine, lineWidth: 18)
-                Circle()
-                    .trim(from: 0, to: max(0.02, fraction))
-                    .stroke(AngularGradient(colors: [Theme.indigo, Theme.violet, Theme.coral, Theme.indigo], center: .center), style: StrokeStyle(lineWidth: 18, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: Theme.violet.opacity(0.5), radius: 12)
-                Circle()
-                    .fill(.white)
-                    .frame(width: 28, height: 28)
-                    .shadow(radius: 4)
-                    .offset(y: -side / 2 + 9)
-                    .rotationEffect(.degrees(360 * fraction))
-                VStack(spacing: 2) {
-                    Text(Self.format(minutes))
-                        .font(.fzHero(52))
-                        .foregroundStyle(Color.fzInk)
-                        .contentTransition(.numericText())
-                    SectionLabel("a day")
-                }
-            }
-            .frame(width: side - 20, height: side - 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Circle())
-            .gesture(
-                DragGesture(minimumDistance: 0).onChanged { drag in
-                    let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
-                    let dx = Double(drag.location.x - center.x)
-                    let dy = Double(drag.location.y - center.y)
-                    var angle = atan2(dx, -dy)
-                    if angle < 0 { angle += 2 * .pi }
-                    let raw = Double(range.lowerBound) + angle / (2 * .pi) * Double(range.upperBound - range.lowerBound)
-                    let snapped = Int((raw / 15).rounded()) * 15
-                    let value = min(range.upperBound, max(range.lowerBound, snapped))
-                    if value != minutes {
-                        withAnimation(.snappy) { minutes = value }
-                    }
-                }
-            )
-            .sensoryFeedback(.selection, trigger: minutes)
-        }
-        .frame(height: 280)
-        .accessibilityElement()
-        .accessibilityLabel("Daily goal")
-        .accessibilityValue(Self.format(minutes))
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: minutes = min(range.upperBound, minutes + 15)
-            case .decrement: minutes = max(range.lowerBound, minutes - 15)
-            @unknown default: break
-            }
-        }
-    }
-
+/// Formats minutes as "2h 30m" (used across the app).
+enum GoalDial {
     static func format(_ minutes: Int) -> String {
         let h = minutes / 60, m = minutes % 60
         if h == 0 { return "\(m)m" }
         return m == 0 ? "\(h)h" : "\(h)h \(m)m"
-    }
-}
-
-private struct ScreenTimeSetupView: View {
-    let next: () -> Void
-    @State private var error: String?
-
-    var body: some View {
-        SetupScaffold(
-            title: "Allow Screen Time",
-            message: "FocuzNow uses Screen Time to block the apps you pick, only during your sessions. It never sees which apps you use or what you do in them.",
-            primary: "Allow Screen Time",
-            secondary: "Not now",
-            onPrimary: { Task { await request() } },
-            onSecondary: next
-        ) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .fill(Color.fzSurface)
-                    .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.fzLine))
-                    .frame(width: 230, height: 230)
-                Image(systemName: "hourglass")
-                    .font(.system(size: 90, weight: .semibold))
-                    .foregroundStyle(Theme.beamGradient)
-                    .symbolEffect(.pulse)
-            }
-        } extra: {
-            if let error {
-                Text(error).font(.footnote).foregroundStyle(Theme.warn)
-            }
-        }
-    }
-
-    @MainActor
-    private func request() async {
-        do {
-            try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
-            next()
-        } catch {
-            self.error = "Screen Time didn't turn on (it only works on a real iPhone or iPad). You can try again in Settings."
-        }
-    }
-}
-
-private struct AppsSetupView: View {
-    let next: () -> Void
-    @Environment(AppModel.self) private var model
-    @State private var picking = false
-
-    var body: some View {
-        @Bindable var model = model
-        SetupScaffold(
-            title: "What distracts you?",
-            message: "Choose the apps, categories and sites FocuzNow should block during focus sessions.",
-            primary: model.selection.applicationTokens.isEmpty && model.selection.categoryTokens.isEmpty ? "Choose apps" : "Continue",
-            secondary: "Skip for now",
-            onPrimary: {
-                if model.selection.applicationTokens.isEmpty && model.selection.categoryTokens.isEmpty { picking = true } else { next() }
-            },
-            onSecondary: next
-        ) {
-            VStack(spacing: 18) {
-                if model.selection.applicationTokens.isEmpty {
-                    AppStack(apps: DistractionApp.samples, size: 70, limit: 4)
-                } else {
-                    HStack(spacing: -14) {
-                        ForEach(Array(model.selection.applicationTokens.prefix(5)), id: \.self) { token in
-                            Label(token)
-                                .labelStyle(.iconOnly)
-                                .scaleEffect(2.2)
-                                .frame(width: 70, height: 70)
-                        }
-                    }
-                    Text("\(model.selection.applicationTokens.count) apps · \(model.selection.categoryTokens.count) categories · \(model.selection.webDomainTokens.count) sites")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.fzInk2)
-                }
-            }
-        } extra: {
-            EmptyView()
-        }
-        .familyActivityPicker(isPresented: $picking, selection: $model.selection)
-    }
-}
-
-private struct NotificationsSetupView: View {
-    let next: () -> Void
-
-    var body: some View {
-        SetupScaffold(
-            title: "Stay on track",
-            message: "Get a gentle nudge when a planned session starts, and a cheer when you finish one.",
-            primary: "Turn on notifications",
-            secondary: "Not now",
-            onPrimary: {
-                Task {
-                    _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-                    await MainActor.run { next() }
-                }
-            },
-            onSecondary: next
-        ) {
-            VStack(spacing: 10) {
-                notification("Time to focus", "Deep work starts in 5 minutes", "bolt.fill")
-                notification("Session complete 🎉", "50 minutes · your Beam is 80% full", "checkmark.seal.fill")
-                    .scaleEffect(0.94)
-                    .opacity(0.8)
-            }
-            .padding(.horizontal, 28)
-        } extra: {
-            EmptyView()
-        }
-    }
-
-    private func notification(_ title: String, _ body: String, _ symbol: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(width: 38, height: 38)
-                .background(Theme.beamGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.fzInk)
-                Text(body).font(.footnote).foregroundStyle(Color.fzInk2)
-            }
-            Spacer()
-            Text("now").font(.caption2).foregroundStyle(Color.fzInk3)
-        }
-        .padding(14)
-        .frame(maxWidth: 420)
-        .fzGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-}
-
-private struct SetupDoneView: View {
-    let finish: () -> Void
-    @Environment(AppModel.self) private var model
-    @State private var fill = 0.05
-    @State private var burst = false
-
-    var body: some View {
-        VStack(spacing: 26) {
-            Spacer()
-            ZStack {
-                ForEach(0..<14, id: \.self) { index in
-                    let angle = Double(index) / 14 * 2 * .pi
-                    Circle()
-                        .fill(index.isMultiple(of: 2) ? Theme.coral : Theme.violet)
-                        .frame(width: 8, height: 8)
-                        .offset(x: cos(angle) * (burst ? 160 : 10), y: sin(angle) * (burst ? 160 : 10))
-                        .opacity(burst ? 0 : 1)
-                }
-                BeamView(fill: fill, score: 9.2, active: true)
-            }
-            VStack(spacing: 8) {
-                Text("You're set, \(model.userName.isEmpty ? "friend" : model.userName).")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(Color.fzInk)
-                Text("Your goal is \(GoalDial.format(model.goalMinutes)) a day. Let's fill the Beam.")
-                    .foregroundStyle(Color.fzInk2)
-            }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 28)
-            Spacer()
-            Button("Let's focus", action: finish)
-                .buttonStyle(.beam)
-                .frame(maxWidth: 520)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-        }
-        .sensoryFeedback(.success, trigger: burst)
-        .onAppear {
-            withAnimation(.smooth(duration: 1.4)) { fill = 0.85 }
-            withAnimation(.easeOut(duration: 1.2).delay(0.5)) { burst = true }
-        }
     }
 }

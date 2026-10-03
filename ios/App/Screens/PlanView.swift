@@ -132,19 +132,19 @@ struct WeekStrip: View {
                     VStack(spacing: 6) {
                         Text(date.formatted(.dateTime.weekday(.narrow)))
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.fzInk3)
+                            .foregroundStyle(isSelected ? Color.fzBg.opacity(0.75) : Color.fzInk3)
                         Text(date.formatted(.dateTime.day()))
                             .font(.fzNumber(17, weight: .semibold))
-                            .foregroundStyle(isSelected ? Color.white : Color.fzInk)
+                            .foregroundStyle(isSelected ? Color.fzBg : Color.fzInk)
                         Circle()
-                            .fill(isToday ? (isSelected ? Color.white : Theme.violet) : Color.clear)
+                            .fill(isToday ? (isSelected ? Color.fzBg : Theme.accent) : Color.clear)
                             .frame(width: 5, height: 5)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .background {
                         if isSelected {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.beamGradient)
+                            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.fzInk)
                         }
                     }
                 }
