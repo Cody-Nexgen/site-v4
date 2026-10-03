@@ -1,0 +1,33 @@
+{
+  "masterPassword": "fixture-master-password ✓ 2026",
+  "meta": {
+    "version": 2,
+    "salt": "QAAInS1SGNqnjKV7DLEzvw==",
+    "kdf": "pbkdf2-sha256",
+    "iterations": 600000,
+    "wrappedKey": {
+      "iv": "tWdCTZfIh2YkqrDZ",
+      "ct": "hRrTaSz+IvEtaxv7vAfKxXAM5nYvSjmGkv2TIzjMjkFK8lH/x9DurDgrlBvdsQwY"
+    }
+  },
+  "blob": {
+    "iv": "kWrgzvWeAez1nwkZ",
+    "ct": "pWwg1wFbI4aot46xFn/u0+Z5Tr0jPT/MTPTTFVEkTyW+J84PWK01JdJNBWp3G4I9SS4vo8b90cuF+jTZfPN7QB6zCftL6gNz7gL5kyEZsicqRKP9zFbJyXvnz0uFGdVXGvO5QB8A9kgLosSxEhv+UPS20glQwoXxCPzJ6PiP4M7m0TTzxMIJ2idpFxhZIKbmwBIycqyiCosDqogeXHiGNBl/9XheGqxWioUKtPt2PTOWxD9F1FQaStNoXW9ZuNRUvG0OW/v1r8NXxENbAv3W/Mi4ue+BmkXe3DkmzoIwZ4RJh0Y51/gF84NEkPTDfenR/pRjuAV7XOyprZVYrXpIs2ptPEwYBD+puoWUfih04VhZltMReXmfSTr/0JRuIkgwn/sVMEHp4UDnJLgcnpgSyTkZ9KuN+0ily1IokL2rIcDlO++U1++/gxVqc2aJQ6Ys1rujgXQp+dbdreDCliKICbJsbpTTe0NeZU2abjll6smJXg88paE60gHCY+dHlhJcyuxdw0Wu+BZezURK5xcMDNVYdarJOluWQMVl1HDTvCuEF0MHr4Eem6QuMHhkBMLUvfsyQV64SQpt8je/yvZtCZvT4dEFRlrv25PwVgu/lDznmH42kvl9fN5XVPr2tNw9KULgwOphwoxttRrJ62SGxjcCUgAtUw5UMPU3LCxl1kc78qQIcDczd6wMSMpRMzm0vB+hFxrPJeKUpT4BUcjd+BgwVDDuTcCjje03Ots8hcykb7jANdfpyIWI3w5eEm7keOXIBSvOZqqul43EdJV4n2a91TgR37PwXutVFZuoG6QonZm6FE0RiH3271Cz99FueQc0RaAQFNu/+sEnj/CIJCi8P/06XC3NXc0behjfqATF4oK26UJ76vah7zTfbUD91nw2l3OOC3mI9OZJO2VRx2m0/cXHEpcov10lId/Q3M0kq+hw6EhRreViPpaMoPSnS9u1omPdP2HifXwAzLPhHtIXm2zt5L8gfdAmguLcCQhdXZeJ1WwLnC61izNP/AJh+7JFtRfTfhUUiDs/0iIHpva3vi63mfRLn0YQTd1DDxIK2p668qjFSnN3/hndrkWKmbIgK6kxfjj4U8GPC0oe2HHlTaz7u7Cr2eD7Fve6WSdRS/sRNxdY/54/zbDf6XGpws/wFv+RVyC+TCftDh8x5dsiGJ8Jow78CLNJ5g/NOZuVURugDfDD3225jbBU4sYqT95gUpd4DEKs6dhiBwTIQcBjFHO89X9VydPHiDhCKLKnizY2RfxuTJqVTQXizmJRwUISe02pZBSp2nsNuFP6Gbc2HhpxKFUlqIpNB9NOMGaSlbuNx2wi3bTdTLGnEsjD0VjTU2GnFZj4BAG/TOB+z/Ibjn7SbwkdTCf5+eYEcyjwMxdDKx/97Umc6EuQM3Nx8MImsrCdm3qSJbzR/kt0i6gpMLCZ3ToMloAi8uUmPtzuBNAfUdFl5cG9/G/fBwJ1zJIxRmFKhFqc7dMX4eKL0U0N7ty1f/PkcAVee19NfFUYZsxjbKyHf6uEaY/vUZHW9FkyFTl5d6JpHhFgWqnnoKVzt4LzriRZh/IKRqpBuyByxIMS5oE3skl4ityBucMn+YZdlYT/VXt7GGqQS+qpamZVMFiWLeTE12adbDo6aSAczlJWktZe+/z99QH1+67i3cIMyesAVv7568UauJBzPaoJ/oDeG1DhJPXyAfuhD/Q14toXBXoLJstt204C0Wx5l2ALDUyK+M94mZGLgOy1mr8+56bk/RPFNgG1VV8mKfgm47J9iq0wUFn87QHC8a1Aa7gYsLg9XCvFHS//yMNZpwNspsmQlG92FZqA31DQFJxMIvIwED01+Fura5Af"
+  },
+  "expect": [
+    {
+      "title": "GitHub",
+      "identity": "maya@focuznow.com",
+      "domain": "github.com",
+      "password": "Gh-Secret!42 ünïcødé",
+      "note": "two-factor on"
+    },
+    {
+      "title": "Linear",
+      "identity": "maya",
+      "domain": "linear.app",
+      "password": "linear-pass-9000",
+      "note": ""
+    }
+  ]
+}

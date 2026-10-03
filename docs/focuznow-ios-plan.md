@@ -1,6 +1,6 @@
 # FocuzNow for iPhone & iPad: the plan
 
-Status: **planning** (2026-10-03). Nothing built yet. The owner has a Mac and an Apple Developer account.
+Status: **Phase 0 written** (2026-10-03), waiting for the owner's first build on the Mac (`ios/README.md`). The DeviceActivityReport extension moves to Phase 2 (it's an ExtensionKit target). The owner has a Mac and an Apple Developer account.
 
 Goals the owner set:
 - The **whole FocuzNow**, not only FocuzPass, with **app blocking** as the headline feature.
