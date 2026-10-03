@@ -42,3 +42,12 @@ export function tileHue(name: string): number {
     for (const char of name.toLowerCase()) hash = (hash * 31 + char.codePointAt(0)!) >>> 0;
     return TILE_HUES[hash % TILE_HUES.length]!;
 }
+
+/** A person's initials for an identity tile: "Maya Jones" → "MJ", "Cher" → "C", "maya r. de la cruz" → "MC". */
+export function nameInitials(fullName: string): string {
+    const words = fullName.trim().split(/\s+/).map((word) => word.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
+    if (!words.length) return '';
+    const first = words[0]![0]!;
+    const last = words.length > 1 ? words[words.length - 1]![0]! : '';
+    return (first + last).toUpperCase();
+}

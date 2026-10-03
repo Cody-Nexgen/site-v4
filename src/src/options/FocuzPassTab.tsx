@@ -86,7 +86,7 @@ import { COLLECTION_ICON_GROUPS, collectionIcon, searchCollectionIcons } from '.
 import { FloatingPanel } from './focuzpass/FloatingPanel';
 import { ColorPicker } from './focuzpass/ColorPicker';
 import { DatePicker } from './focuzpass/DatePicker';
-import { markLetters, readableTitle, tileHue } from '../lib/focuzPass/displayName';
+import { markLetters, nameInitials, readableTitle, tileHue } from '../lib/focuzPass/displayName';
 import { PLACES_MIN_CHARS, newPlacesSession, placesDetails, placesSuggest, type PlaceSuggestion } from '../lib/focuzPass/places';
 import { PasskeySettings } from './focuzpass/PasskeySettings';
 import { CloudSync } from './focuzpass/CloudSync';
@@ -881,17 +881,19 @@ function ItemMark({ item, large = false }: { item: VaultItem; large?: boolean })
     const favicon = useSiteIcon(siteLike ? item.domain : undefined, markRef);
     const definition = itemDefinition(item);
     const tone = item.markTone === '#e5e5e5' ? definition.tone : item.markTone;
-    const typeIconKind = item.type === 'custom' && item.kind && item.kind !== 'password' ? item.kind : null;
+    // An identity with a name gets that person's initials on a letter tile, like a site with no icon.
+    const initials = item.type === 'custom' && item.kind === 'identity' ? nameInitials(item.fields?.fullName || '') : '';
+    const typeIconKind = item.type === 'custom' && item.kind && item.kind !== 'password' && !initials ? item.kind : null;
     const isCard = item.type === 'card';
     return (
         <span
             ref={markRef}
             className={`vault-item-mark${typeIconKind || isCard ? ' is-type-icon' : ''}${isCard ? ' is-card-brand' : ''}${favicon ? ' has-favicon' : ''} relative ${large ? 'h-[60px] w-[60px] rounded-lg text-lg' : 'h-8 w-8 rounded-lg text-[11px]'} flex shrink-0 items-center justify-center overflow-hidden border font-bold tracking-[-0.03em]`}
-            style={typeIconKind || isCard || favicon ? ({ '--item-tone': tone } as CSSProperties) : ({ '--tile-h': tileHue(item.title) } as CSSProperties)}
+            style={typeIconKind || isCard || favicon ? ({ '--item-tone': tone } as CSSProperties) : ({ '--tile-h': tileHue(initials ? item.fields?.fullName || item.title : item.title) } as CSSProperties)}
             data-letter-tile={typeIconKind || isCard || favicon ? undefined : ''}
             aria-hidden="true"
         >
-            {isCard ? <CardBrandMark number={item.cardNumber} compact={!large} /> : typeIconKind ? <SoftItemTypeIcon kind={typeIconKind} size={large ? 60 : 32} /> : item.mark}
+            {isCard ? <CardBrandMark number={item.cardNumber} compact={!large} /> : typeIconKind ? <SoftItemTypeIcon kind={typeIconKind} size={large ? 60 : 32} /> : initials || item.mark}
             {favicon && <SiteIconImage icon={favicon} />}
         </span>
     );
@@ -1684,7 +1686,6 @@ function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, savedAddres
     const [localError, setLocalError] = useState('');
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const selectedTags = tags.filter((tag) => tagIds.includes(tag.id));
-    const availableTags = tags.filter((tag) => !tagIds.includes(tag.id));
     const setValue = (field: FieldDefinition, value: string) => {
         const formatted = formatFieldValue(fieldFormat(kind, field), value);
         setValues((current) => ({ ...current, [field.key]: formatted }));
@@ -1844,30 +1845,30 @@ function ItemEditorModal({ kind, item, vaults, tags, defaultVaultId, savedAddres
                             <section className="vault-editor-section">
                                 <div className="vault-editor-section-heading"><div><strong>Organization</strong><small>Choose where this item appears</small></div></div>
                                 <label className="vault-editor-select"><span>Vault</span><select value={vaultId} onChange={(event) => setVaultId(event.target.value)}>{vaults.map((vault) => <option key={vault.id} value={vault.id}>{vault.name}</option>)}</select></label>
+                                {/* Tags: one row of chips; tap to add or remove, the last chip makes a new tag. */}
                                 <div className="vault-editor-tags">
                                     <div className="vault-editor-tags-heading">
-                                        <div><strong>Tags</strong><small>{selectedTags.length ? `${selectedTags.length} attached` : 'No tags attached'}</small></div>
-                                        <button type="button" className="vault-editor-new-tag" onClick={() => setTagModalOpen(true)}><Plus size={13} /> New tag</button>
+                                        <strong>Tags</strong>
+                                        {selectedTags.length > 0 && <small>{selectedTags.length} added</small>}
                                     </div>
-                                    {selectedTags.length > 0 && (
-                                        <div className="vault-editor-selected-tags" aria-label="Selected tags">
-                                            {selectedTags.map((tag) => (
-                                                <button key={tag.id} type="button" style={{ '--tag-tone': tag.color } as CSSProperties} onClick={() => setTagIds((current) => current.filter((id) => id !== tag.id))} aria-label={`Remove ${tag.name} tag`}>
-                                                    <ExactTagIcon size={12} color={tag.color} /><span>{tag.name}</span><X size={12} />
+                                    <div className="vault-tag-chips" role="group" aria-label="Tags">
+                                        {tags.map((tag) => {
+                                            const on = tagIds.includes(tag.id);
+                                            return (
+                                                <button
+                                                    key={tag.id}
+                                                    type="button"
+                                                    className={on ? 'is-on' : ''}
+                                                    style={{ '--tag-tone': tag.color } as CSSProperties}
+                                                    aria-pressed={on}
+                                                    onClick={() => setTagIds((current) => (on ? current.filter((id) => id !== tag.id) : [...current, tag.id]))}
+                                                >
+                                                    <ExactTagIcon size={14} color={tag.color} /><span>{tag.name}</span>{on && <Check size={12} aria-hidden="true" />}
                                                 </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {availableTags.length > 0 && (
-                                        <div className="vault-editor-available-tags" aria-label="Available tags">
-                                            {availableTags.map((tag) => (
-                                                <button key={tag.id} type="button" style={{ '--tag-tone': tag.color } as CSSProperties} onClick={() => setTagIds((current) => [...current, tag.id])} aria-label={`Add ${tag.name} tag`}>
-                                                    <Plus size={11} /><ExactTagIcon size={12} color={tag.color} /><span>{tag.name}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {tags.length === 0 && <p className="vault-editor-tags-empty">Create a tag to organize this item.</p>}
+                                            );
+                                        })}
+                                        <button type="button" className="vault-tag-chip-new" onClick={() => setTagModalOpen(true)}><Plus size={12} /> New tag</button>
+                                    </div>
                                 </div>
                             </section>
                         </div>

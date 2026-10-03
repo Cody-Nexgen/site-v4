@@ -6816,3 +6816,35 @@ html[data-dashboard-theme="light"] .fp-flat-glyph.fp-solid-icon.tone-all { color
 .focuz-pass-ready .vault-toolbar .vault-help { margin-left: auto; }
 .focuz-pass-ready .vault-toolbar .vault-search input,
 html[data-dashboard-theme="light"] .focuz-pass-ready .vault-toolbar .vault-search input { background: transparent; }
+
+/* Item editor tags (2026-10-03): one row of chips. Off = quiet outline, on = a soft fill in the
+   tag's colour with a check; "New tag" is the last chip, not a separate button. */
+.vault-editor-modal .vault-editor-tags > .vault-editor-tags-heading { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; }
+.vault-editor-modal .vault-editor-tags-heading strong { color: var(--fz-text-2); font-size: 12px; font-weight: 620; }
+.vault-editor-modal .vault-editor-tags-heading small { color: var(--fz-text-4); font-size: 11px; }
+.vault-tag-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.vault-tag-chips > button {
+    display: inline-flex;
+    height: 30px;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--fz-border);
+    border-radius: 999px;
+    background: transparent;
+    padding: 0 12px 0 9px;
+    color: var(--fz-text-2);
+    font-size: 12px;
+    font-weight: 520;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 100ms ease;
+}
+.vault-tag-chips > button:hover { background: var(--fz-bg-hover); color: var(--fz-text-1); }
+.vault-tag-chips > button:active { transform: scale(0.97); }
+.vault-tag-chips > button.is-on {
+    border-color: color-mix(in srgb, var(--tag-tone, var(--fz-text-2)) 45%, transparent);
+    background: color-mix(in srgb, var(--tag-tone, var(--fz-text-2)) 16%, transparent);
+    color: var(--fz-text-1);
+}
+.vault-tag-chips > button.is-on > svg:last-child { color: var(--tag-tone, var(--fz-text-2)); }
+.vault-tag-chips > button .fp-flat-glyph { flex: none; }
+.vault-tag-chips > .vault-tag-chip-new { gap: 4px; border-style: dashed; padding: 0 12px; color: var(--fz-text-3); }
+.vault-tag-chips > .vault-tag-chip-new:hover { border-style: solid; }

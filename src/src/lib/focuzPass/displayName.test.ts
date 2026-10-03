@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { markLetters, readableTitle, tileHue } from './displayName';
+import { markLetters, nameInitials, readableTitle, tileHue } from './displayName';
 
 test('Raw web addresses become the site name', () => {
     assert.equal(readableTitle('account.hoyolab.com'), 'Hoyolab');
@@ -26,4 +26,12 @@ test('Tile letters and colours', () => {
     assert.equal(markLetters('X'), 'X');
     assert.equal(markLetters('!!'), '•');
     assert.equal(tileHue('Focuznow'), tileHue('focuznow'));
+});
+
+test('Identity initials', () => {
+    assert.equal(nameInitials('Maya Jones'), 'MJ');
+    assert.equal(nameInitials('  cher '), 'C');
+    assert.equal(nameInitials('maya r. de la cruz'), 'MC');
+    assert.equal(nameInitials('Élodie Brun'), 'ÉB');
+    assert.equal(nameInitials(''), '');
 });

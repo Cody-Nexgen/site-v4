@@ -179,6 +179,7 @@ const fpItems: Record<string, unknown>[] = [
     { id: 'i-card', type: 'card', title: 'Amex Gold', identity: '•••• 1005', cardNumber: '378282246310005', expiry: '09/28', mark: 'AX', markTone: '#e0af68', vaultId: 'v-personal', tagIds: ['t-finance'], favorite: false, sortOrder: 4, createdAt: iso(now - 86400e3 * 10), updatedAt: iso(now - 86400e3 * 10) },
     { id: 'i-pk', type: 'passkey', title: 'Google passkey', identity: 'compooteriolyt@gmail.com', domain: 'accounts.google.com', credentialId: 'cred-1', experimental: true, mark: 'GP', markTone: '#52d58e', vaultId: 'v-personal', tagIds: [], favorite: false, sortOrder: 5, createdAt: iso(now - 86400e3 * 8), updatedAt: iso(now - 86400e3 * 8) },
     { id: 'i-wifi', type: 'custom', kind: 'wireless_router', title: 'Home Wi-Fi', identity: 'FocuzHouse_5G', fields: { Password: 'netpw-99', 'Security type': 'WPA3' }, mark: 'WF', markTone: '#7dcfff', vaultId: 'v-personal', tagIds: [], favorite: false, sortOrder: 6, createdAt: iso(now - 86400e3 * 5), updatedAt: iso(now - 86400e3 * 5) },
+    { id: 'i-id', type: 'custom', kind: 'identity', title: 'Me', identity: 'Maya Jones', fields: { fullName: 'Maya Jones', email: 'maya@focuznow.com' }, mark: 'ME', markTone: '#6fcf97', vaultId: 'v-personal', tagIds: [], favorite: false, sortOrder: 7, createdAt: iso(now - 86400e3 * 4), updatedAt: iso(now - 86400e3 * 4) },
 ];
 
 const fpStatus = {
