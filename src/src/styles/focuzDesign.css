@@ -6763,3 +6763,56 @@ html[data-dashboard-theme="light"] .focuz-pass-ready .vault-row.is-selected { ba
 .focuz-pass-ready .vault-nav .vault-nav-item { min-height: 36px; gap: 10px; }
 .fp-flat-glyph.fp-solid-icon.tone-all { color: oklch(0.76 0.09 240); }
 html[data-dashboard-theme="light"] .fp-flat-glyph.fp-solid-icon.tone-all { color: oklch(0.56 0.12 245); }
+
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   Clean Desk (2026-10-03). A calm, solid layout: sidebar | list | item, edge to edge with hairline
+   dividers; the list is a fixed column and the item pane is a document page (no card in a card,
+   no glows); search is a normal-width box. Under 900px the old overlay panel stays.
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.vault-detail-empty { display: none; }
+@media (min-width: 900px) {
+    .focuz-pass-ready .vault-content-grid.vault-library-layout { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); }
+    .focuz-pass-ready .vault-library-layout .vault-list { grid-column: 1; grid-row: 1; border-right: 1px solid var(--fp-line); }
+    .focuz-pass-ready .vault-library-layout .vault-list-scroll { padding: 4px 8px 12px; }
+    .focuz-pass-ready .vault-library-layout .vault-row { grid-template-columns: 18px 36px minmax(0, 1fr) 24px; gap: 10px; }
+    .focuz-pass-ready .vault-library-layout .vault-row-type,
+    .focuz-pass-ready .vault-library-layout .vault-row-vault,
+    .focuz-pass-ready .vault-library-layout .vault-row-activity { display: none; }
+
+    .focuz-pass-ready .vault-inspector,
+    .focuz-pass-ready .vault-detail-empty {
+        position: static;
+        grid-column: 2;
+        grid-row: 1;
+        width: auto;
+        min-width: 0;
+        border: 0;
+        border-radius: 0;
+        background: var(--fp-main);
+        box-shadow: none;
+    }
+    .focuz-pass-ready .vault-detail-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        color: var(--fz-text-3);
+        text-align: center;
+    }
+    .focuz-pass-ready .vault-detail-empty .fp-solid-icon { margin-bottom: 6px; opacity: 0.45; filter: grayscale(1); }
+    .focuz-pass-ready .vault-detail-empty p { margin: 0; color: var(--fz-text-2); font-size: 14px; font-weight: 550; }
+    .focuz-pass-ready .vault-detail-empty small { color: var(--fz-text-4); font-size: 12px; }
+
+    /* The item as a page: content at a reading width, groups outlined but not lifted. */
+    .focuz-pass-ready .vault-inspector .vault-detail-topbar { border-bottom: 1px solid var(--fp-line); }
+    .focuz-pass-ready .vault-inspector .vault-detail-body { width: min(640px, calc(100% - 64px)); margin-inline: auto; }
+    .focuz-pass-ready .vault-inspector .vault-credential-card { background: transparent; box-shadow: none; }
+}
+
+/* Toolbar: a normal-width search on the left, actions on the right. */
+.focuz-pass-ready .vault-toolbar { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--fp-line); }
+.focuz-pass-ready .vault-toolbar .vault-search { flex: 0 1 440px; max-width: 440px; }
+.focuz-pass-ready .vault-toolbar .vault-help { margin-left: auto; }
+.focuz-pass-ready .vault-toolbar .vault-search input,
+html[data-dashboard-theme="light"] .focuz-pass-ready .vault-toolbar .vault-search input { background: transparent; }

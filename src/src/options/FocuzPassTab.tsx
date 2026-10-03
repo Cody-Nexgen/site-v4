@@ -700,22 +700,15 @@ function SolidIcon({ size = 20, tone, color, grid = 20, children, mask }: { size
     );
 }
 
-/** All Items: a solid wallet, its flap and its clasp pocket cut out of the front. */
+/** All Items: a solid wallet with its curved flap cut out of the front (the owner's pick, W3). */
 function ExactAllItemsIcon({ size = 20 }: { size?: number }) {
     return (
         <SolidIcon
             size={size}
-            grid={24}
             tone="all"
-            mask={
-                <>
-                    <path d="M2.5 10.5h19" fill="none" stroke="#000" strokeWidth="1.4" />
-                    <rect x="14" y="12.6" width="9" height="5" rx="2.1" fill="none" stroke="#000" strokeWidth="1.4" />
-                    <circle cx="17" cy="15.1" r="1" />
-                </>
-            }
+            mask={<path d="M2 8.4h3.4c.7 0 1 .4 1.5 1s.9 1.1 2.1 1.1h2c1.2 0 1.6-.5 2.1-1.1s.8-1 1.5-1H18" fill="none" stroke="#000" strokeWidth="1.3" strokeLinecap="round" />}
         >
-            <rect x="2.5" y="4.5" width="19" height="16" rx="4" />
+            <rect x="2" y="4" width="16" height="13" rx="3" />
         </SolidIcon>
     );
 }
@@ -756,25 +749,21 @@ function VaultChip({ color, icon: Icon, size = 20 }: { color: string; icon: type
     );
 }
 
-/** The default vault mark: a little safe in the vault's colour (door edge, dial, handle, feet). */
+/** The default vault mark: a safe door in the vault's colour, its ring and keyhole cut out (the owner's pick, V14). */
 function ExactVaultIcon({ color, size = 20 }: { color: string; size?: number }) {
     return (
         <SolidIcon
             size={size}
-            grid={24}
             color={color}
             mask={
                 <>
-                    <path d="M6.4 2v17" fill="none" stroke="#000" strokeWidth="1.4" />
-                    <circle cx="12.6" cy="10.8" r="3.5" fill="none" stroke="#000" strokeWidth="1.5" />
-                    <circle cx="12.6" cy="10.8" r="1" />
-                    <rect x="17.7" y="7.6" width="1.6" height="6.4" rx="0.8" />
+                    <circle cx="10" cy="10" r="5.2" fill="none" stroke="#000" strokeWidth="1.2" />
+                    <circle cx="10" cy="9" r="1.5" />
+                    <path d="M9.25 9.6h1.5l.45 2.9h-2.4z" />
                 </>
             }
         >
-            <rect x="2.5" y="2" width="19" height="17.4" rx="4.6" />
-            <rect x="5.2" y="19" width="3.6" height="3" rx="1.1" opacity="0.55" />
-            <rect x="15.2" y="19" width="3.6" height="3" rx="1.1" opacity="0.55" />
+            <rect x="2.5" y="2.5" width="15" height="15" rx="3.4" />
         </SolidIcon>
     );
 }
@@ -3104,6 +3093,14 @@ export default function FocuzPassTab({
                         </div>
                     </div>
 
+                    {/* Clean Desk: the item pane is a column of its own, so it says what to do while it's empty. */}
+                    {!selected && (
+                        <div className="vault-detail-empty">
+                            <ExactAllItemsIcon size={34} />
+                            <p>{filteredItems.length ? 'Pick an item to see its details' : 'Nothing here yet'}</p>
+                            <small>Press / to search</small>
+                        </div>
+                    )}
                     <AnimatePresence>
                     {selected && (
                         <motion.aside
@@ -3116,10 +3113,10 @@ export default function FocuzPassTab({
                                 setSelectedId('');
                                 setActionsOpen(false);
                             }}
-                            initial={reduceMotion ? false : { x: '104%', opacity: 0.8 }}
+                            initial={reduceMotion ? false : { x: 14, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
-                            exit={reduceMotion ? { opacity: 0 } : { x: '104%', opacity: 0.8 }}
-                            transition={{ duration: reduceMotion ? 0 : 0.28, ease: [0.16, 1, 0.3, 1] }}
+                            exit={{ opacity: 0, transition: { duration: reduceMotion ? 0 : 0.12 } }}
+                            transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
                         >
                         <div className="vault-detail-current">{detailPanel}</div>
                         <div className="vault-detail-legacy" aria-hidden="true">
