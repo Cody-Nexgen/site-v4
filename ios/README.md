@@ -24,13 +24,31 @@ Native SwiftUI, iOS/iPadOS 18+, Liquid Glass on iOS 26. The plan and every quirk
 5. **Your iPhone/iPad:** plug it in, trust the Mac, then on the device: Settings → Privacy & Security → **Developer Mode** → on (it restarts).
 6. Pick your device at the top of Xcode and press **▶ Run**.
 
-## What you should see (Phase 0)
+## What you should see (UI v1, mock data)
 
-- **iPhone:** five tabs (Today, Focus, Plan, Pass, Coach). On iOS 26 the tab bar is Liquid Glass and shrinks when you scroll down; on iOS 18 it's the normal bar. Today has a glass **Start focus** button and the person icon (top left) opens the "You" sheet.
-- **iPad:** a sidebar with the same tabs plus a **You** section (Stats, Friends, Forest, Shop, Settings). Today shows two columns.
-- **Focus tab → Allow Screen Time:** the system asks for Face ID/passcode, then the row says **Allowed**. This proves the Family Controls entitlement works. *(It never works in the Simulator, only on a real device.)*
-- Long-press the home screen → add the **FocuzNow** widget ("Start focus").
-- Settings → General → AutoFill & Passwords: **FocuzPass** shows in the list (it only says "coming soon" for now).
+Design spec: [`docs/ios-design-spec.md`](../docs/ios-design-spec.md). Everything runs on mock data for now.
+
+1. **Onboarding** (first launch):
+   - four intro pages on living gradient skies (the Beam filling up, apps getting shielded, Plan/Pass/Coach orbiting, friends);
+   - **account** (Sign in with Apple, Google, or email; any button continues for now);
+   - **goal** (drag the dial) → **Screen Time** → **pick apps** (the real Apple picker) → **notifications**;
+   - **"You're set"** with a burst.
+2. **Today:** the glowing **Beam** fills toward your goal, with the big Focus Score, the stats row, the day wave chart, up next, and friends focusing now. The **Start focus** button floats at the bottom.
+3. **Focus:**
+   - presets, a drag ring for the length;
+   - block list (opens Apple's picker);
+   - difficulty, breaks, and the scene picker.
+4. **Start a session** → full-screen **scene** (Night Lake by default: stars, moon on the lake) with the countdown, timeline, block list, difficulty, **Take a break** (a calm countdown) and **End early**. Swipe it down (⌄): on iOS 26 a glass session bar sits in the tab bar; on iOS 18 it floats above it.
+5. When it ends: **celebration** (sparks, the Beam jumps, coins, a tree).
+6. **Plan:** week strip plus a day timeline with a "now" line; Lists; the + button adds a to-do.
+7. **Pass:** Face ID lock → vault list with filters and search → item detail (copy, reveal, strength).
+8. **Coach:** chat with suggestion chips and a typing indicator (a canned reply for now).
+9. **You** (the avatar on Today; the sidebar on iPad): Stats (score ring, week chart, best hours), Friends (rooms and leaderboard), Forest, Shop (scenes for coins), Settings (theme, **Show onboarding again**), and Pro (paywall).
+10. **iPad:** a sidebar instead of tabs, a two-column Today, list and detail side by side in Pass and Plan.
+
+Tip: Settings → **Show onboarding again** replays the first-launch flow.
+
+**First run on a phone is slow** ("LLDB is reading from device memory"): Xcode is copying debug symbols for your iOS version once. Press Continue and wait. To skip the debugger: Product → Scheme → Edit Scheme → Run → untick **Debug executable**.
 
 ## Run the crypto tests
 

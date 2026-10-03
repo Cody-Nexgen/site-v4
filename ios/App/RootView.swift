@@ -5,60 +5,117 @@ enum AppTab: Hashable {
     case stats, friends, forest, shop, settings
 }
 
-/// Five tabs on iPhone; on iPad the same TabView turns into a sidebar (`.sidebarAdaptable`) with the
-/// "You" pages as their own rows. On iPhone those live in the sheet behind the avatar instead.
+/// Onboarding the first time, then the app. Also drives the session clock.
 struct RootView: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage("onboarded") private var onboarded = false
+    @AppStorage("appearance") private var appearance = "system"
+
+    private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        Group {
+            if onboarded {
+                MainTabs()
+                    .transition(.opacity)
+            } else {
+                OnboardingFlow()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.smooth(duration: 0.6), value: onboarded)
+        .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
+        .onReceive(clock) { _ in model.tick() }
+    }
+}
+
+/// Five tabs on iPhone; on iPad the same TabView becomes a sidebar (`.sidebarAdaptable`) with the
+/// "You" pages as their own rows. On iPhone those live in the sheet behind the avatar instead.
+private struct MainTabs: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var tab: AppTab = .today
     @State private var showYou = false
 
     var body: some View {
+        @Bindable var model = model
         TabView(selection: $tab) {
-            Tab("Today", systemImage: "sun.max", value: AppTab.today) {
-                NavigationStack { TodayView(showYou: $showYou) }
+            Tab("Today", systemImage: "sun.max.fill", value: AppTab.today) {
+                NavigationStack { TodayView(showYou: $showYou, startFocus: { tab = .focus }) }
             }
             Tab("Focus", systemImage: "timer", value: AppTab.focus) {
-                NavigationStack { FocusView() }
+                NavigationStack { FocusSetupView() }
             }
             Tab("Plan", systemImage: "checklist", value: AppTab.plan) {
                 NavigationStack { PlanView() }
             }
             Tab("Pass", systemImage: "key.fill", value: AppTab.pass) {
-                NavigationStack { PassView() }
+                PassView()
             }
             Tab("Coach", systemImage: "sparkles", value: AppTab.coach) {
                 NavigationStack { CoachView() }
             }
 
             TabSection("You") {
-                Tab("Stats", systemImage: "chart.bar", value: AppTab.stats) {
-                    NavigationStack { PlaceholderPage(title: "Stats", symbol: "chart.bar", note: "Focus time, streaks and your score.") }
+                Tab("Stats", systemImage: "chart.bar.fill", value: AppTab.stats) {
+                    NavigationStack { StatsView() }
                 }
                 .defaultVisibility(.hidden, for: .tabBar)
-                Tab("Friends", systemImage: "person.2", value: AppTab.friends) {
-                    NavigationStack { PlaceholderPage(title: "Friends", symbol: "person.2", note: "Focus rooms and the leaderboard.") }
+                Tab("Friends", systemImage: "person.2.fill", value: AppTab.friends) {
+                    NavigationStack { FriendsView() }
                 }
                 .defaultVisibility(.hidden, for: .tabBar)
-                Tab("Forest", systemImage: "tree", value: AppTab.forest) {
-                    NavigationStack { PlaceholderPage(title: "Forest", symbol: "tree", note: "Every session grows a tree.") }
+                Tab("Forest", systemImage: "tree.fill", value: AppTab.forest) {
+                    NavigationStack { ForestView() }
                 }
                 .defaultVisibility(.hidden, for: .tabBar)
-                Tab("Shop", systemImage: "bag", value: AppTab.shop) {
-                    NavigationStack { PlaceholderPage(title: "Focuz Shop", symbol: "bag", note: "Spend the coins you earn focusing.") }
+                Tab("Shop", systemImage: "bag.fill", value: AppTab.shop) {
+                    NavigationStack { ShopView() }
                 }
                 .defaultVisibility(.hidden, for: .tabBar)
-                Tab("Settings", systemImage: "gearshape", value: AppTab.settings) {
-                    NavigationStack { PlaceholderPage(title: "Settings", symbol: "gearshape", note: "Account, theme and notifications.") }
+                Tab("Settings", systemImage: "gearshape.fill", value: AppTab.settings) {
+                    NavigationStack { SettingsView() }
                 }
                 .defaultVisibility(.hidden, for: .tabBar)
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .tint(Color.fzInk)
         .fzMinimizeTabBarOnScroll()
+        .modifier(SessionAccessory(session: model.session, compact: sizeClass != .regular) { model.showSession = true })
         .sheet(isPresented: $showYou) {
-            YouSheet { picked in
-                showYou = false
-                tab = picked
+            YouSheet().environment(model)
+        }
+        .fullScreenCover(isPresented: $model.showSession) {
+            ActiveSessionView().environment(model)
+        }
+    }
+}
+
+/// The running session above the tab bar: the tab bar's own accessory on iOS 26, a floating glass
+/// bar on iOS 18.
+private struct SessionAccessory: ViewModifier {
+    let session: FocusSession?
+    let compact: Bool
+    let open: () -> Void
+
+    func body(content: Content) -> some View {
+        if let session {
+            if #available(iOS 26, *) {
+                content.tabViewBottomAccessory {
+                    SessionBar(session: session, open: open)
+                }
+            } else {
+                content.overlay(alignment: .bottom) {
+                    SessionBar(session: session, open: open)
+                        .fzGlass(in: Capsule())
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, compact ? 58 : 14)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+        } else {
+            content
         }
     }
 }

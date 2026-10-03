@@ -46,7 +46,10 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: FocuzNow
-        UILaunchScreen: {}
+        NSFaceIDUsageDescription: FocuzPass uses Face ID to unlock your passwords.
+        UILaunchScreen:
+          UIColorName: ""
+        UIUserInterfaceStyle: Automatic
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         UISupportedInterfaceOrientations:
@@ -63,6 +66,7 @@ targets:
         com.apple.security.application-groups: [group.com.focuznow.shared]
         keychain-access-groups: [$(AppIdentifierPrefix)com.focuznow.shared]
         com.apple.developer.authentication-services.autofill-credential-provider: true
+        com.apple.developer.applesignin: [Default]
 
   FocusMonitor:
     type: app-extension
