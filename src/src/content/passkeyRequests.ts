@@ -563,7 +563,11 @@ async function handle(send: FocuzPassOverlayTransport, request: PasskeyRequest) 
             const choice = await card.next();
             if (choice !== 'primary') return leave(() => answer(choice));
             void card.show({ title: saveTitle(site), subtitle, busy: 'Saving…' });
+            const savingAt = performance.now();
             const result = await send<Answer>({ type: 'FOCUZPASS_PASSKEY_CREATE', options, ...from });
+            // Temporary (2026-10-03): how long "Saving…" takes on the owner's machine; remove once it's confirmed quick.
+            const savedIn = Math.round(performance.now() - savingAt);
+            if (savedIn > 400) console.info(`[FocuzPass] passkey save took ${savedIn} ms`);
             reply(result);
             if (result.credential) card.finish({ title: 'Passkey saved in FocuzPass', subtitle, done: 'Saved' });
             else card.close();

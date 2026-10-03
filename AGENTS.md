@@ -21,7 +21,7 @@ Read this first, then `docs/focuzpass-cloud-plan.md` (the FocuzPass Cloud plan a
 ```
 node node_modules/typescript/bin/tsc -b
 node node_modules/eslint/bin/eslint.js <files>
-node ./scripts/run-tests.mjs            # unit tests (196 passing, lib + background); `npm test` fails under cmd
+node ./scripts/run-tests.mjs            # unit tests (197 passing, lib + background); `npm test` fails under cmd
 node node_modules/vite/bin/vite.js build   # writes src/dist; the owner then reloads it in vivaldi://extensions
 ```
 Known lint errors that aren't ours: `vaultCore.ts` `inboxPublicJwk` (`_d`, `_ops`, `_ext`), two in `FocuzPassTab.tsx`.
@@ -46,6 +46,9 @@ FocuzPass acts as a passkey provider inside the browser:
 - **Checking the UI without the owner:** `website/dist/demo.html?tab=focuzpass` runs the real FocuzPass UI on demo data (`src/src/mockChrome.ts`). Serve `website/dist` and drive it with the global Playwright (`$(npm root -g)/playwright`) to screenshot or measure layout.
 
 - **Autofill matching (2026-10-03):** `FOCUZPASS_PAGE_CONTEXT` offers logins from the whole site (`vaultDomainMatch` in `vaultCore.ts`: 2 = exact address, 1 = same site, e.g. an Apple ID saved on idmsa.apple.com shows on developer.apple.com), exact first, then most recently used (the first row is what Enter fills). Shared hosting (`SHARED_HOSTING`: github.io, vercel.app…), IPs and public endings only match exactly. Rows saved for another subdomain show it ("you@x.com · idmsa.apple.com").
+- **Autofill keyboard (2026-10-03):** no dropdown row is picked until ↓/↑ (`keyboardIndex = -1`), so Tab and Enter keep doing what the page expects; hovering only highlights.
+- **Login capture (2026-10-03):** saves are caught on form submit, on Enter in a login field, on clicks on submit-like buttons/links/`[role=button]` (also on sites without a `<form>`: `loginScopeFor` finds the nearest container with a password field), and on `pagehide` after typing a password. Two-step sign-ins use the last typed username/email (memory only, 10 min). The save offer is checked at 1.2/2.5/4.5/8 s for slow sites, and a pending save survives a hop to another subdomain of the same site.
+- **Saving speed (2026-10-03):** `encryptDocument` reuses each unchanged item's encrypted form (`encryptedItems`, keyed by the item's exact JSON and the key, cleared on lock): about 3.5x faster saves on a 1000-item vault. Temporary line `[FocuzPass] passkey save took N ms` (over 400 ms) in `passkeyRequests.ts`; remove once the owner confirms.
 
 ## Open items
 1. **"Extension context invalidated" when signing in to FocuzPass: fix written 2026-10-01, the owner still needs to test it.** Cause: an extension page left open across a reload (most likely the website's FocuzPass embed frame, or the unlock window or dashboard). Its platform stays cached as "chrome", so `focuzPassUnlock` called a `chrome.runtime.sendMessage` that no longer exists. The fix is `src/src/lib/focuzPass/extensionReload.ts`, plus its test. `client.ts` `send()` now shows "FocuzNow was updated. Reloading FocuzPass…" and reloads the page. The embed, unlock and options entries also reload as soon as they get focus, become visible or are clicked after a reload. This only applies to `chrome-extension:` pages, because the website's chrome shim also has no runtime id. In the autofill overlay (`focuzPassOverlay.ts`), a cut-off copy now shows "FocuzNow was updated: Reload page" instead of waiting forever or showing an error. Its one-way messages go through `postRuntimeMessage`, which doesn't throw.

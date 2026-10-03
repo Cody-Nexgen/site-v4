@@ -618,6 +618,12 @@ export class FocuzPassVault {
     private cloudExtra: LocalRecord[] = [];
     /** Moves on every save, so a sync can tell the vault changed while it was merging. */
     private generation = 0;
+    /**
+     * Each item's encrypted form, next to the exact item it was made from. A save only re-encrypts
+     * items that changed: re-encrypting a big vault on every save is what made saving a passkey
+     * slow. Identical input gives identical output, so reuse is safe; cleared on lock.
+     */
+    private encryptedItems = new Map<string, { key: CryptoKey; source: string; stored: StoredVaultItem }>();
     private syncRun: Promise<SyncResult> | null = null;
     private syncAgain = false;
     /** This session's sync outcome (not saved: a fresh session syncs straight away). */
@@ -703,6 +709,7 @@ export class FocuzPassVault {
 
     lock() {
         this.vaultKey = null;
+        this.encryptedItems.clear();
         this.items = [];
         this.vaults = [];
         this.tags = [];
@@ -2232,7 +2239,18 @@ export class FocuzPassVault {
     /** The whole vault as it's stored: items, vaults, tags and the inbox key, encrypted with `key`. */
     private async encryptDocument(key: CryptoKey): Promise<VaultBlob> {
         // All at once: one by one, a big vault made every save (and saving a passkey) slow.
-        const storedItems: StoredVaultItem[] = await Promise.all(this.items.map((item) => encryptItem(key, item)));
+        const storedItems: StoredVaultItem[] = await Promise.all(this.items.map(async (item) => {
+            const source = JSON.stringify(item);
+            const known = this.encryptedItems.get(item.id);
+            if (known && known.key === key && known.source === source) return known.stored;
+            const stored = await encryptItem(key, item);
+            this.encryptedItems.set(item.id, { key, source, stored });
+            return stored;
+        }));
+        if (this.encryptedItems.size > this.items.length) {
+            const live = new Set(this.items.map((item) => item.id));
+            for (const id of this.encryptedItems.keys()) if (!live.has(id)) this.encryptedItems.delete(id);
+        }
         assertStoredItemsEncrypted(storedItems, this.items);
         const document: EncryptedVaultDocument = {
             version: FOCUZPASS_VAULT_VERSION,

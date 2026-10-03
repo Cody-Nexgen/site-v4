@@ -5,13 +5,13 @@
 
 import {
     FocuzPassVault,
-    isExactVaultDomain,
     vaultDomainMatch,
     normalizeVaultDomain,
     type VaultItemAction,
     type VaultStorageAdapter,
     type VaultUpsertInput,
 } from '../lib/focuzPass/vaultCore';
+import type { DecryptedLoginItem } from '../lib/focuzPass/types';
 import { encryptForInbox, randomBytes, type InboxEnvelope } from '../lib/focuzPass/crypto';
 import { getSiteIcon } from './siteIcons';
 import { senderKind } from '../lib/trustedOrigins';
@@ -554,12 +554,20 @@ async function readPending(sender?: chrome.runtime.MessageSender): Promise<Pendi
     const stored = chrome.storage.session ? await chrome.storage.session.get(key) : {};
     const pending = (stored[key] as PendingLogin | undefined) || pendingMemory.get(key);
     if (!pending) return null;
-    if (Date.now() - pending.createdAt > PENDING_TTL_MS || !isExactVaultDomain(pending.domain, page.domain)) {
+    // A sign-in often ends on another part of the site (idmsa.apple.com → developer.apple.com): still offer the save there.
+    if (Date.now() - pending.createdAt > PENDING_TTL_MS || !vaultDomainMatch(pending.domain, page.domain)) {
         if (chrome.storage.session) await chrome.storage.session.remove(key);
         pendingMemory.delete(key);
         return null;
     }
     return pending;
+}
+
+/** Active logins for this site (any subdomain), the exact address first. */
+function sameSiteLogins(domain: string): DecryptedLoginItem[] {
+    return vault.snapshot().items
+        .filter((item): item is DecryptedLoginItem => item.type === 'login' && !item.archivedAt && !item.deletedAt && vaultDomainMatch(item.domain, domain) > 0)
+        .sort((a, b) => vaultDomainMatch(b.domain, domain) - vaultDomainMatch(a.domain, domain));
 }
 
 async function clearPending(sender?: chrome.runtime.MessageSender) {
@@ -809,9 +817,7 @@ async function handleVaultMessage(
                     return { ok: true, data: { captured: false, reason: 'empty' } };
                 }
                 const identityMatch = status.unlocked
-                    ? vault
-                          .findLoginMatches(page.domain)
-                          .find((item) => item.identity.toLowerCase() === identity.toLowerCase())
+                    ? sameSiteLogins(page.domain).find((item) => item.identity.toLowerCase() === identity.toLowerCase())
                     : undefined;
                 if (identityMatch && identityMatch.password === password) {
                     await vault.markUsed(identityMatch.id);
@@ -882,16 +888,16 @@ async function handleVaultMessage(
                     await clearPending(sender);
                     return { ok: true, data: { saved: true, queued: true } };
                 }
-                const matches = vault.findLoginMatches(pending.domain);
-                const existing = matches.find(
+                const existing = sameSiteLogins(pending.domain).find(
                     (item) => item.identity.toLowerCase() === pending.identity.toLowerCase(),
                 );
                 const saved = await vault.upsert({
                     id: existing?.id,
                     type: 'login',
-                    title: pending.title,
+                    // An update keeps the login's own name and address.
+                    title: existing?.title || pending.title,
                     identity: pending.identity,
-                    domain: pending.domain,
+                    domain: existing?.domain || pending.domain,
                     password: pending.password,
                     authMethod: 'PASSWORD',
                 });

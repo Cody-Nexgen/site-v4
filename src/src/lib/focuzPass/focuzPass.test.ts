@@ -506,3 +506,23 @@ test('FocuzPass bridge restores the session so LIST works right after a SW resta
     const items = res.ok ? (res.data as { domain?: string; password?: string }[]) : [];
     assert.equal(items.find((item) => item.domain === 'example.com')?.password, 'RestartSecret!1');
 });
+
+test('Saving reuses unchanged items but never keeps a stale copy of an edited one', async () => {
+    const storage = createMemoryStorage();
+    const vault = new FocuzPassVault(storage);
+    await vault.setup('cache-master-password');
+    const a = await vault.upsert({ type: 'login', title: 'A', identity: 'a@example.com', domain: 'a.example', password: 'FirstSecret!11' });
+    const b = await vault.upsert({ type: 'login', title: 'B', identity: 'b@example.com', domain: 'b.example', password: 'OtherSecret!22' });
+    await vault.upsert({ ...a, password: 'ChangedSecret!33' });
+    await vault.itemAction({ action: 'favorite', id: b.id, value: true });
+    await vault.markUsed(b.id);
+    vault.lock();
+    await vault.unlock('cache-master-password');
+    const items = vault.snapshot().items;
+    const savedA = items.find((item) => item.id === a.id);
+    const savedB = items.find((item) => item.id === b.id);
+    assert.equal(savedA?.type === 'login' && savedA.password, 'ChangedSecret!33');
+    assert.equal(savedB?.type === 'login' && savedB.password, 'OtherSecret!22');
+    assert.equal(savedB?.favorite, true);
+    assert.ok(savedB?.lastUsedAt);
+});

@@ -578,7 +578,7 @@ function identityInputFor(password: HTMLInputElement): HTMLInputElement | null {
     return candidates[0]?.input || null;
 }
 
-function passwordInputFor(form: HTMLFormElement): HTMLInputElement | null {
+function passwordInputFor(form: HTMLElement): HTMLInputElement | null {
     const candidates = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="password"]'))
         .filter((input) => isRenderableInput(input) && Boolean(input.value) && !isIgnoredField(input));
     const preferred = candidates.find((input) => {
@@ -588,7 +588,21 @@ function passwordInputFor(form: HTMLFormElement): HTMLInputElement | null {
     return preferred || candidates[0] || null;
 }
 
-function isAccountCreationForm(form: HTMLFormElement, passwordInput: HTMLInputElement): boolean {
+/**
+ * The box a login lives in: its <form>, or (on sites built without forms) the nearest container
+ * that holds a password field, a few levels up at most.
+ */
+function loginScopeFor(element: Element): HTMLElement | null {
+    const form = (element instanceof HTMLInputElement || element instanceof HTMLButtonElement ? element.form : null) || element.closest('form');
+    if (form?.querySelector('input[type="password"]')) return form;
+    let node: Element | null = element;
+    for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
+        if (node.querySelector('input[type="password"]')) return node as HTMLElement;
+    }
+    return null;
+}
+
+function isAccountCreationForm(form: HTMLElement, passwordInput: HTMLInputElement): boolean {
     const passwordFields = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="password"]'));
     const descriptors = `${form.id} ${form.className} ${form.getAttribute('name') || ''} ${form.getAttribute('aria-label') || ''} ${form.innerText}`
         .toLowerCase()
@@ -1153,7 +1167,10 @@ class FocuzPassPageOverlay {
     private saveHost: HTMLDivElement | null = null;
     private positionFrame = 0;
     private contextRequest = 0;
-    private lastCaptures = new WeakMap<HTMLFormElement, number>();
+    private lastCaptures = new WeakMap<HTMLElement, number>();
+    /** The last password field typed in, and the last username/email typed (two-step sign-ins ask for them on separate screens). */
+    private lastPasswordInput: HTMLInputElement | null = null;
+    private recentIdentity: { value: string; at: number } | null = null;
     private observer: MutationObserver | null = null;
     private controlState: ControlState = 'checking';
     private dismissedFor: HTMLElement | null = null;
@@ -1219,6 +1236,9 @@ class FocuzPassPageOverlay {
         window.setTimeout(idleScan, 900);
         document.addEventListener('submit', this.handleSubmit, true);
         document.addEventListener('click', this.handlePotentialSubmitClick, true);
+        document.addEventListener('input', this.handleTyping, true);
+        document.addEventListener('change', this.handleTyping, true);
+        window.addEventListener('pagehide', this.handlePageHide);
         document.addEventListener('pointerdown', this.handleOutsidePointer, true);
         document.addEventListener('keydown', this.handleKeydown, true);
         window.addEventListener('scroll', this.schedulePosition, true);
@@ -1984,7 +2004,8 @@ class FocuzPassPageOverlay {
 
     private renderMatches(domain: string, matches: AutofillItem[], passkeys: PasskeyOffer | null = null) {
         this.keyboardItems = matches;
-        this.keyboardIndex = 0;
+        // No row is picked until ↓/↑: Tab and Enter keep doing what the page expects (move on, submit).
+        this.keyboardIndex = -1;
         const favicon = currentFavicon();
         this.renderPanel(`FocuzPass · ${domain}`, domain, (body, foot) => {
             const list = createElement('div', 'list');
@@ -2009,10 +2030,10 @@ class FocuzPassPageOverlay {
                 list.appendChild(row);
             }
             for (const [index, match] of matches.entries()) {
-                const row = createElement('button', `row${index === 0 ? ' is-active' : ''}`);
+                const row = createElement('button', 'row');
                 row.type = 'button';
                 row.setAttribute('role', 'option');
-                row.setAttribute('aria-selected', String(index === 0));
+                row.setAttribute('aria-selected', 'false');
                 row.dataset.index = String(index);
                 // A login saved for another part of the site says where, so two Apple IDs can't be mixed up.
                 const savedFor = match.type === 'login' ? (match.domain || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] : '';
@@ -2025,7 +2046,7 @@ class FocuzPassPageOverlay {
                 row.append(this.itemTile(match, favicon), copy, hint);
                 row.addEventListener('pointerdown', (event) => event.preventDefault());
                 row.addEventListener('click', () => this.fillMatch(match));
-                row.addEventListener('pointerenter', () => this.setKeyboardIndex(index));
+                row.addEventListener('pointerenter', () => this.highlightRow(index));
                 list.appendChild(row);
             }
             body.appendChild(list);
@@ -2034,10 +2055,15 @@ class FocuzPassPageOverlay {
     }
 
     private keyboardItems: AutofillItem[] = [];
-    private keyboardIndex = 0;
+    /** The row ↓/↑ moved to; -1 = none, so Enter goes to the page. Hovering only highlights. */
+    private keyboardIndex = -1;
 
     private setKeyboardIndex(index: number) {
         this.keyboardIndex = index;
+        this.highlightRow(index);
+    }
+
+    private highlightRow(index: number) {
         const rows = Array.from(this.panelBody?.querySelectorAll<HTMLElement>('.row:not(.pk-row)') || []);
         rows.forEach((node, i) => {
             node.classList.toggle('is-active', i === index);
@@ -2396,6 +2422,13 @@ class FocuzPassPageOverlay {
     };
 
     private handleKeydown = (event: KeyboardEvent) => {
+        // Enter in a login field submits on most sites, often without a real form submit: save from here too.
+        // (Not when Enter is picking a dropdown row; that fills instead.)
+        if (event.key === 'Enter' && !event.isComposing && !(this.popoverHost && this.keyboardIndex >= 0 && this.keyboardItems.length)) {
+            const field = event.target instanceof Element ? event.target.closest('input') : null;
+            const scope = field ? loginScopeFor(field) : null;
+            if (scope) this.captureForm(scope);
+        }
         if (!this.popoverHost) return;
         if (event.key === 'Escape') {
             const returnFocus = this.activeInput || this.activeControl?.button;
@@ -2407,12 +2440,14 @@ class FocuzPassPageOverlay {
         if (this.keyboardItems.length === 0) return;
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
-            const delta = event.key === 'ArrowDown' ? 1 : -1;
-            this.setKeyboardIndex((this.keyboardIndex + delta + this.keyboardItems.length) % this.keyboardItems.length);
+            const count = this.keyboardItems.length;
+            const from = this.keyboardIndex < 0 ? (event.key === 'ArrowDown' ? -1 : 0) : this.keyboardIndex;
+            this.setKeyboardIndex((from + (event.key === 'ArrowDown' ? 1 : -1) + count) % count);
             return;
         }
         if (event.key === 'Enter') {
-            const match = this.keyboardItems[this.keyboardIndex];
+            // Only a row the keyboard moved to; otherwise Enter submits the form as usual.
+            const match = this.keyboardIndex >= 0 ? this.keyboardItems[this.keyboardIndex] : undefined;
             if (!match) return;
             event.preventDefault();
             event.stopPropagation();
@@ -2425,25 +2460,49 @@ class FocuzPassPageOverlay {
         if (form) this.captureForm(form);
     };
 
-    private handlePotentialSubmitClick = (event: MouseEvent) => {
-        const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement | HTMLInputElement>('button, input[type="submit"], input[type="button"]') : null;
-        if (!target) return;
-        const form = target instanceof HTMLInputElement ? target.form : target.form;
-        if (!form) return;
-        const type = (target.getAttribute('type') || (target.tagName === 'BUTTON' ? 'submit' : '')).toLowerCase();
-        const label = `${target.textContent || ''} ${target.getAttribute('value') || ''} ${target.getAttribute('aria-label') || ''}`.toLowerCase();
-        if (type === 'submit' || /sign\s*in|sign\s*up|log\s*in|continue|create account|register|join\s+(now|us)/.test(label)) {
-            this.captureForm(form);
+    private handleTyping = (event: Event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement) || !input.value) return;
+        if (input.type === 'password') {
+            if (!isIgnoredField(input)) this.lastPasswordInput = input;
+            return;
         }
+        const role = classifyField(input);
+        if (role === 'username' || role === 'email') this.recentIdentity = { value: input.value.trim(), at: Date.now() };
     };
 
-    private captureForm(form: HTMLFormElement) {
+    /** Leaving the page right after typing a password (a sign-in that navigates away): save what was typed. */
+    private handlePageHide = () => {
+        const input = this.lastPasswordInput;
+        if (!input?.value || !input.isConnected) return;
+        const scope = loginScopeFor(input);
+        if (scope) this.captureForm(scope);
+    };
+
+    private handlePotentialSubmitClick = (event: MouseEvent) => {
+        const target = event.target instanceof Element
+            ? event.target.closest<HTMLElement>('button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], a')
+            : null;
+        if (!target) return;
+        const type = (target.getAttribute('type') || (target.tagName === 'BUTTON' ? 'submit' : '')).toLowerCase();
+        const label = `${target.textContent || ''} ${target.getAttribute('value') || ''} ${target.getAttribute('aria-label') || ''}`.toLowerCase();
+        const submitLike = type === 'submit' || /sign\s*(in|on|up)|log\s*(in|on)|continue|next|submit|create\s+(an?\s+)?account|register|join\s+(now|us)|get\s+started|save|done|verify/.test(label);
+        if (!submitLike) return;
+        // Its own form or container, else the password field just typed in (sites built from plain divs).
+        const scope = loginScopeFor(target)
+            || (this.lastPasswordInput?.isConnected && this.lastPasswordInput.value ? loginScopeFor(this.lastPasswordInput) : null);
+        if (scope) this.captureForm(scope);
+    };
+
+    private captureForm(form: HTMLElement) {
         const now = Date.now();
         if (now - (this.lastCaptures.get(form) || 0) < SUBMIT_DEBOUNCE_MS) return;
         const passwordInput = passwordInputFor(form);
         if (!passwordInput?.value) return;
         const identityInput = identityInputFor(passwordInput);
-        const identity = identityInput?.value.trim();
+        // Two-step sign-ins (Google, Microsoft, Apple) ask for the email first and the password on the next screen.
+        const remembered = this.recentIdentity && now - this.recentIdentity.at < 10 * 60_000 ? this.recentIdentity.value : '';
+        const identity = identityInput?.value.trim() || remembered;
         const password = passwordInput.value;
         if (!identity || !password) return;
         const accountCreation = isAccountCreationForm(form, passwordInput);
@@ -2458,11 +2517,16 @@ class FocuzPassPageOverlay {
             accountCreation,
         }).then((result) => {
             if (!result.captured) return;
-            window.setTimeout(() => {
+            // Offer the save once the sign-in went through: the page moved on or the form went away.
+            // Slow sites take a while, so keep looking for a few seconds.
+            const checks = [1200, 2500, 4500, 8000];
+            const look = (i: number) => window.setTimeout(() => {
                 const moved = location.href !== beforeUrl;
-                const formGone = !form.isConnected || !isRenderableInput(passwordInput);
+                const formGone = !form.isConnected || !passwordInput.isConnected || !isRenderableInput(passwordInput);
                 if (accountCreation || moved || formGone) void this.checkPending();
-            }, 1350);
+                else if (i + 1 < checks.length) look(i + 1);
+            }, checks[i]! - (i ? checks[i - 1]! : 0));
+            look(0);
         }).catch(() => undefined);
     }
 
