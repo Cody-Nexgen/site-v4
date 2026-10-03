@@ -2014,9 +2014,12 @@ class FocuzPassPageOverlay {
                 row.setAttribute('role', 'option');
                 row.setAttribute('aria-selected', String(index === 0));
                 row.dataset.index = String(index);
-                row.setAttribute('aria-label', `Fill ${match.title} (${itemSubtitle(match)})`);
+                // A login saved for another part of the site says where, so two Apple IDs can't be mixed up.
+                const savedFor = match.type === 'login' ? (match.domain || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] : '';
+                const subtitle = savedFor && savedFor !== domain.toLowerCase().replace(/^www\./, '') ? `${itemSubtitle(match)} · ${savedFor}` : itemSubtitle(match);
+                row.setAttribute('aria-label', `Fill ${match.title} (${subtitle})`);
                 const copy = createElement('span', 'copy');
-                copy.append(createElement('span', 'title', match.title), createElement('span', 'sub', itemSubtitle(match)));
+                copy.append(createElement('span', 'title', match.title), createElement('span', 'sub', subtitle));
                 const hint = createElement('span', 'hint');
                 hint.innerHTML = icon('enter');
                 row.append(this.itemTile(match, favicon), copy, hint);

@@ -211,6 +211,46 @@ export function isExactVaultDomain(stored?: string, current?: string): boolean {
     return Boolean(a && b && a === b);
 }
 
+/** Two-part public endings, so "shop.bbc.co.uk" and "bbc.co.uk" are one site and "co.uk" isn't. */
+const TWO_PART_SUFFIXES = new Set([
+    'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'com.au', 'net.au', 'org.au', 'co.nz', 'co.jp', 'co.in', 'co.kr', 'co.za',
+    'com.br', 'com.mx', 'com.sg', 'com.tr', 'com.cn', 'com.hk', 'com.tw', 'com.ar', 'co.id', 'com.my', 'com.ph',
+]);
+
+/**
+ * Hosting where every subdomain belongs to a different person: "alice.github.io" must never be
+ * offered logins saved for "bob.github.io", so these only ever match the exact address.
+ */
+const SHARED_HOSTING = new Set([
+    'github.io', 'gitlab.io', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'herokuapp.com', 'web.app',
+    'firebaseapp.com', 'appspot.com', 'blogspot.com', 'wordpress.com', 'tumblr.com', 'azurewebsites.net', 'cloudfront.net',
+    'amazonaws.com', 'onrender.com', 'fly.dev', 'glitch.me', 'repl.co', 'replit.app', 'myshopify.com', 'wixsite.com',
+    'notion.site', 'carrd.co', 'neocities.org', 'surge.sh', 'ngrok.io', 'ngrok-free.app', 'trycloudflare.com', 'deno.dev',
+    'railway.app', 'up.railway.app', 'streamlit.app', 'webflow.io', 'framer.website', 'square.site', 'weebly.com',
+]);
+
+/** The site a host belongs to ("idmsa.apple.com" → "apple.com"), or the host itself on shared hosting, IPs and localhost. */
+export function vaultSiteOf(host?: string): string {
+    const domain = normalizeVaultDomain(host);
+    if (!domain || /^[\d.]+$/.test(domain) || domain.includes(':') || !domain.includes('.')) return domain;
+    const labels = domain.split('.');
+    const two = labels.slice(-2).join('.');
+    const three = labels.slice(-3).join('.');
+    if (SHARED_HOSTING.has(two) || SHARED_HOSTING.has(three)) return domain;
+    const parts = labels.length >= 3 && TWO_PART_SUFFIXES.has(two) ? 3 : 2;
+    return labels.slice(-parts).join('.');
+}
+
+/** How well a saved login's site fits the page: 2 = same address, 1 = same site (another subdomain), 0 = no. */
+export function vaultDomainMatch(stored?: string, current?: string): 0 | 1 | 2 {
+    const a = normalizeVaultDomain(stored);
+    const b = normalizeVaultDomain(current);
+    if (!a || !b) return 0;
+    if (a === b) return 2;
+    const site = vaultSiteOf(a);
+    return site && site === vaultSiteOf(b) && site.includes('.') ? 1 : 0;
+}
+
 /** A package from another device, checked before anything is decrypted. */
 function readExportPackage(value: unknown): VaultExportPackage {
     const p = value as Partial<VaultExportPackage> | null;
