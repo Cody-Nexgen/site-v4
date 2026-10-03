@@ -700,16 +700,22 @@ function SolidIcon({ size = 20, tone, color, grid = 20, children, mask }: { size
     );
 }
 
-/** All Items: a solid wallet with a card peeking out, its flap cut out of the front. */
+/** All Items: a solid wallet, its flap and its clasp pocket cut out of the front. */
 function ExactAllItemsIcon({ size = 20 }: { size?: number }) {
     return (
         <SolidIcon
             size={size}
+            grid={24}
             tone="all"
-            mask={<path d="M2 9.6h3.9c.8 0 1.2.5 1.7 1.2.5.7 1 1.3 2.4 1.3s1.9-.6 2.4-1.3c.5-.7.9-1.2 1.7-1.2H18" fill="none" stroke="#000" strokeWidth="1.5" strokeLinecap="round" />}
+            mask={
+                <>
+                    <path d="M2.5 10.5h19" fill="none" stroke="#000" strokeWidth="1.4" />
+                    <rect x="14" y="12.6" width="9" height="5" rx="2.1" fill="none" stroke="#000" strokeWidth="1.4" />
+                    <circle cx="17" cy="15.1" r="1" />
+                </>
+            }
         >
-            <rect x="4.6" y="2.2" width="10.8" height="4.2" rx="1.2" opacity="0.5" />
-            <rect x="2" y="4.6" width="16" height="12.6" rx="3.2" />
+            <rect x="2.5" y="4.5" width="19" height="16" rx="4" />
         </SolidIcon>
     );
 }
@@ -750,10 +756,7 @@ function VaultChip({ color, icon: Icon, size = 20 }: { color: string; icon: type
     );
 }
 
-/**
- * The default vault mark: a little safe in the vault's colour. Hinges and feet in a lighter shade,
- * and the round door, its spoked handle and hub cut out of the front so it reads at 20px.
- */
+/** The default vault mark: a little safe in the vault's colour (door edge, dial, handle, feet). */
 function ExactVaultIcon({ color, size = 20 }: { color: string; size?: number }) {
     return (
         <SolidIcon
@@ -761,18 +764,17 @@ function ExactVaultIcon({ color, size = 20 }: { color: string; size?: number }) 
             grid={24}
             color={color}
             mask={
-                <g fill="none" stroke="#000" strokeLinecap="round">
-                    <circle cx="12.6" cy="11.4" r="6" strokeWidth="1.3" />
-                    <path d="M12.6 9.1V7.6m0 6.1v1.5m-2.3-3.8H8.8m6.1 0h1.5" strokeWidth="1.5" />
-                    <circle cx="12.6" cy="11.4" r="1" fill="#000" stroke="none" />
-                </g>
+                <>
+                    <path d="M6.4 2v17" fill="none" stroke="#000" strokeWidth="1.4" />
+                    <circle cx="12.6" cy="10.8" r="3.5" fill="none" stroke="#000" strokeWidth="1.5" />
+                    <circle cx="12.6" cy="10.8" r="1" />
+                    <rect x="17.7" y="7.6" width="1.6" height="6.4" rx="0.8" />
+                </>
             }
         >
-            <rect x="3.5" y="2" width="18" height="18.8" rx="4.2" />
-            <rect x="1.6" y="5.6" width="2.6" height="3.6" rx="1" opacity="0.6" />
-            <rect x="1.6" y="13.6" width="2.6" height="3.6" rx="1" opacity="0.6" />
-            <rect x="5.8" y="20" width="3.6" height="2.4" rx="1" opacity="0.6" />
-            <rect x="15.6" y="20" width="3.6" height="2.4" rx="1" opacity="0.6" />
+            <rect x="2.5" y="2" width="19" height="17.4" rx="4.6" />
+            <rect x="5.2" y="19" width="3.6" height="3" rx="1.1" opacity="0.55" />
+            <rect x="15.2" y="19" width="3.6" height="3" rx="1.1" opacity="0.55" />
         </SolidIcon>
     );
 }
