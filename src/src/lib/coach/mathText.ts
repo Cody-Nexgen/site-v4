@@ -18,11 +18,29 @@ function prepareProse(text: string, display: boolean): string {
         .join('');
 }
 
+/**
+ * Models often wrap an equation in a code block (```latex with `$$…$$` inside, or ```math). That
+ * shows raw source instead of the formula, so such a block becomes a display equation. A block of
+ * real LaTeX source (a document, macros, anything not just one `$$…$$`) stays code.
+ */
+const MATH_FENCE = /^(?:```|~~~)[ \t]*(math|katex|latex|tex)?[ \t]*\n([\s\S]*?)\n?(?:```|~~~)[ \t]*$/;
+
+function fencedMath(block: string): string | null {
+    const match = block.match(MATH_FENCE);
+    if (!match) return null;
+    const lang = match[1]?.toLowerCase();
+    const body = match[2]!.trim();
+    const wrapped = body.match(/^\$\$([\s\S]+?)\$\$$/) ?? body.match(/^\\\[([\s\S]+?)\\\]$/);
+    if (wrapped) return `$$\n${wrapped[1]!.trim()}\n$$`;
+    if ((lang === 'math' || lang === 'katex') && body) return `$$\n${body}\n$$`;
+    return null;
+}
+
 function outsideCode(markdown: string, display: boolean): string {
-    if (!markdown.includes('$')) return markdown;
-    // Fenced code blocks (``` or ~~~) stay as written.
+    if (!markdown.includes('$') && !/^(?:```|~~~)[ \t]*(?:math|katex|latex|tex)\b/m.test(markdown)) return markdown;
+    // Fenced code blocks (``` or ~~~) stay as written, unless one only holds an equation.
     const parts = markdown.split(/(^(?:```|~~~)[^\n]*\n[\s\S]*?(?:^(?:```|~~~)[^\n]*$|(?![\s\S])))/m);
-    return parts.map((part, i) => (i % 2 === 1 ? part : prepareProse(part, display))).join('');
+    return parts.map((part, i) => (i % 2 === 1 ? (display ? fencedMath(part) ?? part : part) : prepareProse(part, display))).join('');
 }
 
 export function escapeCurrencyForMath(markdown: string): string {

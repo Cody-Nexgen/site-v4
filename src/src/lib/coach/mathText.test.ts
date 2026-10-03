@@ -28,6 +28,16 @@ test('Code is left alone', () => {
 test('A one-line $$…$$ becomes a display equation; code stays as is', () => {
     assert.equal(prepareMathMarkdown('Area:\n$$\\pi r^2$$\nDone'), 'Area:\n$$\n\\pi r^2\n$$\nDone');
     assert.equal(prepareMathMarkdown('Inline $$x$$ in text stays'), 'Inline $$x$$ in text stays');
-    assert.equal(prepareMathMarkdown('```tex\n$$x$$\n```'), '```tex\n$$x$$\n```');
     assert.equal(prepareMathMarkdown('Costs $5'), 'Costs \\$5');
+});
+
+test('An equation wrapped in a code block renders as math; real LaTeX source stays code', () => {
+    const quad = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
+    assert.equal(prepareMathMarkdown('Here:\n\n```\n$$ ' + quad + ' $$\n```\n\nDone'), 'Here:\n\n$$\n' + quad + '\n$$\n\nDone');
+    assert.equal(prepareMathMarkdown('```latex\n$$x^2$$\n```'), '$$\nx^2\n$$');
+    assert.equal(prepareMathMarkdown('```tex\n\\[ e^{i\\pi} + 1 = 0 \\]\n```'), '$$\ne^{i\\pi} + 1 = 0\n$$');
+    assert.equal(prepareMathMarkdown('```math\na^2 + b^2 = c^2\n```'), '$$\na^2 + b^2 = c^2\n$$');
+    const doc = '```latex\n\\documentclass{article}\n\\begin{document}\n$x$\n\\end{document}\n```';
+    assert.equal(prepareMathMarkdown(doc), doc);
+    assert.equal(prepareMathMarkdown('```bash\necho $$x$$\n```'), '```bash\necho $$x$$\n```');
 });
