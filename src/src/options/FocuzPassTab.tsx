@@ -685,7 +685,7 @@ function SolidIcon({ size = 20, tone, color, grid = 20, children, mask }: { size
     const id = useId().replace(/:/g, '');
     return (
         <span className={`fp-flat-glyph fp-solid-icon${tone ? ` tone-${tone}` : ''}`} style={{ width: size, height: size, color }} aria-hidden="true">
-            <svg viewBox={`0 0 ${grid} ${grid}`} width={grid === 20 ? '84%' : '100%'} height={grid === 20 ? '84%' : '100%'}>
+            <svg viewBox={`0 0 ${grid} ${grid}`} width={grid === 20 ? '92%' : '100%'} height={grid === 20 ? '92%' : '100%'}>
                 {mask && (
                     <defs>
                         <mask id={`m${id}`}>
@@ -700,25 +700,17 @@ function SolidIcon({ size = 20, tone, color, grid = 20, children, mask }: { size
     );
 }
 
-/**
- * Line icons for the sidebar, on a 24px grid with round 2px strokes (the owner's pick: friendlier
- * than our first solid set). They follow the text colour unless given one.
- */
-function LineIcon({ size = 20, color, children }: { size?: number; color?: string; children: ReactNode }) {
-    return (
-        <span className="fp-flat-glyph fp-line-icon" style={{ width: size, height: size, color }} aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
-        </span>
-    );
-}
-
-/** All Items: a wallet holding everything. */
+/** All Items: a solid wallet with a card peeking out, its flap cut out of the front. */
 function ExactAllItemsIcon({ size = 20 }: { size?: number }) {
     return (
-        <LineIcon size={size}>
-            <path d="M2 12c0-3.771 0-5.657 1.172-6.828S6.229 4 10 4h4c3.771 0 5.657 0 6.828 1.172S22 8.229 22 12s0 5.657-1.172 6.828S17.771 20 14 20h-4c-3.771 0-5.657 0-6.828-1.172S2 15.771 2 12" />
-            <path d="M2 10h4.197c.715 0 1.072 0 1.393.112a2 2 0 0 1 .545.292c.27.204.469.501.865 1.096s.595.892.865 1.096q.25.189.546.292c.32.112.677.112 1.392.112h.394c.715 0 1.072 0 1.393-.112a2 2 0 0 0 .544-.292c.271-.204.47-.501.866-1.096s.595-.892.866-1.096c.165-.125.349-.224.544-.292c.32-.112.678-.112 1.393-.112H22" />
-        </LineIcon>
+        <SolidIcon
+            size={size}
+            tone="all"
+            mask={<path d="M2 9.6h3.9c.8 0 1.2.5 1.7 1.2.5.7 1 1.3 2.4 1.3s1.9-.6 2.4-1.3c.5-.7.9-1.2 1.7-1.2H18" fill="none" stroke="#000" strokeWidth="1.5" strokeLinecap="round" />}
+        >
+            <rect x="4.6" y="2.2" width="10.8" height="4.2" rx="1.2" opacity="0.5" />
+            <rect x="2" y="4.6" width="16" height="12.6" rx="3.2" />
+        </SolidIcon>
     );
 }
 
@@ -741,9 +733,9 @@ function ExactTagIcon({ size = 20, color }: { size?: number; color?: string }) {
     return <TagDot size={size} color={color} />;
 }
 
-function ExactFavoritesIcon({ size = 20 }: { size?: number }) {
+function ExactFavoritesIcon({ size = 20, color }: { size?: number; color?: string }) {
     return (
-        <SolidIcon size={size} tone="favorite">
+        <SolidIcon size={size} tone={color ? undefined : 'favorite'} color={color}>
             <path d="M10 2.3c.4 0 .75.23.92.6l1.8 3.82 4.16.55c.83.11 1.17 1.13.56 1.71l-3.05 2.9.78 4.13c.16.82-.71 1.46-1.45 1.06L10 15.06l-3.72 2c-.74.4-1.6-.23-1.45-1.05l.78-4.14-3.05-2.9c-.6-.58-.27-1.6.56-1.7l4.16-.56 1.8-3.82c.17-.37.53-.6.92-.6Z" />
         </SolidIcon>
     );
@@ -758,16 +750,29 @@ function VaultChip({ color, icon: Icon, size = 20 }: { color: string; icon: type
     );
 }
 
-/** The default vault mark: a solid safe in the vault's colour with its dial cut out. */
+/**
+ * The default vault mark: a little safe in the vault's colour. Hinges and feet in a lighter shade,
+ * and the round door, its spoked handle and hub cut out of the front so it reads at 20px.
+ */
 function ExactVaultIcon({ color, size = 20 }: { color: string; size?: number }) {
     return (
         <SolidIcon
             size={size}
             grid={24}
             color={color}
-            mask={<g fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3" /><path d="M9.75 9.75L8 8m6.25 1.75L16 8m-1.75 6.25L16 16m-6.25-1.75L8 16" /></g>}
+            mask={
+                <g fill="none" stroke="#000" strokeLinecap="round">
+                    <circle cx="12.6" cy="11.4" r="6" strokeWidth="1.3" />
+                    <path d="M12.6 9.1V7.6m0 6.1v1.5m-2.3-3.8H8.8m6.1 0h1.5" strokeWidth="1.5" />
+                    <circle cx="12.6" cy="11.4" r="1" fill="#000" stroke="none" />
+                </g>
+            }
         >
-            <rect x="2.5" y="2.5" width="19" height="19" rx="4.2" />
+            <rect x="3.5" y="2" width="18" height="18.8" rx="4.2" />
+            <rect x="1.6" y="5.6" width="2.6" height="3.6" rx="1" opacity="0.6" />
+            <rect x="1.6" y="13.6" width="2.6" height="3.6" rx="1" opacity="0.6" />
+            <rect x="5.8" y="20" width="3.6" height="2.4" rx="1" opacity="0.6" />
+            <rect x="15.6" y="20" width="3.6" height="2.4" rx="1" opacity="0.6" />
         </SolidIcon>
     );
 }
@@ -1304,6 +1309,7 @@ const COLLECTION_GLYPHS: Record<string, typeof KeyRound> = { home: Home, work: B
 function FocusCollectionGlyph({ color, icon, size }: { color: string; icon: string; size: number }) {
     if (icon === 'vault') return <ExactVaultIcon color={color} size={size} />;
     if (icon === 'tag') return <TagDot size={size} color={color} />;
+    if (icon === 'star') return <ExactFavoritesIcon size={size} color={color} />;
     return <VaultChip color={color} icon={COLLECTION_GLYPHS[icon] ?? collectionIcon(icon) ?? Tag} size={size} />;
 }
 
@@ -2875,8 +2881,8 @@ export default function FocuzPassTab({
                     </div>
 
                     <nav className="vault-primary-nav" aria-label="FocuzPass navigation">
-                        <button type="button" className={`vault-nav-item${view.kind === 'all' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'all' }); setTypeFilters([]); setQuery(''); setSelectedId(''); }}><ExactAllItemsIcon size={20} /><span className="vault-nav-label">All Items</span></button>
-                        <button type="button" className={`vault-nav-item${view.kind === 'favorites' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'favorites' }); setSelectedId(''); }}><ExactFavoritesIcon size={20} /><span className="vault-nav-label">Favorites</span></button>
+                        <button type="button" className={`vault-nav-item${view.kind === 'all' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'all' }); setTypeFilters([]); setQuery(''); setSelectedId(''); }}><ExactAllItemsIcon size={22} /><span className="vault-nav-label">All Items</span></button>
+                        <button type="button" className={`vault-nav-item${view.kind === 'favorites' ? ' is-active' : ''}`} onClick={() => { setView({ kind: 'favorites' }); setSelectedId(''); }}><ExactFavoritesIcon size={22} /><span className="vault-nav-label">Favorites</span></button>
 
                         <section className="vault-nav-section" aria-label="Vaults">
                             <div className="vault-nav-heading">
@@ -2891,7 +2897,7 @@ export default function FocuzPassTab({
                             <div className={`vault-nav-section-items${vaultsOpen ? '' : ' is-collapsed'}`} aria-hidden={!vaultsOpen}>
                                 <div>
                                     {vaults.map((vault) => (
-                                        <button key={vault.id} type="button" tabIndex={vaultsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'vault' && view.id === vault.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'vault', id: vault.id }); setSelectedId(''); }}><CollectionMark color={vault.color} icon={vault.icon} size={20} /> <span className="vault-nav-label truncate">{vault.name}</span></button>
+                                        <button key={vault.id} type="button" tabIndex={vaultsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'vault' && view.id === vault.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'vault', id: vault.id }); setSelectedId(''); }}><CollectionMark color={vault.color} icon={vault.icon} size={22} /> <span className="vault-nav-label truncate">{vault.name}</span></button>
                                     ))}
                                 </div>
                             </div>
@@ -2910,7 +2916,7 @@ export default function FocuzPassTab({
                             <div className={`vault-nav-section-items${tagsOpen ? '' : ' is-collapsed'}`} aria-hidden={!tagsOpen}>
                                 <div>
                                     {tags.map((tag) => (
-                                        <button key={tag.id} type="button" tabIndex={tagsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'tag' && view.id === tag.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'tag', id: tag.id }); setSelectedId(''); }}><CollectionMark color={tag.color} icon={tag.icon} size={20} /> <span className="vault-nav-label truncate">{tag.name}</span></button>
+                                        <button key={tag.id} type="button" tabIndex={tagsOpen ? 0 : -1} className={`vault-nav-item${view.kind === 'tag' && view.id === tag.id ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'tag', id: tag.id }); setSelectedId(''); }}><CollectionMark color={tag.color} icon={tag.icon} size={22} /> <span className="vault-nav-label truncate">{tag.name}</span></button>
                                     ))}
                                 </div>
                             </div>
@@ -2918,8 +2924,8 @@ export default function FocuzPassTab({
                     </nav>
 
                     <div className="vault-nav-bottom">
-                        <button type="button" className={`vault-nav-item${view.kind === 'archive' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'archive' }); setSelectedId(''); }}><ExactArchiveIcon size={20} /><span className="vault-nav-label">Archive</span></button>
-                        <button type="button" className={`vault-nav-item${view.kind === 'deleted' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'deleted' }); setSelectedId(''); }}><ExactRecentlyDeletedIcon size={20} /><span className="vault-nav-label">Recently deleted</span></button>
+                        <button type="button" className={`vault-nav-item${view.kind === 'archive' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'archive' }); setSelectedId(''); }}><ExactArchiveIcon size={22} /><span className="vault-nav-label">Archive</span></button>
+                        <button type="button" className={`vault-nav-item${view.kind === 'deleted' ? ' is-active-subtle' : ''}`} onClick={() => { setView({ kind: 'deleted' }); setSelectedId(''); }}><ExactRecentlyDeletedIcon size={22} /><span className="vault-nav-label">Recently deleted</span></button>
                     </div>
                 </aside>
 
