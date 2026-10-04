@@ -1,5 +1,7 @@
 # FocuzNow iOS: the "Island" plan (UI v4)
 
+**Update (2026-10-04): the onboarding part (§4) was replaced by the title sequence, see `docs/ios-title-sequence.md`. The Live Activity, real blocking and Developer mode stay.**
+
 Status (2026-10-04): **phases 1–3 written** (Live Activity, real blocking, the in-app island, the
 Island onboarding, Developer mode). **The owner still needs to build them on the Mac** (§10).
 Phases 4–8 are still a plan. The owner's decisions are in §9.

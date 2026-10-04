@@ -29,7 +29,7 @@ struct DeveloperView: View {
             } header: {
                 Text("Onboarding")
             } footer: {
-                Text("Plays the Island onboarding from the start. Your answers replace the current ones.")
+                Text("Plays the onboarding (the title sequence) from the start. Your answers replace the current ones.")
             }
 
             Section("Live Activity") {

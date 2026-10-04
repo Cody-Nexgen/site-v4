@@ -1,11 +1,12 @@
 import AuthenticationServices
 import SwiftUI
 
-/// First launch: a film's opening titles (docs/ios-title-sequence.md). Earlier versions are backed up
-/// in `backups/ios-onboarding-island-2026-10-04/` (Island) and `backups/ios-onboarding-v3-2026-10-04/`.
+/// First launch. The Island onboarding (docs/ios-island-plan.md §4): answers, apps and your first
+/// session get flicked up into the Dynamic Island. The v3 "Lighthouse" flow is in
+/// `backups/ios-onboarding-v3-2026-10-04/`.
 struct OnboardingFlow: View {
     var body: some View {
-        TitleSequenceOnboarding()
+        IslandOnboarding()
     }
 }
 
@@ -72,17 +73,6 @@ enum Asks {
         }
     }
 
-    /// An answer as it appears in the titles: "SHORT VIDEOS", "8+ HOURS", "SCHOOL".
-    static func titleWord(for title: String) -> String {
-        switch title {
-        case "Honestly, everything": "EVERYTHING"
-        case "School and studying": "SCHOOL"
-        case "Sleep and health": "REST"
-        case "More than 8": "8+ HOURS"
-        default: title.uppercased()
-        }
-    }
-
     /// The focus preset that fits "What do you want more time for?".
     static func presetID(for focusFor: String) -> String {
         switch focusFor {
@@ -105,7 +95,6 @@ enum Asks {
 /// Sign in with Apple, Google, or email.
 struct AccountButtons: View {
     let done: () -> Void
-    @Environment(\.colorScheme) private var scheme
     @State private var showEmail = false
     @State private var email = ""
     @State private var password = ""
@@ -117,7 +106,7 @@ struct AccountButtons: View {
             } onCompletion: { _ in
                 done()
             }
-            .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
+            .signInWithAppleButtonStyle(.white)
             .frame(height: 56)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             Button(action: done) {
@@ -126,19 +115,19 @@ struct AccountButtons: View {
             .buttonStyle(.glassPill)
             if showEmail {
                 VStack(spacing: 0) {
-                    TextField("", text: $email, prompt: Text("Email").foregroundStyle(Color.fzInk3))
+                    TextField("", text: $email, prompt: Text("Email").foregroundStyle(.white.opacity(0.35)))
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .padding(16)
-                    Rectangle().fill(Color.fzLine).frame(height: 1)
-                    SecureField("", text: $password, prompt: Text("Password (8+ characters)").foregroundStyle(Color.fzInk3))
+                    Rectangle().fill(.white.opacity(0.1)).frame(height: 1)
+                    SecureField("", text: $password, prompt: Text("Password (8+ characters)").foregroundStyle(.white.opacity(0.35)))
                         .textContentType(.newPassword)
                         .padding(16)
                 }
-                .foregroundStyle(Color.fzInk)
-                .background(Color.fzInk.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.fzLine))
+                .foregroundStyle(.white)
+                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.1)))
                 .transition(.blurRise)
                 Button("Continue", action: done)
                     .buttonStyle(.beam)
