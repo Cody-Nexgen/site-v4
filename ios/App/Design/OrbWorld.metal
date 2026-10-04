@@ -57,6 +57,26 @@ static float fzWorldDepth(float2 ip, float4 depthPx, float4 pedPx) {
     return mix(ground, footDepth, max(top, body));
 }
 
+// The wide shot, for the camera flying in: how far a point is, relative to the pedestal (1). The
+// ground is a plane (twice as far halfway to the horizon...), the far rocks and sky are very far, and
+// the pedestal is solid (as far as its foot). P: wide-photo pixels. depthPx: the horizon's y, the
+// pedestal's foot y. pedPx: the pedestal's top centre and its top's radii.
+static float fzWideDistance(float2 P, float4 depthPx, float4 pedPx) {
+    // (A little flatter than a true plane, so the ground under the camera doesn't smear.)
+    float ground = pow((depthPx.y - depthPx.x) / max(P.y - depthPx.x, 18.0), 0.8);
+    float2 q = (P - pedPx.xy) / pedPx.zw;
+    float top = 1.0 - smoothstep(0.95, 1.1, length(q));
+    float body = (1.0 - smoothstep(pedPx.z * 1.04, pedPx.z * 1.14, abs(P.x - pedPx.x)))
+               * step(pedPx.y, P.y) * (1.0 - smoothstep(depthPx.y, depthPx.y + 6.0, P.y));
+    return mix(ground, 1.0, max(top, body));
+}
+
+// How much bigger something at `distance` looks once the camera has moved `travel` towards it
+// (the pedestal is at 1).
+static float fzWideZoom(float distance, float travel) {
+    return distance / max(distance - travel, 0.06);
+}
+
 // photo: the photo's colour at p. p and every place: stage points, y down. e: the orb's energy.
 // awake: how lit the world is (0 asleep). flash: a strike, 1 fading to 0. orbOn: how much of the orb
 // there is to give light. ringOn: how far the pedestal's ring is lit. k: the stage's scale.
@@ -65,8 +85,9 @@ static float3 fzWorld(float3 photo, float2 p, float t, float e, float awake, flo
     float3 lightC = float3(0.70, 0.96, 0.82);
     float Y = dot(photo, FZ_LUMA);
 
-    // Asleep the world is darker and colourless; it wakes as the orb charges.
-    float3 base = mix(float3(Y), photo, float3(0.45 + 0.55 * awake)) * (0.45 + 0.55 * awake);
+    // Asleep the world is darker and colourless; it wakes as the orb charges. (The wide shot, the sky
+    // above and the rocks use the same grade: saturation 0.5 + 0.5 awake, brightness 0.62 + 0.38 awake.)
+    float3 base = mix(float3(Y), photo, float3(0.5 + 0.5 * awake)) * (0.62 + 0.38 * awake);
 
     // Where the pedestal is: its top, and its sides (which face you, not the orb).
     float2 qt = (p - ring) / topR;
@@ -125,6 +146,27 @@ static float3 fzWorld(float3 photo, float2 p, float t, float e, float awake, flo
     float3 col = fzWorld(photo, origin + position, state.x, state.y, state.z, state.w, on.x, on.y,
                          orb.xy, orb.z, ring.xy, ring.zw, topInfo.xy, topInfo.z, topInfo.w, orb.w);
     return half4(half3(col * a), c.a);
+}
+
+/// The wide shot as the camera flies in: everything grows from the pedestal by its own distance, so
+/// the near ground rushes past while the far rocks barely move, with a little motion blur.
+/// pxScale: points per wide-photo pixel. anchorPx: the pedestal's ring in the photo. anchorNow: where
+/// it is now, in the view's points. travel: how far the camera has moved (the pedestal is 1 away).
+/// blur: how fast it's moving.
+[[ stitchable ]] half4 wideFly(float2 position, SwiftUI::Layer layer, float pxScale, float2 anchorPx, float2 anchorNow,
+                               float travel, float4 depthPx, float4 pedPx, float blur) {
+    float2 rel = (position - anchorNow) / pxScale;
+    // Where on the photo this point came from: guess the pedestal's distance, then refine.
+    float2 p = anchorPx + rel * (1.0 - travel);
+    for (int i = 0; i < 4; i++) {
+        p = anchorPx + rel / fzWideZoom(fzWideDistance(p, depthPx, pedPx), travel);
+    }
+    float2 away = p - anchorPx;
+    half4 c = half4(0.0);
+    for (int k = 0; k < 8; k++) {
+        c += layer.sample((anchorPx + away * (1.0 - blur * 0.0016 * float(k))) * pxScale);
+    }
+    return c * 0.125h;
 }
 
 /// A floating rock: a mint rim on the edge that faces the orb (`toLight`, a unit vector in the rock's

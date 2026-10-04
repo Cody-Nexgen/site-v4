@@ -3,28 +3,73 @@ import SwiftUI
 // The pieces of `OrbStage`.
 
 /// The wide shot the story opens on: the same pedestal far off in the dark. The camera flies in from
-/// it (`OrbStageState.dolly`), magnifying it until its pedestal is exactly where the stage's is.
+/// it (`OrbStageState.dolly`) through the landscape: `wideFly` grows each point by its own distance,
+/// so the near ground rushes past while the far rocks barely move, until the pedestal is exactly
+/// where the stage's is.
 struct WideShot: View {
     let layout: OrbStageLayout
     let state: OrbStageState
     let cam: CGSize
+    let t: CGFloat
 
     var body: some View {
         let d = CGFloat(state.dolly)
         let c = layout.camera(d)
-        let s = layout.wideScale * c.zoom
+        let s = layout.wideScale
         let size = CGSize(width: OrbStageLayout.widePixels.width * s, height: OrbStageLayout.widePixels.height * s)
-        let origin = CGPoint(x: c.ring.x - OrbStageLayout.wideRingPixels.x * s, y: c.ring.y - OrbStageLayout.wideRingPixels.y * s)
+        let origin = layout.wideOriginAtRest
+        let speed = 4 * d * (1 - d)
+        // Hovering a little, like a camera in flight.
+        let anchor = CGPoint(x: c.ring.x - origin.x, y: c.ring.y - origin.y + sin(t * 2.3) * 1.6 * speed)
+        let shader = ShaderLibrary.wideFly(
+            .float(s),
+            .float2(OrbStageLayout.wideRingPixels.x, OrbStageLayout.wideRingPixels.y),
+            .float2(anchor.x, anchor.y),
+            .float(layout.travelEnd * d),
+            .float4(OrbStageLayout.wideHorizonPixels, OrbStageLayout.wideFootPixels, 0, 0),
+            .float4(OrbStageLayout.wideRingPixels.x, OrbStageLayout.wideRingPixels.y,
+                    OrbStageLayout.wideTopRadiiPixels.width, OrbStageLayout.wideTopRadiiPixels.height),
+            .float(speed * 5)
+        )
         Image("OrbStageWide")
             .resizable()
             .interpolation(.high)
             .frame(width: size.width, height: size.height)
-            .saturation(0.55 + 0.45 * state.awake)
-            .brightness(-0.1 * (1 - state.awake))
+            .layerEffect(shader, maxSampleOffset: CGSize(width: 24, height: 24))
+            .saturation(0.5 + 0.5 * state.awake)
+            .colorMultiply(Color(white: 0.62 + 0.38 * state.awake))
             // It's being magnified past its pixels as the camera closes in: let it go soft.
-            .blur(radius: max(0, c.zoom - 1.5) * 1.6)
+            .blur(radius: max(0, c.zoom - 1.6) * 1.2)
             .opacity(state.scene * Double(1 - fzSmooth(0.6, 0.97, d)))
             .position(x: origin.x + size.width / 2 + cam.width * 0.3, y: origin.y + size.height / 2 + cam.height * 0.3)
+    }
+}
+
+/// The sky above the stage photo: its top edge carried on up the screen (the light from above with
+/// it), so there's never just black above the scene, even pulled down. Graded like the photo.
+struct SkyAbove: View {
+    let layout: OrbStageLayout
+    let awake: Double
+
+    var body: some View {
+        let f = layout.imageFrame
+        let strip = 24 * layout.k
+        let reach = max(f.minY, 0) + 420
+        let dim = 0.62 + 0.38 * awake
+        Image("OrbStage")
+            .resizable()
+            .frame(width: f.width, height: f.height)
+            .frame(width: f.width, height: strip, alignment: .top)
+            .clipped()
+            .scaleEffect(x: 1, y: (reach + strip) / strip, anchor: .bottom)
+            .blur(radius: 5 * layout.k)
+            .saturation(0.5 + 0.5 * awake)
+            .colorMultiply(Color(white: dim))
+            .mask {
+                LinearGradient(colors: [.black.opacity(0.5), .black], startPoint: .top, endPoint: .bottom)
+                    .scaleEffect(x: 1, y: (reach + strip) / strip, anchor: .bottom)
+            }
+            .position(x: f.midX, y: f.minY + strip / 2)
     }
 }
 
@@ -73,7 +118,7 @@ struct StagePhoto: View {
             .layerEffect(shader, maxSampleOffset: CGSize(width: 16, height: 16))
             .mask {
                 LinearGradient(stops: [
-                    .init(color: .clear, location: 0), .init(color: .black, location: 0.2),
+                    .init(color: .clear, location: 0), .init(color: .black, location: 0.05),
                     .init(color: .black, location: 0.68), .init(color: .clear, location: 1),
                 ], startPoint: .top, endPoint: .bottom)
             }
@@ -114,8 +159,8 @@ struct LightShaft: View {
     }
 }
 
-/// The pedestal powering on: the groove ring, lit from the front both ways round, and its front
-/// slits. (The light they throw on the metal is the world shader's.)
+/// The pedestal powering on: the groove ring, lit from the front both ways round. (The light it throws
+/// on the metal is the world shader's. Its front slits stay dark: lit, they looked like a pause button.)
 struct PedestalGlow: View {
     let layout: OrbStageLayout
     var trace: Double
@@ -126,7 +171,6 @@ struct PedestalGlow: View {
         let rr = layout.ringRadii
         let k = layout.k
         let lit = min(max(trace, 0), 1)
-        let slitsOn = min(max((lit - 0.35) / 0.4, 0), 1)
         ZStack(alignment: .topLeading) {
             RingTrace(trace: lit)
                 .stroke(Color.fzMint.opacity(0.75), style: StrokeStyle(lineWidth: 3.5 * k, lineCap: .round))
@@ -151,21 +195,6 @@ struct PedestalGlow: View {
                     .opacity(lit > 0 && lit < 1 ? 1 : 0)
             }
 
-            ForEach(Array(layout.slits.enumerated()), id: \.offset) { _, slit in
-                let size = layout.slitSize
-                ZStack {
-                    RoundedRectangle(cornerRadius: 2 * k)
-                        .fill(Color.fzMint)
-                        .frame(width: size.width * 2.2, height: size.height * 1.3)
-                        .blur(radius: 5 * k)
-                        .opacity(0.6)
-                    RoundedRectangle(cornerRadius: 1.5 * k)
-                        .fill(Color(hex: 0xEFFFF5))
-                        .frame(width: size.width * 0.55, height: size.height * 0.8)
-                }
-                .position(slit)
-                .opacity(power * slitsOn)
-            }
         }
         .blendMode(.plusLighter)
     }

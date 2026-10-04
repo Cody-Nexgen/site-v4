@@ -14,6 +14,8 @@ struct TodayView: View {
     @State private var touchPoint: CGPoint?
     @State private var strike = 0
     @State private var crackle = 0
+    /// How far the page has scrolled (negative while pulled down past the top).
+    @State private var scrollY: CGFloat = 0
 
     /// How charged the orb is for a focus score (0–10).
     static func orbEnergy(_ score: Double) -> Double { min(1, max(0.08, score / 10)) }
@@ -26,18 +28,21 @@ struct TodayView: View {
             let layout = OrbStageLayout(width: outer.size.width, top: top)
             ScrollView {
                 ZStack(alignment: .top) {
-                    OrbStage(layout: layout, state: .settled(Self.orbEnergy(model.focusScore)), strike: strike, touch: touchPoint)
-                    orbTouchArea(layout)
+                    stage(layout)
                     header
                         .padding(.top, top + 6)
                     content
                         .padding(.top, layout.baseY + 6)
                 }
                 .frame(width: outer.size.width)
-                .coordinateSpace(.named("today"))
             }
             .scrollIndicators(.hidden)
             .ignoresSafeArea(edges: .top)
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, y in
+                scrollY = y
+            }
         }
         .background(Color.black)
         .environment(\.colorScheme, .dark)
@@ -55,6 +60,21 @@ struct TodayView: View {
             shownScore = 0
             withAnimation(.smooth(duration: 1.2).delay(0.25)) { shownScore = score }
         }
+    }
+
+    /// The orb's world, with depth as you scroll: scrolling up, it drifts away at half speed while the
+    /// cards slide over it; pulled down, it stays pinned to the top and swells (the sky carries on
+    /// above the photo, so there's no black).
+    private func stage(_ layout: OrbStageLayout) -> some View {
+        let pull = max(0, -scrollY)
+        return ZStack(alignment: .topLeading) {
+            OrbStage(layout: layout, state: .settled(Self.orbEnergy(model.focusScore)), strike: strike, touch: touchPoint)
+            orbTouchArea(layout)
+        }
+        .frame(width: layout.width, height: layout.height, alignment: .topLeading)
+        .coordinateSpace(.named("today"))
+        .scaleEffect(1 + pull / 650, anchor: UnitPoint(x: 0.5, y: layout.orbCenter.y / max(layout.height, 1)))
+        .offset(y: scrollY < 0 ? scrollY : scrollY * 0.5)
     }
 
     /// Touch the orb: a strike, and the lightning follows your finger while you hold it.

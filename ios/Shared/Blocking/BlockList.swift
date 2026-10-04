@@ -65,11 +65,17 @@ enum BlockList {
         let center = DeviceActivityCenter()
         center.stopMonitoring([.sessionEnd])
         try? center.startMonitoring(.sessionEnd, during: schedule)
+        defaults.set(end, forKey: sessionEndKey)
     }
 
     static func cancelSessionEnd() {
         DeviceActivityCenter().stopMonitoring([.sessionEnd])
+        defaults.removeObject(forKey: sessionEndKey)
     }
+
+    /// When the running session ends, for the shield's "It's back at 3:45 PM." The shield extension
+    /// reads the same App Group key (it doesn't compile this file).
+    static let sessionEndKey = "sessionEnd"
 
     // MARK: The daily block
 

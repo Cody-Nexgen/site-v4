@@ -6,7 +6,7 @@ const {W, H, TOP} = P;
 const L = (() => {
   const IMG = {w: 1122, h: 1402}, RING = {x: 557.5, y: 570}, RR = {w: 195.5, h: 44.75}, TR = {w: 293.5, h: 69};
   const SL = [[551, 742], [571.5, 742]], SLS = {w: 10, h: 46}, BASE = 784, HORIZON = 440, HOVER = 75;
-  const WIDE = {w: 941, h: 1672}, WRING = {x: 470, y: 793.75}, WRR = {w: 61.25, h: 12.5};
+  const WIDE = {w: 941, h: 1672}, WRING = {x: 470, y: 793.75}, WRR = {w: 61.25, h: 12.5}, WTOP = {w: 92.5, h: 18.75}, WHORIZON = 620, WFOOT = 851;
   const scale = Math.min(W * 1.12 / IMG.w, 0.62), R = RR.w * 0.95 * scale, orbTop = TOP + 126;
   const iw = IMG.w * scale, ih = IMG.h * scale, ringY = orbTop + R * 2 + HOVER * scale;
   const fr = {x: (W - iw) / 2, y: ringY - RING.y * scale, w: iw, h: ih};
@@ -19,10 +19,17 @@ const L = (() => {
   const ws = Math.max(W / WIDE.w, H / WIDE.h);
   const wrest = [(W - WIDE.w * ws) / 2 + WRING.x * ws, (H - WIDE.h * ws) / 2 + WRING.y * ws];
   const zoom1 = rr[0] / (WRR.w * ws);
-  const camera = (d) => [[wrest[0] + (ring[0] - wrest[0]) * d, wrest[1] + (ring[1] - wrest[1]) * d], Math.pow(zoom1, d)];
-  const widePoint = (w, d) => { const [c, z] = camera(d); const s = ws * z; return [c[0] + (w[0] - WRING.x) * s, c[1] + (w[1] - WRING.y) * s]; };
+  const travelEnd = 1 - 1 / zoom1;
+  const wideDistance = (p) => { const ground = Math.pow((WFOOT - WHORIZON) / Math.max(p[1] - WHORIZON, 18), 0.8);
+    const q = Math.hypot((p[0] - WRING.x) / WTOP.w, (p[1] - WRING.y) / WTOP.h); const top = 1 - sm(0.95, 1.1, q);
+    const body = (1 - sm(WTOP.w * 1.04, WTOP.w * 1.14, Math.abs(p[0] - WRING.x))) * (p[1] >= WRING.y ? 1 : 0) * (1 - sm(WFOOT, WFOOT + 6, p[1]));
+    return ground + (1 - ground) * Math.max(top, body); };
+  const wideZoom = (dist, travel) => dist / Math.max(dist - travel, 0.06);
+  const camera = (d) => [[wrest[0] + (ring[0] - wrest[0]) * d, wrest[1] + (ring[1] - wrest[1]) * d], 1 / (1 - travelEnd * d)];
+  const widePoint = (w, d, dist) => { const [c] = camera(d); const s = ws * wideZoom(dist ?? wideDistance(w), travelEnd * d); return [c[0] + (w[0] - WRING.x) * s, c[1] + (w[1] - WRING.y) * s]; };
+  const wideOrigin = [(W - WIDE.w * ws) / 2, (H - WIDE.h * ws) / 2];
   const orbInWide = [WRING.x + (orb[0] - ring[0]) / (ws * zoom1), WRING.y + (orb[1] - ring[1]) / (ws * zoom1)];
-  return {IMG, RING, TR, SL, SLS, BASE, HORIZON, WIDE, WRING, scale, R, fr, pt, ring, rr, topR, base, horizon, orb, k, sm, pedDepth, ws, camera, widePoint, orbInWide, zoom1};
+  return {IMG, RING, TR, SL, SLS, BASE, HORIZON, WIDE, WRING, WTOP, WHORIZON, WFOOT, scale, R, fr, pt, ring, rr, topR, base, horizon, orb, k, sm, pedDepth, ws, camera, widePoint, orbInWide, zoom1, travelEnd, wideDistance, wideOrigin};
 })();
 window.L = L;
 const sm = L.sm;
@@ -47,14 +54,37 @@ const PRE = '#version 300 es\nprecision highp float;\n#define float2 vec2\n#defi
 (async () => {
   const [photo, wide, ...rocks] = await Promise.all([load('../../Art/orb-stage.jpg'), load('../../Art/orb-stage-wide.jpg'), ...[0, 1, 2, 3, 4, 5].map(i => load('../../App/Assets.xcassets/OrbRock' + i + '.imageset/orb-rock-' + i + '.png'))]);
 
-  // 1. The wide shot.
-  const c0 = layer(1).getContext('2d'); c0.scale(2, 2);
+  // 1. The wide shot, flown through (wideFly).
   if (d < 0.999) {
-    const [c, z] = L.camera(d); const s = L.ws * z;
-    c0.save(); c0.globalAlpha = P.SCENE * (1 - sm(0.6, 0.97, d));
-    c0.filter = `saturate(${0.55 + 0.45 * AW}) brightness(${1 - 0.1 * (1 - AW)}) blur(${Math.max(0, z - 1.5) * 1.6}px)`;
-    c0.drawImage(wide, c[0] - L.WRING.x * s + cam[0] * 0.3, c[1] - L.WRING.y * s + cam[1] * 0.3, L.WIDE.w * s, L.WIDE.h * s); c0.restore();
+    const cw = layer(1); cw.style.opacity = P.SCENE * (1 - sm(0.6, 0.97, d));
+    const [c, z] = L.camera(d); cw.style.filter = `saturate(${0.5 + 0.5 * AW}) brightness(${0.62 + 0.38 * AW}) blur(${Math.max(0, z - 1.6) * 1.2}px)`;
+    const gw = cw.getContext('webgl2'); const speed = 4 * d * (1 - d);
+    const pw = glProgram(gw, PRE + `uniform sampler2D uWide; uniform vec2 uSize, uOrigin, uImg, uAnchorPx, uAnchorNow; uniform float uPx, uTravel, uBlur; uniform vec4 uDepth, uPed; out vec4 o;
+${window.WORLD_GLSL}
+void main() {
+  vec2 pos = vec2(gl_FragCoord.x, uSize.y * 2.0 - gl_FragCoord.y) / 2.0 - uOrigin;
+  vec2 rel = (pos - uAnchorNow) / uPx;
+  vec2 p = uAnchorPx + rel * (1.0 - uTravel);
+  for (int i = 0; i < 4; i++) { p = uAnchorPx + rel / fzWideZoom(fzWideDistance(p, uDepth, uPed), uTravel); }
+  vec2 away = p - uAnchorPx; vec4 c = vec4(0.0);
+  for (int k = 0; k < 8; k++) { vec2 q = uAnchorPx + away * (1.0 - uBlur * 0.0016 * float(k)); c += texture(uWide, q / uImg); }
+  o = c * 0.125;
+}`);
+    const tex = gw.createTexture(); gw.bindTexture(gw.TEXTURE_2D, tex); gw.texImage2D(gw.TEXTURE_2D, 0, gw.RGBA, gw.RGBA, gw.UNSIGNED_BYTE, wide);
+    gw.texParameteri(gw.TEXTURE_2D, gw.TEXTURE_MIN_FILTER, gw.LINEAR); gw.texParameteri(gw.TEXTURE_2D, gw.TEXTURE_WRAP_S, gw.CLAMP_TO_EDGE); gw.texParameteri(gw.TEXTURE_2D, gw.TEXTURE_WRAP_T, gw.CLAMP_TO_EDGE);
+    const u = n => gw.getUniformLocation(pw, n);
+    gw.uniform2f(u('uSize'), W, H); gw.uniform2f(u('uOrigin'), L.wideOrigin[0] + cam[0] * 0.3, L.wideOrigin[1] + cam[1] * 0.3); gw.uniform2f(u('uImg'), L.WIDE.w, L.WIDE.h);
+    gw.uniform2f(u('uAnchorPx'), L.WRING.x, L.WRING.y); gw.uniform2f(u('uAnchorNow'), c[0] - L.wideOrigin[0], c[1] - L.wideOrigin[1] + Math.sin(T * 2.3) * 1.6 * speed);
+    gw.uniform1f(u('uPx'), L.ws); gw.uniform1f(u('uTravel'), L.travelEnd * d); gw.uniform1f(u('uBlur'), speed * 5);
+    gw.uniform4f(u('uDepth'), L.WHORIZON, L.WFOOT, 0, 0); gw.uniform4f(u('uPed'), L.WRING.x, L.WRING.y, L.WTOP.w, L.WTOP.h);
+    gw.drawArrays(gw.TRIANGLES, 0, 3);
   }
+
+  // 1b. The sky above the photo (its top strip carried up the screen).
+  if (close > 0) { const cs = layer(1); const gs = cs.getContext('2d'); gs.scale(2, 2); const strip = 24 * L.k; const reach = Math.max(L.fr.y, 0) + 420; const dim = 0.62 + 0.38 * AW;
+    gs.save(); gs.globalAlpha = close * P.SCENE; gs.filter = `blur(${5 * L.k}px) saturate(${0.5 + 0.5 * AW}) brightness(${dim})`;
+    gs.drawImage(photo, 0, 0, L.IMG.w, strip / L.scale, L.fr.x + cam[0] * 0.06, L.fr.y + strip - (reach + strip) + cam[1] * 0.06, L.fr.w, reach + strip); gs.restore();
+    gs.globalCompositeOperation = 'destination-in'; const gm = gs.createLinearGradient(0, L.fr.y + strip - reach - strip, 0, L.fr.y + strip); gm.addColorStop(0, 'rgba(0,0,0,0.5)'); gm.addColorStop(1, 'rgba(0,0,0,1)'); gs.fillStyle = gm; gs.fillRect(0, 0, W, L.fr.y + strip); }
 
   // 2. The stage photo through the world shader.
   const cv = layer(2); const gl = cv.getContext('webgl2', {premultipliedAlpha: false});
@@ -69,7 +99,7 @@ void main() {
   vec3 photo = texture(uPhoto, src).rgb;
   vec3 c = fzWorld(photo, p, uState.x, uState.y, uState.z, uState.w, uOn.x, uOn.y, uOrb.xy, uOrb.z, uRing.xy, uRing.zw, uTop.xy, uTop.z, uTop.w, uOrb.w);
   vec2 uv = local / uFrameSize;
-  float fade = smoothstep(0.0, 0.2, uv.y) * (1.0 - smoothstep(0.68, 1.0, uv.y));
+  float fade = smoothstep(0.0, 0.05, uv.y) * (1.0 - smoothstep(0.68, 1.0, uv.y));
   float rd = length(local - vec2(557.5, 570.0) * uPx) / (uFrameSize.x * uRevealR);
   float rad = 1.0 - smoothstep(0.7, 1.0, rd);
   o = vec4(c, fade * rad * uReveal);
@@ -101,9 +131,6 @@ void main() {
   const power = (0.45 + 0.55 * E) * close * (P.RING > 0 ? 1 : 0);
   g3.save(); g3.globalAlpha = power; g3.filter = `blur(${3.5 * k}px)`; g3.strokeStyle = 'rgba(166,230,191,0.75)'; g3.lineWidth = 3.5 * k; g3.beginPath(); g3.ellipse(ring[0], ring[1], L.rr[0], L.rr[1], 0, 0, 7); g3.stroke(); g3.restore();
   g3.save(); g3.globalAlpha = power; g3.strokeStyle = '#EFFFF5'; g3.lineWidth = 1.4 * k; g3.beginPath(); g3.ellipse(ring[0], ring[1], L.rr[0], L.rr[1], 0, 0, 7); g3.stroke(); g3.restore();
-  for (const s of L.SL) { const p = L.pt(s[0], s[1]); const sw = L.SLS.w * L.scale, sh = L.SLS.h * L.scale; const x = p[0] + pedShift[0], y = p[1] + pedShift[1];
-    g3.save(); g3.globalAlpha = power * 0.6; g3.filter = `blur(${5 * k}px)`; g3.fillStyle = 'rgb(166,230,191)'; g3.fillRect(x - sw * 1.1, y - sh * 0.65, sw * 2.2, sh * 1.3); g3.restore();
-    g3.save(); g3.globalAlpha = power; g3.fillStyle = '#EFFFF5'; g3.fillRect(x - sw * 0.275, y - sh * 0.4, sw * 0.55, sh * 0.8); g3.restore(); }
 
   // 4. Rocks (behind and in front), lit with a rim facing the orb.
   const ROCKS = [[0, -2.3, 0.25, 0.95, 0.32, 0, 0, 0.35, 5, 0.3, false], [1, 2.25, -0.6, 0.78, 0.28, 0.6, 0.15, 0.5, 4, 1.7, false], [4, -1.45, -1.55, 0.62, 0.25, 0.8, 0.3, 0.65, 8, 2.9, false],
@@ -111,7 +138,7 @@ void main() {
   function drawRock(g, img, w, x, y, angle, blur, alpha) {
     const h = w * img.height / img.width;
     const dx = orbAt[0] - x, dy = orbAt[1] - y, dist = Math.max(Math.hypot(dx, dy), 1);
-    const near = dist / L.R; const light = P.FORMED * (0.25 + 0.85 * E) / (1 + near * near * 0.25) + P.FLASH * 0.5; const dim = 0.45 + 0.55 * AW;
+    const near = dist / L.R; const light = P.FORMED * (0.25 + 0.85 * E) / (1 + near * near * 0.25) + P.FLASH * 0.5; const dim = 0.62 + 0.38 * AW;
     const off = document.createElement('canvas'); off.width = Math.ceil(w * 2) + 8; off.height = Math.ceil(h * 2) + 8; const o = off.getContext('2d'); o.scale(2, 2);
     o.drawImage(img, 2, 2, w, h);
     // brighten its own colour by the light (multiplicative, mint-tinted), then darken by dim
@@ -157,6 +184,14 @@ void main() {
       const b = (sa[i] + 6 * Math.sin(T * 0.6 + i)) * Math.PI / 180, begin = [orbAt[0] + radius * Math.cos(b), orbAt[1] + radius * Math.sin(b)];
       strokeBolt(begin, end, seed * 7 + i, P.ARCS * (0.6 + 0.4 * fl), 1); } }
 
+  // 5b. Through the glass: the world behind it, upside down and squeezed.
+  if (P.FORMED > 0.05) { const cr = layer(6); const gr2 = cr.getContext('2d'); gr2.scale(2, 2); const sq = 0.5, ball = L.R; const f = L.fr;
+    gr2.save(); gr2.beginPath(); gr2.arc(orbAt[0], orbAt[1], ball * (0.12 + 0.88 * P.FORMED), 0, 7); gr2.clip();
+    gr2.globalAlpha = Math.min(1, P.FORMED * 2) * (0.55 + 0.45 * AW) * P.SCENE; gr2.filter = `blur(1px) saturate(${0.5 + 0.5 * AW})`;
+    gr2.translate(orbAt[0], orbAt[1]); gr2.scale(-1, -1);
+    gr2.drawImage(photo, -(orbAt[0] - f.x) * sq, -(orbAt[1] - f.y) * sq, f.w * sq, f.h * sq);
+    gr2.restore(); gr2.globalCompositeOperation = 'multiply'; gr2.fillStyle = 'rgb(199,245,219)'; gr2.beginPath(); gr2.arc(orbAt[0], orbAt[1], ball, 0, 7); gr2.fill(); }
+
   // 6. The orb.
   if (P.FORMED > 0.001) { const og = layer(6); const size = L.R * 2 / 0.84 * 1.5; og.width = size * 2; og.height = size * 2; Object.assign(og.style, {left: (orbAt[0] - size / 2) + 'px', top: (orbAt[1] - size / 2) + 'px', width: size + 'px', height: size + 'px'});
     const g = og.getContext('webgl2', {premultipliedAlpha: true}); const p2 = glProgram(g, PRE + `uniform vec2 uSize; uniform float uT, uE; uniform vec3 uTouch; out vec4 o;\n${window.ORB_GLSL}\nvoid main(){ vec2 pos = vec2(gl_FragCoord.x, uSize.y - gl_FragCoord.y); float side = min(uSize.x, uSize.y); vec2 p = (pos - uSize*0.5)/(side*0.5); o = fzOrb(p, uT, uE, 4.5/side, uTouch); }`);
@@ -169,11 +204,13 @@ void main() {
   if (P.SCATTER > 0.01) { const c8 = layer(8); c8.style.mixBlendMode = 'screen'; const g8 = c8.getContext('2d'); g8.scale(2, 2); const target = L.orbInWide;
     for (let i = 0; i < 34; i++) { const h1 = hash(i, 21), h2 = hash(i, 22), h3 = hash(i, 23), h4 = hash(i, 24), h5 = hash(i, 25), h6 = hash(i, 26), h7 = hash(i, 27);
       const start = [70 + h1 * 800, 650 + h2 * h2 * 800]; const near = (start[1] - 650) / 800; let at = start, behind = null, alpha = P.SCATTER;
+      const d0 = L.wideDistance(start); let dist = d0, bdist = d0;
       if (P.GATHER >= 0) { const p = Math.min(Math.max((P.GATHER - h3 * 0.9) / 1.9, 0), 1); if (p >= 1) continue; const ctrl = [(start[0] + target[0]) / 2 + (h7 - 0.5) * 260, Math.min(start[1], target[1]) - 120 - h7 * 200];
         const along = q => { const u = 1 - q; return [u * u * start[0] + 2 * u * q * ctrl[0] + q * q * target[0], u * u * start[1] + 2 * u * q * ctrl[1] + q * q * target[1]]; };
-        const e = p * p * (3 - 2 * p); at = along(e); behind = along(Math.max(0, e - 0.09)); alpha *= 1 - sm(0.85, 1, p) * 0.6; }
-      const s = L.widePoint(at, d); const tw = 0.55 + 0.45 * Math.sin(T * (1.3 + h4 * 2.2) + h5 * 6.3); const size = (1.6 + 2 * h6) * (0.7 + 0.8 * near) * k; const a = alpha * tw;
-      if (behind) { const b = L.widePoint(behind, d); const lg = g8.createLinearGradient(b[0], b[1], s[0], s[1]); lg.addColorStop(0, 'rgba(166,230,191,0)'); lg.addColorStop(1, `rgba(166,230,191,${0.85 * a})`); g8.strokeStyle = lg; g8.lineWidth = Math.max(0.8, size * 0.45); g8.lineCap = 'round'; g8.beginPath(); g8.moveTo(...b); g8.lineTo(...s); g8.stroke(); }
+        const e = p * p * (3 - 2 * p); at = along(e); behind = along(Math.max(0, e - 0.09)); dist = d0 + (1 - d0) * e; bdist = d0 + (1 - d0) * Math.max(0, e - 0.09); alpha *= 1 - sm(0.85, 1, p) * 0.6; }
+      if (dist <= L.travelEnd * d + 0.03) continue;
+      const s = L.widePoint(at, d, dist); const tw = 0.55 + 0.45 * Math.sin(T * (1.3 + h4 * 2.2) + h5 * 6.3); const size = (1.6 + 2 * h6) * (0.7 + 0.8 * near) * k; const a = alpha * tw;
+      if (behind) { const b = L.widePoint(behind, d, Math.max(bdist, L.travelEnd * d + 0.05)); const lg = g8.createLinearGradient(b[0], b[1], s[0], s[1]); lg.addColorStop(0, 'rgba(166,230,191,0)'); lg.addColorStop(1, `rgba(166,230,191,${0.85 * a})`); g8.strokeStyle = lg; g8.lineWidth = Math.max(0.8, size * 0.45); g8.lineCap = 'round'; g8.beginPath(); g8.moveTo(...b); g8.lineTo(...s); g8.stroke(); }
       const rg = g8.createRadialGradient(s[0], s[1], 0, s[0], s[1], size * 5); rg.addColorStop(0, `rgba(166,230,191,${0.5 * a})`); rg.addColorStop(1, 'rgba(166,230,191,0)'); g8.fillStyle = rg; g8.beginPath(); g8.arc(s[0], s[1], size * 5, 0, 7); g8.fill();
       g8.fillStyle = `rgba(255,255,255,${0.95 * a})`; g8.beginPath(); g8.arc(s[0], s[1], size / 2, 0, 7); g8.fill(); } }
   window.done = true;

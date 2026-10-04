@@ -31,12 +31,15 @@ The images are in `App/Assets.xcassets` (sources in `ios/Art/`: `orb-stage.jpg`,
    cold, colourless landscape, the pedestal tiny in the distance, the camera drifting in very slowly.
    Little lights flicker all across the ground. **"Your focus is everywhere."** **"Scattered across a
    hundred things."** **"Let's bring it back."**: the lights rise and stream to the pedestal, trailing
-   light, and the camera flies in after them until the pedestal fills the screen (the wide shot
-   magnifies into the close photo, which opens out from the pedestal). The lights catch into a
+   light, and the camera flies in after them, low over the ground: everything grows by its own
+   distance (`wideFly`), so the near ground rushes past with motion blur while the far rocks barely
+   move, until the pedestal fills the screen and the close photo takes over from it. The lights catch into a
    white-hot point, the pedestal's ring powers on round both sides, lightning jumps up and the orb
    forms around the light, floating, with lightning down into the ring. Its light falls on the
    brushed metal (the orb shows in it) and the ground; fog drifts and glows; the whole scene moves in
-   depth with the phone's tilt. **"This is your focus orb." / "Touch it."** (a ring keeps pulsing off
+   depth with the phone's tilt. The orb's glass is see-through: the world shows in it upside down,
+   like a crystal ball. The sky carries on above the photo, so the top of the screen is never just
+   black. (The pedestal's front slits stay dark: lit, they looked like a pause button.) **"This is your focus orb." / "Touch it."** (a ring keeps pulsing off
    it). Touch it and, like a plasma globe, the lightning inside bends to your finger, the world
    flashes and the phone crackles; drag off it and lightning reaches out after your finger. Then
    "It's barely charged. Answer a few questions and it grows." and **Make it grow** (they come anyway
@@ -66,7 +69,17 @@ charged as your focus score, **FOCUS SCORE 82 Charged** (the 0–10 score × 10;
 Today card: the next event and to-do (open Plan), apps blocked (opens Focus), screen time today (opens
 Stats). Friends focusing now and the day wave stay below it if they're on in Customize. Its world
 follows the score: a low score is a cold, foggy, still world, a high one is lit with rocks floating
-round the orb. Touch the orb there too. Today is a night scene, so it stays dark in light mode too.
+round the orb. Touch the orb there too. Scroll up and the scene drifts away at half speed while the
+cards slide over it; pull down and it stays pinned and swells. Today is a night scene, so it stays
+dark in light mode too.
+
+## The block screen
+When a blocked app opens, the shield (`Extensions/FocusShield`) is in the FocuzNow look as far as Apple
+allows (a background, an icon, a title, a subtitle and two buttons; no fonts or layout): near-black
+glass, the focus orb with the Beam Z as its icon, "YouTube can wait", "You're in a focus session. It's
+back at 3:45 PM, and your orb's charging." (the app saves the session's end in the App Group,
+`BlockList.sessionEndKey`), a mint **Back to focus** and **Ask for 5 minutes** (which doesn't do
+anything yet: the emergency-override rules are a later phase).
 
 ## Not real yet
 - **Accounts:** the buttons don't create a FocuzNow account yet (Supabase auth isn't wired into the

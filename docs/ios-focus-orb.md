@@ -13,8 +13,9 @@ shader, a SwiftUI colour effect). Use it as `FocusOrb(energy:size:)`. The v1 Can
   then flares (a strike), and swings nearer (brighter, thicker) or further away.
 - **Veins:** thin jagged lines crackling over the shell in patches that drift and turn.
 - **Plasma haze:** a slow teal smoke turning inside, which gives the sphere depth.
-- **Glass:** dark body, a rim that catches the light, a crescent of light on the top left, a soft bounce
-  at the bottom, and a mint glow around it.
+- **Glass:** a see-through body (about 40% in the middle, solid at the rim; the stage puts the world
+  behind it, upside down, like a crystal ball), a rim that catches the light, a crescent of light on
+  the top left, a soft bounce at the bottom, and a mint glow around it.
 
 ## On the stage
 `OrbStage` (`ios/App/Design/OrbStage.swift`) floats the orb over the pedestal photo, bobbing 3 pt, with

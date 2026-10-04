@@ -127,7 +127,7 @@ static float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
     // A slow plasma haze turning inside.
     float warp = orbFbm(float3(q * 1.3, t * 0.11));
     float haze = orbFbm(float3(q * 2.1 + float2(warp * 1.4, -warp), t * 0.19 + 4.0));
-    col += deep * pow(haze, 2.2) * (0.55 + 1.05 * e) * (1.0 - 0.4 * rr);
+    col += deep * pow(haze, 2.2) * (0.75 + 1.25 * e) * (1.0 - 0.4 * rr);
 
     // Veins crackling over the shell, in patches that drift and flicker.
     float3 front = orbTurnY(n, t * 0.2);
@@ -202,8 +202,11 @@ static float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
     float2 b = (q - float2(0.12, 0.8)) / float2(0.5, 0.14);
     col += mint * exp(-dot(b, b) * 2.0) * 0.1 * (0.5 + e);
 
+    // Glass you can see into: the body only half hides what's behind it (the stage shows the world
+    // through it, upside down), the rim is solid, and all the light inside adds on top.
     float inside = 1.0 - smoothstep(1.0 - aa / FZ_ORB_R, 1.0 + aa / FZ_ORB_R, r);
-    float4 sphere = float4(orbTone(col), 1.0);
+    float glass = 0.42 + 0.58 * smoothstep(0.55, 1.0, rr);
+    float4 sphere = float4(orbTone(col), glass);
     return mix(outside, sphere, float4(inside));
 }
 // END SHARED

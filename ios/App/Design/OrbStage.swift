@@ -34,6 +34,26 @@ struct OrbStageLayout: Equatable {
     static let widePixels = CGSize(width: 941, height: 1672)
     static let wideRingPixels = CGPoint(x: 470, y: 793.75)
     static let wideRingRadiiPixels = CGSize(width: 61.25, height: 12.5)
+    static let wideTopRadiiPixels = CGSize(width: 92.5, height: 18.75)
+    /// Where the ground meets the haze, and the pedestal's foot, in the wide photo.
+    static let wideHorizonPixels: CGFloat = 620
+    static let wideFootPixels: CGFloat = 851
+
+    /// How far a point of the wide photo is, relative to the pedestal (1): the ground as a plane, the
+    /// far rocks and sky very far, the pedestal solid. The same as `fzWideDistance` in OrbWorld.metal.
+    static func wideDistance(_ p: CGPoint) -> CGFloat {
+        let ground = pow((wideFootPixels - wideHorizonPixels) / max(p.y - wideHorizonPixels, 18), 0.8)
+        let q = hypot((p.x - wideRingPixels.x) / wideTopRadiiPixels.width, (p.y - wideRingPixels.y) / wideTopRadiiPixels.height)
+        let top = 1 - fzSmooth(0.95, 1.1, q)
+        let body = (1 - fzSmooth(wideTopRadiiPixels.width * 1.04, wideTopRadiiPixels.width * 1.14, abs(p.x - wideRingPixels.x)))
+            * (p.y >= wideRingPixels.y ? 1 : 0) * (1 - fzSmooth(wideFootPixels, wideFootPixels + 6, p.y))
+        return ground + (1 - ground) * max(top, body)
+    }
+
+    /// How much bigger something at `distance` looks once the camera has moved `travel` towards it.
+    static func wideZoom(_ distance: CGFloat, travel: CGFloat) -> CGFloat {
+        distance / max(distance - travel, 0.06)
+    }
 
     /// How near the pedestal is, for parallax (as near as its foot).
     static let pedestalDepth = OrbStageLayout.depth(atPixelY: OrbStageLayout.basePixels)
@@ -102,18 +122,29 @@ struct OrbStageLayout: Equatable {
     /// How much bigger the pedestal is on the stage than in the wide shot.
     var dollyZoom: CGFloat { ringRadii.width / (Self.wideRingRadiiPixels.width * wideScale) }
 
+    /// How far the camera travels towards the pedestal (which starts 1 away) to get from the wide
+    /// shot to the stage.
+    var travelEnd: CGFloat { 1 - 1 / dollyZoom }
+
     /// The camera between the wide shot (0) and the stage (1): where the pedestal's ring is on screen,
-    /// and how much the wide shot is magnified. The zoom is even in feel (exponential).
+    /// and how much bigger the pedestal looks. The camera really moves (`travel`), so things nearer
+    /// than the pedestal grow faster and things further grow slower.
     func camera(_ d: CGFloat) -> (ring: CGPoint, zoom: CGFloat) {
         let rest = wideRingAtRest
-        return (CGPoint(x: rest.x + (ring.x - rest.x) * d, y: rest.y + (ring.y - rest.y) * d), pow(dollyZoom, d))
+        return (CGPoint(x: rest.x + (ring.x - rest.x) * d, y: rest.y + (ring.y - rest.y) * d), 1 / (1 - travelEnd * d))
     }
 
-    /// A point of the wide photo (its pixels) on screen, with the camera at `d`.
-    func widePoint(_ w: CGPoint, dolly d: CGFloat) -> CGPoint {
+    /// A point of the wide photo (its pixels) on screen, with the camera at `d`. `distance` is how far
+    /// it is (relative to the pedestal); by default, the ground's at that point.
+    func widePoint(_ w: CGPoint, distance: CGFloat? = nil, dolly d: CGFloat) -> CGPoint {
         let c = camera(d)
-        let s = wideScale * c.zoom
+        let s = wideScale * Self.wideZoom(distance ?? Self.wideDistance(w), travel: travelEnd * d)
         return CGPoint(x: c.ring.x + (w.x - Self.wideRingPixels.x) * s, y: c.ring.y + (w.y - Self.wideRingPixels.y) * s)
+    }
+
+    /// The wide shot's top-left when the camera hasn't moved.
+    var wideOriginAtRest: CGPoint {
+        CGPoint(x: (width - Self.widePixels.width * wideScale) / 2, y: (screenHeight - Self.widePixels.height * wideScale) / 2)
     }
 
     /// The orb's spot, in the wide photo's pixels.
@@ -229,8 +260,11 @@ struct OrbStage: View, Animatable {
         let close = Double(fzSmooth(0.9, 1.0, CGFloat(s.dolly)))
         return ZStack(alignment: .topLeading) {
             if s.dolly < 0.999 {
-                WideShot(layout: layout, state: s, cam: cam)
+                WideShot(layout: layout, state: s, cam: cam, t: t)
             }
+            SkyAbove(layout: layout, awake: s.awake)
+                .opacity(close * s.scene)
+                .offset(cam * 0.06)
             StagePhoto(layout: layout, state: s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift)
             LightShaft(layout: layout)
                 .opacity(s.beam * (0.4 + 0.6 * s.awake) * close)
@@ -251,6 +285,7 @@ struct OrbStage: View, Animatable {
             }
             .blendMode(.plusLighter)
 
+            refraction(s, at: orbAt)
             orb(s, at: orbAt)
 
             rocks(front: true, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
@@ -268,6 +303,30 @@ struct OrbStage: View, Animatable {
             if hint {
                 hintRing(t: t, at: orbAt)
             }
+        }
+    }
+
+    /// What you see through the glass: the world behind the orb, upside down and squeezed, like a
+    /// crystal ball. The orb draws over it, half see-through.
+    @ViewBuilder
+    private func refraction(_ s: OrbStageState, at p: CGPoint) -> some View {
+        if s.formed > 0.05 {
+            let f = layout.imageFrame
+            let squeeze: CGFloat = 0.5
+            let ball = layout.sphereRadius * 2
+            Image("OrbStage")
+                .resizable()
+                .frame(width: f.width * squeeze, height: f.height * squeeze)
+                .offset(x: (f.width / 2 - (p.x - f.minX)) * squeeze, y: (f.height / 2 - (p.y - f.minY)) * squeeze)
+                .scaleEffect(x: -1, y: -1)
+                .frame(width: ball, height: ball)
+                .clipShape(Circle())
+                .saturation(0.5 + 0.5 * s.awake)
+                .colorMultiply(Color(red: 0.78, green: 0.96, blue: 0.86))
+                .blur(radius: 1)
+                .scaleEffect(0.12 + 0.88 * s.formed)
+                .opacity(min(1, s.formed * 2) * (0.55 + 0.45 * s.awake) * s.scene)
+                .position(p)
         }
     }
 
@@ -372,7 +431,7 @@ struct OrbStage: View, Animatable {
         let toLight = CGPoint(x: (dx * cos(back) - dy * sin(back)) / distance, y: (dx * sin(back) + dy * cos(back)) / distance)
         let near = distance / layout.sphereRadius
         let light = CGFloat(s.formed) * (0.25 + 0.85 * CGFloat(s.energy)) / (1 + near * near * 0.25) + flash * 0.5
-        let dim = 0.45 + 0.55 * CGFloat(s.awake)
+        let dim = 0.62 + 0.38 * CGFloat(s.awake)
         return Image(image)
             .resizable()
             .aspectRatio(contentMode: .fit)
@@ -536,6 +595,10 @@ struct OrbStage: View, Animatable {
             // More of them far away than near.
             let start = CGPoint(x: 70 + h1 * 800, y: 650 + h2 * h2 * 800)
             let near: CGFloat = (start.y - 650) / 800
+            // How far it is: where it lies on the ground, then the pedestal's distance as it flies there.
+            let startDistance = OrbStageLayout.wideDistance(start)
+            var distance = startDistance
+            var behindDistance = startDistance
             var at = start
             var behind: CGPoint?
             var alpha: CGFloat = scatter
@@ -551,15 +614,19 @@ struct OrbStage: View, Animatable {
                 let e = p * p * (3 - 2 * p)
                 at = along(e)
                 behind = along(max(0, e - 0.09))
+                distance = startDistance + (1 - startDistance) * e
+                behindDistance = startDistance + (1 - startDistance) * max(0, e - 0.09)
                 alpha *= 1 - fzSmooth(0.85, 1, p) * 0.6
             }
-            let screen = layout.widePoint(at, dolly: d)
+            // The camera has flown past it.
+            if distance <= layout.travelEnd * d + 0.03 { continue }
+            let screen = layout.widePoint(at, distance: distance, dolly: d)
             let twinkle: CGFloat = 0.55 + 0.45 * sin(t * (1.3 + h4 * 2.2) + h5 * 6.3)
             let size: CGFloat = (1.6 + 2 * h6) * (0.7 + 0.8 * near) * k
             let a = Double(alpha * twinkle)
             if let behind {
                 // A thin trail that fades out behind it.
-                let tail = layout.widePoint(behind, dolly: d)
+                let tail = layout.widePoint(behind, distance: max(behindDistance, layout.travelEnd * d + 0.05), dolly: d)
                 var streak = Path()
                 streak.move(to: tail)
                 streak.addLine(to: screen)
