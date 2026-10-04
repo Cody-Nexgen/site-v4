@@ -1,7 +1,7 @@
 # FocuzNow iOS: images to generate
 
-For the owner to generate (any image model). **Onboarding needs none of these**, so they don't block
-anything. Priority order: **1 Coast → 2 Sessions → 3 Presets → 4 Forest → 5 Shop → 6 Video (optional).**
+For the owner to generate (any image model). **The onboarding and the dashboard need §9 (the orb
+stage) first**; the rest don't block anything. Priority order: **1 Coast → 2 Sessions → 3 Presets → 4 Forest → 5 Shop → 6 Video (optional).**
 
 ## How to hand them over
 - Put each file in `ios/Art/` with **the exact file name** below (PNG or JPG is fine), then push it
@@ -257,3 +257,23 @@ Cinematic photograph from high orbit at night looking down at the curved horizon
 ```
 The exact same shot and framing as the attached image, a moment later: the sun is just rising over the curved horizon slightly left of center, a small bright warm-white star of light on the horizon line, the atmosphere glowing brighter along the curve, soft light spreading into the dark sky, everything else unchanged. No lens flare streaks, no text, no watermark.
 ```
+
+## 9. The orb stage (onboarding story + Today) ⏳ needed first
+One dark scene with an empty pedestal. The onboarding builds the orb on it (code draws the orb, the
+light beam, sparks, arcs and the ring glow), and the dashboard keeps the same scene, so the last frame
+of the onboarding is the first frame of Today. Aspect **9:16 portrait** (2:3 if your tool can't),
+highest resolution, upscale 2x if you can. It doesn't need exact placement: I'll measure where the
+pedestal landed. Reroll until the pedestal is **perfectly round, centred and symmetric** (both front
+slits the same), with **no glow on it**.
+
+**`orb-stage`** (required)
+```
+Cinematic, photoreal product photograph at night, portrait. A low, wide, circular pedestal stands empty on rough dark volcanic ground in a vast, silent, almost black landscape. The pedestal is matte black anodized aluminium with two stepped round tiers, fine machined concentric grooves on its top, a shallow circular dish in the middle with a thin empty groove ring around it, two tiny vertical slits on the front of the lower tier, and bevelled edges catching a faint rim of cool light. All of its lights are off. Seen from slightly above (about 15 degrees), centred, its top about 40% down from the top of the frame, about 45% of the frame width. Around it: dark gravel and fine black sand, soft low fog lying on the ground, blurred dark rock formations far away on the left and right, a very faint cool shaft of light falling from the top centre onto the pedestal, a few tiny dust specks in the air. The top quarter is empty darkness; the bottom third falls off into deep shadow, nearly black. Very low key, deep clean blacks, a subtle dark green-grey tint, 50mm lens, shallow depth of field, subtle film grain. Nothing on the pedestal: no orb, no sphere, no object, no glow, no neon, no sci-fi panels, no runes, no text, no logo, no people, no watermark.
+```
+
+**`orb-stage-lit`** (nice to have: attach `orb-stage` and ask for an edit)
+```
+Edit the attached image. Keep everything exactly the same: camera, framing, pedestal, ground, fog, rocks, light. Only switch the pedestal's lights on: the thin groove ring around the dish on its top glows soft white with a hint of mint green (#A6E6BF), the two small slits on its front glow the same colour, and that light falls softly onto the nearby metal and the ground right around the pedestal. Nothing else changes. No orb, no object on top, no text, no watermark.
+```
+If anything moved (the pedestal shifted, the grooves changed), skip it: the ring glow can be drawn in
+code instead. Save them as `ios/Art/orb-stage.jpg` and `ios/Art/orb-stage-lit.jpg`.

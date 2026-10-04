@@ -49,3 +49,34 @@ Code: `ios/App/Onboarding/FocusOnboarding.swift`, with `Design/BeamZ.swift` (the
 5. The days number counts up. **Let's change that**, then allow Screen Time, choose apps, allow
    notifications. The orb flares and Today opens.
 6. Try it on an iPhone SE simulator too: nothing should overlap.
+
+## Planned next (2026-10-04, waiting on the owner's images and one answer)
+The owner's feedback: the intro Z shouldn't sit in a tile ("it's a splash, not an icon"), and the orb
+should form on the pedestal from the dashboard mockup, as a story, in that scene, before the questions.
+Images: `orb-stage` (+ optional `orb-stage-lit`), `docs/ios-image-prompts.md` §9.
+
+1. **Splash:** the bare Z on black, no tile and no outline box. It draws as a beam of light (bright head,
+   fading mint tail), the fill sweeps in, a soft bloom, then it glides up; the small tile only fades in
+   as it lands in the header, where it acts as the logo. The same intro replaces the old lighthouse
+   splash for returning users, and the iOS launch screen becomes black (it's the system default now,
+   which is white in light mode).
+2. **The orb story**, after "Hey, <name> / Welcome to FocuzNow":
+   - The scene fades up from black with a slow push-in; the shaft of light from above brightens onto the
+     empty pedestal; dust drifts.
+   - The pedestal powers on: light traces around its ring (the same move as the Z), the front slits
+     blink on.
+   - Sparks lift off the ring, spiral up and gather above it; they ignite into a white-hot point, and
+     thin arcs jump from the ring up to it.
+   - The glass sphere grows out of the point and closes with a ripple of light; the energy inside starts,
+     faint; the arcs settle into the small ones at its base.
+   - "This is your focus orb." / "It's barely charged. Answer a few questions and it grows." /
+     **Make it grow**.
+3. **Questions, year, permissions** stay as they are, over the scene: the glass panel opens over the
+   ground and nothing moves. Each answer sends a pulse up the arcs into the orb; the orb, the ring and
+   the beam get brighter.
+4. **Into Today without a cut:** the orb and the pedestal stay put while the dashboard builds around
+   them ("Afternoon, <name>", the focus score counting up, Start, the Today card, the tab bar).
+
+Open question for the owner: the orb's look. The mockup's orb is clear glass with swirling ribbons and
+star dust inside; the current shader is dark glass with radial lightning. Recommended: match the
+mockup, and keep the lightning as the strike when you answer.
