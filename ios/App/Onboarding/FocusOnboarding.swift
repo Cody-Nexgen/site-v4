@@ -97,6 +97,7 @@ struct FocusOnboarding: View {
             if !open { pickerClosed() }
         }
         .task { await playIntro() }
+        .task { await FocusOrb.prepare() }
         .sensoryFeedback(.impact(weight: .medium), trigger: pulse)
         .sensoryFeedback(.selection, trigger: askIndex)
     }

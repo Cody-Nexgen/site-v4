@@ -3,7 +3,7 @@
 The owner's design: one black screen that never navigates, every piece animated, text that blurs
 into focus. Replaces the title sequence (backed up in `backups/ios-onboarding-title-sequence-2026-10-04/`).
 Code: `ios/App/Onboarding/FocusOnboarding.swift`, with `Design/BeamZ.swift` (the extension's Z mark),
-`Design/FocusOrb.swift` (the orb), `blurReveal` in `Design/Motion.swift`, and `Color.fzMint` in
+`Design/FocusOrb.swift` + `FocusOrb.metal` (the orb, see `docs/ios-focus-orb.md`), `blurReveal` in `Design/Motion.swift`, and `Color.fzMint` in
 `Design/Theme.swift`.
 
 ## The flow
@@ -36,8 +36,7 @@ Code: `ios/App/Onboarding/FocusOnboarding.swift`, with `Design/BeamZ.swift` (the
   iOS app). Apple's sign-in really runs and gives us the name; Google is a placeholder until the
   Google Sign-In SDK is added (then its official button and logo replace the stand-in "G"); email
   only checks the format.
-- **The orb** is a first version drawn in code (glass sphere, turning electric filaments, a breathing
-  core). The detailed electric orb and the dashboard from the owner's mockup are next.
+- **The dashboard** from the owner's mockup is next; the onboarding still ends on the current Today.
 
 ## Test on the iPhone
 1. Pull, `cd ios && xcodegen`, build. Delete the app first, or Settings → Replay the intro.
