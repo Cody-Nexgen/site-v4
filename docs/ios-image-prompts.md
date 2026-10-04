@@ -203,3 +203,57 @@ For the session screen. **6–8 seconds, completely static camera, seamless loop
 - `loop-night-sea`: slow moonlit waves on a dark sea
 - `loop-rain`: raindrops slowly running down a window with blurred city lights
 - `loop-fog`: fog drifting slowly between pine trees
+
+---
+
+## 7. Zee, the guide (cutout puppet)
+Zee is built from **separate pieces** that code moves (float, fly, tilt, wave, point). The **face and
+the chest "Z" are drawn in code**, so the art must leave the face screen and chest panel **blank**.
+Make it our own design: don't copy any existing robot.
+
+Steps:
+1. Generate the **reference** (7a) until you love it. Everything else copies it.
+2. Attach the reference as an image input and generate **each part** (7b), or one **parts sheet**
+   (7c). I'll cut them out and line up the pivots (neck, shoulders).
+
+Aspect **1:1**, highest resolution (2048 px if you can), **pure white background** (or transparent).
+
+**`zee-reference`** (7a)
+```
+3D character render of a small, friendly floating robot, front view, centered, full body visible. A rounded glossy white head shaped like a soft rounded rectangle, with a large black glass screen as its face; the screen is completely blank, with no eyes, no mouth and no reflections of a face. Small round headphone-like ear pieces on both sides of the head, each with a thin glowing light-blue ring. A smaller egg-shaped glossy white body with a small blank dark glass panel in the middle of the chest. Two short rounded arms hanging at its sides, slightly apart from the body, with simple round hands and no fingers. No legs: the body tapers into a small silver hover nozzle at the bottom. Glossy white plastic with soft silver metal accents and subtle reflections. Soft studio lighting from the upper left with a gentle rim light, clean and premium like a high-end designer toy. Plain pure white background, no shadow on the ground. No text, no logos, no face on the screen, no antenna, no extra limbs.
+```
+
+**Parts** (7b): attach `zee-reference` to each prompt.
+- **`zee-head`**
+  ```
+  Only the head of the robot in the attached image, exactly the same design, size, materials and lighting, front view, centered: the rounded head with both headphone ear pieces and their glowing light-blue rings, the face screen completely blank black glass, cut off cleanly at the bottom of the head with no neck. Plain pure white background, nothing else in the frame. No text, no face on the screen.
+  ```
+- **`zee-body`**
+  ```
+  Only the body of the robot in the attached image, exactly the same design, size, materials and lighting, front view, centered: the egg-shaped body with a short silver neck stub on top, the blank dark glass chest panel, and the silver hover nozzle at the bottom. No head and no arms; the sides where the arms attach are smooth and rounded. Plain pure white background, nothing else in the frame. No text, no logo on the chest.
+  ```
+- **`zee-arm-left`** (the arm on the **left side of the picture**)
+  ```
+  Only the arm on the left side of the picture of the robot in the attached image, exactly the same design, size, materials and lighting: one short rounded arm hanging straight down, with a rounded shoulder joint at the top and a simple round hand at the bottom, no fingers. Centered, plain pure white background, nothing else in the frame.
+  ```
+- **`zee-arm-right`**: the same prompt, with "the arm on the right side of the picture".
+
+**`zee-parts`** (7c, instead of 7b if your tool handles it)
+```
+Character parts sheet of the robot in the attached image, exactly the same design, materials and lighting: the head (with the ear pieces, face screen completely blank), the body (with the neck stub and hover nozzle, no arms, blank chest panel), the left arm and the right arm, laid out separately with clear space between them, all front view at the same scale. Plain pure white background. No text, no labels, no face on the screen.
+```
+
+## 8. Zee's world (optional backdrop plates)
+The mockup draws this world in code (stars, haze, a planet horizon, dust). A generated plate would
+look richer behind the code layers. Aspect **9:16**. Keep the **top 70% dark and empty** (Zee and the
+words live there) and the horizon in the **bottom quarter**.
+
+**`world-night`**
+```
+Cinematic photograph from high orbit at night looking down at the curved horizon of a dark blue planet, the horizon low in the bottom quarter of the frame, a thin glowing light-blue line of atmosphere along the curve, the planet surface below almost black with faint cloud texture, a deep black sky above full of tiny faint stars, a very subtle blue haze, lots of empty dark space in the top two thirds, shot on a full-frame camera, subtle film grain, deep clean blacks, calm and minimal. No sun, no moon, no spacecraft, no text, no logos, no watermark, no lens flare.
+```
+
+**`world-sunrise`**: attach `world-night` and ask for
+```
+The exact same shot and framing as the attached image, a moment later: the sun is just rising over the curved horizon slightly left of center, a small bright warm-white star of light on the horizon line, the atmosphere glowing brighter along the curve, soft light spreading into the dark sky, everything else unchanged. No lens flare streaks, no text, no watermark.
+```
