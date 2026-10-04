@@ -68,6 +68,24 @@ const startScene = (root, script) => {
   return { play, stop: clear };
 };
 
+sceneScripts.quiet = (s, root) => {
+  const ring = s.el('qring'); const time = s.el('qtime'); const count = s.el('qcount');
+  const pings = ['p1', 'p2', 'p3'].map(s.el);
+  let left = 50 * 60; let n = 0;
+  root.classList.remove('q'); pings.forEach((p) => p.classList.remove('show'));
+  ring.style.setProperty('--p', 0); time.textContent = clock(left); count.textContent = n;
+  s.park(0.55, 1.1);
+  s.at(700, () => pings[0].classList.add('show'));
+  s.at(1500, () => pings[1].classList.add('show'));
+  s.at(2200, () => { pings[2].classList.add('show'); s.move('qext', 0.5, 0.5); });
+  s.at(3300, () => s.click(() => { root.classList.add('q'); n = 3; count.textContent = n; }));
+  s.at(4200, () => s.park(0.9, 1.15));
+  s.at(4600, () => s.every(80, () => { left = Math.max(0, left - 5); time.textContent = clock(left); ring.style.setProperty('--p', 1 - left / 3000); }));
+  s.at(7200, () => { n += 1; count.textContent = n; });
+  s.at(9400, () => { n += 1; count.textContent = n; });
+  return 12500;
+};
+
 sceneScripts.hero = (s) => {
   const ring = s.el('ring');
   const time = s.el('time');
