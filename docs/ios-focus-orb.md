@@ -24,6 +24,24 @@ strike (each answer) flashes the ring and flares all four arcs. `OrbStageLayout`
 screen width and the top safe area only, using the pedestal measured in the photo's pixels, so the
 onboarding and Today put the orb in exactly the same spot.
 
+## The world around it
+`OrbWorld.metal` (`orbWorld` on the stage photo, `rockLight` on each rock):
+- **Its light on the scene:** brighter near the orb, strongest on the pedestal's top, weak on its sides
+  (they face you), a contact shadow at its foot, the ring's light spreading over the metal, the orb
+  mirrored in the brushed top, fog drifting on the ground that glows where the light reaches it. It
+  flickers with the lightning and flashes on every strike or touch.
+- **Awake (0–1):** asleep the world is darker and colourless with thicker fog; it wakes as you charge
+  the orb (`OrbStageState.awake`).
+- **Depth:** a depth map made from the photo's geometry (ground by height, the pedestal as near as its
+  foot); the photo shifts by depth with the camera (the phone's tilt, `StageTilt`, plus a slow drift),
+  so the near ground slides against the far rocks. The pedestal's lights, the orb, the rocks and the
+  dust move with their own depths.
+- **Rocks:** six cut from `orb-rocks.png`, rising one after another with `lift`, bobbing and swaying,
+  two out of focus in front, one pebble circling the orb (behind it, then in front). Each is darkened
+  to the ground's tone and gets a mint rim on the edge facing the orb.
+- **Touch:** a finger on the orb bends the lightning inside to it (`FocusOrb(touch:)`); off the orb,
+  lightning leaves the glass and reaches for it (`drawReach`).
+
 ## Energy (0–1)
 | energy | looks like |
 |---|---|
@@ -44,6 +62,11 @@ Change `energy` inside `withAnimation` and it glides there. Reduce Motion freeze
   oldest on iOS 18), lower the tendril count (the loop's `8`) or the haze octaves first.
 
 ## Checking it without a Mac
+The whole stage (photos, world shader, rocks, lights, orb, the wide shot at any point of the camera's
+move) renders in a browser: `node ios/Tools/stage-preview/shot.mjs ios/Tools/stage-preview/example-shots.json <out dir>`.
+Its layout numbers are copied from `OrbStageLayout` and `FloatingRock`: change them in both places.
+
+Just the orb:
 The part of the shader between `BEGIN SHARED` and `END SHARED` only uses code Metal and GLSL both
 accept, so it can be rendered in a browser:
 

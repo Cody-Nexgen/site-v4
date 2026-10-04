@@ -1,19 +1,15 @@
 import SwiftUI
 
-/// Home, from the owner's mockup: your focus orb floating over its pedestal, then the score, Start, and
-/// what's on today. Its world follows your focus score: a low score is a cold, foggy, still world; a
-/// high one is lit, with rocks floating round the orb. Touch the orb and the lightning reaches for your
-/// finger. The stage is the same one the onboarding builds (same `OrbStageLayout`), so the onboarding
-/// hands over to this screen without a cut. It's a night scene, so Today stays dark in light mode too.
+/// Home, from the owner's mockup: your focus orb floating over its pedestal, as charged as your focus
+/// score, then the score, Start, and what's on today. The stage is the same one the onboarding builds
+/// (same `OrbStageLayout`), so the onboarding hands over to this screen without a cut. It's a night
+/// scene, so Today stays dark in light mode too.
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @Binding var showYou: Bool
     let startFocus: () -> Void
     let open: (AppTab) -> Void
     @State private var shownScore = 0
-    @State private var touchPoint: CGPoint?
-    @State private var strike = 0
-    @State private var crackle = 0
 
     /// How charged the orb is for a focus score (0–10).
     static func orbEnergy(_ score: Double) -> Double { min(1, max(0.08, score / 10)) }
@@ -26,15 +22,13 @@ struct TodayView: View {
             let layout = OrbStageLayout(width: outer.size.width, top: top)
             ScrollView {
                 ZStack(alignment: .top) {
-                    OrbStage(layout: layout, state: .settled(Self.orbEnergy(model.focusScore)), strike: strike, touch: touchPoint)
-                    orbTouchArea(layout)
+                    OrbStage(layout: layout, state: .settled(Self.orbEnergy(model.focusScore)))
                     header
                         .padding(.top, top + 6)
                     content
                         .padding(.top, layout.baseY + 6)
                 }
                 .frame(width: outer.size.width)
-                .coordinateSpace(.named("today"))
             }
             .scrollIndicators(.hidden)
             .ignoresSafeArea(edges: .top)
@@ -43,37 +37,10 @@ struct TodayView: View {
         .environment(\.colorScheme, .dark)
         .toolbarColorScheme(.dark, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.45), trigger: crackle)
-        .sensoryFeedback(.impact(weight: .medium), trigger: strike)
-        .task(id: touchPoint != nil) {
-            while touchPoint != nil, !Task.isCancelled {
-                crackle += 1
-                try? await Task.sleep(for: .milliseconds(110))
-            }
-        }
         .onAppear {
             shownScore = 0
             withAnimation(.smooth(duration: 1.2).delay(0.25)) { shownScore = score }
         }
-    }
-
-    /// Touch the orb: a strike, and the lightning follows your finger while you hold it.
-    private func orbTouchArea(_ layout: OrbStageLayout) -> some View {
-        Circle()
-            .fill(.clear)
-            .contentShape(Circle())
-            .frame(width: layout.sphereRadius * 2.4, height: layout.sphereRadius * 2.4)
-            .position(layout.orbCenter)
-            .frame(width: layout.width, height: layout.height)
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .named("today"))
-                    .onChanged { value in
-                        if touchPoint == nil { strike += 1 }
-                        touchPoint = value.location
-                    }
-                    .onEnded { _ in touchPoint = nil }
-            )
-            .accessibilityHidden(true)
     }
 
     // MARK: Header

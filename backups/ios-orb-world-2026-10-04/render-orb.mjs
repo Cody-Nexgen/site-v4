@@ -4,7 +4,6 @@
 //   node ios/Tools/render-orb.mjs '[[0.12,3],[0.5,8],[1,14]]' 420 <out dir>
 //
 // Each [energy, seconds] pair becomes orb-e<energy>-t<seconds>.png (420 px square here) in <out dir>.
-// [energy, seconds, x, y] also puts a finger on it (x and y from -1 to 1, 0 is the centre).
 // The browser is not the phone: SwiftUI may show the colours slightly differently.
 import { createRequire } from 'module';
 import { execSync } from 'child_process';
@@ -33,14 +32,14 @@ precision highp float;
 #define float2x2 mat2
 #define static
 #define atan2 atan
-uniform vec2 uSize; uniform float uT; uniform float uE; uniform vec3 uTouch;
+uniform vec2 uSize; uniform float uT; uniform float uE;
 out vec4 o;
 ${shared}
 void main() {
   vec2 pos = vec2(gl_FragCoord.x, uSize.y - gl_FragCoord.y);
   float side = min(uSize.x, uSize.y);
   vec2 p = (pos - uSize * 0.5) / (side * 0.5);
-  vec4 c = fzOrb(p, uT, uE, 4.5 / side, uTouch);
+  vec4 c = fzOrb(p, uT, uE, 4.5 / side);
   o = vec4(c.rgb, 1.0);
 }`;
 
@@ -57,11 +56,10 @@ gl.useProgram(pr);
 gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-window.draw = (e, t, tx, ty) => {
+window.draw = (e, t) => {
   gl.uniform2f(gl.getUniformLocation(pr, 'uSize'), ${px}, ${px});
   gl.uniform1f(gl.getUniformLocation(pr, 'uT'), t);
   gl.uniform1f(gl.getUniformLocation(pr, 'uE'), e);
-  gl.uniform3f(gl.getUniformLocation(pr, 'uTouch'), tx ?? 0, ty ?? 0, tx === undefined || tx === null ? 0 : 1);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 };
 </script></body></html>`;
@@ -79,9 +77,9 @@ if (errors.length) {
   await browser.close();
   process.exit(1);
 }
-for (const [e, t, tx, ty] of shots) {
-  await page.evaluate(([e, t, tx, ty]) => window.draw(e, t, tx, ty), [e, t, tx ?? null, ty ?? null]);
-  await page.locator('canvas').screenshot({ path: path.join(out, `orb-e${e}-t${t}${tx === undefined ? '' : `-x${tx}-y${ty}`}.png`) });
+for (const [e, t] of shots) {
+  await page.evaluate(([e, t]) => window.draw(e, t), [e, t]);
+  await page.locator('canvas').screenshot({ path: path.join(out, `orb-e${e}-t${t}.png`) });
 }
 await browser.close();
 console.log(`wrote ${shots.length} image(s) to ${out}`);

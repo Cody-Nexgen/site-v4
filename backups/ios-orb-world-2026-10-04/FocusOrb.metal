@@ -1,8 +1,7 @@
 // Your focus orb, drawn on the GPU: a dark glass sphere holding live electricity. Lightning tendrils
 // leave a white-hot core, fork, and strike the inside of the glass; faint veins crackle over the
 // shell; a slow plasma haze turns inside; the rim catches the light. `energy` (0...1) is how charged
-// it is: more tendrils, brighter strikes, a stronger glow. Touch it and, like a plasma globe, the
-// tendrils bend to your finger and the glass glows under it.
+// it is: more tendrils, brighter strikes, a stronger glow.
 //
 // Used by FocusOrb.swift as a SwiftUI colour effect. Everything between BEGIN SHARED and END SHARED
 // keeps to the subset Metal and GLSL share, so the same code can be rendered in a browser to check it
@@ -88,9 +87,8 @@ static float orbBend(float r, float t, float fi) {
 }
 
 // p: centred, 1 = half the view's shorter side, y down. t: seconds. e: energy 0...1.
-// aa: one point in p units (for a smooth edge). touch: where a finger is (p units) and 1 while it's
-// down, 0 otherwise. Returns a premultiplied colour.
-static float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
+// aa: one point in p units (for a smooth edge). Returns a premultiplied colour.
+static float4 fzOrb(float2 p, float t, float e, float aa) {
     float3 mint = float3(0.651, 0.902, 0.749);   // #A6E6BF, fzMint
     float3 deep = float3(0.04, 0.42, 0.32);
     float3 hot = float3(0.94, 1.0, 0.97);
@@ -99,9 +97,6 @@ static float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
     float r = length(q);
     float ang = atan2(q.y, q.x);
     float charge = 0.35 + 0.65 * e;
-    float2 tq = touch.xy / FZ_ORB_R;
-    float touchAng = atan2(tq.y, tq.x);
-    float touchOn = touch.z;
 
     // Outside: the light it throws, flickering a little with the strikes.
     float beyond = max(r - 1.0, 0.0);
@@ -147,18 +142,14 @@ static float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
             break;
         }
         float base = fi * (FZ_TAU / 8.0) + 0.85 * sin(t * 0.19 + fi * 2.3) + t * 0.07;
-        // A finger pulls most of them to it, like a plasma globe, and they end at the fingertip.
-        float pull = touchOn * (0.55 + 0.4 * orbHash(float3(fi, 7.0, 3.0)));
-        base += orbWrap(touchAng - base) * pull;
-        float reach = mix(1.0, clamp(length(tq), 0.3, 0.97), pull);
         // Some swing towards you (brighter, thicker), some behind the core.
         float depth = 0.68 + 0.32 * sin(t * 0.33 + fi * 1.9);
         float flick = 0.45 + 0.55 * orbNoise1(t * 6.0 + fi * 13.0);
         float strike = pow(orbNoise1(t * 1.9 + fi * 17.0), 6.0) * 2.4;
-        float power = (flick + strike) * on * charge * depth * (1.0 + 0.7 * touchOn);
+        float power = (flick + strike) * on * charge * depth;
 
         float bend = orbBend(rr, t, fi);
-        float span = smoothstep(0.05, 0.18, rr) * (1.0 - smoothstep(reach - 0.025, reach, r));
+        float span = smoothstep(0.05, 0.18, rr) * (1.0 - smoothstep(0.975, 1.0, r));
         float d = abs(orbWrap(ang - base - bend)) * rr;
         float width = mix(70.0, 240.0, rr) / (0.7 + 0.5 * depth);
         tendrils += (1.3 * exp(-d * width) + 0.32 * exp(-d * 20.0)) * span * power;
@@ -173,18 +164,13 @@ static float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
         tendrils += (exp(-d2 * 300.0) + 0.18 * exp(-d2 * 28.0)) * smoothstep(0.0, 0.1, k) * span * power * 0.65;
 
         // Where it strikes the glass.
-        float endA = base + orbBend(reach, t, fi);
-        float2 tip = float2(cos(endA), sin(endA)) * min(reach, 0.985);
+        float endA = base + orbBend(1.0, t, fi);
+        float2 tip = float2(cos(endA), sin(endA)) * 0.985;
         float td = length(q - tip);
         tips += (exp(-td * 40.0) * 1.1 + exp(-td * 10.0) * 0.2) * power;
     }
     col += mix(mint, hot, float3(0.6)) * tendrils;
     col += mix(mint, hot, float3(0.45)) * tips;
-
-    // The glass glowing under the finger (or on the rim nearest it, if it's outside).
-    float2 under = tq / max(length(tq), 0.0001) * min(length(tq), 0.97);
-    float ud = length(q - under);
-    col += mix(mint, hot, float3(0.7)) * (exp(-ud * 16.0) * 1.8 + exp(-ud * 5.0) * 0.35) * touchOn;
 
     // The core.
     float breathe = 0.5 + 0.5 * sin(t * 1.6);
@@ -208,10 +194,8 @@ static float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
 }
 // END SHARED
 
-/// touch: the finger relative to the centre (points) and 1 while it's down.
-[[ stitchable ]] half4 focusOrb(float2 position, half4 color, float2 size, float time, float energy, float3 touch) {
+[[ stitchable ]] half4 focusOrb(float2 position, half4 color, float2 size, float time, float energy) {
     float side = min(size.x, size.y);
     float2 p = (position - size * 0.5) / (side * 0.5);
-    float3 t = float3(touch.xy / (side * 0.5), touch.z);
-    return half4(fzOrb(p, time, clamp(energy, 0.0, 1.0), 1.5 / side, t));
+    return half4(fzOrb(p, time, clamp(energy, 0.0, 1.0), 1.5 / side));
 }

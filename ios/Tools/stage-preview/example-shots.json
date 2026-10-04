@@ -1,0 +1,6 @@
+[
+ {"name": "a-wide", "DOLLY": 0.05, "SCATTER": 1, "E": 0.12, "AWAKE": 0, "LIFT": 0, "FORMED": 0, "RING": 0, "ARCS": 0, "BEAM": 0},
+ {"name": "b-flying", "DOLLY": 0.62, "SCATTER": 1, "GATHER": 1.6, "E": 0.12, "AWAKE": 0, "LIFT": 0, "FORMED": 0, "RING": 0, "ARCS": 0, "BEAM": 0, "T": 11},
+ {"name": "c-formed", "E": 0.18, "AWAKE": 0.3, "LIFT": 0, "T": 14},
+ {"name": "d-today", "CAM": [-6, 2]}
+]

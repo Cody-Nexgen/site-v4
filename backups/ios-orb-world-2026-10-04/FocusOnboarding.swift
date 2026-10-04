@@ -7,15 +7,11 @@ import UserNotifications
 /// 1. The bare Beam Z draws itself as a beam of light, fills, and flies up beside "FocuzNow", where it
 ///    becomes the logo. The focus chart draws, the sign-in buttons rise. Signing in draws the line away.
 /// 2. "Hey, Avan" (the name from Apple, or the start of the email) and "Welcome to FocuzNow".
-/// 3. The story (`OrbStage`): a wide shot of a cold, dark landscape with little lights scattered across
-///    it ("Your focus is everywhere."). "Let's bring it back.": the lights stream to a far-off pedestal
-///    and the camera flies in after them; the ring powers on, the light catches, lightning, and your
-///    focus orb forms there, floating. "Touch it.": the lightning reaches for your finger.
+/// 3. The orb stage (`OrbStage`): the light comes up on an empty pedestal, its ring powers on, sparks
+///    gather above it and your focus orb forms there, floating, with lightning down into the ring.
 /// 4. A glass button opens into a glass panel in place, and the questions are asked there. Every answer
-///    has its own reply, sends a strike down, and wakes the world a little more (light, fog, rocks
-///    lifting into the air).
-/// 5. How many days a year that phone time adds up to (the world goes cold while it counts, then surges
-///    back: "We can change that."), then the permissions in the same panel.
+///    has its own reply and sends a strike down into the orb.
+/// 5. How many days a year that phone time adds up to, then the permissions in the same panel.
 /// 6. The orb settles and Today builds around the same stage.
 struct FocusOnboarding: View {
     enum Stage: Int, Comparable {
@@ -60,20 +56,10 @@ struct FocusOnboarding: View {
     @State private var showWelcomeLine = false
     @State private var stageState = OrbStageState.dark
     @State private var strike = 0
-    @State private var gatherAt: Date?
+    @State private var sparksAt: Date?
+    @State private var pushedIn = false
     @State private var ringOn = false
-    @State private var greetingGone = false
-    /// The story's lines over the wide shot: 1 "Your focus is everywhere.", 2 "Scattered across a
-    /// hundred things.", 3 "Let's bring it back.", 0 none.
-    @State private var storyLine = 0
     @State private var showOrbLine = false
-    /// "Touch it." Then, touched (or after a while), the rest of the line and the button.
-    @State private var askTouch = false
-    @State private var showGrowLine = false
-    @State private var touchPoint: CGPoint?
-    @State private var crackle = 0
-    /// The world before the year in days dimmed it, so "We can change that." can bring it back.
-    @State private var beforeStat = OrbStageState.dark
     @State private var showPanel = false
     @State private var panelOpen = false
     @State private var pulse = 0
@@ -121,14 +107,6 @@ struct FocusOnboarding: View {
         .task { await FocusOrb.prepare() }
         .sensoryFeedback(.impact(weight: .medium), trigger: pulse)
         .sensoryFeedback(.impact(weight: .light), trigger: ringOn)
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.45), trigger: crackle)
-        .task(id: touchPoint != nil) {
-            // A crackle in your hand while you touch the orb.
-            while touchPoint != nil, !Task.isCancelled {
-                crackle += 1
-                try? await Task.sleep(for: .milliseconds(110))
-            }
-        }
         .sensoryFeedback(.selection, trigger: askIndex)
     }
 
@@ -391,30 +369,13 @@ struct FocusOnboarding: View {
 
     /// The stage stays put from here to Today; only the words and the panel come and go over it.
     private func journeyLayer(_ size: CGSize, top: CGFloat, bottom: CGFloat) -> some View {
-        let layout = OrbStageLayout(width: size.width, top: top, screenHeight: size.height)
+        let layout = OrbStageLayout(width: size.width, top: top)
         let compact = isCompact()
         let small = size.height < 720
         return ZStack(alignment: .top) {
-            OrbStage(layout: layout, state: stageState, strike: strike, gatherAt: gatherAt, touch: touchPoint, hint: askTouch)
+            OrbStage(layout: layout, state: stageState, strike: strike, sparksAt: sparksAt)
+                .scaleEffect(pushedIn ? 1 : 1.08, anchor: UnitPoint(x: layout.ring.x / layout.width, y: layout.ring.y / max(layout.height, 1)))
                 .frame(width: size.width, height: size.height, alignment: .top)
-
-            // Touch the orb: the lightning reaches for your finger, wherever you drag it.
-            Circle()
-                .fill(.clear)
-                .contentShape(Circle())
-                .frame(width: layout.sphereRadius * 3, height: layout.sphereRadius * 3)
-                .position(layout.orbCenter)
-                .gesture(
-                    DragGesture(minimumDistance: 0, coordinateSpace: .named("journey"))
-                        .onChanged { value in
-                            if touchPoint == nil { touchBegan() }
-                            touchPoint = value.location
-                        }
-                        .onEnded { _ in touchPoint = nil }
-                )
-                .allowsHitTesting(stageState.formed > 0.9 && stage != .finishing)
-                .accessibilityLabel("Your focus orb")
-                .accessibilityAddTraits(.isButton)
 
             VStack(spacing: 8) {
                 Text(greeting.isEmpty ? "Hey there" : "Hey, \(greeting)")
@@ -429,33 +390,17 @@ struct FocusOnboarding: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 24)
             .padding(.top, top + (small ? 12 : 22))
-            .opacity(compact || leaving || greetingGone ? 0 : 1)
-            .blur(radius: compact || greetingGone ? 12 : 0)
-            .animation(.easeInOut(duration: 0.8), value: greetingGone)
-
-            // The story, over the wide shot.
-            ZStack {
-                storyText("Your focus is everywhere.", shown: storyLine == 1, small: small)
-                storyText("Scattered across a hundred things.", shown: storyLine == 2, small: small)
-                storyText("Let's bring it back.", shown: storyLine == 3, small: small)
-            }
-            .padding(.horizontal, 32)
-            .position(x: size.width / 2, y: top + size.height * 0.16)
-            .frame(width: size.width, height: size.height)
-            .allowsHitTesting(false)
+            .opacity(compact || leaving ? 0 : 1)
+            .blur(radius: compact ? 12 : 0)
 
             VStack(spacing: 8) {
                 Text("This is your focus orb.")
                     .font(.fzDisplay(small ? 23 : 26, weight: .bold))
                     .blurReveal(showOrbLine)
-                ZStack {
-                    Text("Touch it.")
-                        .blurReveal(showOrbLine && !showGrowLine, delay: 0.3)
-                    Text("It's barely charged. Answer a few questions and it grows.")
-                        .blurReveal(showGrowLine)
-                }
-                .font(small ? .subheadline : .body)
-                .foregroundStyle(.white.opacity(0.7))
+                Text("It's barely charged. Answer a few questions and it grows.")
+                    .font(small ? .subheadline : .body)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .blurReveal(showOrbLine, delay: 0.25)
             }
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
@@ -463,7 +408,6 @@ struct FocusOnboarding: View {
             .position(x: size.width / 2, y: layout.baseY + (small ? 40 : 56))
             .frame(width: size.width, height: size.height)
             .opacity(compact ? 0 : 1)
-            .allowsHitTesting(false)
 
             statView(size, below: layout.baseY, small: small)
                 .opacity(stage == .stat ? 1 : 0)
@@ -475,17 +419,8 @@ struct FocusOnboarding: View {
                 .opacity(leaving ? 0 : 1)
         }
         .frame(width: size.width, height: size.height)
-        .coordinateSpace(.named("journey"))
         .animation(.spring(duration: 0.85, bounce: 0.12), value: compact)
         .animation(.spring(duration: 0.85, bounce: 0.12), value: stage)
-    }
-
-    private func storyText(_ text: String, shown: Bool, small: Bool) -> some View {
-        Text(text)
-            .font(.fzDisplay(small ? 28 : 32, weight: .bold))
-            .foregroundStyle(.white)
-            .multilineTextAlignment(.center)
-            .blurReveal(shown)
     }
 
     /// The glass button that opens into the glass panel where everything is asked.
@@ -509,7 +444,6 @@ struct FocusOnboarding: View {
         switch stage {
         case .hello:
             panelButton("Make it grow", action: openQuestions)
-                .disabled(!showGrowLine)
         case .questions:
             if let picked {
                 replyCard(picked)
@@ -759,93 +693,49 @@ struct FocusOnboarding: View {
         later(1.15) { startHello() }
     }
 
-    /// Hello, then the story: your focus scattered across a dark world, brought back to the pedestal,
-    /// the camera flying in after it, and the orb forming. Then "Touch it."
+    /// Hello, then the story of the orb: the light comes up on the empty pedestal, the ring powers on,
+    /// sparks lift off it and gather, they catch, lightning jumps up, and the orb forms around it.
     private func startHello() {
         withAnimation(.easeInOut(duration: 0.4)) { stage = .hello }
         later(0.15) { showHey = true }
         later(0.6) { showWelcomeLine = true }
         if reduceMotion {
-            later(0.9) { withAnimation(.easeInOut(duration: 0.8)) { stageState = .settled(0.12) } }
+            later(0.9) {
+                withAnimation(.easeInOut(duration: 0.8)) { stageState = .settled(0.12) }
+                pushedIn = true
+            }
             later(1.6) { showOrbLine = true }
-            later(2.2) { revealGrow() }
+            later(2.2) { withAnimation(.spring(duration: 0.7, bounce: 0.15)) { showPanel = true } }
             return
         }
-        // The wide shot comes up, dark and cold, drifting in very slowly.
-        later(1.4) {
+        later(1.3) {
             withAnimation(.easeInOut(duration: 2.4)) { stageState.scene = 1 }
-            withAnimation(.easeInOut(duration: 6)) { stageState.dolly = 0.06 }
+            withAnimation(.easeOut(duration: 6.5)) { pushedIn = true }
         }
-        later(2.7) { greetingGone = true }
-        later(3.2) {
-            storyLine = 1
-            withAnimation(.easeInOut(duration: 1.8)) { stageState.scatter = 1 }
-        }
-        later(5.0) { storyLine = 2 }
-        later(7.0) { storyLine = 3 }
-        // "Let's bring it back": the lights set off and the camera flies in after them.
-        later(7.8) {
-            gatherAt = .now
-            withAnimation(.easeInOut(duration: 3.0)) { stageState.dolly = 1 }
-        }
-        later(9.4) { storyLine = 0 }
-        // They catch into a white-hot point; the pedestal powers on.
-        later(10.4) {
-            withAnimation(.easeOut(duration: 0.4)) { stageState.spark = 1 }
-            pulse += 1
-        }
-        later(10.6) {
-            withAnimation(.easeInOut(duration: 1.2)) { stageState.ring = 1 }
-            withAnimation(.easeInOut(duration: 2)) {
-                stageState.beam = 1
-                stageState.awake = 0.18
-            }
+        later(1.7) { withAnimation(.easeInOut(duration: 2.2)) { stageState.beam = 1 } }
+        later(3.0) {
+            withAnimation(.easeInOut(duration: 1.3)) { stageState.ring = 1 }
             ringOn = true
         }
-        // Lightning jumps up from the ring and the orb forms around the light.
-        later(11.5) {
+        later(4.0) { sparksAt = .now }
+        later(5.3) {
+            withAnimation(.easeOut(duration: 0.35)) { stageState.spark = 1 }
+            pulse += 1
+        }
+        later(5.5) {
             withAnimation(.easeOut(duration: 0.2)) { stageState.arcs = 1 }
             strike += 1
         }
-        later(11.7) {
+        later(5.75) {
             withAnimation(.spring(duration: 1.5, bounce: 0.18)) { stageState.formed = 1 }
             pulse += 1
         }
-        later(12.1) {
-            withAnimation(.easeOut(duration: 1)) {
-                stageState.spark = 0
-                stageState.scatter = 0
-            }
+        later(6.1) {
+            withAnimation(.easeOut(duration: 1)) { stageState.spark = 0 }
+            sparksAt = nil
         }
-        later(13.0) {
-            gatherAt = nil
-            showOrbLine = true
-        }
-        later(13.6) { askTouch = true }
-        // Not everyone will touch it: carry on anyway.
-        later(20) { revealGrow() }
-    }
-
-    /// The first touch on the orb (and every touch after): a strike, and it wakes a little.
-    private func touchBegan() {
-        strike += 1
-        pulse += 1
-        if askTouch {
-            askTouch = false
-            withAnimation(.easeInOut(duration: 1.2)) {
-                stageState.energy = min(1, stageState.energy + 0.06)
-                stageState.awake = min(1, stageState.awake + 0.12)
-            }
-            later(1.0) { revealGrow() }
-        }
-    }
-
-    /// "It's barely charged. Answer a few questions and it grows." and the button.
-    private func revealGrow() {
-        guard stage == .hello, !showGrowLine else { return }
-        askTouch = false
-        showGrowLine = true
-        later(0.8) { withAnimation(.spring(duration: 0.7, bounce: 0.15)) { showPanel = true } }
+        later(7.0) { showOrbLine = true }
+        later(7.9) { withAnimation(.spring(duration: 0.7, bounce: 0.15)) { showPanel = true } }
     }
 
     private func openQuestions() {
@@ -882,14 +772,9 @@ struct FocusOnboarding: View {
         }
     }
 
-    /// A strike comes down the lightning, the orb charges up, and the world wakes a little more: the
-    /// light reaches further, the fog thins, another rock lifts off.
+    /// A strike comes down the lightning and the orb charges up.
     private func grow(by amount: Double) {
-        withAnimation(.easeInOut(duration: 1.2)) {
-            stageState.energy = min(1, stageState.energy + amount)
-            stageState.awake = min(1, stageState.awake + amount * 0.9)
-            stageState.lift = min(1, stageState.lift + amount * 1.3)
-        }
+        withAnimation(.easeInOut(duration: 1.2)) { stageState.energy = min(1, stageState.energy + amount) }
         strike += 1
         pulse += 1
     }
@@ -908,29 +793,9 @@ struct FocusOnboarding: View {
         later(1.6) {
             statStep = 2
             countDays(to: Int((model.phoneHoursGuess * 365 / 24).rounded()))
-            // While the days count up, the world goes cold: the orb dims, the rocks sink.
-            beforeStat = stageState
-            withAnimation(.easeInOut(duration: 2.2)) {
-                stageState.energy = 0.08
-                stageState.awake = 0.04
-                stageState.lift = max(0, stageState.lift - 0.6)
-                stageState.beam = 0.35
-            }
         }
         later(3.0) { statStep = 3 }
-        later(3.7) {
-            statStep = 4
-            // "We can change that.": it all comes back, brighter.
-            let back = beforeStat
-            withAnimation(.spring(duration: 1.3, bounce: 0.2)) {
-                stageState.energy = min(1, back.energy + 0.1)
-                stageState.awake = min(1, back.awake + 0.12)
-                stageState.lift = min(1, back.lift + 0.15)
-                stageState.beam = 1
-            }
-            strike += 1
-            pulse += 1
-        }
+        later(3.7) { statStep = 4 }
         later(4.5) { withAnimation(.spring(duration: 0.7, bounce: 0.15)) { showPanel = true } }
     }
 
@@ -1003,12 +868,7 @@ struct FocusOnboarding: View {
         }
         strike += 1
         pulse += 1
-        let today = OrbStageState.settled(TodayView.orbEnergy(model.focusScore))
-        withAnimation(.easeInOut(duration: 1.2)) {
-            stageState.energy = today.energy
-            stageState.awake = today.awake
-            stageState.lift = today.lift
-        }
+        withAnimation(.easeInOut(duration: 1.2)) { stageState.energy = TodayView.orbEnergy(model.focusScore) }
         later(0.6) { withAnimation(.easeIn(duration: 0.4)) { leaving = true } }
         later(1.3) { onboarded = true }
     }

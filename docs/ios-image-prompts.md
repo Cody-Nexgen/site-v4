@@ -276,3 +276,6 @@ Edit the attached image. Keep everything exactly the same: camera, framing, pede
 ```
 If anything moved (the pedestal shifted, the grooves changed), skip it: the ring glow can be drawn in
 code instead. Save them as `ios/Art/orb-stage.jpg` and `ios/Art/orb-stage-lit.jpg`.
+
+Also done for the story (2026-10-04): `orb-stage-wide.jpg` (the same pedestal far off, where the story
+opens) and `orb-rocks.png` (six rocks on a transparent background, cut into `OrbRock0`–`OrbRock5`).
