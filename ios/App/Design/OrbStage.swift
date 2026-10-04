@@ -223,6 +223,8 @@ struct OrbStage: View, Animatable {
     var touch: CGPoint?
     /// A soft pulse round the orb asking to be touched.
     var hint = false
+    /// Extra camera movement (points), from scrolling the page: the scene shifts by depth.
+    var look: CGSize = .zero
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var struckAt = Date.distantPast
@@ -266,6 +268,8 @@ struct OrbStage: View, Animatable {
                 .opacity(close * s.scene)
                 .offset(cam * 0.06)
             StagePhoto(layout: layout, state: s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift)
+            NightSky(layout: layout, t: t, cam: cam, awake: s.awake)
+                .opacity(close * s.scene)
             LightShaft(layout: layout)
                 .opacity(s.beam * (0.4 + 0.6 * s.awake) * close)
                 .offset(cam * 0.1)
@@ -343,8 +347,10 @@ struct OrbStage: View, Animatable {
 
     /// The tilt of the phone, plus a slow drift like a camera held by hand.
     private func camera(_ t: CGFloat) -> CGSize {
-        guard !reduceMotion else { return .zero }
-        return CGSize(width: tilt.offset.width + 3 * sin(t * 0.13), height: tilt.offset.height + 2 * sin(t * 0.09 + 1))
+        // The world shader can shift the photo by up to 32 points (its maxSampleOffset).
+        let lookY = min(max(look.height, -14), 14)
+        guard !reduceMotion else { return CGSize(width: 0, height: lookY) }
+        return CGSize(width: tilt.offset.width + 3 * sin(t * 0.13), height: tilt.offset.height + 2 * sin(t * 0.09 + 1) + lookY)
     }
 
     // MARK: The orb forming

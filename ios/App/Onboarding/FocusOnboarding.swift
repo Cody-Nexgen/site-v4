@@ -499,6 +499,7 @@ struct FocusOnboarding: View {
         .background(shape.fill(.white.opacity(0.05)))
         .overlay(shape.strokeBorder(.white.opacity(0.13)))
         .fzGlass(in: shape)
+        .fzBottomGlow(strength: panelOpen ? 0 : 0.6)
         .opacity(showPanel ? 1 : 0)
         .offset(y: showPanel ? 0 : 50)
         .allowsHitTesting(showPanel)
@@ -1088,7 +1089,7 @@ private struct SignInLabel<Icon: View>: View {
 }
 
 /// A stand-in for Google's "G" until the Google Sign-In SDK (with its official logo) is added.
-private struct GoogleMark: View {
+struct GoogleMark: View {
     var body: some View {
         Text("G")
             .font(.system(size: 22, weight: .bold, design: .rounded))
@@ -1112,6 +1113,7 @@ private struct GlassCapsuleButtonStyle: ButtonStyle {
             .background(Capsule().fill(.white.opacity(configuration.isPressed ? 0.1 : 0.05)))
             .overlay(Capsule().strokeBorder(.white.opacity(0.13)))
             .fzGlass(in: Capsule(), interactive: true)
+            .fzBottomGlow(strength: 0.55)
             .contentShape(Capsule())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(duration: 0.25), value: configuration.isPressed)
@@ -1130,6 +1132,7 @@ private struct WhiteCapsuleButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(Capsule().fill(Color(hex: 0xF3F5F0)))
+            .fzBottomGlow(strength: enabled ? (configuration.isPressed ? 1.4 : 1) : 0)
             .opacity(enabled ? 1 : 0.35)
             .contentShape(Capsule())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)

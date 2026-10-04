@@ -18,7 +18,7 @@ enum LiveFocus {
 
     static func started(_ session: FocusSession, selection: FamilyActivitySelection) {
         if screenTimeApproved {
-            BlockList.shield(store, with: selection)
+            Protections.lock(store, with: selection)
             BlockList.scheduleSessionEnd(session.end)
         }
         endAllActivities()
@@ -35,7 +35,7 @@ enum LiveFocus {
         if session.breakStartedAt != nil {
             store.clearAllSettings()
         } else if screenTimeApproved {
-            BlockList.shield(store, with: selection)
+            Protections.lock(store, with: selection)
             BlockList.scheduleSessionEnd(session.end)
         }
         let content = ActivityContent(state: state(for: session, locked: locked(selection), at: .now), staleDate: session.end.addingTimeInterval(60))

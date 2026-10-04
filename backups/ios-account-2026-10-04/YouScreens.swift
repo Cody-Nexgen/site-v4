@@ -208,11 +208,17 @@ struct ShopView: View {
     }
 }
 
-// MARK: Preferences (You → Other → Preferences). Your account and protections live in You itself.
+// MARK: Settings: account things only. Focus, Pass and looks live where they're used.
 
-/// Notifications, haptics and light or dark: quiet grouped rows.
+/// Themed like the rest of FocuzNow: a lighthouse card on top, then quiet grouped rows.
 struct SettingsView: View {
+    @Environment(AppModel.self) private var model
     @AppStorage("appearance") private var appearance = "system"
+    @AppStorage("onboarded") private var onboarded = true
+    @AppStorage("onboardingStep") private var onboardingStep = 0
+    @AppStorage("devMode") private var devMode = false
+    @State private var showPro = false
+    @State private var confirmDelete = false
     @State private var nudges = true
     @State private var cheers = true
     @State private var haptics = true
@@ -220,12 +226,14 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
+                profile.riseIn()
+
                 group("Notifications") {
                     SettingsToggle(symbol: "bell", title: "Session reminders", isOn: $nudges)
                     SettingsToggle(symbol: "party.popper", title: "Heads-up when you finish", isOn: $cheers)
                     SettingsToggle(symbol: "iphone.radiowaves.left.and.right", title: "Haptics", isOn: $haptics)
                 }
-                .riseIn()
+                .riseIn(delay: 0.08)
 
                 group("Appearance") {
                     HStack(spacing: 8) {
@@ -246,12 +254,38 @@ struct SettingsView: View {
                     .padding(10)
                     .sensoryFeedback(.selection, trigger: appearance)
                 }
-                .riseIn(delay: 0.08)
+                .riseIn(delay: 0.16)
 
-                Text("Today and You stay dark either way: they're night scenes.")
+                group("About") {
+                    NavigationLink { AboutView() } label: { SettingsRow(symbol: "light.beacon.max", title: "About FocuzNow") }
+                    NavigationLink { GuestPassView() } label: { SettingsRow(symbol: "ticket", title: "Send a guest pass") }
+                    Button {
+                        onboardingStep = 0
+                        onboarded = false
+                    } label: { SettingsRow(symbol: "arrow.counterclockwise", title: "Replay the intro", chevron: false) }
+                }
+                .riseIn(delay: 0.24)
+
+                group("Developer") {
+                    SettingsToggle(symbol: "hammer", title: "Developer mode", isOn: $devMode)
+                    if devMode {
+                        NavigationLink { DeveloperView() } label: { SettingsRow(symbol: "wrench.and.screwdriver", title: "Developer tools") }
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.spring(duration: 0.35), value: devMode)
+                .riseIn(delay: 0.28)
+
+                group("Account") {
+                    Button {} label: { SettingsRow(symbol: "rectangle.portrait.and.arrow.right", title: "Sign out", chevron: false) }
+                    Button { confirmDelete = true } label: { SettingsRow(symbol: "trash", title: "Delete account", chevron: false, destructive: true) }
+                }
+                .riseIn(delay: 0.32)
+
+                Text("FocuzNow 0.1 · Your passwords and photos stay encrypted on your devices.")
                     .font(.footnote)
                     .foregroundStyle(Color.fzInk3)
-                    .padding(.horizontal, 4)
+                    .frame(maxWidth: .infinity)
             }
             .padding(20)
             .frame(maxWidth: 680)
@@ -260,7 +294,39 @@ struct SettingsView: View {
         .scrollIndicators(.hidden)
         .background(SkyBackground())
         .buttonStyle(.plain)
-        .navigationTitle("Preferences")
+        .navigationTitle("Settings")
+        .sheet(isPresented: $showPro) { ProView().environment(model) }
+        .confirmationDialog("Delete your FocuzNow account?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete account", role: .destructive) {}
+        } message: {
+            Text("This deletes your account, sessions, lists and FocuzPass vault from the cloud. It can't be undone.")
+        }
+    }
+
+    private var profile: some View {
+        ZStack(alignment: .bottomLeading) {
+            LighthouseView(scene: LighthouseScene(power: Theme.lampPower(model.focusScore), phase: 3.2, speed: 0.7, x: 0.78, waterline: 0.12, horizon: 0.18, scale: 1.0))
+                .frame(height: 190)
+                .overlay(LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom))
+            HStack(spacing: 12) {
+                Avatar(name: model.userName, size: 48)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.userName).font(.fzDisplay(22, weight: .bold)).foregroundStyle(.white)
+                    Text(model.isPro ? "FocuzNow Pro" : "Free plan · \(model.streakDays)-day streak").font(.subheadline).foregroundStyle(.white.opacity(0.7))
+                }
+                Spacer()
+                if !model.isPro {
+                    Button("Go Pro") { showPro = true }
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.white, in: Capsule())
+                }
+            }
+            .padding(16)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -269,6 +335,31 @@ struct SettingsView: View {
             VStack(spacing: 0) { content() }
                 .fzSurface(cornerRadius: 20)
         }
+    }
+}
+
+private struct SettingsRow: View {
+    let symbol: String
+    let title: String
+    var chevron = true
+    var destructive = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(destructive ? Theme.danger : Color.fzInk)
+                .frame(width: 30, height: 30)
+                .background(Color.fzInk.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text(title).foregroundStyle(destructive ? Theme.danger : Color.fzInk)
+            Spacer()
+            if chevron {
+                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Color.fzInk3)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
     }
 }
 
@@ -376,5 +467,83 @@ struct ProView: View {
         }
         .buttonStyle(.pressable)
         .sensoryFeedback(.selection, trigger: selected)
+    }
+}
+
+// MARK: The "You" sheet on iPhone
+
+struct YouSheet: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(spacing: 14) {
+                        Avatar(name: model.userName, size: 56)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(model.userName).font(.fzDisplay(24, weight: .bold)).foregroundStyle(Color.fzInk)
+                            Text("\(model.coins) coins · \(model.streakDays)-day streak")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.fzInk3)
+                        }
+                    }
+                    .riseIn()
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                        tile("chart.bar.fill", "Stats") { StatsView() }
+                        tile("person.2.fill", "Friends") { FriendsView() }
+                        tile("tree.fill", "Forest") { ForestView() }
+                        tile("bag.fill", "Shop") { ShopView() }
+                        tile("paintbrush.fill", "Customize") { CustomizeView() }
+                        tile("ticket.fill", "Guest pass") { GuestPassView() }
+                    }
+                    .riseIn(delay: 0.1)
+                    VStack(spacing: 0) {
+                        NavigationLink { SettingsView() } label: { row("gearshape.fill", "Settings") }
+                        Divider().overlay(Color.fzLine).padding(.leading, 54)
+                        NavigationLink { AboutView() } label: { row("light.beacon.max", "About FocuzNow") }
+                    }
+                    .fzSurface(cornerRadius: 20)
+                    .riseIn(delay: 0.2)
+                }
+                .padding(20)
+            }
+            .buttonStyle(.pressable)
+            .background(Color.fzBg)
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationCornerRadius(32)
+    }
+
+    private func tile<Destination: View>(_ symbol: String, _ title: String, @ViewBuilder destination: @escaping () -> Destination) -> some View {
+        NavigationLink(destination: destination) {
+            VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.fzBone)
+                    .frame(width: 32, height: 32)
+                    .background(Color.fzOnBone, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                Text(title).font(.headline).foregroundStyle(Color.fzOnBone)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Color.fzBone, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+    }
+
+    private func row(_ symbol: String, _ title: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.fzInk)
+                .frame(width: 30, height: 30)
+                .background(Color.fzInk.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text(title).foregroundStyle(Color.fzInk)
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Color.fzInk3)
+        }
+        .padding(12)
+        .contentShape(Rectangle())
     }
 }

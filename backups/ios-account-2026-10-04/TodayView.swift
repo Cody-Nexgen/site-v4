@@ -7,7 +7,7 @@ import SwiftUI
 /// hands over to this screen without a cut. It's a night scene, so Today stays dark in light mode too.
 struct TodayView: View {
     @Environment(AppModel.self) private var model
-    let openCoach: () -> Void
+    @Binding var showYou: Bool
     let startFocus: () -> Void
     let open: (AppTab) -> Void
     @State private var shownScore = 0
@@ -108,18 +108,7 @@ struct TodayView: View {
                     .font(.fzDisplay(19, weight: .bold))
                     .foregroundStyle(.white)
                 Spacer()
-                Button(action: openCoach) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(Circle().fill(.white.opacity(0.06)))
-                        .overlay(Circle().strokeBorder(.white.opacity(0.13)))
-                        .fzGlass(in: Circle(), interactive: true)
-                }
-                .buttonStyle(.pressable)
-                .accessibilityLabel("Coach")
-                Button { open(.you) } label: { Avatar(name: model.userName, size: 40, image: model.profilePhoto) }
+                Button { showYou = true } label: { Avatar(name: model.userName, size: 40) }
                     .buttonStyle(.pressable)
                     .accessibilityLabel("You")
             }

@@ -5,7 +5,7 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
-/// You → Support → Developer mode → Developer tools. For testing, for people
+/// Settings → Developer → Developer tools (shown when Developer mode is on). For testing, for people
 /// who like to see what's going on, and for anyone whose app is misbehaving: what FocuzNow is allowed
 /// to do, what it's doing right now, and ways to reset it. "Copy diagnostics" gives support
 /// something to go on without any personal data.
@@ -67,26 +67,13 @@ struct DeveloperView: View {
                 }
                 .disabled(BlockList.dailyWindow == nil)
                 Button("Unlock everything now", role: .destructive) {
-                    for name in Protections.lockStores { ManagedSettingsStore(named: name).clearAllSettings() }
+                    ManagedSettingsStore(named: .focus).clearAllSettings()
+                    ManagedSettingsStore(named: .daily).clearAllSettings()
                 }
             } header: {
                 Text("Screen Time")
             } footer: {
-                Text("Unlocking clears the shields until the next session, daily block or autofocus lock starts.")
-            }
-
-            Section {
-                row("Blocking now", Protections.isBlocking ? "Yes" : "No")
-                row("Autofocus", model.protections.autofocus ? "After \(GoalDial.format(model.protections.autofocusMinutes))\(model.protections.autofocusLocks ? ", locks" : ", nudges")" : "Off")
-                row("Uninstall protection", model.protections.uninstallProtection ? "On" : "Off")
-                row("Adult site filter", model.protections.adultFilter ? "On" : "Off")
-                row("PIN", PinLock.isSet ? (PinLock.resetAt != nil ? "On, resetting" : "On") : "Off")
-                row("Emergency passes left", "\(EmergencyPass.left) of \(EmergencyPass.perWeek)")
-                Button("Give back this week's passes") { EmergencyPass.reset() }
-            } header: {
-                Text("Protections")
-            } footer: {
-                Text("Set these in You. Giving passes back is for testing only.")
+                Text("Unlocking clears the shields until the next session or daily block starts.")
             }
 
             Section("Notifications") {
@@ -165,7 +152,6 @@ struct DeveloperView: View {
             "Dynamic Island: \(IslandGeometry.deviceHasIsland ? "yes" : "no")",
             "Live Activities: \(LiveFocus.activitiesEnabled ? "allowed" : "off"), running: \(activities)",
             "Screen Time: \(screenTimeStatus), locked: \(BlockList.count(model.selection)), daily block: \(BlockList.dailyWindow?.label ?? "none")",
-            "Autofocus: \(model.protections.autofocus ? "on" : "off"), uninstall protection: \(model.protections.uninstallProtection ? "on" : "off"), filter: \(model.protections.adultFilter ? "on" : "off"), PIN: \(PinLock.isSet ? "on" : "off")",
             "Notifications: \(notifications)",
             "Session running: \(model.session != nil ? "yes" : "no")",
         ].joined(separator: "\n")

@@ -5,10 +5,10 @@ struct PlanView: View {
     enum Mode: String, CaseIterable { case today = "Today", lists = "Lists" }
 
     @Environment(AppModel.self) private var model
+    @Environment(PopupCenter.self) private var popups
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var mode: Mode = .today
     @State private var day = Calendar.current.startOfDay(for: .now)
-    @State private var adding = false
     @State private var newTitle = ""
 
     var body: some View {
@@ -27,19 +27,30 @@ struct PlanView: View {
                 }
                 .padding(.horizontal, 20)
             }
-            GlassCircleButton(symbol: "plus", size: 58) { adding = true }
+            GlassCircleButton(symbol: "plus", size: 58, action: addTodo)
                 .padding(.trailing, 22)
                 .padding(.bottom, 24)
         }
         .toolbar(.hidden, for: .navigationBar)
-        .alert("New to-do", isPresented: $adding) {
-            TextField("What needs doing?", text: $newTitle)
-            Button("Add") {
-                if !newTitle.isEmpty { model.todos.insert(TodoItem(title: newTitle, list: "School", due: "Today"), at: 0) }
-                newTitle = ""
-            }
-            Button("Cancel", role: .cancel) { newTitle = "" }
+    }
+
+    private func addTodo() {
+        newTitle = ""
+        popups.show(FZPopup(symbol: "checklist", title: "New to-do", message: "Small and specific works best.",
+                            primary: "Add", secondary: "Cancel",
+                            onPrimary: saveTodo,
+                            extra: AnyView(PopupField(placeholder: "What needs doing?", text: $newTitle) {
+                                popups.dismiss()
+                                saveTodo()
+                            })))
+    }
+
+    private func saveTodo() {
+        let title = newTitle.trimmingCharacters(in: .whitespaces)
+        if !title.isEmpty {
+            withAnimation(.spring(duration: 0.4)) { model.todos.insert(TodoItem(title: title, list: "School", due: "Today"), at: 0) }
         }
+        newTitle = ""
     }
 
     private var header: some View {

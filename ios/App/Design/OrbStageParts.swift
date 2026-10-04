@@ -115,7 +115,7 @@ struct StagePhoto: View {
             .resizable()
             .interpolation(.high)
             .frame(width: size.width, height: size.height)
-            .layerEffect(shader, maxSampleOffset: CGSize(width: 16, height: 16))
+            .layerEffect(shader, maxSampleOffset: CGSize(width: 32, height: 32))
             .mask {
                 LinearGradient(stops: [
                     .init(color: .clear, location: 0), .init(color: .black, location: 0.05),
@@ -137,6 +137,48 @@ struct StagePhoto: View {
     }
 }
 
+/// The night sky above the scene, where the photo goes black: faint stars that twinkle and barely
+/// move with the camera (they're far), and a soft haze where the light comes down from. It fades out
+/// before the mountain tops.
+struct NightSky: View {
+    let layout: OrbStageLayout
+    let t: CGFloat
+    let cam: CGSize
+    let awake: Double
+
+    var body: some View {
+        let f = layout.imageFrame
+        let fadeEnd = f.minY + 70 * layout.k
+        Canvas { g, _ in
+            // The canvas starts 420 points above the stage.
+            g.translateBy(x: 0, y: 420)
+            let haze = CGRect(x: layout.width / 2 - layout.width * 0.9, y: f.minY - 420, width: layout.width * 1.8, height: 520)
+            g.fill(Path(ellipseIn: haze), with: .radialGradient(
+                Gradient(colors: [Color(hex: 0xBFE8D2).opacity(0.05 + 0.05 * awake), .clear]),
+                center: CGPoint(x: layout.width / 2, y: f.minY - 160), startRadius: 0, endRadius: layout.width * 0.9))
+            for i in 0..<90 {
+                let h1 = Self.hash(i, 71), h2 = Self.hash(i, 72), h3 = Self.hash(i, 73), h4 = Self.hash(i, 74)
+                let x = h1 * layout.width + cam.width * 0.03
+                let y = f.minY - 420 + h2 * (fadeEnd - f.minY + 420) + cam.height * 0.03
+                let fade = 1 - fzSmooth(f.minY - 10, fadeEnd, y)
+                let twinkle = 0.45 + 0.55 * (0.5 + 0.5 * sin(t * (0.6 + h3 * 1.8) + h4 * 6.3))
+                let r = (0.45 + 1.1 * h3 * h3) * layout.k
+                let alpha = Double(fade * twinkle) * (0.25 + 0.55 * Double(h4)) * (0.6 + 0.4 * awake)
+                g.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(.white.opacity(alpha)))
+            }
+        }
+        .frame(width: layout.width, height: max(fadeEnd, 1) + 420)
+        .offset(y: -420)
+        .blendMode(.plusLighter)
+        .allowsHitTesting(false)
+    }
+
+    private static func hash(_ i: Int, _ k: Int) -> CGFloat {
+        let x = sin(CGFloat(i) * 12.9898 + CGFloat(k) * 78.233) * 43758.5453
+        return x - floor(x)
+    }
+}
+
 /// A soft shaft of light falling from the top onto the pedestal.
 struct LightShaft: View {
     let layout: OrbStageLayout
@@ -146,11 +188,13 @@ struct LightShaft: View {
         let narrow = layout.topRadii.width * 0.35
         let wide = layout.topRadii.width * 1.05
         let light = Color(hex: 0xDDF5E6)
+        // From well above the top of the screen, so pulling the page down never shows its end.
         Path { p in
-            p.move(to: CGPoint(x: ring.x - narrow, y: 0))
-            p.addLine(to: CGPoint(x: ring.x + narrow, y: 0))
-            p.addLine(to: CGPoint(x: ring.x + wide, y: ring.y))
-            p.addLine(to: CGPoint(x: ring.x - wide, y: ring.y))
+            p.addLines([
+                CGPoint(x: ring.x - narrow * 0.8, y: -420), CGPoint(x: ring.x + narrow * 0.8, y: -420),
+                CGPoint(x: ring.x + narrow, y: 0), CGPoint(x: ring.x + wide, y: ring.y),
+                CGPoint(x: ring.x - wide, y: ring.y), CGPoint(x: ring.x - narrow, y: 0),
+            ])
             p.closeSubpath()
         }
         .fill(LinearGradient(colors: [light.opacity(0.13), light.opacity(0.05), light.opacity(0.1)], startPoint: .top, endPoint: .bottom))

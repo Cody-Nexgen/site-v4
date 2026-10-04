@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct FocuzNowApp: App {
     @State private var model: AppModel
+    @State private var popups = PopupCenter()
 
     init() {
         let model = AppModel()
@@ -16,6 +17,7 @@ struct FocuzNowApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .environment(popups)
         }
     }
 }

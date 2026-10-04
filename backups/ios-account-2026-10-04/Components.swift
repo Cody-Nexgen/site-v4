@@ -273,26 +273,17 @@ struct AppIcon: View {
     }
 }
 
-/// Your photo, or a bone circle with the initial like the website's account button.
+/// A bone circle with the initial, like the website's account button.
 struct Avatar: View {
     let name: String
     var size: CGFloat = 34
-    var image: UIImage? = nil
 
     var body: some View {
-        if let image {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(Circle())
-        } else {
-            Text(String(name.prefix(1)).uppercased())
-                .font(.fzDisplay(size * 0.44, weight: .bold))
-                .foregroundStyle(Color.fzOnBone)
-                .frame(width: size, height: size)
-                .background(Color.fzBone, in: Circle())
-        }
+        Text(String(name.prefix(1)).uppercased())
+            .font(.fzDisplay(size * 0.44, weight: .bold))
+            .foregroundStyle(Color.fzOnBone)
+            .frame(width: size, height: size)
+            .background(Color.fzBone, in: Circle())
     }
 }
 

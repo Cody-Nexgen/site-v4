@@ -4,8 +4,8 @@ import SwiftUI
 /// into a dark panel that holds the clock, one clean progress track and the controls.
 struct ActiveSessionView: View {
     @Environment(AppModel.self) private var model
-    @Environment(PopupCenter.self) private var popups
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmEnd = false
     @State private var editing = false
     @State private var editingBreak = false
     @State private var customizing = false
@@ -29,12 +29,6 @@ struct ActiveSessionView: View {
             }
         }
         .animation(.smooth(duration: 0.7), value: model.session == nil)
-        .fzPopupHost(layer: 1)
-        .onAppear { popups.layer = 1 }
-        .onDisappear {
-            popups.dismiss()
-            popups.layer = 0
-        }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $editing) { EditSessionSheet().environment(model).presentationDetents([.medium]) }
         .sheet(isPresented: $editingBreak) { BreakSheet().environment(model).presentationDetents([.height(340)]) }
@@ -68,15 +62,11 @@ struct ActiveSessionView: View {
                 .animation(.smooth(duration: 0.6), value: onBreak)
             }
         }
-    }
-
-    /// The PIN first if there is one, then a last chance to stay.
-    private func endEarly() {
-        popups.withPin("Ending early needs your PIN.") {
-            popups.show(FZPopup(symbol: "flag.checkered", tint: Color(hex: 0xF2CC86), title: "End this one early?",
-                                message: "The time you've done still counts. Your tree just won't grow this round.",
-                                primary: "End session", destructive: true, secondary: "Keep going",
-                                onPrimary: { withAnimation { model.endSession(completedFully: false) } }))
+        .confirmationDialog("End this session early?", isPresented: $confirmEnd, titleVisibility: .visible) {
+            Button("End session", role: .destructive) { withAnimation { model.endSession(completedFully: false) } }
+            Button("Keep focusing", role: .cancel) {}
+        } message: {
+            Text("Your focused time still counts, but your tree won't grow.")
         }
     }
 
@@ -132,7 +122,7 @@ struct ActiveSessionView: View {
                     withAnimation(.spring(duration: 0.6)) { model.takeBreak() }
                 }
                 .padding(.top, 20)
-                Button("End early", action: endEarly)
+                Button("End early") { confirmEnd = true }
                     .buttonStyle(.ghost)
                     .padding(.top, 2)
             } else {

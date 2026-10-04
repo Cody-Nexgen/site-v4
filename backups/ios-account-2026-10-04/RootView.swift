@@ -1,8 +1,8 @@
 import SwiftUI
 
 enum AppTab: Hashable {
-    case today, focus, plan, pass, coach, you
-    case stats, friends, forest, shop, customize
+    case today, focus, plan, pass, coach
+    case stats, friends, forest, shop, customize, settings
 }
 
 /// Onboarding the first time, then the app. Also drives the session clock.
@@ -41,22 +41,19 @@ struct RootView: View {
     }
 }
 
-/// Today, Focus, Plan, Pass and You on iPhone. Coach opens as a sheet there (the sparkles on Today,
-/// or You → Coach); on iPad it keeps its place in the bar. On iPad the same TabView becomes a sidebar
-/// (`.sidebarAdaptable`) with the "More" pages as their own rows; on iPhone they're tiles in You.
+/// Five tabs on iPhone; on iPad the same TabView becomes a sidebar (`.sidebarAdaptable`) with the
+/// "You" pages as their own rows. On iPhone those live in the sheet behind the avatar instead.
 private struct MainTabs: View {
     @Environment(AppModel.self) private var model
-    @Environment(PopupCenter.self) private var popups
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var tab: AppTab = .today
-    @State private var showCoach = false
+    @State private var showYou = false
 
     var body: some View {
         @Bindable var model = model
-        let openCoach = { if sizeClass == .regular { tab = .coach } else { showCoach = true } }
         TabView(selection: $tab) {
             Tab("Today", systemImage: "sun.max.fill", value: AppTab.today) {
-                NavigationStack { TodayView(openCoach: openCoach, startFocus: { tab = .focus }, open: { tab = $0 }) }
+                NavigationStack { TodayView(showYou: $showYou, startFocus: { tab = .focus }, open: { tab = $0 }) }
             }
             Tab("Focus", systemImage: "scope", value: AppTab.focus) {
                 NavigationStack { FocusSetupView() }
@@ -70,12 +67,8 @@ private struct MainTabs: View {
             Tab("Coach", systemImage: "sparkles", value: AppTab.coach) {
                 NavigationStack { CoachView() }
             }
-            .defaultVisibility(sizeClass == .regular ? .visible : .hidden, for: .tabBar)
-            Tab("You", systemImage: "person.crop.circle.fill", value: AppTab.you) {
-                NavigationStack { AccountView(open: { tab = $0 }, openCoach: openCoach) }
-            }
 
-            TabSection("More") {
+            TabSection("You") {
                 Tab("Stats", systemImage: "chart.bar.fill", value: AppTab.stats) {
                     NavigationStack { StatsView() }
                 }
@@ -96,22 +89,21 @@ private struct MainTabs: View {
                     NavigationStack { CustomizeView() }
                 }
                 .defaultVisibility(.hidden, for: .tabBar)
+                Tab("Settings", systemImage: "gearshape.fill", value: AppTab.settings) {
+                    NavigationStack { SettingsView() }
+                }
+                .defaultVisibility(.hidden, for: .tabBar)
             }
         }
         .tabViewStyle(.sidebarAdaptable)
         .tint(Color.fzInk)
         .fzMinimizeTabBarOnScroll()
         .modifier(SessionAccessory(session: model.session, compact: sizeClass != .regular) { model.showSession = true })
-        .sheet(isPresented: $showCoach) {
-            NavigationStack { CoachView() }
-                .environment(model)
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(32)
+        .sheet(isPresented: $showYou) {
+            YouSheet().environment(model)
         }
         .fullScreenCover(isPresented: $model.showSession) {
-            ActiveSessionView()
-                .environment(model)
-                .environment(popups)
+            ActiveSessionView().environment(model)
         }
     }
 }

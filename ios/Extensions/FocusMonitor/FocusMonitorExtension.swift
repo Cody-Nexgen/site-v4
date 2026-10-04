@@ -8,7 +8,7 @@ class FocusMonitorExtension: DeviceActivityMonitor {
     override func intervalDidStart(for activity: DeviceActivityName) {
         super.intervalDidStart(for: activity)
         guard activity == .dailyBlock, let selection = BlockList.load() else { return }
-        BlockList.shield(ManagedSettingsStore(named: .daily), with: selection)
+        Protections.lock(ManagedSettingsStore(named: .daily), with: selection)
     }
 
     override func intervalDidEnd(for activity: DeviceActivityName) {
@@ -17,7 +17,17 @@ class FocusMonitorExtension: DeviceActivityMonitor {
         case .dailyBlock: ManagedSettingsStore(named: .daily).clearAllSettings()
         // A session ended while the app wasn't running: unlock what it locked.
         case .sessionEnd: ManagedSettingsStore(named: .focus).clearAllSettings()
+        // Autofocus's 15 minutes are up.
+        case .autofocusEnd: ManagedSettingsStore(named: .autofocus).clearAllSettings()
+        // The emergency pass ran out: lock again whatever should be locked.
+        case .emergencyEnd: EmergencyPass.relock()
         default: break
         }
+    }
+
+    override func eventDidReachThreshold(_ event: DeviceActivityEvent.Name, activity: DeviceActivityName) {
+        super.eventDidReachThreshold(event, activity: activity)
+        guard activity == .autofocus, event == .distracted else { return }
+        Autofocus.stepIn()
     }
 }

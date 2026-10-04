@@ -1,6 +1,4 @@
-import DeviceActivity
 import FamilyControls
-import ManagedSettings
 import Observation
 import SwiftUI
 import UIKit
@@ -9,15 +7,8 @@ import UIKit
 @MainActor
 @Observable
 final class AppModel {
-    // Profile (saved on this iPhone until accounts sync) and today
-    var profile = UserProfile.load() {
-        didSet { profile.save() }
-    }
-    var profilePhoto: UIImage?
-    var userName: String {
-        get { profile.name }
-        set { profile.name = newValue }
-    }
+    // Profile and today
+    var userName = "Maya"
     var goalMinutes = 120
     var focusedMinutesToday = 74
     var focusScore = 8.2
@@ -36,22 +27,7 @@ final class AppModel {
     var breaksOn = true
     /// What gets locked. Saved to the App Group so the Screen Time monitor can lock it on schedule.
     var selection = BlockList.load() ?? FamilyActivitySelection() {
-        didSet {
-            BlockList.save(selection)
-            Autofocus.schedule(protections, selection: selection)
-        }
-    }
-    /// Autofocus, uninstall protection, the adult site filter. Saved to the App Group for the monitor.
-    var protections = Protections.current {
-        didSet {
-            guard protections != oldValue else { return }
-            Protections.current = protections
-            if protections.autofocus != oldValue.autofocus || protections.autofocusMinutes != oldValue.autofocusMinutes {
-                Autofocus.schedule(protections, selection: selection)
-            }
-            if protections.adultFilter != oldValue.adultFilter { Protections.applyFilter() }
-            if protections.uninstallProtection != oldValue.uninstallProtection { Protections.updateRemoval() }
-        }
+        didSet { BlockList.save(selection) }
     }
     var blockedApps = Array(DistractionApp.samples.prefix(5))
     var session: FocusSession?
@@ -102,11 +78,7 @@ final class AppModel {
     var homeShowsWave = true
 
     // Onboarding answers
-    /// "How long are you on your phone a day?": the screen time you started with.
-    var phoneHoursGuess: Double {
-        get { profile.phoneHours }
-        set { profile.phoneHours = newValue }
-    }
+    var phoneHoursGuess = 5.0
     var distraction = ""
     var focusFor = ""
     var hardestTime = ""
@@ -179,37 +151,11 @@ final class AppModel {
         URL.documentsDirectory.appending(path: "session-background.jpg")
     }
 
-    private static var profilePhotoURL: URL {
-        URL.documentsDirectory.appending(path: "profile-photo.jpg")
-    }
-
     init() {
         if let data = try? Data(contentsOf: Self.photoURL), let image = UIImage(data: data) {
             backgroundPhoto = image
             sessionBackground = .photo
         }
-        if let data = try? Data(contentsOf: Self.profilePhotoURL) {
-            profilePhoto = UIImage(data: data)
-        }
-    }
-
-    /// Square, 600 pt at most: it's only ever shown small.
-    func setProfilePhoto(_ data: Data) {
-        guard let image = UIImage(data: data) else { return }
-        let side = min(image.size.width, image.size.height)
-        let crop = CGRect(x: (image.size.width - side) / 2, y: (image.size.height - side) / 2, width: side, height: side)
-        let target = CGSize(width: min(600, side), height: min(600, side))
-        let square = UIGraphicsImageRenderer(size: target).image { _ in
-            image.draw(in: CGRect(x: -crop.minX * target.width / side, y: -crop.minY * target.height / side,
-                                  width: image.size.width * target.width / side, height: image.size.height * target.height / side))
-        }
-        profilePhoto = square
-        if let jpeg = square.jpegData(compressionQuality: 0.85) { try? jpeg.write(to: Self.profilePhotoURL, options: .atomic) }
-    }
-
-    func removeProfilePhoto() {
-        profilePhoto = nil
-        try? FileManager.default.removeItem(at: Self.profilePhotoURL)
     }
 
     func setBackgroundPhoto(_ data: Data) {
@@ -251,8 +197,6 @@ final class AppModel {
 
     /// Called every second by the root view.
     func tick() {
-        // The monitor relocks after an emergency pass; this is the backup while the app is open.
-        EmergencyPass.relockIfDue()
         guard let current = session else { return }
         if current.breakStartedAt != nil, current.breakRemaining(at: .now) <= 0 { endBreak() }
         if current.remaining(at: .now) <= 0 {
@@ -295,95 +239,4 @@ final class AppModel {
 
     /// Days a year FocuzNow could give back, from the onboarding answers (30% less phone time).
     var daysBack: Int { Int((phoneHoursGuess * 0.3 * 365 / 24).rounded()) }
-
-    // MARK: Account
-
-    /// Puts the locks, schedules and filter back the way they should be, for when something looks
-    /// stuck (You → Support → Reload). Leaves a running emergency pass alone.
-    func reloadProtections() {
-        EmergencyPass.relockIfDue()
-        guard LiveFocus.screenTimeApproved else { return }
-        if EmergencyPass.activeUntil == nil {
-            if let session, session.breakStartedAt == nil { LiveFocus.changed(session, selection: selection) }
-            if let window = BlockList.dailyWindow {
-                try? BlockList.scheduleDaily(window)
-                if window.contains(.now) { Protections.lock(ManagedSettingsStore(named: .daily), with: selection) }
-            }
-        }
-        Autofocus.schedule(protections, selection: selection)
-        Protections.applyFilter()
-        Protections.updateRemoval()
-    }
-
-    /// Stops everything FocuzNow runs on this phone: sessions, the daily block, autofocus, the filter.
-    private func stopEverything() {
-        if session != nil { endSession(completedFully: false) }
-        BlockList.cancelDaily()
-        DeviceActivityCenter().stopMonitoring()
-        for name in Protections.lockStores + [.filter] {
-            ManagedSettingsStore(named: name).clearAllSettings()
-        }
-        BlockList.cancelSessionEnd()
-    }
-
-    /// Back to the start. Your profile, PIN and settings stay on this iPhone; the blocks stop until
-    /// you're signed in again (they'd have nobody to answer to).
-    func signOut() {
-        stopEverything()
-        profile.appleLinked = false
-        profile.googleLinked = false
-        var stopped = protections
-        stopped.autofocus = false
-        stopped.adultFilter = false
-        protections = stopped
-        UserDefaults.standard.set(0, forKey: "onboardingStep")
-        UserDefaults.standard.set(false, forKey: "onboarded")
-    }
-
-    /// Everything on this iPhone: profile, photo, PIN, protections, block list, settings. (There's
-    /// no cloud account to delete yet; when sign-in reaches Supabase this also deletes that.)
-    func deleteAccount() {
-        stopEverything()
-        PinLock.clear()
-        EmergencyPass.reset()
-        removeProfilePhoto()
-        profile = UserProfile()
-        protections = Protections()
-        selection = FamilyActivitySelection()
-        if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
-        UserDefaults(suiteName: "group.com.focuznow.shared")?.removePersistentDomain(forName: "group.com.focuznow.shared")
-        UserDefaults.standard.set(false, forKey: "onboarded")
-    }
-}
-
-/// Who you are, as the You tab shows it. Saved as one small JSON in this app's defaults.
-struct UserProfile: Codable, Equatable {
-    var name = "Maya"
-    /// Without the @. Empty until you pick one (we suggest one from your name).
-    var username = ""
-    var occupation = ""
-    var age: Int?
-    /// Hours a day on your phone when you started (the onboarding's first question).
-    var phoneHours = 5.0
-    var memberSince = Date.now
-    var appleLinked = false
-    var googleLinked = false
-
-    private static let key = "profile"
-
-    /// "@maya", the username or one made from the name.
-    var handle: String {
-        let base = username.isEmpty ? name.lowercased().filter { $0.isLetter || $0.isNumber } : username
-        return "@" + (base.isEmpty ? "you" : base)
-    }
-
-    static func load() -> UserProfile {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let profile = try? JSONDecoder().decode(UserProfile.self, from: data) else { return UserProfile() }
-        return profile
-    }
-
-    func save() {
-        if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: Self.key) }
-    }
 }

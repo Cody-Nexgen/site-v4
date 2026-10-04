@@ -62,24 +62,32 @@ The images are in `App/Assets.xcassets` (sources in `ios/Art/`: `orb-stage.jpg`,
 Returning users get the same bare-Z splash (about 2 s) over Today instead of the old lighthouse.
 
 ## Today (the owner's dashboard mockup)
-`ios/App/Screens/TodayView.swift`: the Z logo and "FocuzNow", your avatar (opens You), "Afternoon,
-<name>" and a line that follows the score ("Your focus is building."), the orb on its pedestal as
-charged as your focus score, **FOCUS SCORE 82 Charged** (the 0–10 score × 10; words from
-`Theme.orbWord`), "1h 14m today · 6-day streak", **Start 45m focus** (or **Back to your session**), and a
-Today card: the next event and to-do (open Plan), apps blocked (opens Focus), screen time today (opens
-Stats). Friends focusing now and the day wave stay below it if they're on in Customize. Its world
-follows the score: a low score is a cold, foggy, still world, a high one is lit with rocks floating
-round the orb. Touch the orb there too. Scroll up and the scene drifts away at half speed while the
-cards slide over it; pull down and it stays pinned and swells. Today is a night scene, so it stays
-dark in light mode too.
+`ios/App/Screens/TodayView.swift`: the Z logo and "FocuzNow", Coach (the sparkles; a sheet on iPhone),
+your photo (opens the You tab), "Afternoon, <name>" and a line that follows the score ("Your focus is
+building."), the orb on its pedestal as charged as your focus score, then a glass card on the ground:
+**FOCUS SCORE 82 Charged** (the 0–10 score × 10; words from `Theme.orbWord`), streak and time today on
+the right, and a mint bar to today's goal ("45m to today's goal" / "Goal done. The orb is showing
+off."). Then **Start 45m focus** (or **Back to your session**) and a Today card: the next event and
+to-do (open Plan), apps blocked (opens Focus), screen time today (opens Stats). Friends focusing now
+and the day wave stay below it if they're on in Customize. Its world follows the score: a low score is
+a cold, foggy, still world, a high one is lit with rocks floating round the orb. Touch the orb there
+too. Scroll up and the scene drifts away at half speed (its camera tilts a little, so near things move
+more than far ones) while the cards slide over it; pull down and the page comes down together while
+the camera drops and the sky opens up above the photo (`SkyAbove` + `NightSky`: stars, no black, no
+zoom). Today is a night scene, so it stays dark in light mode too.
+
+All buttons have a glow under them (`FZKit.swift`, `.fzBottomGlow`, colour `Color.fzGlow`: mint, the
+orb's light; one line to change it). Popups are `FZPopup`s: Liquid Glass over a coloured glow, an icon,
+a title, a line or two and a button (`PopupCenter.show`).
 
 ## The block screen
-When a blocked app opens, the shield (`Extensions/FocusShield`) is in the FocuzNow look as far as Apple
-allows (a background, an icon, a title, a subtitle and two buttons; no fonts or layout): near-black
-glass, the focus orb with the Beam Z as its icon, "YouTube can wait", "You're in a focus session. It's
-back at 3:45 PM, and your orb's charging." (the app saves the session's end in the App Group,
-`BlockList.sessionEndKey`), a mint **Back to focus** and **Ask for 5 minutes** (which doesn't do
-anything yet: the emergency-override rules are a later phase).
+When a blocked app opens, the shield (`Extensions/FocusShield`) is as plain as Apple allows (a
+background, an icon, a title, a subtitle and buttons; no fonts or layout, and it's always portrait like
+the app behind it): pure black, the bare Beam Z in bone, a line that changes every minute ("Not now,
+YouTube.", "YouTube can wait.", "Nice try."), when it opens again while a session runs ("It's back at
+3:45 PM. Future you says thanks.": the app saves the session's end in the App Group,
+`BlockList.sessionEndKey`), and one bone **Back to focus** button. No "5 more minutes" button: the
+way out is the emergency pass in the You tab (`docs/ios-account.md`).
 
 ## Not real yet
 - **Accounts:** the buttons don't create a FocuzNow account yet (Supabase auth isn't wired into the
@@ -89,10 +97,11 @@ anything yet: the emergency-override rules are a later phase).
 - **The photos** in the app are the chat copies (compressed). Copying originals over the files in
   `App/Assets.xcassets` changes nothing else as long as the framing is the same. A different photo
   needs the pedestal measured again (`OrbStageLayout`'s pixel numbers, and the wide shot's).
-- The tab bar keeps Coach where the mockup says More.
+- The iPhone tab bar is Today, Focus, Plan, Pass, You. Coach opens from the sparkles on Today and from
+  You (on iPad it keeps its tab).
 
 ## Test on the iPhone
-1. Pull, `cd ios && xcodegen`, build. Delete the app first, or Settings → Replay the intro.
+1. Pull, `cd ios && xcodegen`, build. Delete the app first, or You → Developer mode → Replay the intro.
 2. **Splash:** no white flash, no box: a beam of light draws the Z, it fills, glows once, and flies into
    the header, where its tile fades in.
 3. Sign in (Apple, or email + an 8+ character password). "Hey, <your name>".
