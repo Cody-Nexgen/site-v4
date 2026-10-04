@@ -101,6 +101,9 @@ extension Color {
     /// A raised surface: white on bone, graphite on black.
     static let fzSurface = Color(light: 0xFFFFFF, dark: 0x161617)
 
+    /// The onboarding and dashboard accent: a soft electric mint (the focus orb's light).
+    static let fzMint = Color(hex: 0xA6E6BF)
+
     // Bone, the website's feature-card colour (same in both modes).
     static let fzBone = Color(hex: 0xECE8DF)
     static let fzBoneTile = Color(hex: 0xE1DDD3)

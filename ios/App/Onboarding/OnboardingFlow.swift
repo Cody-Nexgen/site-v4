@@ -1,11 +1,11 @@
 import AuthenticationServices
 import SwiftUI
 
-/// First launch: a film's opening titles (docs/ios-title-sequence.md). Earlier versions are backed up
-/// in `backups/ios-onboarding-island-2026-10-04/` (Island) and `backups/ios-onboarding-v3-2026-10-04/`.
+/// First launch: the Beam Z, sign-in, your focus orb and the questions (docs/ios-onboarding.md).
+/// Earlier versions are backed up in `backups/` (title sequence, Island, v3 Lighthouse).
 struct OnboardingFlow: View {
     var body: some View {
-        TitleSequenceOnboarding()
+        FocusOnboarding()
     }
 }
 

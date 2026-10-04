@@ -51,6 +51,29 @@ extension View {
     }
 }
 
+// MARK: Blur reveal
+
+/// Text and buttons that sharpen into view: from blurred, faded and a little low, to crisp. Driven
+/// by `shown`, so a sequence can reveal things one after another. Hidden things can't be tapped.
+struct BlurReveal: ViewModifier {
+    let shown: Bool
+    var delay: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: shown || reduceMotion ? 0 : 14)
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown || reduceMotion ? 0 : 10)
+            .allowsHitTesting(shown)
+            .animation(.easeOut(duration: 0.85).delay(shown ? delay : 0), value: shown)
+    }
+}
+
+extension View {
+    func blurReveal(_ shown: Bool, delay: Double = 0) -> some View { modifier(BlurReveal(shown: shown, delay: delay)) }
+}
+
 // MARK: Hold to commit
 
 /// A button you press and hold. The fill sweeps across, haptics tick, and it fires when full.

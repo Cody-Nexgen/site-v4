@@ -1,0 +1,979 @@
+import AuthenticationServices
+import FamilyControls
+import SwiftUI
+import UserNotifications
+
+/// First launch (docs/ios-onboarding.md), all on one black screen that never navigates:
+/// 1. The Beam Z draws itself, flies up beside "FocuzNow", the focus chart draws, the sign-in buttons
+///    rise. Signing in draws the line away and fades everything out.
+/// 2. "Hey, Avan" (the name from Apple, or the start of the email) and "Welcome to FocuzNow".
+/// 3. Your focus orb rises. A glass button opens into a glass panel in place, and the questions are
+///    asked there. Every answer has its own reply and makes the orb grow.
+/// 4. How many days a year that phone time adds up to, then the permissions in the same panel.
+/// 5. The orb flares and the app appears.
+struct FocusOnboarding: View {
+    enum Stage: Int, Comparable {
+        case intro, welcome, email, leaving, hello, questions, stat, permissions, finishing
+        static func < (a: Stage, b: Stage) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    enum Permission { case screenTime, apps, notifications }
+
+    @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("onboarded") private var onboarded = false
+    @Namespace private var markSpace
+
+    @State private var stage: Stage = .intro
+
+    // The welcome
+    @State private var zDraw: CGFloat = 0
+    @State private var zFilled = false
+    @State private var docked = false
+    @State private var showWordmark = false
+    @State private var showHeadline = false
+    @State private var showGlow = false
+    @State private var lineStart: CGFloat = 0
+    @State private var lineEnd: CGFloat = 0
+    @State private var nodes = [false, false, false]
+    @State private var showButtons = false
+    @State private var showFooter = false
+    @State private var signUp = false
+    @State private var welcomeGone = false
+
+    // Email
+    @State private var email = ""
+    @State private var password = ""
+    @FocusState private var emailFocused: Bool
+
+    // Hello and the orb
+    @State private var greeting = ""
+    @State private var showHey = false
+    @State private var showWelcomeLine = false
+    @State private var showOrb = false
+    @State private var showOrbLine = false
+    @State private var showPanel = false
+    @State private var panelOpen = false
+    @State private var energy = 0.12
+    @State private var pulse = 0
+
+    // Questions
+    @State private var askIndex = 0
+    @State private var picked: Asks.Option?
+
+    // The year in days
+    @State private var statStep = 0
+    @State private var shownDays = 0
+
+    // Permissions
+    @State private var permission: Permission = .screenTime
+    @State private var appsChosen = 0
+    @State private var picking = false
+    @State private var leaving = false
+
+    var body: some View {
+        @Bindable var model = model
+        GeometryReader { proxy in
+            let size = CGSize(width: proxy.size.width, height: proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom)
+            let top = proxy.safeAreaInsets.top
+            let bottom = max(proxy.safeAreaInsets.bottom, 16)
+            ZStack(alignment: .top) {
+                backdrop(size)
+                if stage < .hello {
+                    welcomeLayer(size, top: top, bottom: bottom)
+                } else {
+                    journeyLayer(size, top: top, bottom: bottom)
+                }
+                introMark(size)
+            }
+            .frame(width: size.width, height: size.height)
+            .ignoresSafeArea()
+        }
+        .background(Color.black)
+        .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
+        .familyActivityPicker(isPresented: $picking, selection: $model.selection)
+        .onChange(of: picking) { _, open in
+            if !open { pickerClosed() }
+        }
+        .task { await playIntro() }
+        .sensoryFeedback(.impact(weight: .medium), trigger: pulse)
+        .sensoryFeedback(.selection, trigger: askIndex)
+    }
+
+    // MARK: Backdrop
+
+    private func backdrop(_ size: CGSize) -> some View {
+        let welcome = stage < .hello
+        let y: CGFloat = welcome ? 0.46 : orbY(size) / size.height
+        return ZStack {
+            Color.black
+            RadialGradient(
+                colors: [Color.fzMint.opacity(0.2), Color(hex: 0x1C3A2E).opacity(0.22), .clear],
+                center: UnitPoint(x: 0.5, y: y),
+                startRadius: 0,
+                endRadius: size.width * 0.8
+            )
+            .opacity(welcome ? (showGlow && !welcomeGone ? 1 : 0) : (showOrb ? 0.6 + 0.4 * energy : 0))
+            .animation(.easeInOut(duration: 1.2), value: showGlow)
+            .animation(.easeInOut(duration: 1.2), value: welcomeGone)
+            .animation(.easeInOut(duration: 1.0), value: stage)
+        }
+        .allowsHitTesting(false)
+    }
+
+    // MARK: 1. The welcome
+
+    /// The big Z in the middle, before it flies up next to "FocuzNow".
+    @ViewBuilder
+    private func introMark(_ size: CGSize) -> some View {
+        if !docked, stage < .hello {
+            BeamZMark(size: 112, draw: zDraw, filled: zFilled)
+                .matchedGeometryEffect(id: "mark", in: markSpace)
+                .shadow(color: Color.fzMint.opacity(zFilled ? 0.35 : 0), radius: 34)
+                .position(x: size.width / 2, y: size.height * 0.42)
+        }
+    }
+
+    private func welcomeLayer(_ size: CGSize, top: CGFloat, bottom: CGFloat) -> some View {
+        let small = size.height < 720
+        return VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                if docked {
+                    BeamZMark(size: 44)
+                        .matchedGeometryEffect(id: "mark", in: markSpace)
+                } else {
+                    Color.clear.frame(width: 44, height: 44)
+                }
+                Text("FocuzNow")
+                    .font(.fzDisplay(26, weight: .bold))
+                    .foregroundStyle(.white)
+                    .blurReveal(showWordmark)
+            }
+            .padding(.top, top + 14)
+
+            Spacer(minLength: 16).frame(maxHeight: small ? 24 : 48)
+
+            VStack(spacing: 10) {
+                Text(stage == .email ? "Continue with email" : signUp ? "Let's get you focused" : "Welcome back")
+                    .font(.fzDisplay(small ? 34 : 40, weight: .bold))
+                    .foregroundStyle(.white)
+                    .contentTransition(.opacity)
+                Text(signUp ? "Make an account so your focus follows you to every device." : "Sign in to keep your focus synced across devices.")
+                    .font(.system(size: small ? 16 : 18))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .contentTransition(.opacity)
+            }
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .blurReveal(showHeadline)
+            .animation(.easeInOut(duration: 0.3), value: signUp)
+
+            if stage == .email {
+                emailForm
+                    .padding(.top, 28)
+                    .transition(.blurReplace)
+                Spacer(minLength: 0)
+            } else {
+                chart(height: min(size.height * (small ? 0.2 : 0.3), 300))
+                    .padding(.horizontal, -24)
+                    .padding(.top, small ? 8 : 18)
+                    .transition(.blurReplace)
+                Spacer(minLength: 12)
+                signInButtons(small: small)
+                footer
+                    .padding(.top, small ? 16 : 26)
+                    .padding(.bottom, bottom + 4)
+                    .blurReveal(showFooter)
+            }
+        }
+        .padding(.horizontal, 24)
+        .frame(maxWidth: 560)
+        .frame(width: size.width, height: size.height, alignment: .top)
+        .opacity(welcomeGone ? 0 : 1)
+        .blur(radius: welcomeGone ? 14 : 0)
+    }
+
+    /// The focus line: it draws in left to right, and draws itself away when you sign in.
+    private func chart(height: CGFloat) -> some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let points = FocusCurve.shape.map { CGPoint(x: $0.x * w, y: $0.y * h) }
+            ZStack(alignment: .topLeading) {
+                ForEach(FocusCurve.nodes.indices, id: \.self) { i in
+                    Rectangle()
+                        .fill(.white.opacity(0.05))
+                        .frame(width: 1, height: h * 1.3)
+                        .position(x: points[FocusCurve.nodes[i].index].x, y: h * 0.5)
+                }
+                .opacity(lineEnd > 0 && lineStart < 1 ? 1 : 0)
+                .animation(.easeInOut(duration: 0.6), value: lineStart)
+
+                FocusCurve()
+                    .trim(from: lineStart, to: lineEnd)
+                    .stroke(Color.fzMint.opacity(0.8), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .blur(radius: 7)
+                FocusCurve()
+                    .trim(from: lineStart, to: lineEnd)
+                    .stroke(Color.fzMint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+
+                ForEach(FocusCurve.nodes.indices, id: \.self) { i in
+                    node(i, at: points[FocusCurve.nodes[i].index], width: w)
+                }
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+
+    private func node(_ i: Int, at point: CGPoint, width: CGFloat) -> some View {
+        let info = FocusCurve.nodes[i]
+        let shown = nodes[i]
+        let pillX = min(max(point.x + info.dx, 96), width - 96)
+        return ZStack {
+            Circle()
+                .fill(Color.fzMint)
+                .frame(width: 13, height: 13)
+                .background(Circle().fill(Color.fzMint.opacity(0.4)).frame(width: 30, height: 30).blur(radius: 7))
+                .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1).frame(width: 23, height: 23))
+                .scaleEffect(shown ? 1 : 0.2)
+                .opacity(shown ? 1 : 0)
+                .animation(.spring(duration: 0.5, bounce: 0.45), value: shown)
+                .position(point)
+            HStack(spacing: 6) {
+                if let symbol = info.symbol {
+                    Image(systemName: symbol).foregroundStyle(Color.fzMint)
+                }
+                if let label = info.label {
+                    Text(label).foregroundStyle(.white.opacity(0.7))
+                }
+                Text(info.value).fontWeight(.bold).foregroundStyle(.white)
+            }
+            .font(.system(size: 16))
+            .padding(.horizontal, 17)
+            .padding(.vertical, 11)
+            .background(Capsule().fill(.white.opacity(0.06)))
+            .overlay(Capsule().strokeBorder(.white.opacity(0.13)))
+            .fzGlass(in: Capsule())
+            .fixedSize()
+            .blurReveal(shown, delay: 0.12)
+            .position(x: pillX, y: point.y + 46)
+        }
+    }
+
+    private func signInButtons(small: Bool) -> some View {
+        let height: CGFloat = small ? 54 : 60
+        return VStack(spacing: 12) {
+            SignInWithAppleButton(signUp ? .signUp : .continue) { request in
+                request.requestedScopes = [.fullName, .email]
+            } onCompletion: { result in
+                appleFinished(result)
+            }
+            .signInWithAppleButtonStyle(.white)
+            .frame(height: height)
+            .clipShape(Capsule())
+            .blurReveal(showButtons)
+
+            Button { signedIn(name: nil) } label: {
+                SignInLabel(title: "Continue with Google") { GoogleMark() }
+            }
+            .buttonStyle(GlassCapsuleButtonStyle(height: height))
+            .blurReveal(showButtons, delay: 0.08)
+
+            Button {
+                withAnimation(.spring(duration: 0.6, bounce: 0.12)) { stage = .email }
+                later(0.45) { emailFocused = true }
+            } label: {
+                SignInLabel(title: "Continue with Email") { Image(systemName: "envelope").font(.title3) }
+            }
+            .buttonStyle(GlassCapsuleButtonStyle(height: height))
+            .blurReveal(showButtons, delay: 0.16)
+
+            HStack(spacing: 5) {
+                Text(signUp ? "Already have an account?" : "Don't have an account?")
+                    .foregroundStyle(.white.opacity(0.55))
+                Button(signUp ? "Sign in" : "Sign up") {
+                    withAnimation(.easeInOut(duration: 0.3)) { signUp.toggle() }
+                }
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.fzMint)
+            }
+            .font(.subheadline)
+            .padding(.top, small ? 8 : 14)
+            .blurReveal(showButtons, delay: 0.24)
+        }
+    }
+
+    private var footer: some View {
+        Text("By continuing, you agree to our [Terms of Service](https://www.focuznow.com/terms.html) and [Privacy Policy](https://www.focuznow.com/privacy.html).")
+            .font(.footnote)
+            .foregroundStyle(.white.opacity(0.45))
+            .tint(.white.opacity(0.85))
+            .multilineTextAlignment(.center)
+    }
+
+    private var emailValid: Bool { email.contains("@") && email.contains(".") && password.count >= 8 }
+
+    private var emailForm: some View {
+        VStack(spacing: 14) {
+            VStack(spacing: 0) {
+                TextField("", text: $email, prompt: Text("Email").foregroundStyle(.white.opacity(0.35)))
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.next)
+                    .focused($emailFocused)
+                    .padding(18)
+                Rectangle().fill(.white.opacity(0.1)).frame(height: 1)
+                SecureField("", text: $password, prompt: Text(signUp ? "Create a password (8+ characters)" : "Password").foregroundStyle(.white.opacity(0.35)))
+                    .textContentType(signUp ? .newPassword : .password)
+                    .submitLabel(.go)
+                    .onSubmit(emailContinue)
+                    .padding(18)
+            }
+            .font(.system(size: 18))
+            .foregroundStyle(.white)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.12)))
+            .fzGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+
+            HStack(spacing: 10) {
+                Button("Back") {
+                    emailFocused = false
+                    withAnimation(.spring(duration: 0.6, bounce: 0.12)) { stage = .welcome }
+                }
+                .buttonStyle(GlassCapsuleButtonStyle(height: 56))
+                .frame(width: 112)
+                Button(signUp ? "Create account" : "Sign in", action: emailContinue)
+                    .buttonStyle(WhiteCapsuleButtonStyle(height: 56))
+                    .disabled(!emailValid)
+            }
+        }
+    }
+
+    // MARK: 2–5. Hello, the orb, questions, the year, permissions
+
+    private func isCompact() -> Bool {
+        stage == .questions || stage == .stat || stage == .permissions || stage == .finishing || panelOpen
+    }
+
+    private func orbSize(_ size: CGSize) -> CGFloat {
+        isCompact() ? min(size.width * 0.46, 220) : min(size.width * 0.66, 320)
+    }
+
+    private func orbY(_ size: CGSize) -> CGFloat {
+        if stage == .stat { return size.height * 0.2 }
+        return isCompact() ? size.height * 0.25 : size.height * 0.47
+    }
+
+    private func journeyLayer(_ size: CGSize, top: CGFloat, bottom: CGFloat) -> some View {
+        let compact = isCompact()
+        let orb = orbSize(size)
+        let y = orbY(size)
+        return ZStack(alignment: .top) {
+            VStack(spacing: 10) {
+                Text(greeting.isEmpty ? "Hey there" : "Hey, \(greeting)")
+                    .font(.fzDisplay(44, weight: .bold))
+                    .blurReveal(showHey)
+                Text("Welcome to FocuzNow")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .blurReveal(showWelcomeLine)
+            }
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
+            .padding(.top, top + 52)
+            .opacity(compact ? 0 : 1)
+            .blur(radius: compact ? 12 : 0)
+
+            FocusOrb(energy: energy, size: orb)
+                .keyframeAnimator(initialValue: 1.0, trigger: pulse) { content, scale in
+                    content.scaleEffect(scale)
+                } keyframes: { _ in
+                    KeyframeTrack(\.self) {
+                        SpringKeyframe(1.1, duration: 0.18)
+                        SpringKeyframe(1.0, duration: 0.6)
+                    }
+                }
+                .scaleEffect(showOrb ? (leaving ? 1.6 : 1) : 0.5)
+                .opacity(showOrb && !leaving ? 1 : 0)
+                .blur(radius: showOrb ? 0 : 26)
+                .position(x: size.width / 2, y: y)
+                .frame(width: size.width, height: size.height)
+
+            VStack(spacing: 8) {
+                Text("This is your focus orb.")
+                    .font(.fzDisplay(26, weight: .bold))
+                    .blurReveal(showOrbLine)
+                Text("Answer a few questions and watch it grow.")
+                    .font(.body)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .blurReveal(showOrbLine, delay: 0.25)
+            }
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
+            .position(x: size.width / 2, y: y + orb * 0.5 + 58)
+            .frame(width: size.width, height: size.height)
+            .opacity(compact ? 0 : 1)
+
+            statView(size)
+                .opacity(stage == .stat ? 1 : 0)
+
+            panel(size)
+                .padding(.horizontal, 16)
+                .padding(.bottom, bottom + 8)
+                .frame(width: size.width, height: size.height, alignment: .bottom)
+        }
+        .frame(width: size.width, height: size.height)
+        .opacity(leaving ? 0 : 1)
+        .animation(.spring(duration: 0.85, bounce: 0.12), value: compact)
+        .animation(.spring(duration: 0.85, bounce: 0.12), value: stage)
+    }
+
+    /// The glass button that opens into the glass panel where everything is asked.
+    private func panel(_ size: CGSize) -> some View {
+        let shape = RoundedRectangle(cornerRadius: panelOpen ? 32 : 30, style: .continuous)
+        return VStack(alignment: .leading, spacing: 0) {
+            panelContent(size)
+        }
+        .padding(panelOpen ? 20 : 0)
+        .frame(maxWidth: 560)
+        .background(shape.fill(.white.opacity(0.05)))
+        .overlay(shape.strokeBorder(.white.opacity(0.13)))
+        .fzGlass(in: shape)
+        .opacity(showPanel ? 1 : 0)
+        .offset(y: showPanel ? 0 : 50)
+        .allowsHitTesting(showPanel)
+    }
+
+    @ViewBuilder
+    private func panelContent(_ size: CGSize) -> some View {
+        switch stage {
+        case .hello:
+            panelButton("Make it grow", action: openQuestions)
+        case .questions:
+            if let picked {
+                replyCard(picked)
+            } else {
+                questionCard(Asks.all[askIndex], twoColumns: Asks.all[askIndex].options.count >= 6 || size.height < 760)
+            }
+        case .stat:
+            panelButton("Let's change that", action: openPermissions)
+        case .permissions:
+            permissionCard
+        default:
+            EmptyView()
+        }
+    }
+
+    private func panelButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 60)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+        .transition(.blurReplace)
+    }
+
+    private func questionCard(_ ask: Asks.Ask, twoColumns: Bool) -> some View {
+        let columns = twoColumns ? [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)] : [GridItem(.flexible())]
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Text("\(askIndex + 1) of \(Asks.all.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+                Spacer()
+                ForEach(0..<Asks.all.count, id: \.self) { i in
+                    Capsule()
+                        .fill(i <= askIndex ? Color.fzMint : .white.opacity(0.15))
+                        .frame(width: i == askIndex ? 18 : 6, height: 6)
+                }
+            }
+            Text(ask.question)
+                .font(.fzDisplay(23, weight: .bold))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            if let hint = ask.hint {
+                Text(hint).font(.subheadline).foregroundStyle(.white.opacity(0.55))
+            }
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(Array(ask.options.enumerated()), id: \.element.id) { index, option in
+                    Button { choose(option, in: ask) } label: {
+                        OptionRow(option: option)
+                    }
+                    .buttonStyle(.pressable)
+                    .riseIn(delay: 0.05 * Double(index))
+                }
+            }
+        }
+        .id("question-\(askIndex)")
+        .transition(.blurReplace)
+    }
+
+    private func replyCard(_ option: Asks.Option) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: option.symbol)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .frame(width: 42, height: 42)
+                    .background(Color.fzMint, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(option.reply)
+                        .font(.fzDisplay(22, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(option.detail)
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Button(askIndex + 1 < Asks.all.count ? "Next question" : "Continue", action: nextQuestion)
+                .buttonStyle(WhiteCapsuleButtonStyle(height: 54))
+        }
+        .id("reply-\(askIndex)")
+        .transition(.blurReplace)
+    }
+
+    private func statView(_ size: CGSize) -> some View {
+        VStack(spacing: 8) {
+            Text("This year, you're on track to spend")
+                .font(.title3.weight(.medium))
+                .foregroundStyle(.white.opacity(0.72))
+                .blurReveal(statStep >= 1)
+            Text("\(shownDays) days")
+                .font(.fzDisplay(84, weight: .black))
+                .foregroundStyle(.white)
+                .monospacedDigit()
+                .contentTransition(.numericText(value: Double(shownDays)))
+                .blurReveal(statStep >= 2)
+            Text("on your phone.")
+                .font(.title3.weight(.medium))
+                .foregroundStyle(.white.opacity(0.72))
+                .blurReveal(statStep >= 3)
+            Text("We can change that.")
+                .font(.fzDisplay(28, weight: .bold))
+                .foregroundStyle(Color.fzMint)
+                .padding(.top, 18)
+                .blurReveal(statStep >= 4)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 24)
+        .position(x: size.width / 2, y: size.height * 0.52)
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
+    }
+
+    private var permissionCard: some View {
+        let info = permissionInfo
+        return VStack(alignment: .leading, spacing: 14) {
+            Image(systemName: info.symbol)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.black)
+                .frame(width: 52, height: 52)
+                .background(Color.fzMint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            Text(info.title)
+                .font(.fzDisplay(24, weight: .bold))
+                .foregroundStyle(.white)
+            Text(info.body)
+                .font(.body)
+                .foregroundStyle(.white.opacity(0.72))
+                .fixedSize(horizontal: false, vertical: true)
+            Button(info.primary, action: permissionPrimary)
+                .buttonStyle(WhiteCapsuleButtonStyle(height: 56))
+                .padding(.top, 4)
+            Button(info.secondary, action: permissionSecondary)
+                .buttonStyle(QuietCapsuleButtonStyle())
+        }
+        .id(info.title)
+        .transition(.blurReplace)
+    }
+
+    private var permissionInfo: (symbol: String, title: String, body: String, primary: String, secondary: String) {
+        switch permission {
+        case .screenTime:
+            ("hourglass", "Block what pulls you away", "FocuzNow uses Apple's Screen Time to keep apps out of your way. Apple keeps it private: we never see what you do in your apps.", "Allow app blocking", "Not now")
+        case .apps where appsChosen > 0:
+            ("checkmark.shield.fill", appsChosen == 1 ? "1 app will wait" : "\(appsChosen) apps will wait", "They stay locked while you focus, and come back when you're done.", "Continue", "Change")
+        case .apps:
+            ("square.grid.2x2.fill", "Choose what can wait", "Pick the apps, categories and websites to lock while you focus.", "Choose apps", "Skip for now")
+        case .notifications:
+            ("bell.badge.fill", "Get a nudge when it's time", "A heads-up when a session starts and when it's done. Nothing else.", "Allow notifications", "Not now")
+        }
+    }
+
+    // MARK: Flow
+
+    private func playIntro() async {
+        guard stage == .intro else { return }
+        if reduceMotion {
+            zDraw = 1; zFilled = true; docked = true
+            showWordmark = true; showHeadline = true; showGlow = true
+            lineEnd = 1; nodes = [true, true, true]
+            showButtons = true; showFooter = true
+            stage = .welcome
+            return
+        }
+        await wait(0.35)
+        withAnimation(.easeInOut(duration: 1.1)) { zDraw = 1 }
+        await wait(1.0)
+        withAnimation(.easeOut(duration: 0.4)) { zFilled = true }
+        pulse += 1
+        await wait(0.6)
+        withAnimation(.spring(duration: 0.85, bounce: 0.16)) { docked = true }
+        await wait(0.3)
+        showWordmark = true
+        await wait(0.25)
+        showHeadline = true
+        await wait(0.4)
+        withAnimation(.easeOut(duration: 1.2)) { showGlow = true }
+        let drawTime = 1.6
+        withAnimation(.easeInOut(duration: drawTime)) { lineEnd = 1 }
+        for (i, node) in FocusCurve.nodes.enumerated() {
+            later(drawTime * Double(FocusCurve.shape[node.index].x)) { nodes[i] = true }
+        }
+        await wait(1.0)
+        showButtons = true
+        await wait(0.45)
+        showFooter = true
+        stage = .welcome
+    }
+
+    private func wait(_ seconds: Double) async {
+        try? await Task.sleep(for: .seconds(seconds))
+    }
+
+    private func later(_ seconds: Double, _ action: @escaping () -> Void) {
+        Task {
+            try? await Task.sleep(for: .seconds(seconds))
+            action()
+        }
+    }
+
+    private func appleFinished(_ result: Result<ASAuthorization, Error>) {
+        // Cancelled or failed: stay on the welcome.
+        guard case let .success(authorization) = result else { return }
+        let credential = authorization.credential as? ASAuthorizationAppleIDCredential
+        signedIn(name: Self.greetingName(given: credential?.fullName?.givenName, email: credential?.email))
+    }
+
+    private func emailContinue() {
+        guard emailValid else { return }
+        emailFocused = false
+        signedIn(name: Self.greetingName(given: nil, email: email))
+    }
+
+    /// The name for "Hey, …": the first name from Apple, or the letters at the start of the email
+    /// (avan.k@… becomes "Avan"). Nothing for Apple's private relay addresses.
+    static func greetingName(given: String?, email: String?) -> String? {
+        if let given = given?.trimmingCharacters(in: .whitespaces), !given.isEmpty { return given }
+        guard let email, let at = email.firstIndex(of: "@") else { return nil }
+        if email[at...].contains("privaterelay.appleid.com") { return nil }
+        let letters = email[..<at].prefix { $0.isLetter }
+        guard letters.count >= 2 else { return nil }
+        return letters.prefix(1).uppercased() + letters.dropFirst().lowercased()
+    }
+
+    /// Signed in (or signed up): the line draws itself away and everything fades, then hello.
+    private func signedIn(name: String?) {
+        guard stage == .welcome || stage == .email else { return }
+        emailFocused = false
+        if let name {
+            model.userName = name
+            greeting = name
+        }
+        stage = .leaving
+        pulse += 1
+        withAnimation(.easeInOut(duration: 0.8)) { lineStart = 1 }
+        nodes = [false, false, false]
+        later(0.35) { withAnimation(.easeInOut(duration: 0.6)) { welcomeGone = true } }
+        later(1.15) { startHello() }
+    }
+
+    private func startHello() {
+        withAnimation(.easeInOut(duration: 0.4)) { stage = .hello }
+        later(0.15) { showHey = true }
+        later(0.6) { showWelcomeLine = true }
+        later(1.4) {
+            withAnimation(.spring(duration: 1.3, bounce: 0.15)) { showOrb = true }
+            pulse += 1
+        }
+        later(2.4) { showOrbLine = true }
+        later(3.1) { withAnimation(.spring(duration: 0.7, bounce: 0.15)) { showPanel = true } }
+    }
+
+    private func openQuestions() {
+        withAnimation(.spring(duration: 0.8, bounce: 0.14)) {
+            stage = .questions
+            panelOpen = true
+            askIndex = 0
+            picked = nil
+        }
+    }
+
+    private func choose(_ option: Asks.Option, in ask: Asks.Ask) {
+        guard picked == nil else { return }
+        switch ask.id {
+        case "hours":
+            model.phoneHoursGuess = option.value
+            model.goalMinutes = option.value < 2 ? 60 : option.value < 6 ? 90 : 120
+        case "pull": model.distraction = option.title
+        case "time": model.hardestTime = option.title
+        default: model.focusFor = option.title
+        }
+        withAnimation(.spring(duration: 0.6, bounce: 0.15)) { picked = option }
+        grow(by: 0.16)
+    }
+
+    private func nextQuestion() {
+        if askIndex + 1 < Asks.all.count {
+            withAnimation(.spring(duration: 0.6, bounce: 0.12)) {
+                picked = nil
+                askIndex += 1
+            }
+        } else {
+            startStat()
+        }
+    }
+
+    private func grow(by amount: Double) {
+        withAnimation(.easeInOut(duration: 1.2)) { energy = min(1, energy + amount) }
+        pulse += 1
+    }
+
+    /// "This year, you're on track to spend 76 days on your phone. We can change that."
+    private func startStat() {
+        withAnimation(.spring(duration: 0.6)) { showPanel = false }
+        later(0.35) {
+            withAnimation(.spring(duration: 0.9, bounce: 0.12)) {
+                stage = .stat
+                panelOpen = false
+                picked = nil
+            }
+        }
+        later(1.0) { statStep = 1 }
+        later(1.6) {
+            statStep = 2
+            countDays(to: Int((model.phoneHoursGuess * 365 / 24).rounded()))
+        }
+        later(3.0) { statStep = 3 }
+        later(3.7) { statStep = 4 }
+        later(4.5) { withAnimation(.spring(duration: 0.7, bounce: 0.15)) { showPanel = true } }
+    }
+
+    private func countDays(to target: Int) {
+        let steps = 24
+        for i in 0...steps {
+            later(Double(i) * 0.045) {
+                withAnimation(.snappy(duration: 0.2)) { shownDays = Int((Double(target) * Double(i) / Double(steps)).rounded()) }
+            }
+        }
+    }
+
+    private func openPermissions() {
+        withAnimation(.spring(duration: 0.8, bounce: 0.12)) {
+            permission = LiveFocus.screenTimeApproved ? .apps : .screenTime
+            stage = .permissions
+            panelOpen = true
+        }
+    }
+
+    private func show(_ next: Permission) {
+        withAnimation(.spring(duration: 0.6, bounce: 0.12)) { permission = next }
+    }
+
+    private func permissionPrimary() {
+        switch permission {
+        case .screenTime:
+            Task {
+                try? await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+                if LiveFocus.screenTimeApproved {
+                    grow(by: 0.08)
+                    show(.apps)
+                } else {
+                    show(.notifications)
+                }
+            }
+        case .apps:
+            if appsChosen > 0 { show(.notifications) } else { picking = true }
+        case .notifications:
+            Task {
+                let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+                if granted { grow(by: 0.08) }
+                finish()
+            }
+        }
+    }
+
+    private func permissionSecondary() {
+        switch permission {
+        case .screenTime: show(.notifications)
+        case .apps: if appsChosen > 0 { picking = true } else { show(.notifications) }
+        case .notifications: finish()
+        }
+    }
+
+    private func pickerClosed() {
+        let count = BlockList.count(model.selection)
+        guard count > 0 else { return }
+        withAnimation(.spring(duration: 0.6, bounce: 0.12)) { appsChosen = count }
+        grow(by: 0.08)
+    }
+
+    /// The orb flares and grows into the screen, then the app appears.
+    private func finish() {
+        guard stage != .finishing else { return }
+        withAnimation(.easeInOut(duration: 0.5)) {
+            showPanel = false
+            stage = .finishing
+        }
+        withAnimation(.easeInOut(duration: 0.8)) { energy = 1 }
+        pulse += 1
+        later(0.8) { withAnimation(.easeIn(duration: 0.6)) { leaving = true } }
+        later(1.35) { onboarded = true }
+    }
+}
+
+// MARK: The focus line on the welcome
+
+/// A smooth line through a few points (Catmull-Rom), in a unit box scaled to the rect.
+struct FocusCurve: Shape {
+    static let shape: [CGPoint] = [
+        CGPoint(x: 0, y: 0.08), CGPoint(x: 0.14, y: 0.16), CGPoint(x: 0.3, y: 0.42),
+        CGPoint(x: 0.5, y: 0.6), CGPoint(x: 0.66, y: 0.56), CGPoint(x: 0.86, y: 0.86), CGPoint(x: 1, y: 0.88),
+    ]
+
+    /// The dots on the line and their glass labels (example numbers, it's an illustration).
+    static let nodes: [(index: Int, label: String?, value: String, symbol: String?, dx: CGFloat)] = [
+        (1, "Today", "4h 18m", nil, 34),
+        (3, "Focus goal", "5h", nil, 26),
+        (5, nil, "Deep work", "leaf.fill", -10),
+    ]
+
+    func path(in rect: CGRect) -> Path {
+        let p = Self.shape.map { CGPoint(x: rect.minX + $0.x * rect.width, y: rect.minY + $0.y * rect.height) }
+        var path = Path()
+        guard let first = p.first else { return path }
+        path.move(to: first)
+        for i in 0..<(p.count - 1) {
+            let p0 = i > 0 ? p[i - 1] : p[i]
+            let p1 = p[i]
+            let p2 = p[i + 1]
+            let p3 = i + 2 < p.count ? p[i + 2] : p2
+            let c1 = CGPoint(x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6)
+            let c2 = CGPoint(x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6)
+            path.addCurve(to: p2, control1: c1, control2: c2)
+        }
+        return path
+    }
+}
+
+// MARK: Pieces
+
+private struct OptionRow: View {
+    let option: Asks.Option
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: option.symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.fzMint)
+                .frame(width: 36, height: 36)
+                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            Text(option.title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.08)))
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct SignInLabel<Icon: View>: View {
+    let title: String
+    @ViewBuilder let icon: Icon
+
+    var body: some View {
+        HStack(spacing: 12) {
+            icon.frame(width: 28)
+            Text(title)
+        }
+    }
+}
+
+/// A stand-in for Google's "G" until the Google Sign-In SDK (with its official logo) is added.
+private struct GoogleMark: View {
+    var body: some View {
+        Text("G")
+            .font(.system(size: 22, weight: .bold, design: .rounded))
+            .foregroundStyle(AngularGradient(
+                colors: [Color(hex: 0xEA4335), Color(hex: 0xFBBC05), Color(hex: 0x34A853), Color(hex: 0x4285F4), Color(hex: 0xEA4335)],
+                center: .center
+            ))
+    }
+}
+
+/// Dark glass capsule (Google, Email, Back).
+private struct GlassCapsuleButtonStyle: ButtonStyle {
+    var height: CGFloat = 60
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 19, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .background(Capsule().fill(.white.opacity(configuration.isPressed ? 0.1 : 0.05)))
+            .overlay(Capsule().strokeBorder(.white.opacity(0.13)))
+            .fzGlass(in: Capsule(), interactive: true)
+            .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(duration: 0.25), value: configuration.isPressed)
+    }
+}
+
+/// The main action: a white capsule with black text.
+private struct WhiteCapsuleButtonStyle: ButtonStyle {
+    var height: CGFloat = 60
+    @Environment(\.isEnabled) private var enabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .background(Capsule().fill(Color(hex: 0xF3F5F0)))
+            .opacity(enabled ? 1 : 0.35)
+            .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(duration: 0.25), value: configuration.isPressed)
+    }
+}
+
+/// "Not now", "Skip for now".
+private struct QuietCapsuleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline.weight(.medium))
+            .foregroundStyle(.white.opacity(0.6))
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.5 : 1)
+    }
+}
