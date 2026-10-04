@@ -5,7 +5,6 @@ import WidgetKit
 struct FocuzNowWidgets: WidgetBundle {
     var body: some Widget {
         StartFocusWidget()
-        FocusLiveActivity()
     }
 }
 

@@ -29,9 +29,7 @@ targets:
   FocuzNow:
     type: application
     platform: iOS
-    # Shared/: the Live Activity (also in the widget extension) and the block list (also in the
-    # Screen Time monitor).
-    sources: [App, Shared/LiveActivity, Shared/Blocking]
+    sources: [App]
     dependencies:
       - package: FocuzNowKit
       - target: FocusMonitor
@@ -49,8 +47,6 @@ targets:
       properties:
         CFBundleDisplayName: FocuzNow
         NSFaceIDUsageDescription: FocuzPass uses Face ID to unlock your passwords.
-        # A running session shows in the Dynamic Island and on the Lock Screen.
-        NSSupportsLiveActivities: true
         # Satoshi (fontshare.com, free licence): drop the three .otf files into App/Fonts.
         # Until then the app falls back to a heavy system font.
         UIAppFonts:
@@ -81,7 +77,7 @@ targets:
   FocusMonitor:
     type: app-extension
     platform: iOS
-    sources: [Extensions/FocusMonitor, Shared/Blocking]
+    sources: [Extensions/FocusMonitor]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.focuznow.app.FocusMonitor
@@ -141,12 +137,7 @@ targets:
   FocuzNowWidgets:
     type: app-extension
     platform: iOS
-    sources:
-      - Extensions/Widgets
-      - Shared/LiveActivity
-      # Satoshi for the Live Activity's countdown, once the .otf files are in App/Fonts.
-      - path: App/Fonts
-        buildPhase: resources
+    sources: [Extensions/Widgets]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.focuznow.app.Widgets
@@ -154,10 +145,6 @@ targets:
       path: Extensions/Widgets/Info.plist
       properties:
         CFBundleDisplayName: FocuzNow
-        UIAppFonts:
-          - Satoshi-Medium.otf
-          - Satoshi-Bold.otf
-          - Satoshi-Black.otf
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

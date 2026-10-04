@@ -215,8 +215,6 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("appearance") private var appearance = "system"
     @AppStorage("onboarded") private var onboarded = true
-    @AppStorage("onboardingStep") private var onboardingStep = 0
-    @AppStorage("devMode") private var devMode = false
     @State private var showPro = false
     @State private var confirmDelete = false
     @State private var nudges = true
@@ -259,22 +257,9 @@ struct SettingsView: View {
                 group("About") {
                     NavigationLink { AboutView() } label: { SettingsRow(symbol: "light.beacon.max", title: "About FocuzNow") }
                     NavigationLink { GuestPassView() } label: { SettingsRow(symbol: "ticket", title: "Send a guest pass") }
-                    Button {
-                        onboardingStep = 0
-                        onboarded = false
-                    } label: { SettingsRow(symbol: "arrow.counterclockwise", title: "Replay the intro", chevron: false) }
+                    Button { onboarded = false } label: { SettingsRow(symbol: "arrow.counterclockwise", title: "Replay the intro", chevron: false) }
                 }
                 .riseIn(delay: 0.24)
-
-                group("Developer") {
-                    SettingsToggle(symbol: "hammer", title: "Developer mode", isOn: $devMode)
-                    if devMode {
-                        NavigationLink { DeveloperView() } label: { SettingsRow(symbol: "wrench.and.screwdriver", title: "Developer tools") }
-                            .transition(.opacity)
-                    }
-                }
-                .animation(.spring(duration: 0.35), value: devMode)
-                .riseIn(delay: 0.28)
 
                 group("Account") {
                     Button {} label: { SettingsRow(symbol: "rectangle.portrait.and.arrow.right", title: "Sign out", chevron: false) }

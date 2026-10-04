@@ -1,6 +1,8 @@
 # FocuzNow iOS: the "Island" plan (UI v4)
 
-Status: **plan, waiting for the owner's go.** Nothing here is built yet.
+Status (2026-10-04): **phases 1–3 written** (Live Activity, real blocking, the in-app island, the
+Island onboarding, Developer mode). **The owner still needs to build them on the Mac** (§10).
+Phases 4–8 are still a plan. The owner's decisions are in §9.
 Replaces the v3 "Lighthouse" direction in `docs/ios-design-spec.md` where the two disagree.
 
 ---
@@ -199,13 +201,19 @@ Copy rules: the island speaks in first person ("I need Screen Time"). Questions 
 replies in `Asks.all` are reused, but **"days a year" maths stays a one-line aside, never a
 payoff**, and the "What it adds up to" row is removed.
 
-### 4.4 Developer mode (the owner's ask)
-- Settings → **Developer** → **Developer mode** toggle (`@AppStorage("devMode")`).
-- With it on, **Replay the intro** opens a popup: **Island** (default) · **In your words (A)** ·
-  **Assemble (C)**. With it off, Replay always plays Island.
-- All three share the same answers (`Asks`), `AccountButtons` and permission steps, so only the
-  presentation differs.
-- Decision pending (§9): keep C, or drop it, since Island is the stronger version of the same idea.
+### 4.4 Developer mode
+- Settings → **Developer** → **Developer mode** toggle (`@AppStorage("devMode")`). Turning it on adds
+  **Developer tools** (`Screens/DeveloperView.swift`).
+- It's a general toolbox (the owner's call), for testing, for people who like to see what's going on,
+  and for anyone whose app is misbehaving:
+  - Replay onboarding.
+  - Live Activity status, plus a 1-minute test session.
+  - Screen Time permission, the locked count and the daily block, with buttons to cancel the block
+    or unlock everything.
+  - Notification permission.
+  - App, iOS and device versions, and **Copy diagnostics** (no names or app lists).
+- Island is the only onboarding. A and C were not built; they can come back as Developer tools
+  entries if wanted.
 
 ---
 
@@ -406,14 +414,54 @@ Phases 1–3 are the onboarding the owner asked for. Phase 4 needs the photo sho
 
 ---
 
-## 9. Decisions for the owner
+## 9. The owner's decisions (2026-10-04)
 
-1. **Onboarding options in Developer mode:** Island (default) + A + C, or Island + A only?
-   (Recommendation: drop C. Island is the stronger version of the same "things fly into place"
-   idea.)
-2. **Start a real 10-minute session at the end of onboarding?** (Recommendation: yes, with "Later"
-   always there.)
-3. **Photos:** approve the shortlist, and is there a budget for licensed shop scenes, or should the
-   shop launch with free-licence backdrops only?
-4. **Forest:** keep the SceneKit forest, or replace it with a photo grove or a badge wall?
-5. **Phase order:** 1 → 2 → 3 (onboarding first), or 1 → 4 → 5 (the main app first)?
+1. **Developer mode** is a general toolbox for testing and troubleshooting, not an onboarding picker
+   (§4.4).
+2. **The end of onboarding** offers a real first session (10 or 25 min) **or** a daily app block
+   during your hardest time (from the "When is it hardest?" answer), or Later.
+3. **Images:** the owner generates them. The list and prompts are in `docs/ios-image-prompts.md`; the
+   files go in `ios/Art/`. The four coast photos are done (sent in chat, still to be added to
+   `ios/Art/`). Generated images are the owner's, so they can be sold as Shop scenes.
+4. **Forest:** a **cartoony 2D storybook scene** replaces the SceneKit island. It's fixed (no
+   panning or rotating), full from day one (bushes, flowers, rocks, critters), and every finished
+   session plants a tree in a free spot. Tap a tree and it bounces and shows the session that grew
+   it; tap a critter and it does a little move. Sprites and backgrounds are in
+   `docs/ios-image-prompts.md` §4. It must not look like the "Forest" app (no isometric tile, no
+   low-poly 3D).
+5. **Order:** onboarding first (phases 1–3), then the main app.
+
+## 10. What's built (phases 1–3) and how to test it
+
+Files:
+- `Shared/LiveActivity/FocusActivity.swift` (app + widgets): the Live Activity's data and the End
+  and +5 min intents.
+- `Shared/Blocking/BlockList.swift` (app + monitor): the saved block list, shields, the daily block
+  and the session-end safety net.
+- `Extensions/Widgets/FocusLiveActivity.swift`: the island and Lock Screen UI.
+- `Extensions/FocusMonitor/FocusMonitorExtension.swift`: locks and unlocks on schedule.
+- `App/Model/LiveFocus.swift` + hooks in `AppModel`: sessions now really lock the picked apps and run
+  the Live Activity. The pick is saved, and sessions end on time even with the app closed.
+- `App/Design/IslandStage.swift`: the in-app island, its light, throwable chips, `FlowLayout`.
+- `App/Onboarding/IslandOnboarding.swift`: the flow. `OnboardingFlow.swift` keeps `Asks`,
+  `AccountButtons` and `GoalDial`.
+- `App/Screens/DeveloperView.swift` + Settings → Developer.
+- The v3 files are backed up in `backups/ios-onboarding-v3-2026-10-04/`.
+
+Test on an iPhone with a Dynamic Island (and once in an iPhone SE simulator for the fallback):
+1. `cd ios && xcodegen`, build, and delete the old app first so onboarding runs.
+2. **Noise:** five notification cards pop in. The island wakes and its light sweeps them off the
+   bottom, then "Everything else can wait." rises. The pill should sit exactly on the camera cutout.
+3. **Name:** type it and tap the up arrow. The name flies into the island, which squashes, then
+   expands with "Nice to meet you…". Your initial stays on its left.
+4. **Four questions:** drag a chip up and the island widens to catch it; let go short and it springs
+   back. Tapping works too. Each answer gets its own reply in the island, and the next question
+   rises while you read it.
+5. **Screen Time → Choose apps → flick each icon up** (or All in). The island counts the locks.
+6. **Notifications**, then **Focus 10 min**. The island becomes a countdown and the Lock Screen
+   card appears. Swipe home: the **real** Live Activity is in the island. Long-press it for End and
+   +5. Open a picked app: it's blocked.
+7. Come back, tap **Keep going**, sign in or tap Not now. Today fades in with the session bar.
+8. Settings → Developer mode → Developer tools: everything should show the right status. Try the
+   1-minute test session, then go home and wait for it to end: the apps unlock on their own.
+9. Replay with **Block … daily** instead of a session, and check the apps lock at that time.

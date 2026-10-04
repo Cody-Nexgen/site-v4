@@ -25,10 +25,7 @@ final class AppModel {
     var sessionMinutes = 50
     var difficulty: Difficulty = .normal
     var breaksOn = true
-    /// What gets locked. Saved to the App Group so the Screen Time monitor can lock it on schedule.
-    var selection = BlockList.load() ?? FamilyActivitySelection() {
-        didSet { BlockList.save(selection) }
-    }
+    var selection = FamilyActivitySelection()
     var blockedApps = Array(DistractionApp.samples.prefix(5))
     var session: FocusSession?
     var showSession = false
@@ -121,22 +118,13 @@ final class AppModel {
         )
         completed = nil
         showSession = true
-        if let session { LiveFocus.started(session, selection: selection) }
-    }
-
-    /// The Live Activity's End and +5 buttons (`FocusIntentBridge`).
-    func handle(_ action: FocusIntentAction) {
-        switch action {
-        case .end: endSession(completedFully: false)
-        case .addFive: extendSession(minutes: 5)
-        }
+        // Phase 2: apply the ManagedSettings shield and schedule DeviceActivity.
     }
 
     func extendSession(minutes: Int) {
         guard var current = session else { return }
         current.duration += TimeInterval(minutes * 60)
         session = current
-        LiveFocus.changed(current, selection: selection)
     }
 
     func setBreakLength(minutes: Int) {
@@ -169,7 +157,6 @@ final class AppModel {
         guard var current = session, current.breakStartedAt == nil, current.difficulty != .lockedIn else { return }
         current.breakStartedAt = .now
         session = current
-        LiveFocus.changed(current, selection: selection)
     }
 
     func endBreak() {
@@ -177,7 +164,6 @@ final class AppModel {
         current.pausedTotal += Date.now.timeIntervalSince(started)
         current.breakStartedAt = nil
         session = current
-        LiveFocus.changed(current, selection: selection)
     }
 
     func endSession(completedFully: Bool) {
@@ -192,7 +178,6 @@ final class AppModel {
         }
         completed = CompletedSession(title: current.title, minutes: minutes, coins: completedFully ? max(5, minutes / 4) : 0, scoreBefore: before, scoreAfter: focusScore)
         session = nil
-        LiveFocus.ended(minutes: minutes)
     }
 
     /// Called every second by the root view.
