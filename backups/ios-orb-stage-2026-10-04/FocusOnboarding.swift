@@ -3,16 +3,14 @@ import FamilyControls
 import SwiftUI
 import UserNotifications
 
-/// First launch (docs/ios-onboarding.md), all on one screen that never navigates:
-/// 1. The bare Beam Z draws itself as a beam of light, fills, and flies up beside "FocuzNow", where it
-///    becomes the logo. The focus chart draws, the sign-in buttons rise. Signing in draws the line away.
+/// First launch (docs/ios-onboarding.md), all on one black screen that never navigates:
+/// 1. The Beam Z draws itself, flies up beside "FocuzNow", the focus chart draws, the sign-in buttons
+///    rise. Signing in draws the line away and fades everything out.
 /// 2. "Hey, Avan" (the name from Apple, or the start of the email) and "Welcome to FocuzNow".
-/// 3. The orb stage (`OrbStage`): the light comes up on an empty pedestal, its ring powers on, sparks
-///    gather above it and your focus orb forms there, floating, with lightning down into the ring.
-/// 4. A glass button opens into a glass panel in place, and the questions are asked there. Every answer
-///    has its own reply and sends a strike down into the orb.
-/// 5. How many days a year that phone time adds up to, then the permissions in the same panel.
-/// 6. The orb settles and Today builds around the same stage.
+/// 3. Your focus orb rises. A glass button opens into a glass panel in place, and the questions are
+///    asked there. Every answer has its own reply and makes the orb grow.
+/// 4. How many days a year that phone time adds up to, then the permissions in the same panel.
+/// 5. The orb flares and the app appears.
 struct FocusOnboarding: View {
     enum Stage: Int, Comparable {
         case intro, welcome, email, leaving, hello, questions, stat, permissions, finishing
@@ -30,10 +28,8 @@ struct FocusOnboarding: View {
 
     // The welcome
     @State private var zDraw: CGFloat = 0
-    @State private var zFill: CGFloat = 0
-    @State private var bloom = false
+    @State private var zFilled = false
     @State private var docked = false
-    @State private var tileShown = false
     @State private var showWordmark = false
     @State private var showHeadline = false
     @State private var showGlow = false
@@ -50,18 +46,15 @@ struct FocusOnboarding: View {
     @State private var password = ""
     @FocusState private var emailFocused: Bool
 
-    // Hello and the orb stage
+    // Hello and the orb
     @State private var greeting = ""
     @State private var showHey = false
     @State private var showWelcomeLine = false
-    @State private var stageState = OrbStageState.dark
-    @State private var strike = 0
-    @State private var sparksAt: Date?
-    @State private var pushedIn = false
-    @State private var ringOn = false
+    @State private var showOrb = false
     @State private var showOrbLine = false
     @State private var showPanel = false
     @State private var panelOpen = false
+    @State private var energy = 0.12
     @State private var pulse = 0
 
     // Questions
@@ -106,40 +99,40 @@ struct FocusOnboarding: View {
         .task { await playIntro() }
         .task { await FocusOrb.prepare() }
         .sensoryFeedback(.impact(weight: .medium), trigger: pulse)
-        .sensoryFeedback(.impact(weight: .light), trigger: ringOn)
         .sensoryFeedback(.selection, trigger: askIndex)
     }
 
     // MARK: Backdrop
 
-    /// Black, with a mint glow behind the welcome's focus line.
     private func backdrop(_ size: CGSize) -> some View {
-        ZStack {
+        let welcome = stage < .hello
+        let y: CGFloat = welcome ? 0.46 : orbY(size) / size.height
+        return ZStack {
             Color.black
             RadialGradient(
                 colors: [Color.fzMint.opacity(0.2), Color(hex: 0x1C3A2E).opacity(0.22), .clear],
-                center: UnitPoint(x: 0.5, y: 0.46),
+                center: UnitPoint(x: 0.5, y: y),
                 startRadius: 0,
                 endRadius: size.width * 0.8
             )
-            .opacity(stage < .hello && showGlow && !welcomeGone ? 1 : 0)
+            .opacity(welcome ? (showGlow && !welcomeGone ? 1 : 0) : (showOrb ? 0.6 + 0.4 * energy : 0))
             .animation(.easeInOut(duration: 1.2), value: showGlow)
             .animation(.easeInOut(duration: 1.2), value: welcomeGone)
+            .animation(.easeInOut(duration: 1.0), value: stage)
         }
         .allowsHitTesting(false)
     }
 
     // MARK: 1. The welcome
 
-    /// The splash: the bare Z drawing itself in the middle, before it flies up next to "FocuzNow".
-    /// No tile here; it only gets one when it lands in the header as the logo.
+    /// The big Z in the middle, before it flies up next to "FocuzNow".
     @ViewBuilder
     private func introMark(_ size: CGSize) -> some View {
         if !docked, stage < .hello {
-            BeamZDrawing(size: 184, draw: zDraw, fill: zFill)
+            BeamZMark(size: 112, draw: zDraw, filled: zFilled)
                 .matchedGeometryEffect(id: "mark", in: markSpace)
-                .shadow(color: Color.fzMint.opacity(bloom ? 0.55 : 0), radius: 44)
-                .position(x: size.width / 2, y: size.height * 0.44)
+                .shadow(color: Color.fzMint.opacity(zFilled ? 0.35 : 0), radius: 34)
+                .position(x: size.width / 2, y: size.height * 0.42)
         }
     }
 
@@ -148,7 +141,7 @@ struct FocusOnboarding: View {
         return VStack(spacing: 0) {
             HStack(spacing: 14) {
                 if docked {
-                    BeamZMark(size: 44, tile: tileShown ? 1 : 0)
+                    BeamZMark(size: 44)
                         .matchedGeometryEffect(id: "mark", in: markSpace)
                 } else {
                     Color.clear.frame(width: 44, height: 44)
@@ -361,25 +354,29 @@ struct FocusOnboarding: View {
         }
     }
 
-    // MARK: 2–6. Hello, the orb stage, questions, the year, permissions
+    // MARK: 2–5. Hello, the orb, questions, the year, permissions
 
     private func isCompact() -> Bool {
         stage == .questions || stage == .stat || stage == .permissions || stage == .finishing || panelOpen
     }
 
-    /// The stage stays put from here to Today; only the words and the panel come and go over it.
-    private func journeyLayer(_ size: CGSize, top: CGFloat, bottom: CGFloat) -> some View {
-        let layout = OrbStageLayout(width: size.width, top: top)
-        let compact = isCompact()
-        let small = size.height < 720
-        return ZStack(alignment: .top) {
-            OrbStage(layout: layout, state: stageState, strike: strike, sparksAt: sparksAt)
-                .scaleEffect(pushedIn ? 1 : 1.08, anchor: UnitPoint(x: layout.ring.x / layout.width, y: layout.ring.y / max(layout.height, 1)))
-                .frame(width: size.width, height: size.height, alignment: .top)
+    private func orbSize(_ size: CGSize) -> CGFloat {
+        isCompact() ? min(size.width * 0.46, 220) : min(size.width * 0.66, 320)
+    }
 
-            VStack(spacing: 8) {
+    private func orbY(_ size: CGSize) -> CGFloat {
+        if stage == .stat { return size.height * 0.2 }
+        return isCompact() ? size.height * 0.25 : size.height * 0.47
+    }
+
+    private func journeyLayer(_ size: CGSize, top: CGFloat, bottom: CGFloat) -> some View {
+        let compact = isCompact()
+        let orb = orbSize(size)
+        let y = orbY(size)
+        return ZStack(alignment: .top) {
+            VStack(spacing: 10) {
                 Text(greeting.isEmpty ? "Hey there" : "Hey, \(greeting)")
-                    .font(.fzDisplay(small ? 34 : 40, weight: .bold))
+                    .font(.fzDisplay(44, weight: .bold))
                     .blurReveal(showHey)
                 Text("Welcome to FocuzNow")
                     .font(.title3.weight(.medium))
@@ -389,36 +386,51 @@ struct FocusOnboarding: View {
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 24)
-            .padding(.top, top + (small ? 12 : 22))
-            .opacity(compact || leaving ? 0 : 1)
+            .padding(.top, top + 52)
+            .opacity(compact ? 0 : 1)
             .blur(radius: compact ? 12 : 0)
+
+            FocusOrb(energy: energy, size: orb)
+                .keyframeAnimator(initialValue: 1.0, trigger: pulse) { content, scale in
+                    content.scaleEffect(scale)
+                } keyframes: { _ in
+                    KeyframeTrack(\.self) {
+                        SpringKeyframe(1.1, duration: 0.18)
+                        SpringKeyframe(1.0, duration: 0.6)
+                    }
+                }
+                .scaleEffect(showOrb ? (leaving ? 1.6 : 1) : 0.5)
+                .opacity(showOrb && !leaving ? 1 : 0)
+                .blur(radius: showOrb ? 0 : 26)
+                .position(x: size.width / 2, y: y)
+                .frame(width: size.width, height: size.height)
 
             VStack(spacing: 8) {
                 Text("This is your focus orb.")
-                    .font(.fzDisplay(small ? 23 : 26, weight: .bold))
+                    .font(.fzDisplay(26, weight: .bold))
                     .blurReveal(showOrbLine)
-                Text("It's barely charged. Answer a few questions and it grows.")
-                    .font(small ? .subheadline : .body)
+                Text("Answer a few questions and watch it grow.")
+                    .font(.body)
                     .foregroundStyle(.white.opacity(0.7))
                     .blurReveal(showOrbLine, delay: 0.25)
             }
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
-            .padding(.horizontal, 32)
-            .position(x: size.width / 2, y: layout.baseY + (small ? 40 : 56))
+            .padding(.horizontal, 24)
+            .position(x: size.width / 2, y: y + orb * 0.5 + 58)
             .frame(width: size.width, height: size.height)
             .opacity(compact ? 0 : 1)
 
-            statView(size, below: layout.baseY, small: small)
+            statView(size)
                 .opacity(stage == .stat ? 1 : 0)
 
             panel(size)
                 .padding(.horizontal, 16)
                 .padding(.bottom, bottom + 8)
                 .frame(width: size.width, height: size.height, alignment: .bottom)
-                .opacity(leaving ? 0 : 1)
         }
         .frame(width: size.width, height: size.height)
+        .opacity(leaving ? 0 : 1)
         .animation(.spring(duration: 0.85, bounce: 0.12), value: compact)
         .animation(.spring(duration: 0.85, bounce: 0.12), value: stage)
     }
@@ -532,15 +544,14 @@ struct FocusOnboarding: View {
         .transition(.blurReplace)
     }
 
-    /// Under the pedestal, over the dark ground.
-    private func statView(_ size: CGSize, below baseY: CGFloat, small: Bool) -> some View {
-        VStack(spacing: small ? 4 : 8) {
+    private func statView(_ size: CGSize) -> some View {
+        VStack(spacing: 8) {
             Text("This year, you're on track to spend")
                 .font(.title3.weight(.medium))
                 .foregroundStyle(.white.opacity(0.72))
                 .blurReveal(statStep >= 1)
             Text("\(shownDays) days")
-                .font(.fzDisplay(small ? 60 : 80, weight: .black))
+                .font(.fzDisplay(84, weight: .black))
                 .foregroundStyle(.white)
                 .monospacedDigit()
                 .contentTransition(.numericText(value: Double(shownDays)))
@@ -550,14 +561,14 @@ struct FocusOnboarding: View {
                 .foregroundStyle(.white.opacity(0.72))
                 .blurReveal(statStep >= 3)
             Text("We can change that.")
-                .font(.fzDisplay(small ? 24 : 28, weight: .bold))
+                .font(.fzDisplay(28, weight: .bold))
                 .foregroundStyle(Color.fzMint)
-                .padding(.top, small ? 8 : 16)
+                .padding(.top, 18)
                 .blurReveal(statStep >= 4)
         }
         .multilineTextAlignment(.center)
         .padding(.horizontal, 24)
-        .position(x: size.width / 2, y: baseY + (small ? 104 : 140))
+        .position(x: size.width / 2, y: size.height * 0.52)
         .frame(width: size.width, height: size.height)
         .allowsHitTesting(false)
     }
@@ -605,25 +616,20 @@ struct FocusOnboarding: View {
     private func playIntro() async {
         guard stage == .intro else { return }
         if reduceMotion {
-            zDraw = 1; zFill = 1; docked = true; tileShown = true
+            zDraw = 1; zFilled = true; docked = true
             showWordmark = true; showHeadline = true; showGlow = true
             lineEnd = 1; nodes = [true, true, true]
             showButtons = true; showFooter = true
             stage = .welcome
             return
         }
-        // The beam runs round the Z, the fill sweeps in, one soft glow, then it flies up.
-        await wait(0.3)
-        withAnimation(.easeInOut(duration: 1.25)) { zDraw = 1 }
-        await wait(1.15)
-        withAnimation(.easeInOut(duration: 0.5)) { zFill = 1 }
-        await wait(0.4)
-        withAnimation(.easeOut(duration: 0.3)) { bloom = true }
+        await wait(0.35)
+        withAnimation(.easeInOut(duration: 1.1)) { zDraw = 1 }
+        await wait(1.0)
+        withAnimation(.easeOut(duration: 0.4)) { zFilled = true }
         pulse += 1
-        await wait(0.4)
-        withAnimation(.easeInOut(duration: 0.6)) { bloom = false }
+        await wait(0.6)
         withAnimation(.spring(duration: 0.85, bounce: 0.16)) { docked = true }
-        later(0.55) { withAnimation(.easeInOut(duration: 0.5)) { tileShown = true } }
         await wait(0.3)
         showWordmark = true
         await wait(0.25)
@@ -693,49 +699,16 @@ struct FocusOnboarding: View {
         later(1.15) { startHello() }
     }
 
-    /// Hello, then the story of the orb: the light comes up on the empty pedestal, the ring powers on,
-    /// sparks lift off it and gather, they catch, lightning jumps up, and the orb forms around it.
     private func startHello() {
         withAnimation(.easeInOut(duration: 0.4)) { stage = .hello }
         later(0.15) { showHey = true }
         later(0.6) { showWelcomeLine = true }
-        if reduceMotion {
-            later(0.9) {
-                withAnimation(.easeInOut(duration: 0.8)) { stageState = .settled(0.12) }
-                pushedIn = true
-            }
-            later(1.6) { showOrbLine = true }
-            later(2.2) { withAnimation(.spring(duration: 0.7, bounce: 0.15)) { showPanel = true } }
-            return
-        }
-        later(1.3) {
-            withAnimation(.easeInOut(duration: 2.4)) { stageState.scene = 1 }
-            withAnimation(.easeOut(duration: 6.5)) { pushedIn = true }
-        }
-        later(1.7) { withAnimation(.easeInOut(duration: 2.2)) { stageState.beam = 1 } }
-        later(3.0) {
-            withAnimation(.easeInOut(duration: 1.3)) { stageState.ring = 1 }
-            ringOn = true
-        }
-        later(4.0) { sparksAt = .now }
-        later(5.3) {
-            withAnimation(.easeOut(duration: 0.35)) { stageState.spark = 1 }
+        later(1.4) {
+            withAnimation(.spring(duration: 1.3, bounce: 0.15)) { showOrb = true }
             pulse += 1
         }
-        later(5.5) {
-            withAnimation(.easeOut(duration: 0.2)) { stageState.arcs = 1 }
-            strike += 1
-        }
-        later(5.75) {
-            withAnimation(.spring(duration: 1.5, bounce: 0.18)) { stageState.formed = 1 }
-            pulse += 1
-        }
-        later(6.1) {
-            withAnimation(.easeOut(duration: 1)) { stageState.spark = 0 }
-            sparksAt = nil
-        }
-        later(7.0) { showOrbLine = true }
-        later(7.9) { withAnimation(.spring(duration: 0.7, bounce: 0.15)) { showPanel = true } }
+        later(2.4) { showOrbLine = true }
+        later(3.1) { withAnimation(.spring(duration: 0.7, bounce: 0.15)) { showPanel = true } }
     }
 
     private func openQuestions() {
@@ -772,10 +745,8 @@ struct FocusOnboarding: View {
         }
     }
 
-    /// A strike comes down the lightning and the orb charges up.
     private func grow(by amount: Double) {
-        withAnimation(.easeInOut(duration: 1.2)) { stageState.energy = min(1, stageState.energy + amount) }
-        strike += 1
+        withAnimation(.easeInOut(duration: 1.2)) { energy = min(1, energy + amount) }
         pulse += 1
     }
 
@@ -858,19 +829,17 @@ struct FocusOnboarding: View {
         grow(by: 0.08)
     }
 
-    /// One last strike, the orb settles to today's charge, and Today builds around the same stage
-    /// (it's laid out with the same `OrbStageLayout`, so nothing on it moves).
+    /// The orb flares and grows into the screen, then the app appears.
     private func finish() {
         guard stage != .finishing else { return }
         withAnimation(.easeInOut(duration: 0.5)) {
             showPanel = false
             stage = .finishing
         }
-        strike += 1
+        withAnimation(.easeInOut(duration: 0.8)) { energy = 1 }
         pulse += 1
-        withAnimation(.easeInOut(duration: 1.2)) { stageState.energy = TodayView.orbEnergy(model.focusScore) }
-        later(0.6) { withAnimation(.easeIn(duration: 0.4)) { leaving = true } }
-        later(1.3) { onboarded = true }
+        later(0.8) { withAnimation(.easeIn(duration: 0.6)) { leaving = true } }
+        later(1.35) { onboarded = true }
     }
 }
 

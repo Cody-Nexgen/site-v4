@@ -1,7 +1,6 @@
 # FocuzNow iOS: images to generate
 
-For the owner to generate (any image model). **The onboarding and the dashboard need §9 (the orb
-stage) first**; the rest don't block anything. Priority order: **1 Coast → 2 Sessions → 3 Presets → 4 Forest → 5 Shop → 6 Video (optional).**
+For the owner to generate (any image model). §9 (the orb stage) is done; the rest don't block anything. Priority order: **1 Coast → 2 Sessions → 3 Presets → 4 Forest → 5 Shop → 6 Video (optional).**
 
 ## How to hand them over
 - Put each file in `ios/Art/` with **the exact file name** below (PNG or JPG is fine), then push it
@@ -258,7 +257,7 @@ Cinematic photograph from high orbit at night looking down at the curved horizon
 The exact same shot and framing as the attached image, a moment later: the sun is just rising over the curved horizon slightly left of center, a small bright warm-white star of light on the horizon line, the atmosphere glowing brighter along the curve, soft light spreading into the dark sky, everything else unchanged. No lens flare streaks, no text, no watermark.
 ```
 
-## 9. The orb stage (onboarding story + Today) ⏳ needed first
+## 9. The orb stage (onboarding story + Today) ✅ done 2026-10-04 (`orb-stage`; the lit version is drawn in code)
 One dark scene with an empty pedestal. The onboarding builds the orb on it (code draws the orb, the
 light beam, sparks, arcs and the ring glow), and the dashboard keeps the same scene, so the last frame
 of the onboarding is the first frame of Today. Aspect **9:16 portrait** (2:3 if your tool can't),

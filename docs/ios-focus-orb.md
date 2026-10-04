@@ -16,6 +16,14 @@ shader, a SwiftUI colour effect). Use it as `FocusOrb(energy:size:)`. The v1 Can
 - **Glass:** dark body, a rim that catches the light, a crescent of light on the top left, a soft bounce
   at the bottom, and a mint glow around it.
 
+## On the stage
+`OrbStage` (`ios/App/Design/OrbStage.swift`) floats the orb over the pedestal photo, bobbing 3 pt, with
+2–4 lightning arcs from its underside down into the pedestal's ring (re-struck 13 times a second, a fork
+now and then, a glow where each touches the ring), the ring and slits lit, a light shaft and dust. A
+strike (each answer) flashes the ring and flares all four arcs. `OrbStageLayout` places it all from the
+screen width and the top safe area only, using the pedestal measured in the photo's pixels, so the
+onboarding and Today put the orb in exactly the same spot.
+
 ## Energy (0–1)
 | energy | looks like |
 |---|---|

@@ -44,9 +44,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.focuznow.app
         PRODUCT_NAME: FocuzNow
         INFOPLIST_KEY_CFBundleDisplayName: FocuzNow
-        # App/Assets.xcassets has no AppIcon set yet (the icon isn't designed). Without this, the
-        # asset catalog compiler stops the build looking for one. Set it to AppIcon once it exists.
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
     info:
       path: App/Info.plist
       properties:
@@ -61,7 +58,7 @@ targets:
           - Satoshi-Bold.otf
           - Satoshi-Black.otf
         UILaunchScreen:
-          UIColorName: LaunchBackground
+          UIColorName: ""
         UIUserInterfaceStyle: Automatic
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true

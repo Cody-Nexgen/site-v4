@@ -10,7 +10,6 @@ struct FocusOrb: View, Animatable {
     var energy: Double
     var size: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var start = Date()
 
     /// So a change to `energy` inside `withAnimation` glides instead of jumping.
     var animatableData: Double {
@@ -24,8 +23,9 @@ struct FocusOrb: View, Animatable {
     var body: some View {
         let canvas = size * Self.spill
         TimelineView(.animation(paused: reduceMotion)) { context in
-            // Kept small: the shader works in 32-bit floats. The pattern jumps once every 20 minutes.
-            let t = reduceMotion ? 12 : context.date.timeIntervalSince(start).truncatingRemainder(dividingBy: 1200)
+            // Absolute time, so a second orb (Today, after the onboarding) carries on the same pattern.
+            // Wrapped small because the shader works in 32-bit floats: it jumps once every 20 minutes.
+            let t = reduceMotion ? 12 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1200)
             Rectangle()
                 .fill(.black)
                 .colorEffect(ShaderLibrary.focusOrb(.float2(canvas, canvas), .float(t), .float(energy)))

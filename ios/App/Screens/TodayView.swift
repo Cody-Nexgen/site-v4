@@ -1,89 +1,74 @@
 import SwiftUI
 
-/// Home. The lighthouse at the top shines as bright as your focus today: a dim lamp at a low score,
-/// the full beam at a high one. Pull down and the sea stretches; scroll and it drifts behind.
+/// Home, from the owner's mockup: your focus orb floating over its pedestal, as charged as your focus
+/// score, then the score, Start, and what's on today. The stage is the same one the onboarding builds
+/// (same `OrbStageLayout`), so the onboarding hands over to this screen without a cut. It's a night
+/// scene, so Today stays dark in light mode too.
 struct TodayView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @Binding var showYou: Bool
     let startFocus: () -> Void
-    @State private var shownScore = 0.0
+    let open: (AppTab) -> Void
+    @State private var shownScore = 0
+
+    /// How charged the orb is for a focus score (0–10).
+    static func orbEnergy(_ score: Double) -> Double { min(1, max(0.08, score / 10)) }
+
+    private var score: Int { Int((model.focusScore * 10).rounded()) }
 
     var body: some View {
         GeometryReader { outer in
             let top = outer.safeAreaInsets.top
+            let layout = OrbStageLayout(width: outer.size.width, top: top)
             ScrollView {
-                VStack(spacing: 0) {
-                    hero(top: top)
-                    Group {
-                        if sizeClass == .regular {
-                            HStack(alignment: .top, spacing: 28) {
-                                VStack(spacing: 26) { score; stats }.frame(maxWidth: .infinity)
-                                VStack(spacing: 26) { upNext; friendsNow }.frame(maxWidth: .infinity)
-                            }
-                        } else {
-                            VStack(spacing: 26) { score; upNext; stats; friendsNow }
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, -28)
-                    .padding(.bottom, 120)
-                    .frame(maxWidth: 980)
+                ZStack(alignment: .top) {
+                    OrbStage(layout: layout, state: .settled(Self.orbEnergy(model.focusScore)))
+                    header
+                        .padding(.top, top + 6)
+                    content
+                        .padding(.top, layout.baseY + 6)
                 }
+                .frame(width: outer.size.width)
             }
             .scrollIndicators(.hidden)
             .ignoresSafeArea(edges: .top)
         }
-        .background(Color.fzBg)
-        .overlay(alignment: .bottom) {
-            if model.session == nil {
-                Button(action: startFocus) {
-                    Label("Start \(GoalDial.format(model.selectedPreset.minutes)) focus", systemImage: "play.fill")
-                }
-                .buttonStyle(.beam)
-                .frame(maxWidth: 420)
-                .padding(.horizontal, 22)
-                .padding(.bottom, 12)
-                .transition(.blurRise)
-            }
-        }
+        .background(Color.black)
+        .environment(\.colorScheme, .dark)
+        .toolbarColorScheme(.dark, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             shownScore = 0
-            withAnimation(.spring(duration: 1.4).delay(0.3)) { shownScore = model.focusScore }
+            withAnimation(.smooth(duration: 1.2).delay(0.25)) { shownScore = score }
         }
     }
 
-    // MARK: Hero
-
-    private func hero(top: CGFloat) -> some View {
-        let height = 300 + top
-        return GeometryReader { proxy in
-            let minY = proxy.frame(in: .scrollView).minY
-            LighthouseView(scene: LighthouseScene.header.with(power: Theme.lampPower(model.focusScore)))
-                .frame(height: height + max(0, minY))
-                .offset(y: minY > 0 ? -minY : -minY * 0.45)
-                .mask(LinearGradient(stops: [.init(color: .black, location: 0.7), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
-                .overlay(alignment: .top) {
-                    header
-                        .padding(.top, top + 6)
-                        .offset(y: minY > 0 ? -minY : 0)
-                }
-        }
-        .frame(height: height)
-    }
+    // MARK: Header
 
     private var header: some View {
-        HStack {
-            Text(greeting)
-                .font(.fzDisplay(22, weight: .bold))
-                .foregroundStyle(.white)
-            Spacer()
-            Button { showYou = true } label: { Avatar(name: model.userName, size: 36) }
-                .buttonStyle(.pressable)
-                .accessibilityLabel("You")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                BeamZMark(size: 34)
+                Text("FocuzNow")
+                    .font(.fzDisplay(19, weight: .bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Button { showYou = true } label: { Avatar(name: model.userName, size: 40) }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("You")
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(greeting)
+                    .font(.fzDisplay(30, weight: .bold))
+                    .foregroundStyle(.white)
+                Text(Self.focusLine(model.focusScore))
+                    .font(.body)
+                    .foregroundStyle(.white.opacity(0.62))
+            }
+            .riseIn(delay: 0.05)
         }
         .padding(.horizontal, 20)
+        .frame(maxWidth: 980)
     }
 
     private var greeting: String {
@@ -92,74 +77,134 @@ struct TodayView: View {
         return "\(part), \(model.userName)"
     }
 
-    // MARK: Score
-
-    private var score: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            SectionLabel("Focus score")
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(shownScore, format: .number.precision(.fractionLength(1)))
-                    .font(.fzDisplay(84))
-                    .fzTight(84)
-                    .foregroundStyle(Color.fzInk)
-                    .contentTransition(.numericText(value: shownScore))
-                Text(Theme.scoreWord(model.focusScore))
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(Color.fzInk2)
-            }
-            Text("\(GoalDial.format(model.focusedMinutesToday)) of \(GoalDial.format(model.goalMinutes)) today · \(model.streakDays)-day streak")
-                .font(.subheadline)
-                .foregroundStyle(Color.fzInk3)
-            GoalTrack(progress: model.goalProgress)
-                .padding(.top, 12)
+    static func focusLine(_ score: Double) -> String {
+        switch score {
+        case ..<2: "Start a session to charge it up."
+        case ..<6: "Your focus is warming up."
+        case ..<9: "Your focus is building."
+        default: "Fully charged today."
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Under the stage
+
+    private var content: some View {
+        VStack(spacing: 22) {
+            scoreBlock
+            startButton
+            todayCard
+            friendsNow
+            dayWave
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 40)
+        .frame(maxWidth: 560)
+    }
+
+    private var scoreBlock: some View {
+        VStack(spacing: 4) {
+            Text("FOCUS SCORE")
+                .font(.caption.weight(.semibold))
+                .tracking(2.4)
+                .foregroundStyle(.white.opacity(0.55))
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("\(shownScore)")
+                    .font(.fzDisplay(76, weight: .black))
+                    .fzTight(76)
+                    .foregroundStyle(.white)
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(shownScore)))
+                Text(Theme.orbWord(model.focusScore))
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.fzMint)
+            }
+            Text("\(GoalDial.format(model.focusedMinutesToday)) today · \(model.streakDays)-day streak")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.6))
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
         .riseIn(delay: 0.15)
     }
 
-    // MARK: Up next (the website's bone card)
-
-    private var upNext: some View {
-        VStack(spacing: 10) {
-            Text("Up next")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(Color.fzOnBone2)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                if let event = model.events.first {
-                    BoneTile(symbol: "clock", title: event.title, detail: "\(PlanView.time(event.startHour))\(event.place.map { " · \($0)" } ?? "")")
-                }
-                if let todo = model.todos.first(where: { !$0.done }) {
-                    BoneTile(symbol: "checkmark.square", title: todo.title, detail: todo.due.map { "Due \($0.lowercased())" } ?? todo.list)
-                }
-                BoneTile(symbol: "shield.lefthalf.filled", title: "\(model.blockedCount) blocked", detail: "while you focus")
-                BoneTile(symbol: "iphone", title: GoalDial.format(model.screenTimeMinutes), detail: "screen time today")
-            }
+    private var startButton: some View {
+        Button {
+            if model.session != nil { model.showSession = true } else { startFocus() }
+        } label: {
+            Label(model.session != nil ? "Back to your session" : "Start \(GoalDial.format(model.selectedPreset.minutes)) focus",
+                  systemImage: model.session != nil ? "timer" : "play.fill")
+                .font(.headline)
+                .foregroundStyle(.black)
+                .frame(maxWidth: 360)
+                .frame(height: 58)
+                .background(Capsule().fill(Color(hex: 0xEEF3EC)))
+                .overlay(Capsule().strokeBorder(Color.fzMint.opacity(0.6), lineWidth: 1.5).blur(radius: 1.5).padding(-2))
+                .shadow(color: Color.fzMint.opacity(0.35), radius: 18)
+                .contentShape(Capsule())
         }
-        .fzBoneCard()
-        .riseIn(delay: 0.3)
+        .buttonStyle(.pressable)
+        .riseIn(delay: 0.25)
     }
 
-    // MARK: Stats
+    // MARK: Today card
 
-    private var stats: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            StatTrio(items: [
-                .init(label: "Last hour", value: String(format: "%+.1f", model.lastHourDelta), trend: model.lastHourDelta),
-                .init(label: "Pickups", value: "\(model.pickups)"),
-                .init(label: "Coins", value: "\(model.coins)"),
-            ])
-            if model.homeShowsWave {
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel("Focus through the day")
-                    DayWave(points: model.wave)
-                        .frame(height: 110)
+    private var todayCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Today")
+                    .font(.fzDisplay(21, weight: .bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Button { open(.plan) } label: {
+                    HStack(spacing: 4) {
+                        Text("See all")
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.55))
                 }
+                .buttonStyle(.plain)
             }
+            .padding(.bottom, 6)
+
+            if let event = model.events.first {
+                Button { open(.plan) } label: {
+                    TodayRow(symbol: "book", title: event.title, detail: "\(PlanView.time(event.startHour))\(event.place.map { " · \($0)" } ?? "")")
+                }
+                .buttonStyle(.pressable)
+                rowDivider
+            }
+            if let todo = model.todos.first(where: { !$0.done }) {
+                Button { open(.plan) } label: {
+                    TodayRow(symbol: "checkmark.square", title: todo.title, detail: todo.due.map { "Due \($0.lowercased())" } ?? todo.list)
+                }
+                .buttonStyle(.pressable)
+                rowDivider
+            }
+            Button { open(.focus) } label: {
+                TodayRow(symbol: "shield.lefthalf.filled", title: model.blockedCount == 1 ? "1 app blocked" : "\(model.blockedCount) apps blocked", detail: "Distracting apps")
+            }
+            .buttonStyle(.pressable)
+            rowDivider
+            NavigationLink { StatsView() } label: {
+                TodayRow(symbol: "chart.bar.fill", title: GoalDial.format(model.screenTimeMinutes), detail: "Screen time today")
+            }
+            .buttonStyle(.pressable)
         }
         .padding(16)
-        .fzSurface(cornerRadius: 22)
-        .riseIn(delay: 0.45)
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color(hex: 0x111214).opacity(0.88)))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.09)))
+        .riseIn(delay: 0.35)
     }
+
+    private var rowDivider: some View {
+        Rectangle()
+            .fill(.white.opacity(0.08))
+            .frame(height: 1)
+            .padding(.leading, 60)
+    }
+
+    // MARK: Below the fold (Customize can turn these off)
 
     @ViewBuilder
     private var friendsNow: some View {
@@ -169,25 +214,75 @@ struct TodayView: View {
                 HStack(spacing: -10) {
                     ForEach(focusing) { friend in
                         Avatar(name: friend.name, size: 38)
-                            .overlay(Circle().strokeBorder(Color.fzBg, lineWidth: 2.5))
+                            .overlay(Circle().strokeBorder(Color.black, lineWidth: 2.5))
                     }
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(focusing.map(\.name).formatted(.list(type: .and)))
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.fzInk)
+                        .foregroundStyle(.white)
                     Text("focusing right now")
                         .font(.caption)
-                        .foregroundStyle(Color.fzInk3)
+                        .foregroundStyle(.white.opacity(0.55))
                 }
                 Spacer()
-                Circle().fill(Color.fzInk).frame(width: 7, height: 7)
+                Circle().fill(Color.fzMint).frame(width: 7, height: 7)
                     .phaseAnimator([0.3, 1.0]) { dot, phase in dot.opacity(phase) } animation: { _ in .easeInOut(duration: 1.1) }
             }
             .padding(14)
-            .fzSurface(cornerRadius: 20)
-            .riseIn(delay: 0.6)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(hex: 0x111214).opacity(0.88)))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.09)))
+            .riseIn(delay: 0.45)
         }
+    }
+
+    @ViewBuilder
+    private var dayWave: some View {
+        if model.homeShowsWave {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Focus through the day")
+                DayWave(points: model.wave)
+                    .frame(height: 110)
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(hex: 0x111214).opacity(0.88)))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.09)))
+            .riseIn(delay: 0.55)
+        }
+    }
+}
+
+/// One line of the Today card: an icon tile, a title and a detail, and a chevron.
+private struct TodayRow: View {
+    let symbol: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(.white.opacity(0.06)))
+                .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(.white.opacity(0.1)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
 }
 

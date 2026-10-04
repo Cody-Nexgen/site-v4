@@ -82,6 +82,18 @@ enum Theme {
     }
 
     /// Lighthouse brightness for a focus score: a dim lamp at 0, full beam at 10.
+    /// The focus orb's word for a score (0–10, shown as 0–100 on Today).
+    static func orbWord(_ score: Double) -> String {
+        switch score {
+        case ..<2: "Dim"
+        case ..<4: "Flickering"
+        case ..<6: "Warming up"
+        case ..<8: "Building"
+        case ..<9.5: "Charged"
+        default: "Fully charged"
+        }
+    }
+
     static func lampPower(_ score: Double) -> Double { 0.25 + 0.085 * min(10, max(0, score)) }
 
     /// Calm, almost grey tile tint for a name (vault items, avatars).

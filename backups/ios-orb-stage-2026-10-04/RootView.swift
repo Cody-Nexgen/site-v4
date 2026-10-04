@@ -11,7 +11,7 @@ struct RootView: View {
     @AppStorage("onboarded") private var onboarded = false
     @AppStorage("appearance") private var appearance = "system"
 
-    /// Only on launches where you're already set up (the onboarding opens with its own Z).
+    /// Only on launches where you're already set up (onboarding opens on its own lighthouse).
     @State private var splash = UserDefaults.standard.bool(forKey: "onboarded")
 
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -20,9 +20,8 @@ struct RootView: View {
         ZStack {
             Group {
                 if onboarded {
-                    // A plain cross-fade: Today opens on the same orb stage the onboarding ends on.
                     MainTabs()
-                        .transition(.opacity)
+                        .transition(.opacity.combined(with: .scale(scale: 1.04)))
                 } else {
                     OnboardingFlow()
                         .transition(.opacity)
@@ -52,7 +51,7 @@ private struct MainTabs: View {
         @Bindable var model = model
         TabView(selection: $tab) {
             Tab("Today", systemImage: "sun.max.fill", value: AppTab.today) {
-                NavigationStack { TodayView(showYou: $showYou, startFocus: { tab = .focus }, open: { tab = $0 }) }
+                NavigationStack { TodayView(showYou: $showYou, startFocus: { tab = .focus }) }
             }
             Tab("Focus", systemImage: "scope", value: AppTab.focus) {
                 NavigationStack { FocusSetupView() }
