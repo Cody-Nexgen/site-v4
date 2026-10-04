@@ -17,7 +17,9 @@ anything. Priority order: **1 Coast → 2 Sessions → 3 Presets → 4 Forest �
 
 ---
 
-## 1. Coast, by time of day (Today header, profile, About)
+## 1. Coast, by time of day (Today header, profile, About) ✅ done 2026-10-04
+In `ios/Art/` (1536 × 1024 JPG). Sharp enough for iPhone; a 2048 px wide version would be crisper on
+iPad later.
 Shown as a wide card at the top of Today (and a thin strip on iPad), so **keep the lighthouse in the
 middle band, with the horizon a little below centre**, and leave calm sky in the top left (the
 greeting sits there).
