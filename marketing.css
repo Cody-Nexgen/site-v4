@@ -551,3 +551,50 @@ kbd { padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; backg
   .fx-hero { padding: 64px 0 48px; }
 }
 @media (max-width: 860px) { .command-trigger { display: none; } }
+
+/* ---------- Clean pass (Notion-like restraint, dark) ---------- */
+.hero { padding: 96px 0 0; }
+.hero-top { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.hero .h1 { max-width: 900px; margin: 0; font-size: clamp(40px, 5.6vw, 68px); line-height: 1.06; letter-spacing: -.045em; }
+.hero .lede { max-width: 520px; margin-top: 18px; color: var(--text-2); font-size: 17px; }
+.hero-actions { justify-content: center; margin-top: 26px; gap: 8px; }
+.hero .btn { height: 36px; padding: 0 14px; border-radius: 8px; font-size: 14px; }
+.btn-ghost { color: var(--text-2); background: rgba(255,255,255,.06); }
+.btn-ghost:hover { background: rgba(255,255,255,.1); color: var(--text); }
+.hl-chip { display: inline-flex; align-items: center; gap: .18em; padding: 0 .28em 0 .22em; border-radius: .26em; background: var(--green-soft); color: #bff0d6; line-height: 1.12; vertical-align: baseline; }
+.hl-chip i { width: .34em; height: .34em; border-radius: 50%; background: var(--green); }
+.stage { max-width: 1040px; margin: 64px auto 0; }
+.stage::before { display: none; }
+.stage .win { border-color: var(--line-2); border-radius: 12px; box-shadow: 0 40px 100px -30px rgba(0,0,0,1), 0 0 0 1px rgba(255,255,255,.02); }
+.win-bar-app { height: 36px; gap: 10px; background: var(--s1); }
+.win-bar-app .tab { display: inline-flex; align-items: center; gap: 7px; height: 26px; margin-left: 10px; padding: 0 12px; border-radius: 6px; background: var(--s3); color: var(--text-2); font-size: 12px; }
+.win-bar-app .tab .brand-mark { width: 12px; height: 12px; }
+.win-bar-app .tab-add { color: var(--text-4); font-size: 14px; }
+.stage .app { height: 500px; font-size: 13px; grid-template-columns: 196px 1fr; }
+.stage .side { font-size: 13px; }
+.stage .main-top h3 { font-size: 20px; }
+.browsers { padding-top: 56px; gap: 10px 32px; font-size: 13px; }
+.browsers span { color: var(--text-4); }
+.section { padding-top: 140px; }
+.sec-head { display: flex; flex-direction: column; align-items: center; gap: 0; max-width: 720px; margin: 0 auto 48px; text-align: center; }
+.sec-head .h2 { margin-top: 14px; font-size: clamp(30px, 3.6vw, 44px); }
+.sec-head .lede { max-width: 560px; margin-top: 16px; font-size: 16px; }
+.section .win { max-width: 1040px; margin-inline: auto; }
+.coach-launcher button { box-shadow: none !important; }
+.hero-top { gap: 0; }
+.hl-chip { background: rgba(76,195,138,.12); box-shadow: inset 0 0 0 1px rgba(76,195,138,.18); }
+@media (max-width: 960px) {
+  .stage .app { grid-template-columns: 1fr; }
+  .stage .side { display: none; }
+}
+@media (max-width: 640px) {
+  .br-d { display: none; }
+  .hero { padding-top: 64px; }
+  .stage { margin-top: 44px; }
+  .stage .main-top { gap: 12px; }
+  .stage .main-top .ab { white-space: nowrap; }
+}
+.hero .lede { max-width: 580px; }
+.stage .grid-a { grid-template-columns: minmax(0, .85fr) minmax(0, 1.4fr); }
+@media (max-width: 960px) { .stage .grid-a { grid-template-columns: 1fr; } }
+.hero .lede { max-width: 640px; }
