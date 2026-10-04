@@ -657,6 +657,6 @@ kbd { padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; backg
   .hq-meta { flex-wrap: wrap; gap: 8px 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .feed-track { animation: none; } }
-.hq { grid-template-columns: minmax(0, 1fr) minmax(0, 480px); gap: 56px; }
-.hq-title { font-size: clamp(46px, 6.2vw, 86px); white-space: nowrap; }
-@media (max-width: 1180px) { .hq-title { white-space: normal; } }
+@media (min-width: 1021px) { .hq { grid-template-columns: minmax(0, 1fr) minmax(0, 460px); gap: 56px; } }
+.hq-title { font-size: clamp(44px, 5.4vw, 78px); }
+@media (max-width: 640px) { .hq-title { font-size: 46px; } }
