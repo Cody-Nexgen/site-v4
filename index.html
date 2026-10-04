@@ -3,225 +3,463 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#08090a" />
-    <meta name="description" content="FocuzNow is a local-first browser focus system with distraction blocking, focus sessions, activity insights, habits, and AI coaching." />
-    <title>FocuzNow — Take back your attention</title>
+    <meta name="theme-color" content="#060709" />
+    <meta name="description" content="FocuzNow is a local-first focus system for your browser: distraction blocking, focus sessions, calendar planning, activity insights, habits, and an AI coach." />
+    <meta property="og:title" content="FocuzNow — Own your attention" />
+    <meta property="og:description" content="Block the noise, run focused sessions, and see where your time actually goes. A local-first focus system for your browser." />
+    <meta property="og:type" content="website" />
+    <title>FocuzNow — Own your attention</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" />
     <link rel="stylesheet" href="/feature-coach.css" />
+    <link rel="stylesheet" href="/marketing.css" />
   </head>
-  <body>
+  <body class="mk">
     <a class="skip-link" href="#main">Skip to content</a>
 
-    <div class="intro" aria-hidden="true">
-      <div class="intro-orbit" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="brand-orbit-ring" cx="10" cy="10" r="6.4"/><circle class="brand-orbit-dot" cx="10" cy="3.6" r="1.35"/></svg></div>
-      <span>FocuzNow</span>
-      <div class="intro-shutters"><i></i><i></i><i></i><i></i></div>
-    </div>
-
     <header class="site-header" id="top">
-      <nav class="nav shell" aria-label="Main navigation">
-        <a class="brand" href="#top" aria-label="FocuzNow home">
-          <span class="brand-orbit" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="brand-orbit-ring" cx="10" cy="10" r="6.4"/><circle class="brand-orbit-dot" cx="10" cy="3.6" r="1.35"/></svg></span>
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="/" aria-label="FocuzNow home">
+          <span class="brand-orbit" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="ring" cx="10" cy="10" r="6.4"/><circle class="dot" cx="10" cy="3.6" r="1.35"/></svg></span>
           <span>FocuzNow</span>
         </a>
         <div class="nav-links" id="nav-links">
-          <a href="#product">Product</a>
-          <a href="./features.html">Features</a>
-          <a href="#demo">Live demo</a>
-          <a href="#ai-coach" data-open-coach>AI Coach</a>
+          <a href="#tour">Product</a>
+          <a href="/features.html">Features</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#faq">FAQ</a>
         </div>
         <div class="nav-actions">
-          <button class="command-trigger" type="button" data-open-command aria-label="Open command menu">
-            <span>Search</span><kbd>⌘ K</kbd>
-          </button>
+          <button class="command-trigger" type="button" data-open-command aria-label="Open command menu"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3 3"/></svg><kbd>⌘K</kbd></button>
           <a class="text-link sign-in" href="/login">Sign in</a>
-          <a class="button button-small" data-install-cta data-install-header href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a>
-          <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Toggle navigation"><i></i><i></i></button>
+          <a class="btn btn-sm btn-light" data-install-cta data-install-header href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome</span></a>
+          <button class="menu-toggle" type="button" data-site-menu aria-expanded="false" aria-controls="nav-links" aria-label="Open navigation"><i></i><i></i></button>
         </div>
       </nav>
     </header>
 
     <main id="main">
+      <!-- HERO -->
       <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-grid" aria-hidden="true"></div>
-        <div class="hero-glow" aria-hidden="true"></div>
-        <div class="hero-art" aria-hidden="true"><img src="./assets/hero-orb.jpg" alt="" width="1672" height="941" fetchpriority="high"></div>
-        <div class="hero-copy shell">
-          <p class="hero-kicker reveal" style="--delay: .02s"><span></span> LOCAL-FIRST FOCUS SYSTEM FOR YOUR BROWSER</p>
+        <div class="hero-bg" aria-hidden="true">
+          <div class="hero-aurora"></div>
+          <div class="hero-grid"></div>
+          <div class="hero-orbits"><i></i><i></i><i></i><b></b></div>
+        </div>
+        <div class="hero-copy wrap">
+          <a class="pill reveal" href="#tour" style="--d:.05s"><span class="pill-dot"></span>Local-first focus system for your browser<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg></a>
           <h1 id="hero-title" class="hero-title">
-            <span class="title-line title-muted"><span>Own your attention.</span></span>
-            <span class="title-line"><span>Get your time back.</span></span>
+            <span class="line"><span>Own your attention.</span></span>
+            <span class="line"><span>Get your <em>time</em> back.</span></span>
           </h1>
-          <p class="hero-lede reveal" style="--delay: .28s">Block the noise, run focused work sessions, and see where your screen time actually went—all from one private browser workspace.</p>
-          <div class="hero-actions reveal" style="--delay: .36s">
-            <a class="button button-primary" data-install-cta data-install-suffix=" — free" href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome — free</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a>
-            <a class="button button-ghost" href="#demo"><span>Explore the real product</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg></a>
+          <p class="hero-lede reveal" style="--d:.35s">FocuzNow blocks the feeds that steal your day, runs distraction-free focus sessions, and shows you exactly where your screen time went — all from one private workspace in your browser.</p>
+          <div class="hero-actions reveal" style="--d:.45s">
+            <a class="btn btn-primary btn-lg" data-install-cta data-install-suffix=" — it's free" href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome — it's free</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a>
+            <a class="btn btn-ghost btn-lg" href="#tour"><span>Take the tour</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4"/></svg></a>
           </div>
-          <p class="hero-note reveal" style="--delay: .42s">Local-first · Works across every tab · Free to start</p>
+          <ul class="hero-meta reveal" style="--d:.55s" aria-label="Highlights">
+            <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"/></svg>Free forever plan</li>
+            <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"/></svg>No credit card</li>
+            <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"/></svg>Your data stays local</li>
+          </ul>
         </div>
 
-        <div class="product-stage real-product-stage shell reveal" id="product" style="--delay: .46s">
-          <div class="product-beam" aria-hidden="true"></div>
-          <div class="window-bar">
-            <div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
-            <div class="window-title"><span class="lock-icon">⌁</span> FocuzNow · Dashboard</div>
-            <button type="button" class="window-action" data-open-command aria-label="Search FocuzNow"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.25 11.25 14 14M12 7a5 5 0 1 1-10 0 5 5 0 0 1 10 0Z"/></svg></button>
-          </div>
-          <div class="real-app-shell">
-            <aside class="real-sidebar" aria-label="Product navigation">
-              <div class="real-account-wrap">
-                <button class="real-account" type="button" aria-expanded="false" aria-controls="real-account-menu" data-real-account><span class="real-extension-logo" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="logo-ring" cx="10" cy="10" r="6.4"/><circle class="logo-orb" cx="10" cy="3.6" r="1.35"/></svg></span><b>FocuzNow</b><svg class="account-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg></button>
-                <button class="real-search" type="button" data-open-command aria-label="Search"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.25 11.25 14 14M12 7a5 5 0 1 1-10 0 5 5 0 0 1 10 0Z"/></svg></button>
-                <div class="real-account-menu" id="real-account-menu" role="menu" hidden><div><b>FocuzNow</b><small>hello@focuznow.com</small></div><a href="#pricing" role="menuitem">Upgrade to Pro</a><a href="mailto:hello@focuznow.com?subject=FocuzNow%20support" role="menuitem">Help &amp; support</a></div>
-              </div>
-              <nav>
-                <div class="real-primary-nav"><button class="real-nav-item active" type="button" data-real-view="overview" aria-current="page"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="4.2" height="4.2" rx=".7"/><rect x="9.3" y="2.5" width="4.2" height="4.2" rx=".7"/><rect x="2.5" y="9.3" width="4.2" height="4.2" rx=".7"/><rect x="9.3" y="9.3" width="4.2" height="4.2" rx=".7"/></svg><span>Dashboard</span></button></div>
-                <div class="real-nav-sections">
-                  <section class="real-nav-section"><button class="real-section-toggle" type="button" aria-expanded="true"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg><span>Planning</span></button><div class="real-section-items"><button class="real-nav-item" type="button" data-real-view="calendar"><svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M5 2v3M11 2v3M2.5 6.5h11"/></svg><span>Calendar</span></button><button class="real-nav-item" type="button" data-real-view="lists"><svg viewBox="0 0 16 16"><path d="M5 4h8M5 8h8M5 12h8"/><circle cx="2.5" cy="4" r=".6"/><circle cx="2.5" cy="8" r=".6"/><circle cx="2.5" cy="12" r=".6"/></svg><span>Lists</span></button></div></section>
-                  <section class="real-nav-section"><button class="real-section-toggle" type="button" aria-expanded="true"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg><span>Focus</span></button><div class="real-section-items"><button class="real-nav-item" type="button" data-real-view="sessions"><svg viewBox="0 0 16 16"><circle cx="8" cy="8.5" r="5"/><path d="M8 5.5v3l2 1M6 2h4"/></svg><span>Sessions</span></button><button class="real-nav-item" type="button" data-real-view="blocklist"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="m4.2 11.8 7.6-7.6"/></svg><span>Blocklist</span></button><button class="real-nav-item" type="button" data-real-view="habits"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="2"/></svg><span>Habits</span></button></div></section>
-                  <section class="real-nav-section"><button class="real-section-toggle" type="button" aria-expanded="true"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg><span>Insights</span></button><div class="real-section-items"><button class="real-nav-item" type="button" data-real-view="coach"><svg viewBox="0 0 16 16"><path d="m8 1 1.3 4.1L13.5 6.5 9.3 8 8 12l-1.3-4-4.2-1.5 4.2-1.4Z"/></svg><span>AI Coach</span></button><button class="real-nav-item" type="button" data-real-view="statistics"><svg viewBox="0 0 16 16"><path d="M3 13V9M8 13V5M13 13V2"/></svg><span>Stats</span></button></div></section>
-                  <section class="real-nav-section"><button class="real-section-toggle" type="button" aria-expanded="true"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg><span>Progress</span></button><div class="real-section-items"><button class="real-nav-item" type="button" data-real-view="progress"><svg viewBox="0 0 16 16"><path d="M5 2h6v3a3 3 0 0 1-6 0ZM5 4H2.5v1A3 3 0 0 0 5 8M11 4h2.5v1A3 3 0 0 1 11 8M8 8v3M5.5 14h5M6 11h4"/></svg><span>Overview</span></button><button class="real-nav-item" type="button" data-real-view="challenges"><svg viewBox="0 0 16 16"><path d="m9 1-5 8h4l-1 6 5-8H8Z"/></svg><span>Challenges</span></button><button class="real-nav-item" type="button" data-real-view="forest"><svg viewBox="0 0 16 16"><path d="M8 14V8M8 10 5 7M8 9l3-3M3 8c0-3 2-5 5-5s5 2 5 5c0 2-2 3-5 3S3 10 3 8Z"/></svg><span>Forest</span></button></div></section>
-                  <section class="real-nav-section"><button class="real-section-toggle" type="button" aria-expanded="true"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg><span>Social</span></button><div class="real-section-items"><button class="real-nav-item" type="button" data-real-view="friends"><svg viewBox="0 0 16 16"><circle cx="6" cy="5" r="2.3"/><circle cx="11.5" cy="6" r="1.7"/><path d="M2 13c.3-2.6 1.7-4 4-4s3.8 1.4 4 4M10 10c2.1 0 3.3 1 3.6 3"/></svg><span>Friends</span></button><button class="real-nav-item" type="button" data-real-view="focus_rooms"><svg viewBox="0 0 16 16"><rect x="5" y="2" width="6" height="8" rx="3"/><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5V15M5.5 15h5"/></svg><span>Focus Rooms</span></button></div></section>
-                </div>
-              </nav>
-            </aside>
-            <section class="real-main" aria-label="Interactive FocuzNow product preview">
-              <div class="real-topbar"><span id="real-view-label">Overview</span><a href="#pricing">Upgrade</a></div>
-              <div class="real-screen active" data-real-screen="overview">
-                <header class="dashboard-heading"><div><small>MONDAY, JULY 20</small><h2>Dashboard</h2></div><span><i></i> Live sync</span></header>
-                <div class="real-stat-grid">
-                  <article><small>FOCUZ SCORE</small><b class="score-value">82</b></article>
-                  <article><small>SCREEN TIME</small><b>3.2h</b></article>
-                  <article><small>BLOCKED</small><b class="blocked-value">31</b></article>
-                  <article><small>STREAK</small><b class="streak-value">12d</b></article>
-                </div>
-                <article class="activity-card">
-                  <div><span><b>Weekly activity</b><small>↓ 18% vs last week · 3 sessions today</small></span><em>This week</em></div>
-                  <div class="activity-chart" role="img" aria-label="Weekly screen time activity graph"><svg class="activity-graph" viewBox="0 0 700 170" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="activity-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9b97ff" stop-opacity=".28"/><stop offset="1" stop-color="#9b97ff" stop-opacity="0"/></linearGradient></defs><path class="chart-grid-line" d="M0 28H700M0 89H700M0 150H700"/><path class="activity-area" d="M50 118 C100 118 100 78 150 78 S200 108 250 108 S300 54 350 54 S400 88 450 88 S500 38 550 38 S600 68 650 68 L650 150 L50 150Z"/><path class="activity-line" d="M50 118 C100 118 100 78 150 78 S200 108 250 108 S300 54 350 54 S400 88 450 88 S500 38 550 38 S600 68 650 68"/></svg><i class="activity-dot" style="--x:7.14%;--y:69.41%"></i><i class="activity-dot" style="--x:21.43%;--y:45.88%"></i><i class="activity-dot" style="--x:35.71%;--y:63.53%"></i><i class="activity-dot" style="--x:50%;--y:31.76%"></i><i class="activity-dot" style="--x:64.29%;--y:51.76%"></i><i class="activity-dot" style="--x:78.57%;--y:22.35%"></i><i class="activity-dot" style="--x:92.86%;--y:40%"></i></div>
-                  <div class="chart-days"><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span></div>
-                </article>
-                <div class="real-lower-grid">
-                  <article class="real-task-card"><header><span><b>Tasks</b><small>2/4 complete</small></span><button type="button" data-add-real-task aria-label="Add task"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button></header><button class="real-task done" type="button"><i>✓</i><span>Review weekly screen time</span></button><button class="real-task" type="button"><i></i><span>Finish launch outline</span></button><button class="real-task" type="button"><i></i><span>Plan tomorrow’s focus blocks</span></button></article>
-                  <article class="habit-preview"><header><span><b>Habits</b><small>2 active</small></span><em>＋</em></header><div><b>Read for 20 minutes</b><span class="habit-days"><i class="done"></i><i class="done"></i><i></i><i class="done"></i><i></i><i></i><i class="today"></i></span></div><div><b>No phone before 9</b><span class="habit-days"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i></i><i></i><i class="today"></i></span></div></article>
-                </div>
-              </div>
-              <div class="real-screen compact-product-message" data-real-screen="calendar"><span>CALENDAR</span><h2>Plan focus around real time.</h2><p>Week, day, and month views with recurring events, calendar groups, and shareable scheduling links.</p><a href="#demo">Open calendar demo ↓</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="lists"><span>LISTS</span><h2>Turn ideas into structured plans.</h2><p>Flexible blocks, checklists, attachments, AI-generated outlines, and direct calendar scheduling.</p><a href="./features.html">See product details ↗</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="coach"><span>AI COACH</span><h2>Ask for the next useful move.</h2><p>Context-aware coaching for schedules, routines, focus patterns, and the work already inside FocuzNow.</p><a href="#ai-coach" data-open-coach>Ask FocuzAI ↗</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="sessions"><span>FOCUS SESSIONS</span><h2>Timed deep work, stray thoughts contained.</h2><p>Custom focus and break lengths, progress tracking, deep-work planning, and a built-in scratchpad.</p><a href="#demo">Open focus demo ↓</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="blocklist"><span>SITE MANAGEMENT</span><h2>Guardrails stronger than willpower.</h2><p>Block domains, routes, Shorts, Reels, TikTok, and YouTube—with timed schedules and Nuclear Lockdown.</p><a href="#demo">Open blocker demo ↓</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="habits"><span>HABITS</span><h2>Make consistency visible.</h2><p>Daily check-ins, weekly views, streak calculation, and progression rewards live beside your focus data.</p><a href="./features.html">Explore the system ↗</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="statistics"><span>STATISTICS</span><h2>See what earns your attention.</h2><p>Site-level activity, weekly comparisons, focus scores, and pattern analysis—not vague wellness estimates.</p><a href="./features.html">See product details ↗</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="progress"><span>PROGRESSION</span><h2>Turn focus into momentum.</h2><p>Achievements, challenges, levels, streaks, and a focus shop make progress tangible without infantilizing it.</p><a href="./features.html">See the progression system ↗</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="challenges"><span>CHALLENGES</span><h2>Give the week a target.</h2><p>Start focused challenges, track progress against real activity, and earn progression rewards when you finish.</p><a href="./features.html">See the progression system ↗</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="forest"><span>FOCUS FOREST</span><h2>Every completed session leaves a mark.</h2><p>Grow a personal, explorable forest from completed focus sessions and inspect the stats behind it.</p><a href="./features.html">See the progression system ↗</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="friends"><span>FRIENDS</span><h2>Focus together, quietly.</h2><p>See who is focusing, compare weekly focus minutes, and keep accountability present without creating another feed.</p><a href="./features.html">Explore social focus ↗</a></div>
-              <div class="real-screen compact-product-message" data-real-screen="focus_rooms"><span>FOCUS ROOMS</span><h2>Shared presence for deep work.</h2><p>Enter lightweight focus rooms and work alongside friends without meetings, chatter, or performance theater.</p><a href="./features.html">Explore social focus ↗</a></div>
-            </section>
-          </div>
-        </div>
-      </section>
-
-      <section class="signal-section section shell" aria-labelledby="signal-title">
-        <div class="section-index">01 / ATTENTION, DEFENDED</div>
-        <div class="signal-copy">
-          <h2 id="signal-title" class="statement reveal-on-scroll">Your browser doesn’t need<br>more willpower.</h2>
-          <p class="statement-sub reveal-on-scroll">It needs <span>better guardrails.</span></p>
-        </div>
-        <div class="block-signal" aria-label="Distracting platforms being blocked by FocuzNow">
-          <div class="blocked-platforms"><span><i class="platform-red">▶</i><b>YouTube Shorts</b><small>feed blocked</small></span><span><i class="platform-pink">◎</i><b>Instagram Reels</b><small>feed blocked</small></span><span><i class="platform-cyan">♪</i><b>TikTok</b><small>domain blocked</small></span></div>
-          <div class="blocked-summary" aria-label="31 blocks today, 4 more than yesterday"><small>BLOCKS TODAY</small><b>31</b><span><i aria-hidden="true">↗</i> 4 more than yesterday</span></div>
-          <div class="focus-preserved"><small>FOCUS PRESERVED</small><b>1h 47m</b><span>No tab-switching spiral.</span></div>
-        </div>
-      </section>
-
-      <section class="product-demo-section section" id="demo" aria-labelledby="demo-title">
-        <div class="shell source-demo-grid">
-          <div class="source-demo-copy">
-            <div class="section-index">02 / REAL PRODUCT, IN MOTION</div>
-            <h2 id="demo-title">Not another<br><span>pretty timer.</span></h2>
-            <p>Move between focus sessions, site controls, and calendar planning without leaving your attention workspace.</p>
-            <a class="all-features-link" href="./features.html"><span>Explore all 13 features</span><i>↗</i></a>
-            <div class="source-demo-tabs" role="tablist" aria-label="Product demo screens">
-              <button class="source-demo-tab active" type="button" role="tab" aria-selected="true" data-demo-tab="session"><i>01</i><span><b>Focus Sessions</b><small>Timer, deep-work planner, scratchpad.</small></span></button>
-              <button class="source-demo-tab" type="button" role="tab" aria-selected="false" data-demo-tab="block"><i>02</i><span><b>Site Management</b><small>Platform blockers and Nuclear Lockdown.</small></span></button>
-              <button class="source-demo-tab" type="button" role="tab" aria-selected="false" data-demo-tab="calendar"><i>03</i><span><b>Calendar</b><small>Events, groups, recurring time, scheduling links.</small></span></button>
+        <div class="hero-stage wrap reveal" style="--d:.6s">
+          <div class="stage-glow" aria-hidden="true"></div>
+          <div class="app-window" data-tilt>
+            <div class="app-bar">
+              <div class="app-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="app-url"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="7" width="8" height="6" rx="1.4"/><path d="M5.75 7V5.5a2.25 2.25 0 0 1 4.5 0V7"/></svg>FocuzNow · Dashboard</div>
+              <span class="app-sync"><i></i>Live</span>
             </div>
-          </div>
-          <div class="source-demo-frame" data-demo-active="session">
-            <div class="source-demo-bar"><span>FOCUZNOW / <b id="demo-screen-label">FOCUS SESSIONS</b></span></div>
-            <div class="demo-screen demo-session active" data-demo-screen="session">
-              <header><small>FOCUS</small><h3>Focus Sessions</h3><p>Timed deep work with a scratchpad for stray thoughts.</p></header>
-              <div class="session-planner"><span><small>DEEP WORK PLAN</small><b>Write launch narrative</b></span><em>50 min</em></div>
-              <div class="session-grid">
-                <div class="timer-card"><small>FOCUS SESSION</small><div class="demo-timer"><svg viewBox="0 0 160 160"><circle class="timer-track" cx="80" cy="80" r="63"/><circle class="timer-progress" cx="80" cy="80" r="63"/></svg><span><b id="demo-timer-value">50:00</b><small>3 sessions today</small></span></div><button type="button" id="demo-timer-toggle"><i>▶</i><span>Start</span></button></div>
-                <div class="scratch-card"><header><b>Scratchpad</b><span>＋</span></header><textarea aria-label="Demo scratchpad" placeholder="Write freely…">Homepage: lead with control, not guilt.&#10;&#10;Show the real blocker and weekly activity.</textarea><small>Saved locally</small></div>
-              </div>
-            </div>
-            <div class="demo-screen demo-block" data-demo-screen="block">
-              <header><small>FOCUS</small><h3>Site Management</h3><p>Control what gets blocked and what stays reachable.</p></header>
-              <div class="platform-blockers"><b>Platform Blockers</b><div><button class="on" type="button" aria-pressed="true"><i></i>YouTube Shorts</button><button class="on" type="button" aria-pressed="true"><i></i>Instagram Reels</button><button type="button" aria-pressed="false"><i></i>TikTok</button></div></div>
-              <div class="block-columns"><article class="blocked-list-card"><header><b>Blocked List</b><span>⊘</span></header><div><b>reddit.com</b><small>Schedule · 09:00–17:00</small></div><div><b>youtube.com/shorts</b><small>Platform blocker</small></div><div><b>instagram.com/reels</b><small>Platform blocker</small></div></article><article class="nuclear-card"><small>IRREVERSIBLE</small><h4>Nuclear Lockdown</h4><p>Block every listed site for a fixed duration. No overrides until the timer expires.</p><div><button type="button">15m</button><button class="active" type="button">30m</button><button type="button">60m</button></div><button type="button" data-lockdown-toggle aria-pressed="false">Activate lockdown</button></article></div>
-            </div>
-            <div class="demo-screen demo-calendar" data-demo-screen="calendar">
-              <div class="calendar-layout">
-                <aside class="calendar-sidebar">
-                  <div class="calendar-sidebar-top"><b>Calendar</b><button type="button" aria-label="Collapse calendar sidebar"><svg viewBox="0 0 16 16"><path d="M3 3h10v10H3zM6 3v10"/></svg></button></div>
-                  <div class="calendar-email">hello@focuznow.com</div>
-                  <section class="mini-calendar"><header><b>JULY 2026</b><span>‹ &nbsp;›</span></header><div class="mini-week"><i>S</i><i>M</i><i>T</i><i>W</i><i>T</i><i>F</i><i>S</i></div><div class="mini-days"><span class="muted">28</span><span class="muted">29</span><span class="muted">30</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span>18</span><span class="week-active">19</span><span class="today">20</span><span class="week-active">21</span><span class="week-active">22</span><span class="week-active">23</span><span class="week-active">24</span><span class="week-active">25</span><span>26</span><span>27</span><span>28</span><span>29</span><span>30</span><span>31</span><span class="muted">1</span></div></section>
-                  <section class="calendar-scheduling"><header><b>SCHEDULING</b><span>⌄</span></header><p>＋ New scheduling link</p><div><span>30-minute focus call</span><em>↗</em></div></section>
-                  <section class="calendar-groups"><small>CALENDAR GROUPS</small><div><i class="violet"></i><b>Deep work</b><span>✓</span></div><div><i class="blue"></i><b>Personal</b><span>✓</span></div><div><i class="green"></i><b>Meetings</b><span>✓</span></div><p>＋ Add group</p></section>
-                </aside>
-                <div class="week-grid">
-                  <header class="calendar-toolbar"><div><button type="button" data-calendar-shift="-1" aria-label="Previous week">‹</button><button type="button" data-calendar-shift="1" aria-label="Next week">›</button><b id="calendar-toolbar-date">July 2026</b><button class="today-button" type="button" data-calendar-today>Today</button></div><div class="calendar-view-tabs" aria-label="Calendar view"><button type="button">Day</button><button class="active" type="button">Week</button><button type="button">Month</button></div><small>Shift+scroll</small></header>
-                  <div class="week-head"><span class="time-gutter"></span><span><b>SUN</b><small>19</small></span><span class="selected"><b>MON</b><small>20</small></span><span><b>TUE</b><small>21</small></span><span><b>WED</b><small>22</small></span><span><b>THU</b><small>23</small></span><span><b>FRI</b><small>24</small></span><span><b>SAT</b><small>25</small></span></div>
-                  <div class="week-body"><div class="time-rail"><span>8 AM</span><span>9 AM</span><span>10 AM</span><span>11 AM</span><span>12 PM</span><span>1 PM</span><span>2 PM</span><span>3 PM</span><span>4 PM</span></div><div class="week-canvas"><i class="cal-event event-a"><b>Launch writing</b><small>9:00 – 10:30</small></i><i class="cal-event event-b"><b>Team standup</b><small>10:30 – 11:00</small></i><i class="cal-event event-c"><b>Weekly review</b><small>1:00 – 2:00</small></i><i class="cal-event event-d"><b>Focus call</b><small>2:30 – 3:00</small></i><i class="now-line"><span>10:42</span></i></div></div>
+            <div class="app-body">
+              <aside class="app-side" aria-hidden="true">
+                <div class="side-brand"><span class="brand-orbit"><svg viewBox="0 0 20 20"><circle class="ring" cx="10" cy="10" r="6.4"/><circle class="dot" cx="10" cy="3.6" r="1.35"/></svg></span>FocuzNow</div>
+                <span class="side-item active"><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>Dashboard</span>
+                <small>Planning</small>
+                <span class="side-item"><svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg>Calendar</span>
+                <span class="side-item"><svg viewBox="0 0 16 16"><path d="M6 4.5h7.5M6 8h7.5M6 11.5h7.5M2.75 4.5h.5M2.75 8h.5M2.75 11.5h.5"/></svg>Lists</span>
+                <small>Focus</small>
+                <span class="side-item"><svg viewBox="0 0 16 16"><circle cx="8" cy="8.5" r="5"/><path d="M8 5.5v3l2 1.5M6.5 1.75h3"/></svg>Sessions</span>
+                <span class="side-item"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="m4.2 4.2 7.6 7.6"/></svg>Blocklist</span>
+                <span class="side-item"><svg viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></svg>Habits</span>
+                <small>Insights</small>
+                <span class="side-item"><svg viewBox="0 0 16 16"><path d="m8 1.5 1.4 4.1 4.1 1.4-4.1 1.4L8 12.5 6.6 8.4 2.5 7l4.1-1.4Z"/></svg>AI Coach</span>
+                <span class="side-item"><svg viewBox="0 0 16 16"><path d="M3 13V8M8 13V3M13 13V6"/></svg>Statistics</span>
+                <small>Social</small>
+                <span class="side-item"><svg viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.25"/><path d="M2 13c.4-2.2 1.8-3.3 4-3.3s3.6 1.1 4 3.3M10.5 3.5a2.2 2.2 0 0 1 0 4.2M12 9.9c1.2.4 1.9 1.4 2.1 3.1"/></svg>Focus Rooms</span>
+              </aside>
+              <div class="app-main">
+                <header class="app-head"><div><small data-today>Today</small><h2>Good to see you.</h2></div><button class="mini-btn" type="button" data-hero-session><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7-4.5z"/></svg><span>Start focus</span></button></header>
+                <div class="stat-row">
+                  <article><small>Focuz score</small><b data-count="82">82</b><em class="up">+6 this week</em></article>
+                  <article><small>Deep work</small><b>3h 18m</b><em>3 sessions</em></article>
+                  <article><small>Blocked</small><b data-count="31" data-hero-blocked>31</b><em>attempts today</em></article>
+                  <article><small>Streak</small><b>12d</b><em>personal best</em></article>
+                </div>
+                <div class="app-grid">
+                  <article class="card chart-card">
+                    <header><b>Screen time</b><span class="chip-down">↓ 18% vs last week</span></header>
+                    <div class="chart" role="img" aria-label="Example weekly screen time chart trending down">
+                      <svg viewBox="0 0 600 160" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8b88ff" stop-opacity=".35"/><stop offset="1" stop-color="#8b88ff" stop-opacity="0"/></linearGradient></defs><path class="chart-area" d="M0 70 C60 60 90 40 150 52 S240 95 300 88 S390 50 450 70 S540 115 600 105 L600 160 L0 160Z" fill="url(#hero-fill)"/><path class="chart-line" d="M0 70 C60 60 90 40 150 52 S240 95 300 88 S390 50 450 70 S540 115 600 105"/></svg>
+                      <div class="chart-days"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+                    </div>
+                  </article>
+                  <article class="card session-card" data-hero-timer-card>
+                    <header><b>Focus session</b><span data-hero-state>Ready</span></header>
+                    <div class="ring-timer"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="track" cx="60" cy="60" r="52"/><circle class="progress" cx="60" cy="60" r="52" data-hero-ring/></svg><span><b data-hero-time>25:00</b><small>Write launch post</small></span></div>
+                  </article>
+                  <article class="card block-card">
+                    <header><b>Blocking now</b><span>3 active</span></header>
+                    <ul>
+                      <li><i class="ico red">▶</i><span>YouTube Shorts</span><em class="tog on"></em></li>
+                      <li><i class="ico pink">◎</i><span>Instagram Reels</span><em class="tog on"></em></li>
+                      <li><i class="ico cyan">♪</i><span>tiktok.com</span><em class="tog on"></em></li>
+                    </ul>
+                  </article>
                 </div>
               </div>
             </div>
           </div>
+          <div class="float-card float-blocked" aria-hidden="true"><i>⊘</i><span><b>reddit.com blocked</b><small>Back at 5:00 PM · Deep work</small></span></div>
+          <div class="float-card float-coach" aria-hidden="true"><i class="spark">✦</i><span><b>FocuzAI</b><small>You focus best 9–11 AM. Protect it?</small></span></div>
+        </div>
+
+        <div class="browsers wrap reveal" style="--d:.2s">
+          <p>Runs on the browser you already use</p>
+          <ul>
+            <li><span class="b-logo b-chrome" aria-hidden="true"></span>Chrome</li>
+            <li><span class="b-logo b-edge" aria-hidden="true"></span>Edge</li>
+            <li><span class="b-logo b-brave" aria-hidden="true"></span>Brave</li>
+            <li><span class="b-logo b-opera" aria-hidden="true"></span>Opera</li>
+            <li><span class="b-logo b-vivaldi" aria-hidden="true"></span>Vivaldi</li>
+          </ul>
         </div>
       </section>
 
-      <section class="outcomes-section section shell" aria-labelledby="outcomes-title">
-        <div class="outcomes-heading"><div class="section-index">03 / THE COMPLETE LOOP</div><h2 id="outcomes-title">Protect. Focus.<br><span>Prove it.</span></h2></div>
-        <div class="outcome-row reveal-on-scroll"><span class="outcome-index">01</span><div><h3>Block distraction at the source.</h3><p>Domain, route, platform, scheduled, and irreversible blocking give you the right level of friction for the moment.</p></div><div class="outcome-art blocker-art"><span><i></i>YouTube Shorts</span><span><i></i>Instagram Reels</span><b>31 BLOCKED TODAY</b></div></div>
-        <div class="outcome-row reveal-on-scroll"><span class="outcome-index">02</span><div><h3>Keep stray thoughts out of the session.</h3><p>Custom focus intervals, deep-work planning, and an integrated scratchpad keep context in one place.</p></div><div class="outcome-art session-art"><div><small>FOCUS</small><b>38:42</b></div><span>Scratchpad saved locally</span></div></div>
-        <div class="outcome-row reveal-on-scroll"><span class="outcome-index">03</span><div><h3>Watch the work compound.</h3><p>Focus score, activity patterns, habits, streaks, achievements, challenges, and your growing forest turn effort into visible progress.</p></div><div class="outcome-art forest-art"><i>♧</i><div><b>12 day streak</b><small>8 trees grown this week</small></div></div></div>
-      </section>
-
-      <section class="pricing-section section shell" id="pricing" aria-labelledby="pricing-title">
-        <header class="pricing-heading"><div><div class="section-index">04 / PRICING</div><h2 id="pricing-title">Start free.<br><span>Go deeper for $8.</span></h2></div><p>Use the essentials without a card. Upgrade when you want the complete system working together.</p></header>
-        <div class="pricing-grid">
-          <article class="price-card price-free"><header><span>FREE</span><p>Everything you need to begin protecting your attention.</p><div><b>$0</b><em>forever</em></div></header><ul><li>Dashboard and weekly activity</li><li>Focus sessions and scratchpad</li><li>Essential site blocking</li><li>Calendar and lists</li><li>Local-first workspace</li></ul><a class="price-action" data-install-cta href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome</span><i>→</i></a></article>
-          <article class="price-card price-pro"><header><span>PRO <i>RECOMMENDED</i></span><p>The complete focus system for people ready to make it stick.</p><div><b>$8</b><em>per month</em></div></header><ul><li>Everything in Free</li><li>Advanced schedules and route blocking</li><li>Nuclear Lockdown</li><li>Full statistics and FocuzAI</li><li>Habits, challenges, progression, and Forest</li><li>Friends and Focus Rooms</li></ul><a class="price-action" data-pro-cta href="./signup.html?plan=pro&amp;next=%2Fbilling%3Fcheckout%3Dpro%26from%3Dauth"><span>Start Pro</span><i>→</i></a><small>Cancel anytime. Your focus data stays yours.</small></article>
+      <!-- PROBLEM -->
+      <section class="problem section" aria-labelledby="problem-title">
+        <div class="wrap problem-inner">
+          <p class="eyebrow">The problem</p>
+          <h2 id="problem-title" class="scrub" data-scrub>Your browser was built to keep you clicking. Every feed is a door left open. <span>FocuzNow closes the ones you choose — and keeps them closed until the work is done.</span></h2>
+          <div class="problem-chips" aria-label="Examples of distractions FocuzNow can block">
+            <span class="dchip" style="--r:-6deg;--x:2%;--y:0"><i class="ico red">▶</i>YouTube Shorts</span>
+            <span class="dchip" style="--r:4deg;--x:22%;--y:30px"><i class="ico pink">◎</i>Instagram Reels</span>
+            <span class="dchip" style="--r:-3deg;--x:44%;--y:-6px"><i class="ico cyan">♪</i>TikTok</span>
+            <span class="dchip" style="--r:5deg;--x:63%;--y:26px"><i class="ico orange">◉</i>reddit.com</span>
+            <span class="dchip" style="--r:-4deg;--x:82%;--y:2px"><i class="ico blue">𝕏</i>x.com</span>
+          </div>
         </div>
       </section>
 
-      <section class="final-cta section" id="get-started" aria-labelledby="cta-title">
-        <div class="cta-grid" aria-hidden="true"></div>
-        <div class="cta-beam" aria-hidden="true"></div>
-        <div class="shell cta-inner">
-          <h2 id="cta-title">Ready to take back<br>your <span>tabs?</span></h2>
-          <p>Add FocuzNow to Chrome and make your attention the default.</p>
-          <div class="cta-actions"><a class="button button-primary button-large" data-install-cta data-install-suffix=" — free" href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome — free</span><svg viewBox="0 0 16 16"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a><span>Local-first browser extension<br>Free to start</span></div>
+      <!-- TOUR -->
+      <section class="tour section" id="tour" aria-labelledby="tour-title">
+        <div class="wrap">
+          <header class="section-head center">
+            <p class="eyebrow">The product</p>
+            <h2 id="tour-title">One workspace for <em>deep work.</em></h2>
+            <p>Protection, focus, planning, insight, and momentum — each surface does one job and shares context with the rest. Try it right here.</p>
+          </header>
+
+          <div class="tour-shell">
+            <div class="tour-tabs" role="tablist" aria-label="Product tour">
+              <button role="tab" id="tab-block" aria-controls="panel-block" aria-selected="true" data-tab="block"><i><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="m4.2 4.2 7.6 7.6"/></svg></i><span><b>Block</b><small>Feeds, sites, schedules</small></span></button>
+              <button role="tab" id="tab-focus" aria-controls="panel-focus" aria-selected="false" tabindex="-1" data-tab="focus"><i><svg viewBox="0 0 16 16"><circle cx="8" cy="8.5" r="5"/><path d="M8 5.5v3l2 1.5M6.5 1.75h3"/></svg></i><span><b>Focus</b><small>Timer + scratchpad</small></span></button>
+              <button role="tab" id="tab-plan" aria-controls="panel-plan" aria-selected="false" tabindex="-1" data-tab="plan"><i><svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg></i><span><b>Plan</b><small>Calendar + lists</small></span></button>
+              <button role="tab" id="tab-insights" aria-controls="panel-insights" aria-selected="false" tabindex="-1" data-tab="insights"><i><svg viewBox="0 0 16 16"><path d="M3 13V8M8 13V3M13 13V6"/></svg></i><span><b>Insights</b><small>Stats + AI coach</small></span></button>
+              <button role="tab" id="tab-progress" aria-controls="panel-progress" aria-selected="false" tabindex="-1" data-tab="progress"><i><svg viewBox="0 0 16 16"><path d="M8 14V8M8 8C8 5 5.5 3.5 3 3.5 3 6.5 5 8 8 8ZM8 9.5c0-2.5 2-4 5-4 0 2.8-2 4-5 4Z"/></svg></i><span><b>Progress</b><small>Habits, streaks, forest</small></span></button>
+              <button role="tab" id="tab-together" aria-controls="panel-together" aria-selected="false" tabindex="-1" data-tab="together"><i><svg viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.25"/><path d="M2 13c.4-2.2 1.8-3.3 4-3.3s3.6 1.1 4 3.3M10.5 3.5a2.2 2.2 0 0 1 0 4.2M12 9.9c1.2.4 1.9 1.4 2.1 3.1"/></svg></i><span><b>Together</b><small>Friends + focus rooms</small></span></button>
+              <div class="tour-progress" aria-hidden="true"><i></i></div>
+            </div>
+
+            <div class="tour-stage">
+              <!-- BLOCK -->
+              <div class="tour-panel active" role="tabpanel" id="panel-block" aria-labelledby="tab-block" data-panel="block">
+                <div class="panel-copy"><h3>Guardrails stronger than willpower.</h3><p>Block whole domains, specific routes, or just the infinite feeds — on a schedule, or with a lockdown you can't undo.</p></div>
+                <div class="panel-ui block-ui">
+                  <div class="ui-card">
+                    <header><b>Platform blockers</b><small>Remove the feed, keep the useful parts</small></header>
+                    <div class="toggle-list">
+                      <button type="button" class="tl-item" aria-pressed="true" data-toggle><i class="ico red">▶</i><span><b>YouTube Shorts</b><small>youtube.com/shorts</small></span><em class="tog"></em></button>
+                      <button type="button" class="tl-item" aria-pressed="true" data-toggle><i class="ico pink">◎</i><span><b>Instagram Reels</b><small>instagram.com/reels</small></span><em class="tog"></em></button>
+                      <button type="button" class="tl-item" aria-pressed="false" data-toggle><i class="ico cyan">♪</i><span><b>TikTok</b><small>tiktok.com</small></span><em class="tog"></em></button>
+                      <button type="button" class="tl-item" aria-pressed="true" data-toggle><i class="ico orange">◉</i><span><b>reddit.com</b><small>Weekdays · 09:00 – 17:00</small></span><em class="tog"></em></button>
+                    </div>
+                  </div>
+                  <div class="ui-card nuke" data-nuke>
+                    <small class="warn">Irreversible</small>
+                    <h4>Nuclear Lockdown</h4>
+                    <p>Every listed site is blocked for a fixed duration. No overrides, no "just five minutes".</p>
+                    <div class="seg" role="radiogroup" aria-label="Lockdown duration">
+                      <button type="button" role="radio" aria-checked="false" data-nuke-min="15">15m</button>
+                      <button type="button" role="radio" aria-checked="true" data-nuke-min="30">30m</button>
+                      <button type="button" role="radio" aria-checked="false" data-nuke-min="60">60m</button>
+                    </div>
+                    <button type="button" class="nuke-btn" data-nuke-go><span>Activate lockdown</span></button>
+                    <p class="nuke-live" data-nuke-live hidden>Locked · <b data-nuke-time>30:00</b> remaining</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- FOCUS -->
+              <div class="tour-panel" role="tabpanel" id="panel-focus" aria-labelledby="tab-focus" data-panel="focus" hidden>
+                <div class="panel-copy"><h3>One plan. One timer. Zero tabs.</h3><p>Pick what you're working on, set the length, and park stray thoughts in a scratchpad instead of a new tab.</p></div>
+                <div class="panel-ui focus-ui">
+                  <div class="ui-card timer-card">
+                    <div class="seg" role="radiogroup" aria-label="Session length">
+                      <button type="button" role="radio" aria-checked="true" data-len="25">25m</button>
+                      <button type="button" role="radio" aria-checked="false" data-len="50">50m</button>
+                      <button type="button" role="radio" aria-checked="false" data-len="90">90m</button>
+                    </div>
+                    <div class="big-ring"><svg viewBox="0 0 200 200" aria-hidden="true"><circle class="track" cx="100" cy="100" r="88"/><circle class="progress" cx="100" cy="100" r="88" data-focus-ring/></svg><span><b data-focus-time aria-live="off">25:00</b><small data-focus-label>Ready when you are</small></span></div>
+                    <div class="timer-actions"><button type="button" class="btn btn-primary btn-sm" data-focus-toggle><span>Start session</span></button><button type="button" class="btn btn-ghost btn-sm" data-focus-reset>Reset</button></div>
+                  </div>
+                  <div class="ui-card scratch">
+                    <header><b>Scratchpad</b><small>Saved locally</small></header>
+                    <textarea aria-label="Scratchpad demo" data-scratch>Reply to Sam after this block
+Look up that article on habit loops
+Buy coffee filters</textarea>
+                    <footer><span class="plan-pill">Deep work plan · <b>Write launch post</b></span></footer>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PLAN -->
+              <div class="tour-panel" role="tabpanel" id="panel-plan" aria-labelledby="tab-plan" data-panel="plan" hidden>
+                <div class="panel-copy"><h3>Plan focus around real time.</h3><p>Week, day, and month views with recurring events, calendar groups, scheduling links — and lists that drop straight into your calendar.</p></div>
+                <div class="panel-ui plan-ui">
+                  <div class="ui-card cal">
+                    <header><b>This week</b><div class="seg small"><button type="button" aria-pressed="false">Day</button><button type="button" aria-pressed="true">Week</button><button type="button" aria-pressed="false">Month</button></div></header>
+                    <div class="cal-grid">
+                      <div class="cal-days"><span></span><span>Mon</span><span class="today">Tue</span><span>Wed</span><span>Thu</span><span>Fri</span></div>
+                      <div class="cal-body">
+                        <div class="cal-times"><span>9</span><span>10</span><span>11</span><span>12</span><span>1</span><span>2</span></div>
+                        <div class="cal-cols">
+                          <i class="ev violet" style="--c:1;--s:0;--l:3">Deep work<small>9:00 – 10:30</small></i>
+                          <i class="ev green" style="--c:2;--s:3;--l:1">Standup<small>10:30</small></i>
+                          <i class="ev violet" style="--c:2;--s:0;--l:3" data-ev-new hidden>Write launch post<small>9:00 – 10:30</small></i>
+                          <i class="ev blue" style="--c:3;--s:4;--l:2">Design review<small>11:00 – 12:00</small></i>
+                          <i class="ev violet" style="--c:4;--s:1;--l:4">Research block<small>9:30 – 11:30</small></i>
+                          <i class="ev amber" style="--c:5;--s:8;--l:2">Weekly review<small>1:00 – 2:00</small></i>
+                          <i class="now" style="--c:2;--s:2.4"></i>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ui-card list">
+                    <header><b>Launch list</b><small data-task-count>1 of 4 done</small></header>
+                    <button type="button" class="task done" data-task><i></i><span>Outline launch narrative</span></button>
+                    <button type="button" class="task" data-task><i></i><span>Write launch post</span><em data-schedule>Schedule</em></button>
+                    <button type="button" class="task" data-task><i></i><span>Record walkthrough</span></button>
+                    <button type="button" class="task" data-task><i></i><span>Send to beta list</span></button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- INSIGHTS -->
+              <div class="tour-panel" role="tabpanel" id="panel-insights" aria-labelledby="tab-insights" data-panel="insights" hidden>
+                <div class="panel-copy"><h3>See what actually earns your attention.</h3><p>Site-level activity, weekly comparisons, and a focus score — plus a coach that knows your patterns and suggests the next useful move.</p></div>
+                <div class="panel-ui insights-ui">
+                  <div class="ui-card bars-card">
+                    <header><b>Focused vs. distracted</b><small>Example week</small></header>
+                    <div class="bars" data-bars>
+                      <div style="--f:62%;--d:22%" data-day="Mon"><i class="f"></i><i class="d"></i><span>M</span></div>
+                      <div style="--f:74%;--d:15%" data-day="Tue"><i class="f"></i><i class="d"></i><span>T</span></div>
+                      <div style="--f:48%;--d:30%" data-day="Wed"><i class="f"></i><i class="d"></i><span>W</span></div>
+                      <div style="--f:81%;--d:10%" data-day="Thu"><i class="f"></i><i class="d"></i><span>T</span></div>
+                      <div style="--f:69%;--d:18%" data-day="Fri"><i class="f"></i><i class="d"></i><span>F</span></div>
+                      <div style="--f:30%;--d:25%" data-day="Sat"><i class="f"></i><i class="d"></i><span>S</span></div>
+                      <div style="--f:22%;--d:20%" data-day="Sun"><i class="f"></i><i class="d"></i><span>S</span></div>
+                    </div>
+                    <div class="top-sites"><div><span>docs.google.com</span><i style="--w:86%"></i><b>2h 40m</b></div><div><span>github.com</span><i style="--w:62%"></i><b>1h 55m</b></div><div><span>youtube.com</span><i class="bad" style="--w:18%"></i><b>34m</b></div></div>
+                  </div>
+                  <div class="ui-card coach-card">
+                    <header><span class="spark">✦</span><b>FocuzAI</b><small>Knows your workspace</small></header>
+                    <p class="msg user">I have 45 minutes before a call. What should I do?</p>
+                    <p class="msg ai" data-typewrite>Start a 40-minute session on the launch post — it's your top task and Tuesday mornings are your best focus window. I'll keep YouTube blocked and leave 5 minutes to prep for the call.</p>
+                    <button type="button" class="ask" data-open-coach>Ask FocuzAI anything<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PROGRESS -->
+              <div class="tour-panel" role="tabpanel" id="panel-progress" aria-labelledby="tab-progress" data-panel="progress" hidden>
+                <div class="panel-copy"><h3>Watch the work compound.</h3><p>Habits, streaks, challenges, levels, and a forest that grows with every completed session. Progress you can actually see.</p></div>
+                <div class="panel-ui progress-ui">
+                  <div class="ui-card forest-card">
+                    <header><b>Focus Forest</b><small><span data-tree-count>7</span> trees this week</small></header>
+                    <div class="forest" data-forest aria-label="Example focus forest"></div>
+                    <button type="button" class="btn btn-ghost btn-sm" data-plant>Complete a session <span aria-hidden="true">🌱</span></button>
+                  </div>
+                  <div class="progress-side">
+                    <div class="ui-card level-card"><div class="lvl-ring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="track" cx="40" cy="40" r="34"/><circle class="progress" cx="40" cy="40" r="34" style="--p:.68"/></svg><b>12</b></div><span><small>Level</small><b>Deep Diver</b><em>680 / 1000 XP</em></span></div>
+                    <div class="ui-card habits-card">
+                      <header><b>Habits</b><small>Tap to check in</small></header>
+                      <div class="habit"><span>Read 20 minutes</span><div class="days" data-habit><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><button type="button" aria-label="Check in today"></button></div></div>
+                      <div class="habit"><span>No phone before 9</span><div class="days" data-habit><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><button type="button" aria-label="Check in today"></button></div></div>
+                    </div>
+                    <div class="ui-card challenge-card"><header><b>Challenge</b><small>5 of 7 days</small></header><p>No Shorts for a week</p><div class="meter"><i style="--w:71%"></i></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- TOGETHER -->
+              <div class="tour-panel" role="tabpanel" id="panel-together" aria-labelledby="tab-together" data-panel="together" hidden>
+                <div class="panel-copy"><h3>Focus together, quietly.</h3><p>See when friends are heads-down, compare weekly focus minutes, and drop into a room to work side by side — no feed, no chatter.</p></div>
+                <div class="panel-ui together-ui">
+                  <div class="ui-card friends">
+                    <header><b>Friends</b><small>This week</small></header>
+                    <div class="friend"><span class="av" style="--h:250">MA</span><span><b>Maya</b><small class="live"><i></i>Focusing · 32m in</small></span><em>9h 10m</em></div>
+                    <div class="friend"><span class="av" style="--h:160">JR</span><span><b>Jordan</b><small>Last session 1h ago</small></span><em>7h 45m</em></div>
+                    <div class="friend you"><span class="av" style="--h:30">YOU</span><span><b>You</b><small>3 sessions today</small></span><em>6h 20m</em></div>
+                    <div class="friend"><span class="av" style="--h:330">AL</span><span><b>Alex</b><small class="live"><i></i>Focusing · 8m in</small></span><em>5h 05m</em></div>
+                  </div>
+                  <div class="ui-card room" data-room>
+                    <header><b>Focus Room</b><small>Quiet morning</small></header>
+                    <div class="room-grid"><span class="seat" style="--h:250">MA</span><span class="seat" style="--h:330">AL</span><span class="seat" style="--h:200">KT</span><span class="seat empty" data-seat>+</span></div>
+                    <p data-room-status>3 people working · 41 min left in this block</p>
+                    <button type="button" class="btn btn-primary btn-sm" data-room-join>Join room</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BENTO -->
+      <section class="bento-section section" aria-labelledby="bento-title">
+        <div class="wrap">
+          <header class="section-head split">
+            <div><p class="eyebrow">Everything included</p><h2 id="bento-title">Thirteen tools. <em>One quiet system.</em></h2></div>
+            <div><p>Most focus apps do one thing. FocuzNow connects blocking, planning, sessions, and insight so every part makes the others smarter.</p><a class="link-arrow" href="/features.html">Explore every feature<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a></div>
+          </header>
+          <div class="bento">
+            <article class="bento-card b-wide reveal-up"><div class="b-copy"><span class="b-tag">Dashboard</span><h3>Your whole day, at a glance.</h3><p>Score, screen time, blockers, tasks, and habits in one calm overview.</p></div><div class="b-art art-dash" aria-hidden="true"><div class="ad-stats"><span><small>Score</small><b>82</b></span><span><small>Deep work</small><b>3h 18m</b></span><span><small>Blocked</small><b>31</b></span></div><div class="ad-bars"><i style="--h:38%"></i><i style="--h:56%"></i><i style="--h:44%"></i><i style="--h:72%"></i><i style="--h:60%"></i><i style="--h:88%"></i><i style="--h:70%"></i></div></div></article>
+            <article class="bento-card reveal-up"><div class="b-copy"><span class="b-tag">Nuclear Lockdown</span><h3>A promise you can't break.</h3><p>Lock every listed site for a fixed time. No overrides.</p></div><div class="b-art art-lock" aria-hidden="true"><div class="lock-ring"><svg viewBox="0 0 16 16"><rect x="4" y="7" width="8" height="6" rx="1.4"/><path d="M5.75 7V5.5a2.25 2.25 0 0 1 4.5 0V7"/></svg></div><b>29:41</b></div></article>
+            <article class="bento-card reveal-up"><div class="b-copy"><span class="b-tag">AI Coach</span><h3>Advice with context.</h3><p>Coaching that understands your schedule, routines, and patterns.</p></div><div class="b-art art-coach" aria-hidden="true"><p class="u">Plan my afternoon</p><p class="a">Two 50-min blocks on the deck, a walk at 3, inbox at 4:30.</p></div></article>
+            <article class="bento-card reveal-up"><div class="b-copy"><span class="b-tag">Habits</span><h3>Consistency, visible.</h3><p>Daily check-ins and streaks beside your focus data.</p></div><div class="b-art art-habit" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i></div></article>
+            <article class="bento-card reveal-up"><div class="b-copy"><span class="b-tag">Focus Rooms</span><h3>Shared presence.</h3><p>Work alongside friends — no meetings, no chatter.</p></div><div class="b-art art-room" aria-hidden="true"><span style="--h:250">MA</span><span style="--h:330">AL</span><span style="--h:160">JR</span><span style="--h:30">YOU</span></div></article>
+            <article class="bento-card b-wide reveal-up"><div class="b-copy"><span class="b-tag">Focus Forest</span><h3>Every session leaves a mark.</h3><p>Grow a personal, explorable forest from completed focus sessions — and inspect the stats behind every tree.</p></div><div class="b-art art-forest" aria-hidden="true"><span class="t t1"></span><span class="t t2"></span><span class="t t3"></span><span class="t t4"></span><span class="t t5"></span><span class="t t6"></span><span class="t t7"></span></div></article>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRIVACY -->
+      <section class="privacy section" aria-labelledby="privacy-title">
+        <div class="wrap privacy-inner">
+          <div class="privacy-visual" aria-hidden="true">
+            <div class="vault"><i></i><i></i><i></i><div class="vault-core"><svg viewBox="0 0 16 16"><rect x="4" y="7" width="8" height="6" rx="1.4"/><path d="M5.75 7V5.5a2.25 2.25 0 0 1 4.5 0V7"/></svg></div></div>
+            <span class="vchip c1">Activity</span><span class="vchip c2">Blocklist</span><span class="vchip c3">Plans</span><span class="vchip c4">Scratchpad</span>
+          </div>
+          <div class="privacy-copy">
+            <p class="eyebrow">Local-first</p>
+            <h2 id="privacy-title">Your attention data <em>is yours.</em></h2>
+            <p>FocuzNow is designed so your focus activity, preferences, plans, and blocking configuration can stay in your local browser workspace.</p>
+            <ul class="checks">
+              <li><b>Local by default.</b> Your workspace lives in your browser, not on an ad server.</li>
+              <li><b>Accounts are opt-in.</b> Sign in only for features that need it — friends, focus rooms, and billing.</li>
+              <li><b>Never sold for ads.</b> We don't use your focus data to sell targeted advertising.</li>
+            </ul>
+            <a class="link-arrow" href="/privacy.html">Read the privacy policy<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a>
+          </div>
+        </div>
+      </section>
+
+      <!-- HOW -->
+      <section class="how section" aria-labelledby="how-title">
+        <div class="wrap">
+          <header class="section-head center"><p class="eyebrow">Get started</p><h2 id="how-title">Focused in <em>under a minute.</em></h2></header>
+          <ol class="steps">
+            <li class="step reveal-up"><span class="step-n">1</span><h3>Add the extension</h3><p>One click from your browser's store. FocuzNow opens a private workspace right away.</p><div class="step-art" aria-hidden="true"><span class="sa-btn" data-install-cta data-install-label-only><span data-install-label>Add to Chrome</span></span></div></li>
+            <li class="step reveal-up"><span class="step-n">2</span><h3>Choose your guardrails</h3><p>Switch off the feeds that pull you in, or schedule blocks for working hours.</p><div class="step-art" aria-hidden="true"><span class="sa-row"><i class="ico red">▶</i>Shorts<em class="tog on"></em></span><span class="sa-row"><i class="ico pink">◎</i>Reels<em class="tog on"></em></span></div></li>
+            <li class="step reveal-up"><span class="step-n">3</span><h3>Start a session</h3><p>Pick a task, hit start, and let the timer and the blocker do the rest.</p><div class="step-art" aria-hidden="true"><span class="sa-timer"><b>24:59</b><small>Focusing</small></span></div></li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- PRICING -->
+      <section class="pricing section" id="pricing" aria-labelledby="pricing-title">
+        <div class="wrap">
+          <header class="section-head center"><p class="eyebrow">Pricing</p><h2 id="pricing-title">Start free. <em>Go deeper for $8.</em></h2><p>Use the essentials without a card. Upgrade when you want the whole system working together.</p></header>
+          <div class="price-grid">
+            <article class="price-card">
+              <header><h3>Free</h3><p>Everything you need to start protecting your attention.</p><div class="price"><b>$0</b><span>forever</span></div></header>
+              <a class="btn btn-ghost btn-block" data-install-cta href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome</span></a>
+              <ul><li>Dashboard and weekly activity</li><li>Focus sessions and scratchpad</li><li>Essential site blocking</li><li>Calendar and lists</li><li>Local-first workspace</li></ul>
+            </article>
+            <article class="price-card pro">
+              <div class="pro-glow" aria-hidden="true"></div>
+              <header><h3>Pro <span class="badge">Recommended</span></h3><p>The complete focus system for people ready to make it stick.</p><div class="price"><b>$8</b><span>per month</span></div></header>
+              <a class="btn btn-primary btn-block" data-pro-cta href="/signup?plan=pro&amp;next=%2Fbilling%3Fcheckout%3Dpro%26from%3Dauth"><span>Start Pro</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a>
+              <ul><li><b>Everything in Free</b></li><li>Advanced schedules and route blocking</li><li>Nuclear Lockdown</li><li>Full statistics and FocuzAI</li><li>Habits, challenges, progression, and Forest</li><li>Friends and Focus Rooms</li></ul>
+              <small class="fine">Cancel anytime. Your focus data stays yours.</small>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="faq section" id="faq" aria-labelledby="faq-title">
+        <div class="wrap faq-inner">
+          <header class="section-head"><p class="eyebrow">FAQ</p><h2 id="faq-title">Questions, <em>answered.</em></h2><p>Something else? <a href="mailto:hello@focuznow.com">hello@focuznow.com</a> or <a href="#ai-coach" data-open-coach>ask FocuzAI</a>.</p></header>
+          <div class="faq-list">
+            <details><summary>Which browsers does FocuzNow support?</summary><p>FocuzNow is a browser extension for Chromium-based browsers — Chrome, Edge, Brave, Opera, and Vivaldi. The install button above picks the right store for your browser automatically.</p></details>
+            <details><summary>Is it really free?</summary><p>Yes. The Free plan includes the dashboard, focus sessions, essential site blocking, calendar, and lists — no credit card required. Pro adds advanced schedules, Nuclear Lockdown, full statistics, FocuzAI, progression, and social features for $8/month.</p></details>
+            <details><summary>What is Nuclear Lockdown?</summary><p>A deliberate, irreversible block. Choose a duration and every site on your blocked list stays blocked until the timer ends — there's no override button, by design.</p></details>
+            <details><summary>Where is my data stored?</summary><p>FocuzNow is local-first: focus activity, preferences, plans, and blocking configuration are designed to stay in your browser workspace. Features that need an account, like friends and focus rooms, only process what they need to work. See the <a href="/privacy.html">privacy policy</a>.</p></details>
+            <details><summary>Can I block just part of a site?</summary><p>Yes. Route and platform blockers remove things like YouTube Shorts or Instagram Reels while keeping the rest of the site usable — great when you need YouTube for a tutorial but not the feed.</p></details>
+            <details><summary>How do I cancel Pro?</summary><p>Anytime, from the billing page in your account. You keep Pro until the end of the period, then drop back to Free — your data stays put.</p></details>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="cta section" id="get-started" aria-labelledby="cta-title">
+        <div class="cta-bg" aria-hidden="true"><div class="hero-orbits"><i></i><i></i><i></i><b></b></div></div>
+        <div class="wrap cta-inner">
+          <h2 id="cta-title">Make your attention <em>the default.</em></h2>
+          <p>Add FocuzNow and close the doors you didn't mean to leave open.</p>
+          <div class="hero-actions"><a class="btn btn-primary btn-lg" data-install-cta data-install-suffix=" — it's free" href="mailto:hello@focuznow.com?subject=Get%20FocuzNow"><span data-install-label>Add to Chrome — it's free</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></a><a class="btn btn-ghost btn-lg" href="/features.html"><span>See all features</span></a></div>
         </div>
       </section>
     </main>
 
-    <footer class="footer shell">
-      <div class="footer-brand"><a class="brand" href="#top"><span class="brand-orbit" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="brand-orbit-ring" cx="10" cy="10" r="6.4"/><circle class="brand-orbit-dot" cx="10" cy="3.6" r="1.35"/></svg></span><span>FocuzNow</span></a><p>A local-first control center for your attention.</p></div>
-      <div class="footer-links"><div><b>Product</b><a href="#product">Dashboard</a><a href="#demo">Live demo</a><a href="./features.html">Features</a></div><div><b>Surfaces</b><a href="#demo">Focus Sessions</a><a href="#demo">Site Management</a><a href="#ai-coach" data-open-coach>AI Coach</a></div><div><b>Company</b><a href="/login">Sign in</a><a href="./signup.html">Create account</a><a href="mailto:hello@focuznow.com">Contact</a></div></div>
-      <div class="footer-bottom"><span>© 2026 FocuzNow, Inc.</span><div class="footer-legal"><a href="./terms.html">Terms</a><a href="./privacy.html">Privacy</a></div><a class="system-status" href="./status.html"><span>Status</span><span aria-hidden="true">↑</span></a><a href="#top">Back to top ↑</a></div>
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <div class="footer-brand"><a class="brand" href="/"><span class="brand-orbit" aria-hidden="true"><svg viewBox="0 0 20 20"><circle class="ring" cx="10" cy="10" r="6.4"/><circle class="dot" cx="10" cy="3.6" r="1.35"/></svg></span><span>FocuzNow</span></a><p>A local-first control center for your attention.</p></div>
+        <div class="footer-links">
+          <div><b>Product</b><a href="#tour">Tour</a><a href="/features.html">Features</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
+          <div><b>Account</b><a href="/login">Sign in</a><a href="/signup.html">Create account</a><a href="/billing.html">Billing</a></div>
+          <div><b>Company</b><a href="mailto:hello@focuznow.com">Contact</a><a href="/status.html">Status</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
+        </div>
+      </div>
+      <div class="wrap footer-bottom"><span>© 2026 FocuzNow, Inc.</span><a class="status-link" href="/status.html"><i></i>System status</a><a href="#top">Back to top ↑</a></div>
+      <div class="footer-word" aria-hidden="true">FocuzNow</div>
     </footer>
 
     <div class="command-dialog" role="dialog" aria-modal="true" aria-label="Command menu" hidden>
       <button class="dialog-backdrop" type="button" data-close-command aria-label="Close command menu"></button>
       <div class="dialog-panel">
-        <label class="dialog-search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="m10 10 3 3"/></svg><input type="search" placeholder="What do you want to do?" autocomplete="off" id="command-search"><kbd>ESC</kbd></label>
-        <div class="dialog-body"><small>QUICK ACTIONS</small><button class="dialog-result active" type="button" data-command-action="focus"><i>◷</i><span><b>Start focus session · 25m</b><em>Open the session and begin the timer</em></span><kbd>↵</kbd></button><button class="dialog-result" type="button" data-command-action="block"><i>⊘</i><span><b>Open Site Management</b><em>Manage blockers and schedules</em></span><kbd>G B</kbd></button><button class="dialog-result" type="button" data-command-action="calendar"><i>□</i><span><b>Open Calendar</b><em>Plan events and focus time</em></span><kbd>G C</kbd></button><button class="dialog-result" type="button" data-command-action="coach"><i>✦</i><span><b>Ask AI Coach</b><em>Open the contextual helper</em></span><kbd>G A</kbd></button><p class="empty-command" hidden>No matching action. Try “focus,” “block,” or “calendar.”</p></div>
-        <div class="dialog-footer"><span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span><span><kbd>↵</kbd> Select</span><span>Real FocuzNow commands</span></div>
+        <label class="dialog-search"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3 3"/></svg><input type="search" placeholder="Search FocuzNow…" autocomplete="off" id="command-search" aria-label="Search commands"><kbd>Esc</kbd></label>
+        <div class="dialog-body" role="listbox" aria-label="Commands">
+          <small>Jump to</small>
+          <button class="dialog-result" type="button" role="option" data-cmd="tour:block" data-keywords="block blocker sites shorts reels lockdown nuclear"><i>⊘</i><span><b>Site blocking</b><em>Platform blockers and Nuclear Lockdown</em></span></button>
+          <button class="dialog-result" type="button" role="option" data-cmd="tour:focus" data-keywords="focus timer session pomodoro scratchpad"><i>◷</i><span><b>Focus sessions</b><em>Timer, plan, scratchpad</em></span></button>
+          <button class="dialog-result" type="button" role="option" data-cmd="tour:plan" data-keywords="calendar plan lists tasks schedule"><i>▦</i><span><b>Calendar & lists</b><em>Plan focus around real time</em></span></button>
+          <button class="dialog-result" type="button" role="option" data-cmd="tour:insights" data-keywords="stats statistics insights screen time"><i>▥</i><span><b>Insights</b><em>Statistics and focus score</em></span></button>
+          <button class="dialog-result" type="button" role="option" data-cmd="tour:progress" data-keywords="habits streak forest challenges level"><i>♧</i><span><b>Progress</b><em>Habits, challenges, Focus Forest</em></span></button>
+          <button class="dialog-result" type="button" role="option" data-cmd="tour:together" data-keywords="friends rooms social together"><i>☺</i><span><b>Friends & rooms</b><em>Focus together, quietly</em></span></button>
+          <small>Actions</small>
+          <button class="dialog-result" type="button" role="option" data-cmd="coach" data-keywords="ai coach ask help question"><i>✦</i><span><b>Ask FocuzAI</b><em>Get answers about any feature</em></span></button>
+          <button class="dialog-result" type="button" role="option" data-cmd="#pricing" data-keywords="pricing price pro free cost"><i>$</i><span><b>Pricing</b><em>Free and Pro plans</em></span></button>
+          <button class="dialog-result" type="button" role="option" data-cmd="/features.html" data-keywords="features all list"><i>◇</i><span><b>All features</b><em>The complete extension</em></span></button>
+          <button class="dialog-result" type="button" role="option" data-cmd="/login" data-keywords="sign in login account"><i>→</i><span><b>Sign in</b><em>Open your account</em></span></button>
+          <p class="empty-command" hidden>No results. Try “block”, “timer”, or “pricing”.</p>
+        </div>
+        <div class="dialog-footer"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> select</span><span><kbd>esc</kbd> close</span></div>
       </div>
     </div>
 
@@ -236,7 +474,7 @@
     </div>
 
     <script type="module" src="/site-nav.js"></script>
-    <script type="module" src="/app.js"></script>
     <script type="module" src="/feature-coach.js"></script>
+    <script type="module" src="/marketing.js"></script>
   </body>
 </html>
