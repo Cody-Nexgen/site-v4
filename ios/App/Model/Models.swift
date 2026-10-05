@@ -16,7 +16,7 @@ struct FocusPreset: Identifiable, Hashable {
     ]
 }
 
-enum Difficulty: String, CaseIterable, Identifiable {
+enum Difficulty: String, CaseIterable, Identifiable, Codable {
     case easy, normal, lockedIn
 
     var id: String { rawValue }
@@ -43,8 +43,9 @@ enum Difficulty: String, CaseIterable, Identifiable {
     }
 }
 
-struct FocusSession: Identifiable, Equatable {
-    let id = UUID()
+/// Saved on every change (`AppModel.session`), so it carries on when the app is closed and opened again.
+struct FocusSession: Identifiable, Equatable, Codable {
+    var id = UUID()
     var title: String
     var symbol: String
     var start: Date
@@ -59,9 +60,10 @@ struct FocusSession: Identifiable, Equatable {
 
     func isOnBreak(at date: Date) -> Bool { breakStartedAt != nil }
 
+    /// Never more than the session: opened again hours after it ended, it's still its own length.
     func elapsed(at date: Date) -> TimeInterval {
         let current = breakStartedAt.map { date.timeIntervalSince($0) } ?? 0
-        return max(0, date.timeIntervalSince(start) - pausedTotal - current)
+        return min(duration, max(0, date.timeIntervalSince(start) - pausedTotal - current))
     }
 
     func remaining(at date: Date) -> TimeInterval { max(0, duration - elapsed(at: date)) }
@@ -70,6 +72,21 @@ struct FocusSession: Identifiable, Equatable {
     func breakRemaining(at date: Date) -> TimeInterval {
         guard let breakStartedAt else { return 0 }
         return max(0, breakLength - date.timeIntervalSince(breakStartedAt))
+    }
+
+    private static let savedKey = "runningSession"
+
+    static var saved: FocusSession? {
+        guard let data = UserDefaults.standard.data(forKey: savedKey) else { return nil }
+        return try? JSONDecoder().decode(FocusSession.self, from: data)
+    }
+
+    static func save(_ session: FocusSession?) {
+        if let session, let data = try? JSONEncoder().encode(session) {
+            UserDefaults.standard.set(data, forKey: savedKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: savedKey)
+        }
     }
 
     static func clock(_ interval: TimeInterval) -> String {

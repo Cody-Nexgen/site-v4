@@ -62,7 +62,9 @@ final class AppModel {
         didSet { BlockList.breakPicks = breakPicks }
     }
     var blockedApps = Array(DistractionApp.samples.prefix(5))
-    var session: FocusSession?
+    var session: FocusSession? {
+        didSet { FocusSession.save(session) }
+    }
     var showSession = false
     var completed: CompletedSession?
 
@@ -166,6 +168,28 @@ final class AppModel {
         completed = nil
         showSession = true
         if let session { LiveFocus.started(session, selection: selection) }
+    }
+
+    /// At launch: picks up a session that was running when the app was closed (swiped away, or ended
+    /// by iOS in the background). It carries on where it is; if it ended while the app was closed, it's
+    /// finished now and the time counts. Apps locked with no session behind them come unlocked.
+    func restoreSession() {
+        guard var saved = FocusSession.saved else {
+            LiveFocus.clearLeftovers()
+            return
+        }
+        // A break that ran out while the app was closed counts as the break, no longer.
+        if let breakStart = saved.breakStartedAt, Date.now >= breakStart.addingTimeInterval(saved.breakLength) {
+            saved.pausedTotal += saved.breakLength
+            saved.breakStartedAt = nil
+        }
+        session = saved
+        if saved.remaining(at: .now) <= 0 {
+            endSession(completedFully: true)
+            showSession = true
+        } else {
+            LiveFocus.changed(saved, selection: selection, breakApps: breakApps)
+        }
     }
 
     /// The Live Activity's End and +5 buttons (`FocusIntentBridge`).

@@ -74,6 +74,22 @@ enum LiveFocus {
         }
     }
 
+    /// At launch with no session to carry on: a lock or a Live Activity left behind by one comes off.
+    /// (A session the app lost when it was closed, before sessions were saved, or an end the monitor
+    /// missed.) The daily block and autofocus have their own stores and stay as they are.
+    static func clearLeftovers() {
+        if Protections.isLocked(store) {
+            store.clearAllSettings()
+        }
+        BlockList.cancelSessionEnd()
+        BlockList.cancelBreakEnd()
+        // Not a "Done · 50 min" one: that stays its few minutes.
+        let stale = Activity<FocusActivityAttributes>.activities.filter { $0.content.state.phase != .done }
+        Task {
+            for activity in stale { await activity.end(nil, dismissalPolicy: .immediate) }
+        }
+    }
+
     /// Captured before the new activity is requested, so only older ones end.
     private static func endAllActivities() {
         let old = Activity<FocusActivityAttributes>.activities

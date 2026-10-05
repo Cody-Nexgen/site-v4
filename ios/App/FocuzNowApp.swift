@@ -7,6 +7,8 @@ struct FocuzNowApp: App {
 
     init() {
         let model = AppModel()
+        // A session running when the app was closed carries on (and its locks with it).
+        model.restoreSession()
         _model = State(initialValue: model)
         // The Live Activity's End and +5 buttons run in the app's process, sometimes after iOS
         // wakes the app in the background just for them, so this is set before any view appears.

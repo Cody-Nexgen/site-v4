@@ -281,6 +281,13 @@ until the photos land).
     back to the app. The session's end moves out by the break too, and a break counts as no longer
     than its length however late you come back. Ending a break during an emergency pass leaves the
     pass running; the pass locks the session again when it's over.
+- **Closing the app doesn't lose the session (2026-10-05):** it used to live only in memory, so
+  swiping FocuzNow away threw it out while Screen Time kept the apps locked, with nothing left to end
+  it. Now `AppModel.session` is saved on every change (`FocusSession.saved`) and
+  `AppModel.restoreSession()` picks it up at launch (before any view, since the Live Activity's
+  buttons can wake the app): it carries on, or if it ended while the app was closed it's finished then
+  (the time counts, never more than the session) and the complete screen shows. With no session to
+  restore, a lock or Live Activity left behind comes off (`LiveFocus.clearLeftovers`).
 - Leaving the app shows the **real Live Activity** (§6.1).
 
 ### 5.4 Session complete
