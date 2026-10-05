@@ -108,9 +108,10 @@ struct ActiveSessionView: View {
             }
             .padding(.bottom, 14)
 
-            Text(session.title)
-                .font(.fzDisplay(17, weight: .bold))
-                .foregroundStyle(.fzPrismLine)
+            Text(session.title.uppercased())
+                .font(.caption.weight(.semibold))
+                .tracking(1.4)
+                .foregroundStyle(.white.opacity(0.75))
 
             SessionClock(remaining: session.remaining(at: now), progress: session.progress(at: now), style: model.timerStyle)
                 .padding(.top, 6)
@@ -296,10 +297,14 @@ struct SessionClock: View {
     var body: some View {
         switch style {
         case .big:
-            // A number with depth, lit from above (`DimensionalNumber`).
-            DimensionalNumber(text: FocusSession.clock(remaining), size: remaining >= 3600 ? 72 : 96, depth: 5)
+            Text(FocusSession.clock(remaining))
+                .font(.fzDisplay(remaining >= 3600 ? 72 : 96))
+                .fzTight(96)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .contentTransition(.numericText(countsDown: true))
         case .minimal:
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Remaining").font(.title3).foregroundStyle(.white.opacity(0.55))

@@ -118,15 +118,13 @@ static inline float fzDust(float2 q, constant float4* specks, int count, float p
 }
 
 /// The lightning: bolt segments (two float4s each: the ends, then strength, width, whether it's a
-/// fork, and its colour in the prism), then soft glow spots (x, y, radius, negative when it's squashed
-/// onto the ring's plane, and alpha). Each bolt is a wide faint glow, a narrower brighter one and a
-/// white core; forks are a thin white line. The glows take the bolt's colour as far as the orb's light
-/// has split (`spread`). Returns premultiplied light, to add.
+/// fork), then soft glow spots (x, y, radius, negative when it's squashed onto the ring's plane, and
+/// alpha). Each bolt is a wide faint mint glow, a narrower brighter one and a white core; forks are a
+/// thin white line. Returns premultiplied light, to add.
 static inline float4 fzLightning(float2 q, constant float4* segments, int count, constant float4* spots, int spotCount,
-                                 float k, float px, float spread) {
+                                 float k, float px) {
     float3 mint = float3(0.651, 0.902, 0.749);
     float wide = 0.0, mid = 0.0, core = 0.0, fork = 0.0;
-    float3 wideC = mint, midC = mint;
     for (int i = 0; i < count; i++) {
         float4 ends = segments[i * 2];
         float4 look = segments[i * 2 + 1];
@@ -139,21 +137,12 @@ static inline float4 fzLightning(float2 q, constant float4* segments, int count,
         if (d > glowWidth * 1.5 + px) {
             continue;
         }
-        float3 hue = mix(mint, fzPrism(look.w), float3(spread));
-        float w = min(1.0, 0.12 * look.x) * fzCover(d, glowWidth * 1.5, px);
-        if (w > wide) {
-            wide = w;
-            wideC = hue;
-        }
-        float m = min(1.0, 0.3 * look.x) * fzCover(d, glowWidth * 0.7, px);
-        if (m > mid) {
-            mid = m;
-            midC = hue;
-        }
+        wide = max(wide, min(1.0, 0.12 * look.x) * fzCover(d, glowWidth * 1.5, px));
+        mid = max(mid, min(1.0, 0.3 * look.x) * fzCover(d, glowWidth * 0.7, px));
         core = max(core, min(1.0, 0.95 * look.x) * fzCover(d, look.y * k * 0.5, px));
     }
-    float4 col = float4(wideC * wide, wide);
-    col = fzOver(float4(midC * mid, mid), col);
+    float4 col = float4(mint * wide, wide);
+    col = fzOver(float4(mint * mid, mid), col);
     col = fzOver(float4(core), col);
     col = fzOver(float4(fork), col);
     for (int i = 0; i < spotCount; i++) {
@@ -256,7 +245,7 @@ fragment half4 fzStageFragment(StageOut in [[stage_in]],
         float reach = 10.0 * k;
         float2 rd = abs(q - u.ring.xy) - u.ring.zw;
         if (rd.x < reach && rd.y < reach) {
-            col.rgb += fzRingGlow(q, u.ring, u.glow.x, u.glow.y, u.glow.z, k, px, fzSpread(u.state.x)).rgb;
+            col.rgb += fzRingGlow(q, u.ring, u.glow.x, u.glow.y, u.glow.z, k, px).rgb;
         }
     }
 
@@ -267,7 +256,7 @@ fragment half4 fzStageFragment(StageOut in [[stage_in]],
         col.rgb += float3(fzDust(q, dust, dustCount, px));
     }
     if (q.x > u.boltBox.x && q.y > u.boltBox.y && q.x < u.boltBox.z && q.y < u.boltBox.w) {
-        col.rgb += fzLightning(q, segments, segmentCount, spots, spotCount, k, px, fzSpread(u.state.x)).rgb;
+        col.rgb += fzLightning(q, segments, segmentCount, spots, spotCount, k, px).rgb;
     }
 
     // The glass and the orb.
@@ -281,8 +270,7 @@ fragment half4 fzStageFragment(StageOut in [[stage_in]],
             // The world behind it, upside down and squeezed, like a crystal ball (the plain photo).
             float2 w = u.orb.xy - 2.0 * d;
             float4 seen = float4(photo.sample(s, (w - origin) / u.fade.xy, level(1.0)));
-            float3 g = mix(float3(dot(seen.rgb, FZ_LUMA)), seen.rgb, float3(u.glass.y))
-                     * mix(float3(0.78, 0.96, 0.86), float3(0.86, 0.84, 0.98), float3(fzSpread(u.state.x)));
+            float3 g = mix(float3(dot(seen.rgb, FZ_LUMA)), seen.rgb, float3(u.glass.y)) * float3(0.78, 0.96, 0.86);
             float a = min(1.0, formed * 2.0) * u.glass.x * seen.a * (1.0 - smoothstep(ball - 1.0, ball, r));
             col = fzOver(float4(g * a, a), col);
         }

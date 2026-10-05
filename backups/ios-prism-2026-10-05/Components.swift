@@ -99,17 +99,16 @@ struct GlassCircleButton: View {
 // MARK: Text
 
 /// `FOCUS SCORE`, `UP NEXT`: small caps labels.
-/// A section's label: Satoshi, sentence case, in the ink colour. (It used to be grey spaced-out
-/// capitals: the most generated-looking label there is.)
 struct SectionLabel: View {
     let text: String
 
     init(_ text: String) { self.text = text }
 
     var body: some View {
-        Text(text)
-            .font(.fzDisplay(15, weight: .bold))
-            .foregroundStyle(Color.fzInk)
+        Text(text.uppercased())
+            .font(.caption2.weight(.semibold))
+            .tracking(1.3)
+            .foregroundStyle(Color.fzInk3)
     }
 }
 

@@ -72,8 +72,6 @@ struct Bolt {
     var fork: [CGPoint]
     var strength: CGFloat
     var width: CGFloat
-    /// Where its colour sits in the prism (`fzPrism`, 0 to 1) once the orb's light splits.
-    var hue: CGFloat = 0
 }
 
 /// A soft spot of light: where a bolt touches the ring (squashed onto its plane), or round a finger.
@@ -383,7 +381,7 @@ final class StageRenderer: NSObject, MTKViewDelegate {
                 for i in 0..<(line.count - 1) where items.count + 2 + 8 < Self.capacity {
                     let a = line[i], b = line[i + 1]
                     items.append(fzFloat4(a.x, a.y, b.x, b.y))
-                    items.append(fzFloat4(bolt.strength, bolt.width, fork, bolt.hue))
+                    items.append(fzFloat4(bolt.strength, bolt.width, fork, 0))
                     box = box.union(CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
                         .insetBy(dx: -reachOut, dy: -reachOut))
                     segments += 1

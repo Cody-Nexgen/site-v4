@@ -20,9 +20,10 @@ struct AccountSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !title.isEmpty {
-                Text(title)
-                    .font(.fzDisplay(15, weight: .bold))
-                    .foregroundStyle(Color.fzNightInk)
+                Text(title.uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1.6)
+                    .foregroundStyle(.white.opacity(0.45))
                     .padding(.leading, 6)
             }
             VStack(spacing: 0) { content }
@@ -264,8 +265,9 @@ struct EmergencyPassTicket: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Emergency pass")
-                        .font(.fzDisplay(14, weight: .bold))
+                    Text("EMERGENCY PASS")
+                        .font(.caption2.weight(.bold))
+                        .tracking(1.8)
                         .foregroundStyle(Color.fzOnBone2)
                     Spacer()
                     Image(systemName: "ticket.fill")
@@ -281,9 +283,9 @@ struct EmergencyPassTicket: View {
                     .foregroundStyle(Color.fzOnBone2)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(alignment: .top, spacing: 20) {
-                    field("Holder", holder)
-                    field("Good for", "\(EmergencyPass.minutes) min")
-                    field("Questions asked", "None")
+                    field("HOLDER", holder)
+                    field("GOOD FOR", "\(EmergencyPass.minutes) min")
+                    field("QUESTIONS", "None")
                 }
                 .padding(.top, 4)
             }
@@ -344,7 +346,8 @@ struct EmergencyPassTicket: View {
     private func field(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.fzDisplay(11, weight: .bold))
+                .font(.system(size: 9, weight: .bold))
+                .tracking(1.4)
                 .foregroundStyle(Color.fzOnBone2)
             Text(value)
                 .font(.subheadline.weight(.semibold))
@@ -511,9 +514,10 @@ struct ProfileEditor: View {
                             }
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Screen time when you started")
-                            .font(.fzDisplay(14, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.8))
+                        Text("SCREEN TIME WHEN YOU STARTED")
+                            .font(.caption2.weight(.semibold))
+                            .tracking(1.6)
+                            .foregroundStyle(.white.opacity(0.45))
                         HStack {
                             Text("\(GoalDial.format(Int(draft.phoneHours * 60))) a day")
                                 .font(.fzDisplay(24, weight: .bold))
@@ -576,9 +580,10 @@ struct ProfileEditor: View {
 
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.fzDisplay(14, weight: .bold))
-                .foregroundStyle(.white.opacity(0.8))
+            Text(label.uppercased())
+                .font(.caption2.weight(.semibold))
+                .tracking(1.6)
+                .foregroundStyle(.white.opacity(0.45))
             content()
                 .font(.body)
                 .foregroundStyle(.white)

@@ -29,8 +29,8 @@ struct FocusSetupView: View {
                 }
                 .scrollIndicators(.hidden)
 
-                FocusDial(minutes: $model.sessionMinutes)
-                    .frame(height: 320)
+                TimeRing(minutes: $model.sessionMinutes)
+                    .frame(height: 290)
                     .frame(maxWidth: .infinity)
 
                 VStack(spacing: 12) {
@@ -119,6 +119,67 @@ struct FocusSetupView: View {
         .toolbar(.hidden, for: .navigationBar)
         .familyActivityPicker(isPresented: $picking, selection: $model.selection)
         .sheet(isPresented: $customizing) { NavigationStack { CustomizeView() }.environment(model) }
+    }
+}
+
+/// Drag around the ring to set the session length (15 min to 3 h, 5-minute steps).
+struct TimeRing: View {
+    @Binding var minutes: Int
+    private let range = 15...180
+
+    var body: some View {
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height) - 30
+            let fraction = Double(minutes - range.lowerBound) / Double(range.upperBound - range.lowerBound)
+            ZStack {
+                ForEach(0..<60, id: \.self) { tick in
+                    Capsule()
+                        .fill(Double(tick) / 60 <= fraction ? Color.fzInk : Color.fzInk3.opacity(0.5))
+                        .frame(width: 2.5, height: tick % 5 == 0 ? 14 : 7)
+                        .offset(y: -side / 2 + 10)
+                        .rotationEffect(.degrees(Double(tick) * 6))
+                }
+                Circle()
+                    .trim(from: 0, to: max(0.01, fraction))
+                    .stroke(Color.fzInk, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .padding(28)
+                VStack(spacing: 0) {
+                    Text(FocusSession.clock(TimeInterval(minutes * 60)))
+                        .font(.fzDisplay(64))
+                        .fzTight(64)
+                        .foregroundStyle(Color.fzInk)
+                        .contentTransition(.numericText())
+                        .monospacedDigit()
+                    SectionLabel("Drag to set")
+                }
+            }
+            .frame(width: side, height: side)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 0).onChanged { drag in
+                    let dx = Double(drag.location.x - proxy.size.width / 2)
+                    let dy = Double(drag.location.y - proxy.size.height / 2)
+                    var angle = atan2(dx, -dy)
+                    if angle < 0 { angle += 2 * .pi }
+                    let raw = Double(range.lowerBound) + angle / (2 * .pi) * Double(range.upperBound - range.lowerBound)
+                    let value = min(range.upperBound, max(range.lowerBound, Int((raw / 5).rounded()) * 5))
+                    if value != minutes { withAnimation(.snappy) { minutes = value } }
+                }
+            )
+            .sensoryFeedback(.selection, trigger: minutes)
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Session length")
+        .accessibilityValue(GoalDial.format(minutes))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: minutes = min(range.upperBound, minutes + 5)
+            case .decrement: minutes = max(range.lowerBound, minutes - 5)
+            @unknown default: break
+            }
+        }
     }
 }
 

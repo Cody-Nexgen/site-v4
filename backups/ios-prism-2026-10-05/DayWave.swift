@@ -6,8 +6,8 @@ struct WavePoint: Identifiable {
     var id: Double { hour }
 }
 
-/// Today's focus through the day, lit like the stage: a line of the orb's split light with coloured fog
-/// under it up to now, fainter for the rest of the day, and a beam of light standing at now. Plain shapes (it was
+/// Today's focus through the day, lit like the stage: a line of the orb's light with fog under it up
+/// to now, fainter for the rest of the day, and a beam of light standing at now. Plain shapes (it was
 /// a Swift Charts chart: heavier, and it looked like every other app).
 struct DayWave: View {
     let points: [WavePoint]
@@ -28,20 +28,13 @@ struct DayWave: View {
                     // The rest of the day: faint.
                     Self.line(sorted, in: size)
                         .stroke(Color.fzNightInk.opacity(0.16), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [3, 5]))
-                    // Up to now: fog under the light in the prism's colours (fading into the dark at the
-                    // bottom), then the line's glow and the line itself.
+                    // Up to now: fog under the light, then its glow and the line itself.
                     Self.area(past, in: size)
-                        .fill(LinearGradient(colors: Color.fzPrism, startPoint: .leading, endPoint: .trailing))
-                        .opacity(0.26)
-                    Self.area(past, in: size)
-                        .fill(LinearGradient(colors: [.black.opacity(0), .black.opacity(0.95)], startPoint: .top, endPoint: .bottom))
+                        .fill(LinearGradient(colors: [Color.fzMint.opacity(0.2), Color.fzMint.opacity(0)], startPoint: .top, endPoint: .bottom))
                     Self.line(past, in: size)
-                        .stroke(LinearGradient(colors: Color.fzPrism, startPoint: .leading, endPoint: .trailing),
-                                style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-                        .opacity(0.3)
+                        .stroke(Color.fzMint.opacity(0.22), style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
                     Self.line(past, in: size)
-                        .stroke(LinearGradient(colors: Color.fzPrism, startPoint: .leading, endPoint: .trailing),
-                                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                        .stroke(Color(hex: 0xC8F5DA), style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
                     // Now: a beam of light standing on the ground, and where the line has got to.
                     Rectangle()
                         .fill(LinearGradient(colors: [Color.fzHot.opacity(0), Color.fzHot.opacity(0.7), Color.fzHot.opacity(0)],
@@ -49,7 +42,7 @@ struct DayWave: View {
                         .frame(width: 1.5, height: size.height)
                         .offset(x: nowPoint.x - 0.75)
                     Circle()
-                        .fill(RadialGradient(colors: [Color.fzViolet.opacity(0.55), Color.fzViolet.opacity(0)], center: .center, startRadius: 0, endRadius: 11))
+                        .fill(RadialGradient(colors: [Color.fzMint.opacity(0.45), Color.fzMint.opacity(0)], center: .center, startRadius: 0, endRadius: 11))
                         .frame(width: 22, height: 22)
                         .offset(x: nowPoint.x - 11, y: nowPoint.y - 11)
                     Circle()
@@ -64,13 +57,13 @@ struct DayWave: View {
             GeometryReader { proxy in
                 ZStack(alignment: .topLeading) {
                     ForEach([6.0, 12.0, 18.0, 24.0], id: \.self) { hour in
-                        LitCaption(Self.label(hour), color: Color.fzNightInk.opacity(0.55), size: 11)
+                        Engraved(Self.label(hour), color: Color.fzNightInk.opacity(0.4), size: 9)
                             .fixedSize()
-                            .position(x: min(max(Self.x(hour, width: proxy.size.width), 20), proxy.size.width - 22), y: 7)
+                            .position(x: min(max(Self.x(hour, width: proxy.size.width), 18), proxy.size.width - 20), y: 6)
                     }
                 }
             }
-            .frame(height: 14)
+            .frame(height: 12)
         }
         .accessibilityElement()
         .accessibilityLabel("Your focus through the day")

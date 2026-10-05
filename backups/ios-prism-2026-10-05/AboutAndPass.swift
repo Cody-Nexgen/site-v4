@@ -80,8 +80,9 @@ struct GuestPassView: View {
             .frame(height: 14)
             .background(Color.fzBone)
             VStack(alignment: .leading, spacing: 6) {
-                Text("Guest pass · No. \(passNumber)")
-                    .font(.fzDisplay(13, weight: .bold))
+                Text("GUEST PASS · NO. \(passNumber)")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1.6)
                     .foregroundStyle(Color.fzOnBone2)
                 Text("Two weeks of Pro")
                     .font(.fzDisplay(28))
@@ -93,11 +94,11 @@ struct GuestPassView: View {
                 Spacer(minLength: 0)
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("From").font(.fzDisplay(12, weight: .bold)).foregroundStyle(Color.fzOnBone2)
+                        Text("FROM").font(.caption2.weight(.semibold)).tracking(1.4).foregroundStyle(Color.fzOnBone2)
                         Text(model.userName).font(.fzSignature(30)).foregroundStyle(Color.fzOnBone)
                     }
                     Spacer()
-                    Text("Valid 14 days").font(.fzDisplay(12, weight: .bold)).foregroundStyle(Color.fzOnBone2)
+                    Text("VALID 14 DAYS").font(.caption2.weight(.semibold)).tracking(1.4).foregroundStyle(Color.fzOnBone2)
                 }
             }
             .padding(18)

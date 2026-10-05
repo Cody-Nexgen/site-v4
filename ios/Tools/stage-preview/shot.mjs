@@ -10,14 +10,14 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url); const { chromium } = require(process.env.PW || path.join(execSync('npm root -g').toString().trim(), 'playwright'));
 const shared = fs.readFileSync(path.join(here, '../../App/Design/OrbShared.h'), 'utf8');
 const strip = (name) => shared.split('// BEGIN SHARED ' + name)[1].split('// END SHARED ' + name)[0];
-const WORLD = strip('WORLD'), ORB = strip('ORB'), STAGE = strip('STAGE');
+const PRISM = strip('PRISM'), WORLD = PRISM + strip('WORLD'), ORB = strip('ORB'), STAGE = strip('STAGE');
 const shots = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const out = path.resolve(process.argv[3] || '.'); fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--allow-file-access-from-files'] });
 for (const s of shots) {
   const P = Object.assign({W: 393, H: 852, TOP: 59, T: 9, E: 0.82, AWAKE: 0.87, LIFT: 0.75, DOLLY: 1, SCATTER: 0, GATHER: -1, CAM: [0, 0], FLASH: 0, FORMED: 1, SPARK: 0, RING: 1, ARCS: 1, BEAM: 1, SCENE: 1, TOUCH: null, PUSH: 0}, s);
   const html = `<html><head><meta charset="utf-8"></head><body style="margin:0;background:#000"><div id=s style="position:relative;width:${P.W}px;height:${P.H}px;overflow:hidden;background:#000"></div>
-<script>window.P=${JSON.stringify(P)};window.WORLD_GLSL=${JSON.stringify(WORLD)};window.ORB_GLSL=${JSON.stringify(ORB)};window.STAGE_GLSL=${JSON.stringify(STAGE)};</script><script src="page.js"></script></body></html>`;
+<script>window.P=${JSON.stringify(P)};window.WORLD_GLSL=${JSON.stringify(WORLD)};window.ORB_GLSL=${JSON.stringify(ORB)};window.STAGE_GLSL=${JSON.stringify(STAGE)};window.PRISM_GLSL=${JSON.stringify(PRISM)};</script><script src="page.js"></script></body></html>`;
   fs.writeFileSync(path.join(here, 'frame.html'), html);
   const page = await browser.newPage({ viewport: { width: P.W, height: P.H }, deviceScaleFactor: 2 });
   const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });

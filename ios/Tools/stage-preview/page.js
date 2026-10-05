@@ -202,7 +202,7 @@ void main() {
   // 6. The orb.
   if (P.FORMED > 0.001 && !P.METAL) { const og = layer(6); const size = L.R * 2 / 0.84 * 1.5; og.width = size * 2; og.height = size * 2; Object.assign(og.style, {left: (orbAt[0] - size / 2) + 'px', top: (orbAt[1] - size / 2) + 'px', width: size + 'px', height: size + 'px',
       transformOrigin: (pushFrom[0] - orbAt[0] + size / 2) + 'px ' + (pushFrom[1] - orbAt[1] + size / 2) + 'px', transform: 'scale(' + (1 + PUSH) + ')'});
-    const g = og.getContext('webgl2', {premultipliedAlpha: true}); const p2 = glProgram(g, PRE + `uniform vec2 uSize; uniform float uT, uE; uniform vec3 uTouch; out vec4 o;\n${window.ORB_GLSL}\nvoid main(){ vec2 pos = vec2(gl_FragCoord.x, uSize.y - gl_FragCoord.y); float side = min(uSize.x, uSize.y); vec2 p = (pos - uSize*0.5)/(side*0.5); o = fzOrb(p, uT, uE, 4.5/side, uTouch); }`);
+    const g = og.getContext('webgl2', {premultipliedAlpha: true}); const p2 = glProgram(g, PRE + `uniform vec2 uSize; uniform float uT, uE; uniform vec3 uTouch; out vec4 o;\n${window.PRISM_GLSL}\n${window.ORB_GLSL}\nvoid main(){ vec2 pos = vec2(gl_FragCoord.x, uSize.y - gl_FragCoord.y); float side = min(uSize.x, uSize.y); vec2 p = (pos - uSize*0.5)/(side*0.5); o = fzOrb(p, uT, uE, 4.5/side, uTouch); }`);
     g.uniform2f(g.getUniformLocation(p2, 'uSize'), size * 2, size * 2); g.uniform1f(g.getUniformLocation(p2, 'uT'), T % 1200); g.uniform1f(g.getUniformLocation(p2, 'uE'), E);
     const tc = P.TOUCH ? [(P.TOUCH[0] - orbAt[0]) / (size / 2), (P.TOUCH[1] - orbAt[1]) / (size / 2), 1] : [0, 0, 0]; g.uniform3f(g.getUniformLocation(p2, 'uTouch'), ...tc); g.drawArrays(g.TRIANGLES, 0, 3); }
 
@@ -261,16 +261,17 @@ float dustPass(vec2 q, int start, int count, float px) {
     light += s.w < 0.0 ? -s.w * 0.7 * max(0.0, 1.0 - d / s.z) : s.w * fzCover(d, s.z * 0.5, px); }
   return min(light, 1.0);
 }
-vec4 lightningPass(vec2 q, int start, int count, int spotStart, int spotCount, float k, float px) {
-  vec3 mint = vec3(0.651, 0.902, 0.749); float wide = 0.0, mid = 0.0, core = 0.0, fork = 0.0;
+vec4 lightningPass(vec2 q, int start, int count, int spotStart, int spotCount, float k, float px, float spread) {
+  vec3 mint = vec3(0.651, 0.902, 0.749); float wide = 0.0, mid = 0.0, core = 0.0, fork = 0.0; vec3 wideC = mint, midC = mint;
   for (int i = 0; i < 256; i++) { if (i >= count) break; vec4 ends = uItems[start + i * 2]; vec4 look = uItems[start + i * 2 + 1];
     float d = fzSegment(q, ends.xy, ends.zw);
     if (look.z > 0.5) { fork = max(fork, min(1.0, 0.6 * look.x) * fzCover(d, 0.4 * k, px)); continue; }
     float glowWidth = (3.0 + 2.0 * (look.y - 1.0)) * k; if (d > glowWidth * 1.5 + px) continue;
-    wide = max(wide, min(1.0, 0.12 * look.x) * fzCover(d, glowWidth * 1.5, px));
-    mid = max(mid, min(1.0, 0.3 * look.x) * fzCover(d, glowWidth * 0.7, px));
+    vec3 hue = mix(mint, fzPrism(look.w), vec3(spread));
+    float w = min(1.0, 0.12 * look.x) * fzCover(d, glowWidth * 1.5, px); if (w > wide) { wide = w; wideC = hue; }
+    float mm = min(1.0, 0.3 * look.x) * fzCover(d, glowWidth * 0.7, px); if (mm > mid) { mid = mm; midC = hue; }
     core = max(core, min(1.0, 0.95 * look.x) * fzCover(d, look.y * k * 0.5, px)); }
-  vec4 col = vec4(mint * wide, wide); col = over(vec4(mint * mid, mid), col); col = over(vec4(core), col); col = over(vec4(fork), col);
+  vec4 col = vec4(wideC * wide, wide); col = over(vec4(midC * mid, mid), col); col = over(vec4(core), col); col = over(vec4(fork), col);
   for (int i = 0; i < 16; i++) { if (i >= spotCount) break; vec4 s = uItems[spotStart + i]; vec2 d = q - s.xy; if (s.z < 0.0) d.y *= 2.0;
     float a = s.w * max(0.0, 1.0 - length(d) / abs(s.z)); col = over(vec4(mint * a, a), col); }
   return col;
@@ -300,14 +301,14 @@ void main() {
       col.rgb += (vec3(star) + vec3(0.749, 0.910, 0.824) * haze) * skyOn; } }
   if (uShaft.x > 0.002) { vec2 ringAtRest = uRing.xy - uCam.xy * uPush.w; col.rgb += vec3(0.867, 0.961, 0.902) * fzShaft(q - uShaft.yz, ringAtRest, uTop.x, k, px) * uShaft.x; }
   if (uGlow.y > 0.002 || uGlow.z > 0.002) { float reach = 10.0 * k; vec2 rd = abs(q - uRing.xy) - uRing.zw;
-    if (rd.x < reach && rd.y < reach) col.rgb += fzRingGlow(q, uRing, uGlow.x, uGlow.y, uGlow.z, k, px).rgb; }
+    if (rd.x < reach && rd.y < reach) col.rgb += fzRingGlow(q, uRing, uGlow.x, uGlow.y, uGlow.z, k, px, fzSpread(uState.x)).rgb; }
   col = rocksPass(col, p, rockCount, 0.0);
   if (dustCount > 0 && q.y > uDustBox.x - px && q.y < uDustBox.y + px) col.rgb += vec3(dustPass(q, dustStart, dustCount, px));
-  if (q.x > uBoltBox.x && q.y > uBoltBox.y && q.x < uBoltBox.z && q.y < uBoltBox.w) col.rgb += lightningPass(q, segStart, segmentCount, spotStart, spotCount, k, px).rgb;
+  if (q.x > uBoltBox.x && q.y > uBoltBox.y && q.x < uBoltBox.z && q.y < uBoltBox.w) col.rgb += lightningPass(q, segStart, segmentCount, spotStart, spotCount, k, px, fzSpread(uState.x)).rgb;
   float formed = uOrbView.y;
   if (formed > 0.001) { float shrink = 0.12 + 0.88 * formed; vec2 d = (q - uOrb.xy) / shrink; float ball = uOrb.z; float r = length(d);
     if (formed > 0.05 && r < ball + 1.0) { vec2 w = uOrb.xy - 2.0 * d; vec4 seen = photoAt((w - origin) / uFade.xy, 1.0);
-      vec3 g = mix(vec3(dot(seen.rgb, FZ_LUMA)), seen.rgb, vec3(uGlass.y)) * vec3(0.78, 0.96, 0.86);
+      vec3 g = mix(vec3(dot(seen.rgb, FZ_LUMA)), seen.rgb, vec3(uGlass.y)) * mix(vec3(0.78, 0.96, 0.86), vec3(0.86, 0.84, 0.98), vec3(fzSpread(uState.x)));
       float a = min(1.0, formed * 2.0) * uGlass.x * seen.a * (1.0 - smoothstep(ball - 1.0, ball, r)); col = over(vec4(g * a, a), col); }
     float side = uOrbView.x; vec2 op = d / (side * 0.5);
     if (abs(op.x) < 1.0 && abs(op.y) < 1.0) { vec3 finger = vec3(uTouch.xy / (side * 0.5), uTouch.z);
@@ -365,16 +366,16 @@ void main() {
       const a = (ra[i] + 7 * Math.sin(T * 0.45 + i * 1.7)) * Math.PI / 180, end = [ring[0] + L.rr[0] * Math.cos(a), ring[1] + L.rr[1] * Math.sin(a)];
       const b = (sa[i] + 6 * Math.sin(T * 0.6 + i)) * Math.PI / 180, begin = [orbAt[0] + radius * Math.cos(b), orbAt[1] + radius * Math.sin(b)];
       const strength = P.ARCS * (0.6 + 0.4 * fl) * (1 + 1.2 * boost);
-      bolts.push(makeBolt(begin, end, seed * 7 + i, strength, 1 + 0.6 * boost)); spots.push([end[0], end[1], -(9 + 6 * boost) * k * 1.6, Math.min(1, 0.8 * strength)]); } }
+      { const arc = makeBolt(begin, end, seed * 7 + i, strength, 1 + 0.6 * boost); arc.hue = i / 3; bolts.push(arc); } spots.push([end[0], end[1], -(9 + 6 * boost) * k * 1.6, Math.min(1, 0.8 * strength)]); } }
   if (P.TOUCH && P.FORMED > 0.5) { const dx = P.TOUCH[0] - orbAt[0], dy = P.TOUCH[1] - orbAt[1];
     if (Math.hypot(dx, dy) > R * 0.98) { const toward = Math.atan2(dy, dx); const seed = Math.floor(T * 15);
       for (let i = 0; i < 3; i++) { const a = toward + (i - 1) * 0.32; const begin = [orbAt[0] + Math.cos(a) * R * 0.97, orbAt[1] + Math.sin(a) * R * 0.97];
-        const end = [P.TOUCH[0] + (hash(seed, i + 51) - 0.5) * 10, P.TOUCH[1] + (hash(seed, i + 61) - 0.5) * 10]; bolts.push(makeBolt(begin, end, seed * 3 + i, 1.3, 1.2)); }
+        const end = [P.TOUCH[0] + (hash(seed, i + 51) - 0.5) * 10, P.TOUCH[1] + (hash(seed, i + 61) - 0.5) * 10]; { const arc = makeBolt(begin, end, seed * 3 + i, 1.3, 1.2); arc.hue = 0.2 + i * 0.3; bolts.push(arc); } }
       spots.push([P.TOUCH[0], P.TOUCH[1], 22 * k, 0.8]); } }
   let box = null; let segments = 0; const grow = (x0, y0, x1, y1) => { box = box ? [Math.min(box[0], x0), Math.min(box[1], y0), Math.max(box[2], x1), Math.max(box[3], y1)] : [x0, y0, x1, y1]; };
   for (const bolt of bolts) { const reachOut = (3 + 2 * (bolt.width - 1)) * k * 1.5 + 2;
     for (const [line, fork] of [[bolt.points, 0], [bolt.fork, 1]]) { for (let i = 0; i + 1 < line.length; i++) { const a = line[i], b = line[i + 1];
-      items.push([a[0], a[1], b[0], b[1]], [bolt.strength, bolt.width, fork, 0]); grow(Math.min(a[0], b[0]) - reachOut, Math.min(a[1], b[1]) - reachOut, Math.max(a[0], b[0]) + reachOut, Math.max(a[1], b[1]) + reachOut); segments++; } } }
+      items.push([a[0], a[1], b[0], b[1]], [bolt.strength, bolt.width, fork, bolt.hue || 0]); grow(Math.min(a[0], b[0]) - reachOut, Math.min(a[1], b[1]) - reachOut, Math.max(a[0], b[0]) + reachOut, Math.max(a[1], b[1]) + reachOut); segments++; } } }
   for (const s of spots) { items.push(s); const r = Math.abs(s[2]); grow(s[0] - r, s[1] - r, s[0] + r, s[1] + r); }
   const dustTop = dust.length ? Math.min(...dust.map(s => s[1] - s[2])) : 0, dustBottom = dust.length ? Math.max(...dust.map(s => s[1] + s[2])) : -1;
   if (items.length > 640) throw new Error('too many items: ' + items.length);

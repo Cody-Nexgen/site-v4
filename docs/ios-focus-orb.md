@@ -9,6 +9,14 @@ when Metal can't start) and `StageView.metal` (on Today and in the onboarding th
 stage's single Metal pass). Use it as `FocusOrb(energy:size:)`. The v1 Canvas orb is backed up in
 `backups/ios-focus-orb-v1-2026-10-04/`.
 
+## Colour (2026-10-05)
+The orb is a glass ball, and glass splits light: the more charged it is, the further its light splits
+into a prism (mint, aqua, periwinkle, violet, rose; `fzPrism` and `fzSpread` in the PRISM block of
+`OrbShared.h`, before ORB). Dim, it's mint as before; charged, the plasma drifts through the colours,
+each tendril glows its own colour around a white-hot core, the rim and halo are iridescent, and the
+light it throws on the world is a different colour on each side. The previews include the PRISM
+block before ORB and WORLD.
+
 ## What's in it
 - **Tendrils** (up to 8): lightning that leaves a white-hot core, bends and kinks as it goes, forks part
   way out, and lights a bright spot where it strikes the inside of the glass. Each one flickers, now and

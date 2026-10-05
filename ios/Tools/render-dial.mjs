@@ -1,11 +1,11 @@
-// Renders the focus orb (the SHARED ORB part of App/Design/OrbShared.h) in headless Chromium with
-// WebGL2, so the shader can be looked at without a Mac. Uses the global Playwright; no dependencies.
+// Renders the 3D focus timer (the SHARED DIAL part of App/Design/OrbShared.h, which FocusDial.metal
+// draws on the phone) in headless Chromium with WebGL2, so it can be looked at without a Mac. Uses the
+// global Playwright; no dependencies.
 //
-//   node ios/Tools/render-orb.mjs '[[0.12,3],[0.5,8],[1,14]]' 420 <out dir>
+//   node ios/Tools/render-dial.mjs '[[0.21,9],[0.6,12,0.5,-0.3]]' 600 <out dir>
 //
-// Each [energy, seconds] pair becomes orb-e<energy>-t<seconds>.png (420 px square here) in <out dir>.
-// [energy, seconds, x, y] also puts a finger on it (x and y from -1 to 1, 0 is the centre).
-// The browser is not the phone: SwiftUI may show the colours slightly differently.
+// Each [fill, seconds] pair becomes dial-f<fill>-t<seconds>.png (600 px square here) in <out dir>;
+// [fill, seconds, tiltX, tiltY] also tilts the phone (-1 to 1). On black, like the app.
 import { createRequire } from 'module';
 import { execSync } from 'child_process';
 import fs from 'fs';
@@ -19,9 +19,9 @@ const { chromium } = require(pw);
 
 const src = fs.readFileSync(path.join(here, '../App/Design/OrbShared.h'), 'utf8');
 const block = (name) => src.split('// BEGIN SHARED ' + name)[1].split('// END SHARED ' + name)[0];
-const shared = block('PRISM') + block('ORB');
-const shots = JSON.parse(process.argv[2] || '[[0.12,3],[0.5,8],[1,14]]');
-const px = Number(process.argv[3] || 420);
+const shared = block('PRISM') + block('ORB') + block('DIAL');
+const shots = JSON.parse(process.argv[2] || '[[0.21,9],[0.6,12]]');
+const px = Number(process.argv[3] || 600);
 const out = path.resolve(process.argv[4] || '.');
 fs.mkdirSync(out, { recursive: true });
 
@@ -35,14 +35,15 @@ precision highp float;
 #define static
 #define inline
 #define atan2 atan
-uniform vec2 uSize; uniform float uT; uniform float uE; uniform vec3 uTouch;
+uniform vec2 uSize; uniform float uT; uniform float uFill; uniform vec2 uTilt;
 out vec4 o;
 ${shared}
 void main() {
   vec2 pos = vec2(gl_FragCoord.x, uSize.y - gl_FragCoord.y);
   float side = min(uSize.x, uSize.y);
-  vec2 p = (pos - uSize * 0.5) / (side * 0.5);
-  vec4 c = fzOrb(p, uT, uE, 4.5 / side, uTouch);
+  vec2 uv = (pos - uSize * 0.5) / (side * 0.5);
+  uv.y = -uv.y;
+  vec4 c = fzDial(uv, uFill, uT, uTilt, 2.0 / side);
   o = vec4(c.rgb, 1.0);
 }`;
 
@@ -59,11 +60,11 @@ gl.useProgram(pr);
 gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-window.draw = (e, t, tx, ty) => {
+window.draw = (f, t, tx, ty) => {
   gl.uniform2f(gl.getUniformLocation(pr, 'uSize'), ${px}, ${px});
   gl.uniform1f(gl.getUniformLocation(pr, 'uT'), t);
-  gl.uniform1f(gl.getUniformLocation(pr, 'uE'), e);
-  gl.uniform3f(gl.getUniformLocation(pr, 'uTouch'), tx ?? 0, ty ?? 0, tx === undefined || tx === null ? 0 : 1);
+  gl.uniform1f(gl.getUniformLocation(pr, 'uFill'), f);
+  gl.uniform2f(gl.getUniformLocation(pr, 'uTilt'), tx ?? 0, ty ?? 0);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 };
 </script></body></html>`;
@@ -81,9 +82,9 @@ if (errors.length) {
   await browser.close();
   process.exit(1);
 }
-for (const [e, t, tx, ty] of shots) {
-  await page.evaluate(([e, t, tx, ty]) => window.draw(e, t, tx, ty), [e, t, tx ?? null, ty ?? null]);
-  await page.locator('canvas').screenshot({ path: path.join(out, `orb-e${e}-t${t}${tx === undefined ? '' : `-x${tx}-y${ty}`}.png`) });
+for (const [f, t, tx, ty] of shots) {
+  await page.evaluate(([f, t, tx, ty]) => window.draw(f, t, tx, ty), [f, t, tx ?? null, ty ?? null]);
+  await page.locator('canvas').screenshot({ path: path.join(out, `dial-f${f}-t${t}${tx === undefined ? '' : `-x${tx}-y${ty}`}.png`) });
 }
 await browser.close();
 console.log(`wrote ${shots.length} image(s) to ${out}`);

@@ -434,9 +434,10 @@ struct AccountView: View {
     }
 
     private func label(_ text: String) -> some View {
-        Text(text)
-            .font(.fzDisplay(13, weight: .bold))
-            .foregroundStyle(.white.opacity(0.72))
+        Text(text.uppercased())
+            .font(.caption2.weight(.semibold))
+            .tracking(1.4)
+            .foregroundStyle(.white.opacity(0.45))
     }
 
     /// Support's inbox. (Check it's the right address before release.)

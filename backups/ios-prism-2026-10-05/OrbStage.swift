@@ -605,9 +605,7 @@ struct OrbStage: View, Animatable {
             let b: CGFloat = (sphereAngles[i] + 6 * sin(t * 0.6 + fi)) * .pi / 180
             let begin = CGPoint(x: orbAt.x + radius * cos(b), y: orbAt.y + radius * sin(b))
             let strength: CGFloat = power * (0.6 + 0.4 * flicker) * (1 + 1.2 * boost)
-            var arc = bolt(from: begin, to: end, seed: seed &* 7 &+ i, strength: strength, width: 1 + 0.6 * boost)
-            arc.hue = CGFloat(i) / 3
-            bolts.append(arc)
+            bolts.append(bolt(from: begin, to: end, seed: seed &* 7 &+ i, strength: strength, width: 1 + 0.6 * boost))
             spots.append(GlowSpot(center: end, radius: (9 + 6 * boost) * layout.k * 1.6, alpha: min(1, 0.8 * strength), squash: true))
         }
         return (bolts, spots)
@@ -627,9 +625,7 @@ struct OrbStage: View, Animatable {
             let a = toward + (CGFloat(i) - 1) * 0.32
             let begin = CGPoint(x: orbAt.x + cos(a) * radius * 0.97, y: orbAt.y + sin(a) * radius * 0.97)
             let end = CGPoint(x: touch.x + (hash(seed, i + 51) - 0.5) * 10, y: touch.y + (hash(seed, i + 61) - 0.5) * 10)
-            var arc = bolt(from: begin, to: end, seed: seed &* 3 &+ i, strength: 1.3, width: 1.2)
-            arc.hue = 0.2 + CGFloat(i) * 0.3
-            bolts.append(arc)
+            bolts.append(bolt(from: begin, to: end, seed: seed &* 3 &+ i, strength: 1.3, width: 1.2))
         }
         return (bolts, [GlowSpot(center: touch, radius: 22 * layout.k, alpha: 0.8, squash: false)])
     }

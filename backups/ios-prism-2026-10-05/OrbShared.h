@@ -11,39 +11,6 @@
 #include <metal_stdlib>
 using namespace metal;
 
-// BEGIN SHARED PRISM
-// The orb's light split by its glass, 0 to 1: mint, aqua, periwinkle, violet, rose. The more charged
-// the orb, the further its light splits (`fzSpread`).
-static inline float3 fzPrism(float x) {
-    float s = clamp(x, 0.0, 1.0) * 4.0;
-    float3 a = float3(0.651, 0.902, 0.749);
-    float3 b = float3(0.490, 0.890, 0.950);
-    float3 c = float3(0.560, 0.660, 1.000);
-    float3 d = float3(0.740, 0.600, 1.000);
-    float3 e = float3(1.000, 0.600, 0.780);
-    if (s < 1.0) {
-        return mix(a, b, float3(s));
-    }
-    if (s < 2.0) {
-        return mix(b, c, float3(s - 1.0));
-    }
-    if (s < 3.0) {
-        return mix(c, d, float3(s - 2.0));
-    }
-    return mix(d, e, float3(s - 3.0));
-}
-
-// The same, going round and back (no seam where it wraps): for angles.
-static inline float3 fzPrismLoop(float x) {
-    return fzPrism(1.0 - abs(fract(x) * 2.0 - 1.0));
-}
-
-// How far the light splits into colours at energy e: mint while it's dim, the whole prism charged.
-static inline float fzSpread(float e) {
-    return smoothstep(0.2, 0.85, e);
-}
-// END SHARED PRISM
-
 // BEGIN SHARED ORB
 #define FZ_TAU 6.2831853
 #define FZ_ORB_R 0.56
@@ -146,10 +113,7 @@ static inline float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
     float beyond = max(r - 1.0, 0.0);
     float fade = 1.0 - smoothstep(0.8, 1.0, length(p));
     float shimmer = 0.9 + 0.1 * orbNoise1(t * 7.0);
-    // Charged, its light splits into colours: a slow rainbow round the glass, like light through a prism.
-    float spread = fzSpread(e);
-    float3 aura = mix(mint, fzPrismLoop(ang / FZ_TAU + t * 0.03), float3(spread));
-    float3 halo = aura * (exp(-beyond * 5.0) * (0.12 + 0.36 * e) + exp(-beyond * 20.0) * (0.18 + 0.45 * e)) * shimmer;
+    float3 halo = mint * (exp(-beyond * 5.0) * (0.12 + 0.36 * e) + exp(-beyond * 20.0) * (0.18 + 0.45 * e)) * shimmer;
     halo *= fade;
     float3 haloC = orbTone(halo);
     float haloA = clamp(max(haloC.r, max(haloC.g, haloC.b)), 0.0, 1.0);
@@ -164,15 +128,12 @@ static inline float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
     float3 n = float3(q.x, q.y, z);
 
     // The glass body, darker towards the edge.
-    float3 col = mix(mix(float3(0.02, 0.075, 0.06), float3(0.035, 0.04, 0.085), float3(spread * 0.7)),
-                     float3(0.004, 0.014, 0.012), float3(rr));
+    float3 col = mix(float3(0.02, 0.075, 0.06), float3(0.004, 0.014, 0.012), float3(rr));
 
     // A slow plasma haze turning inside.
     float warp = orbFbm(float3(q * 1.3, t * 0.11));
     float haze = orbFbm(float3(q * 2.1 + float2(warp * 1.4, -warp), t * 0.19 + 4.0));
-    // Charged, the plasma drifts through the prism's colours.
-    float3 hazeC = mix(deep, fzPrismLoop(warp * 1.6 + t * 0.025) * 0.8, float3(spread * 0.9));
-    col += hazeC * pow(haze, 2.2) * (0.75 + 1.25 * e) * (1.0 - 0.4 * rr) * (1.0 + 0.9 * spread);
+    col += deep * pow(haze, 2.2) * (0.75 + 1.25 * e) * (1.0 - 0.4 * rr);
 
     // Veins crackling over the shell, in patches that drift and flicker.
     float3 front = orbTurnY(n, t * 0.2);
@@ -180,14 +141,11 @@ static inline float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
     float sharp = mix(30.0, 18.0, e);
     float veins = pow(orbRidge(front * 3.0 + float3(0.0, t * 0.08, warp)), sharp) * patches;
     float crackle = 0.5 + 0.5 * orbNoise1(t * 11.0 + front.x * 5.0 + front.y * 3.0);
-    float3 veinC = mix(mix(mint, hot, float3(0.3)), mix(fzPrismLoop(front.y * 0.4 + front.x * 0.2 + t * 0.02), hot, float3(0.25)), float3(spread));
-    col += veinC * veins * crackle * (0.15 + 0.55 * e) * smoothstep(0.25, 0.7, rr);
+    col += mix(mint, hot, float3(0.3)) * veins * crackle * (0.15 + 0.55 * e) * smoothstep(0.25, 0.7, rr);
 
-    // The tendrils: they leave the core, fork, and strike the glass. Each has its own colour once the
-    // light splits (white-hot in the middle, coloured in its glow).
-    float3 bolts = float3(0.0);
-    float3 boltBase = mix(mint, hot, float3(0.6));
-    float3 tipBase = mix(mint, hot, float3(0.45));
+    // The tendrils: they leave the core, fork, and strike the glass.
+    float tendrils = 0.0;
+    float tips = 0.0;
     for (int i = 0; i < 8; i++) {
         float fi = float(i);
         float on = clamp(e * 9.0 + 3.0 - fi * 1.15, 0.0, 1.0);
@@ -205,15 +163,11 @@ static inline float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
         float strike = pow(orbNoise1(t * 1.9 + fi * 17.0), 6.0) * 2.4;
         float power = (flick + strike) * on * charge * depth * (1.0 + 0.7 * touchOn);
 
-        float3 own = fzPrism(fract(fi / 7.0 + t * 0.012));
-        float3 coreC = mix(boltBase, mix(own, hot, float3(0.4)), float3(spread));
-        float3 glowC = mix(boltBase, own * 1.35, float3(spread));
-
         float bend = orbBend(rr, t, fi);
         float span = smoothstep(0.05, 0.18, rr) * (1.0 - smoothstep(reach - 0.025, reach, r));
         float d = abs(orbWrap(ang - base - bend)) * rr;
         float width = mix(70.0, 240.0, rr) / (0.7 + 0.5 * depth);
-        bolts += (coreC * 1.3 * exp(-d * width) + glowC * 0.32 * exp(-d * 20.0)) * span * power;
+        tendrils += (1.3 * exp(-d * width) + 0.32 * exp(-d * 20.0)) * span * power;
 
         // A fork that splits off part way out.
         float forkAt = 0.4 + 0.22 * orbHash(float3(fi, 3.0, 1.0));
@@ -222,15 +176,16 @@ static inline float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
         float bend2 = bend + side * k * (1.0 + 0.4 * sin(t * 0.7 + fi))
                     + (orbNoise1(rr * 15.0 - t * 4.5 + fi * 5.3) - 0.5) * 0.24 * rr;
         float d2 = abs(orbWrap(ang - base - bend2)) * rr;
-        bolts += (coreC * exp(-d2 * 300.0) + glowC * 0.18 * exp(-d2 * 28.0)) * smoothstep(0.0, 0.1, k) * span * power * 0.65;
+        tendrils += (exp(-d2 * 300.0) + 0.18 * exp(-d2 * 28.0)) * smoothstep(0.0, 0.1, k) * span * power * 0.65;
 
         // Where it strikes the glass.
         float endA = base + orbBend(reach, t, fi);
         float2 tip = float2(cos(endA), sin(endA)) * min(reach, 0.985);
         float td = length(q - tip);
-        bolts += mix(tipBase, mix(own, hot, float3(0.3)), float3(spread)) * (exp(-td * 40.0) * 1.1 + exp(-td * 10.0) * 0.2) * power;
+        tips += (exp(-td * 40.0) * 1.1 + exp(-td * 10.0) * 0.2) * power;
     }
-    col += bolts;
+    col += mix(mint, hot, float3(0.6)) * tendrils;
+    col += mix(mint, hot, float3(0.45)) * tips;
 
     // The glass glowing under the finger (or on the rim nearest it, if it's outside).
     float2 under = tq / max(length(tq), 0.0001) * min(length(tq), 0.97);
@@ -245,10 +200,8 @@ static inline float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
 
     // Glass: a rim that catches the light, a crescent of light on the top left, a bounce at the bottom.
     float fres = pow(1.0 - z, 3.0);
-    // The rim: iridescent once the light splits, like the edge of a glass ball.
-    float3 rimC = mix(mint, fzPrismLoop(ang / FZ_TAU + 0.25 + t * 0.03), float3(spread));
-    col += rimC * fres * (0.28 + 0.42 * e);
-    col += rimC * smoothstep(0.955, 0.995, rr) * (0.16 + 0.2 * e);
+    col += mint * fres * (0.28 + 0.42 * e);
+    col += mint * smoothstep(0.955, 0.995, rr) * (0.16 + 0.2 * e);
     float2 towards = q / max(rr, 0.0001);
     float lit = max(dot(towards, float2(-0.6, -0.8)), 0.0);
     col += float3(0.9, 1.0, 0.95) * fres * lit * lit * 0.75;
@@ -383,11 +336,7 @@ static inline float fzPhotoFade(float2 pos, float4 fade, float2 revealAt) {
 // there is to give light. ringOn: how far the pedestal's ring is lit. k: the stage's scale.
 static inline float3 fzWorld(float3 photo, float2 p, float t, float e, float awake, float flash, float orbOn, float ringOn,
                       float2 orb, float orbR, float2 ring, float2 ringR, float2 topR, float baseY, float horizonY, float k) {
-    // Its light, split by the glass the more charged it is: each side of it lit a different colour, like
-    // the light through a glass ball.
-    float2 fromOrb = p - orb;
-    float around = dot(fromOrb, fromOrb) < 1e-6 ? 0.0 : atan2(fromOrb.y, fromOrb.x);
-    float3 lightC = mix(float3(0.70, 0.96, 0.82), fzPrismLoop(around / 6.2831853 + 0.15), float3(fzSpread(e) * 0.7));
+    float3 lightC = float3(0.70, 0.96, 0.82);
     float Y = dot(photo, FZ_LUMA);
 
     // Asleep the world is darker and colourless; it wakes as the orb charges. (The wide shot, the sky
@@ -502,10 +451,9 @@ static inline float fzEllipse(float2 p, float2 c, float2 r) {
 
 // The pedestal's groove ring lighting up from the front, both ways round (trace 1: all the way), with
 // a soft glow round it and a bright head at each end while it runs, and the white flash of a strike.
-// ring: centre and radii. spread: how far the orb's light has split (the ring takes its colours).
-// Returns premultiplied light, to add.
-static inline float4 fzRingGlow(float2 p, float4 ring, float trace, float power, float flash, float k, float px, float spread) {
-    float3 mint = mix(float3(0.651, 0.902, 0.749), fzPrismLoop(orbAngle((p - ring.xy) / ring.zw) / 6.2831853 + 0.1), float3(spread * 0.8));
+// ring: centre and radii. Returns premultiplied light, to add.
+static inline float4 fzRingGlow(float2 p, float4 ring, float trace, float power, float flash, float k, float px) {
+    float3 mint = float3(0.651, 0.902, 0.749);
     float de = fzEllipse(p, ring.xy, ring.zw);
     float4 col = float4(0.0);
     float lit = clamp(trace, 0.0, 1.0);
@@ -543,171 +491,5 @@ static inline float4 fzRingGlow(float2 p, float4 ring, float trace, float power,
     return col;
 }
 // END SHARED STAGE
-
-// BEGIN SHARED DIAL
-// The focus timer in 3D (FocusDial.metal): a glass tube bent into a ring on a dark machined plate,
-// tilted back like the pedestal's top. The orb's light fills the tube as far as the time goes
-// (`fill`, 0 to 1, clockwise from the top), crackling and split into the prism along the way; its
-// colours fall on the metal under it, and the minute marks it has passed light up. Uses PRISM and ORB.
-
-#define DIAL_TILT 0.42
-#define DIAL_R 0.70
-#define DIAL_TUBE 0.075
-#define DIAL_ZC 0.085
-#define DIAL_PLATE 0.93
-
-// From the view (y up, looking down -z) into the dial's own space (its plate is z = 0, facing +z).
-static inline float3 dialSpace(float3 v) {
-    float c = cos(DIAL_TILT);
-    float s = sin(DIAL_TILT);
-    return float3(v.x, v.y * c - v.z * s, v.y * s + v.z * c);
-}
-
-// How far round the ring a point is, 0 to 1, clockwise from the top.
-static inline float dialAlong(float2 xy) {
-    return fract((1.5707963 - orbAngle(xy)) / 6.2831853);
-}
-
-// The point on the ring's centre line that far round.
-static inline float2 dialAt(float s) {
-    float a = 1.5707963 - s * 6.2831853;
-    return float2(cos(a), sin(a)) * DIAL_R;
-}
-
-// How lit the ring is at s: soft at both ends (it starts at the top and stops at the head).
-static inline float dialOn(float s, float fill) {
-    return (1.0 - smoothstep(fill - 0.002, fill + 0.006, s)) * smoothstep(0.0, 0.008, s) * step(0.0005, fill);
-}
-
-static inline float dialTube(float3 p) {
-    float2 q = float2(length(p.xy) - DIAL_R, p.z - DIAL_ZC);
-    return length(q) - DIAL_TUBE;
-}
-
-// The plate at xy: brushed in circles with a streak of light towards the light, a darker sunk middle,
-// a bevelled edge, engraved minute marks, the tube's shadow, and the light it throws.
-static inline float3 dialPlate(float2 xy, float fill, float3 L, float aa) {
-    float r = length(xy);
-    float ang = orbAngle(xy);
-    float s = dialAlong(xy);
-    float la = orbAngle(L.xy);
-    float grain = 0.75 + 0.25 * orbHash(float3(floor(r * 420.0), floor((ang + 3.2) * 9.0), 1.0));
-    float c1 = abs(cos(ang - la));
-    float streak = pow(c1, 24.0) * 0.07 + pow(c1, 3.0) * 0.025;
-    float3 col = float3(0.040, 0.044, 0.050) + float3(streak * grain);
-    col *= 0.7 + 0.3 * smoothstep(0.3, 0.58, r);
-    // The bevel catches the light on the side facing it.
-    float bevel = smoothstep(0.86, 0.88, r);
-    float3 bn = normalize(float3(xy / max(r, 0.0001) * 0.9, 1.0));
-    float3 bevelC = float3(0.07, 0.075, 0.08) + float3(0.38 * pow(max(dot(bn, L), 0.0), 6.0));
-    col = mix(col, bevelC, float3(bevel));
-    // Minute marks, longer every fifth; the ones the light has passed glow in its colour.
-    float marks = (1.5707963 - ang) / 6.2831853 * 60.0;
-    float nearest = floor(marks + 0.5);
-    float m5 = nearest - 5.0 * floor(nearest / 5.0 + 0.0001);
-    float major = 1.0 - step(0.5, m5);
-    float inner = major > 0.5 ? 0.785 : 0.802;
-    float dMark = abs(marks - nearest) * 6.2831853 / 60.0 * r;
-    float mark = (1.0 - smoothstep(0.0045 - aa, 0.0045 + aa, dMark)) * smoothstep(inner - aa, inner + aa, r)
-               * (1.0 - smoothstep(0.845 - aa, 0.845 + aa, r));
-    float markS = fract(nearest / 60.0);
-    float passed = step(markS, fill + 0.0001) * step(0.0005, fill);
-    float3 markC = mix(float3(0.23, 0.24, 0.26), fzPrismLoop(markS) * 1.1, float3(passed));
-    col = mix(col, markC, float3(mark));
-    // The tube's shadow on the metal under it.
-    float under = exp(-((r - DIAL_R) / 0.07) * ((r - DIAL_R) / 0.07));
-    col *= 1.0 - 0.4 * under;
-    // The light the tube throws, from the nearest lit part of it.
-    float lit = step(0.0005, fill);
-    float sN = s <= fill ? s : ((s - fill) < (1.0 - s) ? fill : 0.0);
-    float2 cp = dialAt(sN);
-    float d = length(float3(xy - cp, -DIAL_ZC));
-    float3 glowC = fzPrismLoop(sN);
-    col += glowC * (exp(-d * 9.0) * 0.4 + exp(-d * 3.0) * 0.05) * lit;
-    return col;
-}
-
-// uv: -1 to 1 across the view, y up. t: seconds. tilt: the phone's tilt (about -1 to 1), so the light
-// moves as you tilt it. aa: one pixel in uv. Returns a premultiplied colour.
-static inline float4 fzDial(float2 uv, float fill, float t, float2 tilt, float aa) {
-    float3 ro = dialSpace(float3(0.0, 0.0, 4.2));
-    float3 rd = dialSpace(normalize(float3(uv * 1.04, -4.2)));
-    float3 L = normalize(float3(-0.45 + tilt.x * 0.5, 0.55 + tilt.y * 0.4, 0.75));
-    float3 V = -rd;
-    float4 result = float4(0.0);
-
-    float tPlate = rd.z < -0.0001 ? -ro.z / rd.z : 100000.0;
-    float3 P = ro + rd * tPlate;
-    float rP = length(P.xy);
-
-    float tHit = -1.0;
-    float zTop = DIAL_ZC + DIAL_TUBE + 0.01;
-    float tt = rd.z < -0.0001 ? max((zTop - ro.z) / rd.z, 0.0) : 0.0;
-    for (int i = 0; i < 48; i++) {
-        float3 p = ro + rd * tt;
-        float dd = dialTube(p);
-        if (dd < 0.0005) {
-            tHit = tt;
-            break;
-        }
-        tt += dd;
-        if (tt > tPlate) {
-            break;
-        }
-    }
-
-    if (tHit > 0.0) {
-        float3 H = ro + rd * tHit;
-        float hr = max(length(H.xy), 0.0001);
-        float3 C = float3(H.xy / hr * DIAL_R, DIAL_ZC);
-        float3 N = normalize(H - C);
-        float s = dialAlong(H.xy);
-        float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-        // What's behind it, bent a little by the glass.
-        float3 rb = normalize(rd - N * 0.3);
-        float tb = rb.z < -0.0001 ? -H.z / rb.z : 0.0;
-        float2 bxy = H.xy + rb.xy * tb;
-        float3 behind = length(bxy) < DIAL_PLATE ? dialPlate(bxy, fill, L, aa) : float3(0.0);
-        // Round, not flat: the glass is thicker (darker) towards its edges.
-        float facing = max(dot(N, V), 0.0);
-        float3 col = behind * (0.45 + 0.35 * facing) + float3(0.012, 0.014, 0.02);
-        // The light inside, as far as the time goes: a crackling core in the prism's colours.
-        // (Soft at both ends: it starts at the top and stops at the head.)
-        float lit = step(0.0005, fill);
-        float filled = dialOn(s, fill);
-        float flick = 0.75 + 0.25 * orbNoise1(t * 9.0 + s * 40.0);
-        float3 hue = fzPrismLoop(s);
-        if (filled > 0.001) {
-            // The core: a crackling line along the middle of the tube, wavering. Locally a straight line,
-            // so how near the view ray passes it is the distance between two lines.
-            float a = 1.5707963 - s * 6.2831853;
-            float3 T = float3(sin(a), -cos(a), 0.0);
-            float wigR = (orbNoise1(s * 46.0 - t * 3.1) - 0.5) * DIAL_TUBE * 0.9;
-            float wigZ = (orbNoise1(s * 39.0 + t * 2.7 + 9.0) - 0.5) * DIAL_TUBE * 0.9;
-            float3 C0 = float3(cos(a), sin(a), 0.0) * (DIAL_R + wigR) + float3(0.0, 0.0, DIAL_ZC + wigZ);
-            float3 n = cross(rd, T);
-            float nl = length(n);
-            float dc = nl > 0.001 ? abs(dot(C0 - H, n)) / nl : length(cross(C0 - H, rd));
-            float glow = exp(-dc * dc / 0.00012) * 1.5 + exp(-dc * 28.0) * 0.35;
-            col += mix(hue, float3(0.95, 1.0, 0.98), float3(0.3)) * glow * flick * filled;
-            col += hue * 0.14 * facing * facing * flick * filled;
-        }
-        // Where the light has got to: a white-hot head.
-        float3 headP = float3(dialAt(fill), DIAL_ZC);
-        col += float3(0.95, 1.0, 0.98) * exp(-length(H - headP) * 26.0) * 1.2 * step(0.0005, fill);
-        // Glass: two highlights and an iridescent rim.
-        float3 Rf = reflect(-L, N);
-        float rv = max(dot(Rf, V), 0.0);
-        col += float3(pow(rv, 70.0) * 1.3 + pow(rv, 12.0) * 0.12);
-        col += mix(float3(0.55, 0.62, 0.66), fzPrismLoop(s + t * 0.02), float3(0.5)) * fres * 0.45;
-        result = float4(orbTone(col), 1.0);
-    } else if (rP < DIAL_PLATE + aa) {
-        float3 col = dialPlate(P.xy, fill, L, aa);
-        float a = 1.0 - smoothstep(DIAL_PLATE - aa, DIAL_PLATE + aa, rP);
-        result = float4(col * a, a);
-    }
-    return result;
-}
-// END SHARED DIAL
 
 #endif
