@@ -13,9 +13,11 @@ struct TodayView: View {
     /// Something covers Today (Coach's sheet, a session): the stage stops drawing.
     var covered = false
     @State private var shownScore = 0
-    /// Read only by the stage and the header, never by this view's body: scrolling then doesn't rebuild
-    /// the cards and the chart on every frame.
-    @State private var scroll = TodayScroll()
+    @State private var touchPoint: CGPoint?
+    @State private var strike = 0
+    @State private var crackle = 0
+    /// How far the page has scrolled (negative while pulled down past the top).
+    @State private var scrollY: CGFloat = 0
 
     /// How charged the orb is for a focus score (0–10).
     static func orbEnergy(_ score: Double) -> Double { min(1, max(0.08, score / 10)) }
@@ -28,10 +30,13 @@ struct TodayView: View {
             let layout = OrbStageLayout(width: outer.size.width, top: top)
             ScrollView {
                 ZStack(alignment: .top) {
-                    TodayStage(layout: layout, scroll: scroll, energy: Self.orbEnergy(model.focusScore), covered: covered)
+                    stage(layout)
                     // Pulled down, the header stays put with the scene (only the cards come down) and
                     // fades as the orb comes closer.
-                    PulledHeader(scroll: scroll, content: header.padding(.top, top + 6))
+                    header
+                        .padding(.top, top + 6)
+                        .offset(y: min(scrollY, 0))
+                        .opacity(1 - 0.85 * Double(pullProgress))
                     content
                         .padding(.top, layout.baseY + 2)
                 }
@@ -40,21 +45,67 @@ struct TodayView: View {
             .scrollIndicators(.hidden)
             .ignoresSafeArea(edges: .top)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                // Held at the bottom of the stage once it's scrolled away: scrolling the cards further
-                // changes nothing on screen but the cards.
+                // Held at the bottom of the stage once it's scrolled away, so scrolling the cards
+                // further doesn't rebuild the page on every frame.
                 min(geometry.contentOffset.y + geometry.contentInsets.top, layout.height)
             } action: { _, y in
-                scroll.update(y)
+                scrollY = y
             }
         }
         .background(Color.black)
         .environment(\.colorScheme, .dark)
         .toolbarColorScheme(.dark, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
+        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.45), trigger: crackle)
+        .sensoryFeedback(.impact(weight: .medium), trigger: strike)
+        .task(id: touchPoint != nil) {
+            while touchPoint != nil, !Task.isCancelled {
+                crackle += 1
+                try? await Task.sleep(for: .milliseconds(110))
+            }
+        }
         .onAppear {
             shownScore = 0
             withAnimation(.smooth(duration: 1.2).delay(0.25)) { shownScore = score }
         }
+    }
+
+    /// How far the page is pulled down past the top, 0 to 1 (eased, like a rubber band).
+    private var pullProgress: CGFloat { 1 - exp(-max(0, -scrollY) / 150) }
+
+    /// The orb's world, with depth as you scroll. Scrolled up, it drifts away at half speed (its camera
+    /// tilting a little) while the cards slide over it. Pulled down, it stays where it is and the
+    /// camera pushes in: the pedestal and the orb grow, the far rocks and the sky barely move, and the
+    /// cards come down to show more of the ground.
+    private func stage(_ layout: OrbStageLayout) -> some View {
+        let look = CGSize(width: 0, height: scrollY > 0 ? -scrollY * 0.12 : 0)
+        return ZStack(alignment: .topLeading) {
+            OrbStage(layout: layout, state: .settled(Self.orbEnergy(model.focusScore)), strike: strike, touch: touchPoint,
+                     look: look, push: 0.28 * pullProgress, paused: covered || scrollY >= layout.height * 0.9)
+            orbTouchArea(layout)
+        }
+        .frame(width: layout.width, height: layout.height, alignment: .topLeading)
+        .coordinateSpace(.named("today"))
+        .offset(y: scrollY < 0 ? scrollY : scrollY * 0.5)
+    }
+
+    /// Touch the orb: a strike, and the lightning follows your finger while you hold it.
+    private func orbTouchArea(_ layout: OrbStageLayout) -> some View {
+        Circle()
+            .fill(.clear)
+            .contentShape(Circle())
+            .frame(width: layout.sphereRadius * 2.4, height: layout.sphereRadius * 2.4)
+            .position(layout.orbCenter)
+            .frame(width: layout.width, height: layout.height)
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .named("today"))
+                    .onChanged { value in
+                        if touchPoint == nil { strike += 1 }
+                        touchPoint = value.location
+                    }
+                    .onEnded { _ in touchPoint = nil }
+            )
+            .accessibilityHidden(true)
     }
 
     // MARK: Header
@@ -162,14 +213,10 @@ struct TodayView: View {
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
                         Capsule().fill(.white.opacity(0.1))
-                        // Its glow is a wider faint capsule, not a shadow (a blur pass as it scrolls).
-                        Capsule()
-                            .fill(Color.fzMint.opacity(0.25))
-                            .frame(width: max(4, proxy.size.width * min(1, model.goalProgress)) + 6, height: 10)
-                            .offset(x: -3)
                         Capsule()
                             .fill(Color.fzMint)
                             .frame(width: max(4, proxy.size.width * min(1, model.goalProgress)))
+                            .shadow(color: Color.fzMint.opacity(0.6), radius: 5)
                     }
                 }
                 .frame(width: 84, height: 4)
@@ -299,92 +346,6 @@ struct TodayView: View {
             .fzEdgeLight(cornerRadius: 22)
             .riseIn(delay: 0.55)
         }
-    }
-}
-
-/// How far Today has scrolled (negative while pulled down past the top), outside the view's own state.
-@MainActor
-@Observable
-final class TodayScroll {
-    private(set) var y: CGFloat = 0
-    /// Only what the header needs: how far it's pulled down (0 while scrolling up), so scrolling the
-    /// page normally doesn't touch the header at all.
-    private(set) var pulled: CGFloat = 0
-
-    func update(_ value: CGFloat) {
-        if y != value { y = value }
-        let down = min(value, 0)
-        if pulled != down { pulled = down }
-    }
-
-    /// How far the page is pulled down past the top, 0 to 1 (eased, like a rubber band).
-    static func pull(_ pulled: CGFloat) -> CGFloat { 1 - exp(-max(0, -pulled) / 150) }
-}
-
-/// The header, held in place while the page is pulled down and fading as the orb comes closer.
-private struct PulledHeader<Content: View>: View {
-    let scroll: TodayScroll
-    let content: Content
-
-    var body: some View {
-        let pulled = scroll.pulled
-        content
-            .offset(y: pulled)
-            .opacity(1 - 0.85 * Double(TodayScroll.pull(pulled)))
-    }
-}
-
-/// The orb's world, with depth as you scroll: the only part of Today that changes while you scroll or
-/// touch the orb. Scrolled up, it drifts away at half speed (its camera tilting a little) while the
-/// cards slide over it. Pulled down, it stays where it is and the camera pushes in: the pedestal and
-/// the orb grow, the far rocks and the sky barely move, and the cards come down to show more ground.
-private struct TodayStage: View {
-    let layout: OrbStageLayout
-    let scroll: TodayScroll
-    let energy: Double
-    let covered: Bool
-    @State private var touchPoint: CGPoint?
-    @State private var strike = 0
-    @State private var crackle = 0
-
-    var body: some View {
-        let y = scroll.y
-        let look = CGSize(width: 0, height: y > 0 ? -y * 0.12 : 0)
-        ZStack(alignment: .topLeading) {
-            OrbStage(layout: layout, state: .settled(energy), strike: strike, touch: touchPoint,
-                     look: look, push: 0.28 * TodayScroll.pull(y), paused: covered || y >= layout.height * 0.9)
-            touchArea
-        }
-        .frame(width: layout.width, height: layout.height, alignment: .topLeading)
-        .coordinateSpace(.named("today"))
-        .offset(y: y < 0 ? y : y * 0.5)
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.45), trigger: crackle)
-        .sensoryFeedback(.impact(weight: .medium), trigger: strike)
-        .task(id: touchPoint != nil) {
-            while touchPoint != nil, !Task.isCancelled {
-                crackle += 1
-                try? await Task.sleep(for: .milliseconds(110))
-            }
-        }
-    }
-
-    /// Touch the orb: a strike, and the lightning follows your finger while you hold it.
-    private var touchArea: some View {
-        Circle()
-            .fill(.clear)
-            .contentShape(Circle())
-            .frame(width: layout.sphereRadius * 2.4, height: layout.sphereRadius * 2.4)
-            .position(layout.orbCenter)
-            .frame(width: layout.width, height: layout.height)
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .named("today"))
-                    .onChanged { value in
-                        if touchPoint == nil { strike += 1 }
-                        touchPoint = value.location
-                    }
-                    .onEnded { _ in touchPoint = nil }
-            )
-            .accessibilityHidden(true)
     }
 }
 

@@ -11,7 +11,7 @@ struct CustomizeView: View {
         @Bindable var model = model
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
-                section("Session background", detail: "The lighthouse, or a place you love. Your photo stays on this device.") {
+                section("Session background", detail: "A scene, or a place you love. Your photo stays on this device.") {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 12) {
                         Button { withAnimation(.smooth) { model.sessionBackground = .lighthouse } } label: {
                             tile(selected: model.sessionBackground == .lighthouse, title: "Lighthouse") {
@@ -59,7 +59,7 @@ struct CustomizeView: View {
                     .animation(.smooth, value: model.timerStyle)
                 }
 
-                section("Lamp", detail: "The colour of the lighthouse's light. Everything else stays black, bone and white.") {
+                section("Highlight", detail: "The colour of highlights around the app. Everything else stays black, bone and white.") {
                     HStack(spacing: 18) {
                         ForEach(AccentLight.allCases) { light in
                             let picked = AccentStore.shared.light == light

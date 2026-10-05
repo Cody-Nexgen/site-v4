@@ -1,4 +1,3 @@
-import FamilyControls
 import SwiftUI
 
 /// The running session (spec §4.7): your photo or a scene fills the top, blurring progressively
@@ -9,7 +8,6 @@ struct ActiveSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var editing = false
     @State private var editingBreak = false
-    @State private var choosingBreak = false
     @State private var customizing = false
 
     var body: some View {
@@ -40,16 +38,6 @@ struct ActiveSessionView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $editing) { EditSessionSheet().environment(model).presentationDetents([.medium]) }
         .sheet(isPresented: $editingBreak) { BreakSheet().environment(model).presentationDetents([.height(340)]) }
-        .sheet(isPresented: $choosingBreak) {
-            BreakAppsSheet { everything, picks in
-                choosingBreak = false
-                withAnimation(.spring(duration: 0.6)) { model.takeBreak(openingAll: everything, picks: picks) }
-            }
-            .environment(model)
-            .presentationDetents([.height(560)])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(32)
-        }
         .sheet(isPresented: $customizing) { NavigationStack { CustomizeView() }.environment(model) }
     }
 
@@ -141,12 +129,7 @@ struct ActiveSessionView: View {
 
             if session.difficulty != .lockedIn {
                 HoldButton(title: "Hold for a break", holdingTitle: "Okay, breathe…", duration: session.difficulty == .easy ? 0.5 : 1.2) {
-                    // With real locks, it asks what the break is for: everything, or just a few apps.
-                    if model.breakAsksWhichApps {
-                        choosingBreak = true
-                    } else {
-                        withAnimation(.spring(duration: 0.6)) { model.takeBreak() }
-                    }
+                    withAnimation(.spring(duration: 0.6)) { model.takeBreak() }
                 }
                 .padding(.top, 20)
                 Button("End early", action: endEarly)
@@ -184,34 +167,15 @@ struct ActiveSessionView: View {
                 }
             }
             .frame(width: 220, height: 220)
-            breakLine(session)
+            Text("Stretch, drink some water, look outside.\nYour apps stay blocked.")
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.7))
             Button("Back to focus") { withAnimation(.smooth) { model.endBreak() } }
                 .buttonStyle(.beam)
         }
         .padding(.horizontal, 22)
         .padding(.bottom, 30)
-    }
-
-    /// What the break opened, and until when.
-    @ViewBuilder
-    private func breakLine(_ session: FocusSession) -> some View {
-        let until = (session.breakStartedAt ?? .now).addingTimeInterval(session.breakLength)
-            .formatted(date: .omitted, time: .shortened)
-        Group {
-            if !model.breakAsksWhichApps {
-                Text("Stretch, drink some water, look outside.")
-            } else if let open = model.breakApps {
-                VStack(spacing: 10) {
-                    PickedApps(selection: open, size: 26)
-                    Text("Open until \(until). Everything else stays locked.")
-                }
-            } else {
-                Text("Everything's open until \(until).\nThen it all locks again, even if you're not here.")
-            }
-        }
-        .font(.subheadline)
-        .multilineTextAlignment(.center)
-        .foregroundStyle(.white.opacity(0.7))
     }
 
     private func card<Content: View>(title: String, action: @escaping () -> Void, @ViewBuilder content: () -> Content) -> some View {
@@ -389,156 +353,6 @@ private struct EditSessionSheet: View {
     }
 }
 
-/// Before a break: open everything, or just a few apps? It remembers what you picked last time, and
-/// the apps lock again when the break ends, even with FocuzNow closed.
-private struct BreakAppsSheet: View {
-    let start: (_ everything: Bool, _ picks: FamilyActivitySelection) -> Void
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var everything = true
-    @State private var picks = FamilyActivitySelection()
-    @State private var picking = false
-
-    private var picked: Int { BlockList.count(picks) }
-
-    var body: some View {
-        let minutes = Int((model.session?.breakLength ?? 300) / 60)
-        VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: "cup.and.saucer")
-                .font(.system(size: 21, weight: .medium))
-                .foregroundStyle(Color.fzMint)
-                .frame(width: 48, height: 48)
-                .background(Circle().fill(Color.fzMint.opacity(0.12)))
-                .overlay(Circle().strokeBorder(Color.fzMint.opacity(0.25)))
-            Text("Break time. What's it for?")
-                .font(.fzDisplay(25, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.top, 16)
-            Text("\(minutes) minutes. Then everything locks again, even if you're off in another app.")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.6))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 4)
-
-            VStack(spacing: 10) {
-                option(selected: everything, title: "Everything", detail: "All \(BlockList.count(model.selection)) on your block list open up.") {
-                    everything = true
-                }
-                option(selected: !everything, title: "Just a few apps",
-                       detail: picked == 0 ? "Pick the ones you need. The rest stay locked." : "The rest stay locked.") {
-                    everything = false
-                    if picked == 0 { picking = true }
-                } extra: {
-                    if !everything && picked > 0 {
-                        HStack {
-                            PickedApps(selection: picks, size: 24)
-                            Spacer()
-                            Button("Change") { picking = true }
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Color.fzMint)
-                        }
-                        .padding(.top, 12)
-                    }
-                }
-            }
-            .padding(.top, 22)
-
-            Spacer(minLength: 16)
-            Button {
-                start(everything, picks)
-            } label: {
-                Label(everything ? "Open everything" : picked == 1 ? "Open 1 app" : "Open \(picked) apps", systemImage: "cup.and.saucer.fill")
-            }
-            .buttonStyle(FZPrimaryButtonStyle(height: 56))
-            .disabled(!everything && picked == 0)
-            Button("Never mind") { dismiss() }
-                .buttonStyle(.ghost)
-                .frame(maxWidth: .infinity)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 28)
-        .padding(.bottom, 8)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color(hex: 0x0B0C0E))
-        .environment(\.colorScheme, .dark)
-        .familyActivityPicker(isPresented: $picking, selection: $picks)
-        .onAppear {
-            everything = model.breakOpensAll
-            picks = model.breakPicks
-        }
-        .onChange(of: picking) { _, open in
-            // Closed the picker without picking anything: back to everything.
-            if !open && picked == 0 { everything = true }
-        }
-        .animation(.snappy(duration: 0.25), value: everything)
-        .animation(.snappy(duration: 0.25), value: picked)
-        .sensoryFeedback(.selection, trigger: everything)
-    }
-
-    /// A choice: the row picks it; anything under it (the picked apps, Change) is its own button.
-    private func option<Extra: View>(selected: Bool, title: String, detail: String, action: @escaping () -> Void,
-                                     @ViewBuilder extra: () -> Extra = { EmptyView() }) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: action) {
-                HStack(spacing: 14) {
-                    // A little orb: lit when it's the one.
-                    Circle()
-                        .fill(selected ? Color.fzMint : .clear)
-                        .frame(width: 12, height: 12)
-                        .padding(5)
-                        .overlay(Circle().strokeBorder(selected ? Color.fzMint : .white.opacity(0.3), lineWidth: 1.5))
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(title)
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.white)
-                        Text(detail)
-                            .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.55))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            extra()
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.white.opacity(selected ? 0.08 : 0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .strokeBorder(selected ? Color.fzMint.opacity(0.45) : .white.opacity(0.1)))
-    }
-}
-
-/// The apps (and categories and sites) in a selection, as their icons in a row, "+3" past six.
-private struct PickedApps: View {
-    let selection: FamilyActivitySelection
-    var size: CGFloat = 24
-
-    var body: some View {
-        let apps = Array(selection.applicationTokens)
-        let categories = Array(selection.categoryTokens)
-        let shownApps = Array(apps.prefix(6))
-        let shownCategories = Array(categories.prefix(max(0, 6 - shownApps.count)))
-        let more = BlockList.count(selection) - shownApps.count - shownCategories.count
-        HStack(spacing: 6) {
-            ForEach(shownApps, id: \.self) { token in
-                Label(token).labelStyle(.iconOnly).font(.system(size: size))
-            }
-            ForEach(shownCategories, id: \.self) { token in
-                Label(token).labelStyle(.iconOnly).font(.system(size: size))
-            }
-            if more > 0 {
-                Text("+\(more)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.6))
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 private struct BreakSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -592,7 +406,7 @@ struct SessionCompleteView: View {
                     .foregroundStyle(.white)
                     .contentTransition(.numericText(value: Double(shownMinutes)))
                     .riseIn(delay: 0.5)
-                Text("of \(result.title.lowercased()). Your orb charged the whole way.")
+                Text("of \(result.title.lowercased()). The lamp stayed on the whole time.")
                     .font(.title3.weight(.medium))
                     .foregroundStyle(.white.opacity(0.72))
                     .padding(.top, 4)

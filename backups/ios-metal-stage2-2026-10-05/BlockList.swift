@@ -17,8 +17,6 @@ extension DeviceActivityName {
     static let dailyBlock = Self("dailyBlock")
     /// A running session's end, so its shields come off on time with the app closed.
     static let sessionEnd = Self("sessionEnd")
-    /// A break's end, so the apps it opened lock again on time: you leave the app to use them.
-    static let breakEnd = Self("breakEnd")
 }
 
 /// What gets locked: the apps, categories and sites picked in the FamilyActivityPicker.
@@ -50,25 +48,23 @@ enum BlockList {
         store.shield.webDomainCategories = selection.categoryTokens.isEmpty ? nil : .specific(selection.categoryTokens)
     }
 
-    /// Locks `selection` in `store` except what a break opens (`open`). Apps and sites picked one by
-    /// one simply come off the list; an app inside a locked category stays open as the category's
-    /// exception.
-    static func shield(_ store: ManagedSettingsStore, with selection: FamilyActivitySelection, except open: FamilyActivitySelection) {
-        let apps = selection.applicationTokens.subtracting(open.applicationTokens)
-        let categories = selection.categoryTokens.subtracting(open.categoryTokens)
-        let sites = selection.webDomainTokens.subtracting(open.webDomainTokens)
-        store.shield.applications = apps.isEmpty ? nil : apps
-        store.shield.applicationCategories = categories.isEmpty ? nil : .specific(categories, except: open.applicationTokens)
-        store.shield.webDomains = sites.isEmpty ? nil : sites
-        store.shield.webDomainCategories = categories.isEmpty ? nil : .specific(categories, except: open.webDomainTokens)
-    }
-
     // MARK: A running session's end
 
     /// The app locks apps when a session starts, but it may not be running when the session ends.
     /// This asks Screen Time to wake the monitor at `end`, which unlocks them (`intervalDidEnd`).
+    /// Screen Time needs an interval of at least 15 minutes, so a short session's interval simply
+    /// starts in the past.
     static func scheduleSessionEnd(_ end: Date) {
-        schedule(.sessionEnd, endingAt: end)
+        let start = min(Date.now, end.addingTimeInterval(-16 * 60))
+        let fields: Set<Calendar.Component> = [.year, .month, .day, .hour, .minute, .second]
+        let schedule = DeviceActivitySchedule(
+            intervalStart: Calendar.current.dateComponents(fields, from: start),
+            intervalEnd: Calendar.current.dateComponents(fields, from: end),
+            repeats: false
+        )
+        let center = DeviceActivityCenter()
+        center.stopMonitoring([.sessionEnd])
+        try? center.startMonitoring(.sessionEnd, during: schedule)
         defaults.set(end, forKey: sessionEndKey)
     }
 
@@ -80,56 +76,6 @@ enum BlockList {
     /// When the running session ends, for the shield's "It's back at 3:45 PM." The shield extension
     /// reads the same App Group key (it doesn't compile this file).
     static let sessionEndKey = "sessionEnd"
-
-    static var sessionEnd: Date? { defaults.object(forKey: sessionEndKey) as? Date }
-
-    /// Wakes the monitor at `end` (`intervalDidEnd`). Screen Time needs an interval of at least 15
-    /// minutes, so a short one simply starts in the past.
-    private static func schedule(_ name: DeviceActivityName, endingAt end: Date) {
-        let start = min(Date.now, end.addingTimeInterval(-16 * 60))
-        let fields: Set<Calendar.Component> = [.year, .month, .day, .hour, .minute, .second]
-        let schedule = DeviceActivitySchedule(
-            intervalStart: Calendar.current.dateComponents(fields, from: start),
-            intervalEnd: Calendar.current.dateComponents(fields, from: end),
-            repeats: false
-        )
-        let center = DeviceActivityCenter()
-        center.stopMonitoring([name])
-        try? center.startMonitoring(name, during: schedule)
-    }
-
-    // MARK: Breaks
-
-    /// You take a break to use the apps, so the app is usually closed when it ends: the monitor locks
-    /// them again at `end`.
-    static func scheduleBreakEnd(_ end: Date) {
-        schedule(.breakEnd, endingAt: end)
-    }
-
-    static func cancelBreakEnd() {
-        DeviceActivityCenter().stopMonitoring([.breakEnd])
-    }
-
-    private static let breakAllKey = "breakOpensAll"
-    private static let breakPicksKey = "breakPicks"
-
-    /// What a break opens, remembered for the next one: everything on the block list, or only the
-    /// apps picked (`breakPicks`).
-    static var breakOpensAll: Bool {
-        get { defaults.object(forKey: breakAllKey) as? Bool ?? true }
-        set { defaults.set(newValue, forKey: breakAllKey) }
-    }
-
-    static var breakPicks: FamilyActivitySelection {
-        get {
-            guard let data = defaults.data(forKey: breakPicksKey),
-                  let picks = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) else { return FamilyActivitySelection() }
-            return picks
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) { defaults.set(data, forKey: breakPicksKey) }
-        }
-    }
 
     // MARK: The daily block
 

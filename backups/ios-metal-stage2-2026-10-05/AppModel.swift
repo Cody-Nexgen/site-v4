@@ -53,14 +53,6 @@ final class AppModel {
             if protections.uninstallProtection != oldValue.uninstallProtection { Protections.updateRemoval() }
         }
     }
-    /// What a break opens, remembered for the next one: everything on the block list, or only
-    /// `breakPicks`.
-    var breakOpensAll = BlockList.breakOpensAll {
-        didSet { BlockList.breakOpensAll = breakOpensAll }
-    }
-    var breakPicks = BlockList.breakPicks {
-        didSet { BlockList.breakPicks = breakPicks }
-    }
     var blockedApps = Array(DistractionApp.samples.prefix(5))
     var session: FocusSession?
     var showSession = false
@@ -137,14 +129,6 @@ final class AppModel {
     var selectedPreset: FocusPreset { presets.first { $0.id == selectedPresetID } ?? presets[0] }
     var blockedCount: Int { max(blockedApps.count, selection.applicationTokens.count + selection.categoryTokens.count) }
 
-    /// Whether a break asks what it's for: only when Screen Time really locks something.
-    var breakAsksWhichApps: Bool { LiveFocus.screenTimeApproved && BlockList.count(selection) > 0 }
-
-    /// What a break opens when it's only some apps (nil: everything).
-    var breakApps: FamilyActivitySelection? {
-        breakOpensAll || BlockList.count(breakPicks) == 0 ? nil : breakPicks
-    }
-
     // MARK: Sessions
 
     func choose(_ preset: FocusPreset) {
@@ -180,7 +164,7 @@ final class AppModel {
         guard var current = session else { return }
         current.duration += TimeInterval(minutes * 60)
         session = current
-        LiveFocus.changed(current, selection: selection, breakApps: breakApps)
+        LiveFocus.changed(current, selection: selection)
     }
 
     func setBreakLength(minutes: Int) {
@@ -235,20 +219,16 @@ final class AppModel {
         if let jpeg = image.jpegData(compressionQuality: 0.85) { try? jpeg.write(to: Self.photoURL, options: .atomic) }
     }
 
-    /// A break that opens everything (`openingAll`), or only `picks`; both are remembered for next time.
-    func takeBreak(openingAll: Bool = true, picks: FamilyActivitySelection? = nil) {
+    func takeBreak() {
         guard var current = session, current.breakStartedAt == nil, current.difficulty != .lockedIn else { return }
-        breakOpensAll = openingAll
-        if let picks { breakPicks = picks }
         current.breakStartedAt = .now
         session = current
-        LiveFocus.changed(current, selection: selection, breakApps: breakApps)
+        LiveFocus.changed(current, selection: selection)
     }
 
     func endBreak() {
         guard var current = session, let started = current.breakStartedAt else { return }
-        // No more than the break: with the app closed, it only notices when you're back.
-        current.pausedTotal += min(Date.now.timeIntervalSince(started), current.breakLength)
+        current.pausedTotal += Date.now.timeIntervalSince(started)
         current.breakStartedAt = nil
         session = current
         LiveFocus.changed(current, selection: selection)
@@ -324,7 +304,7 @@ final class AppModel {
         EmergencyPass.relockIfDue()
         guard LiveFocus.screenTimeApproved else { return }
         if EmergencyPass.activeUntil == nil {
-            if let session { LiveFocus.changed(session, selection: selection, breakApps: breakApps) }
+            if let session, session.breakStartedAt == nil { LiveFocus.changed(session, selection: selection) }
             if let window = BlockList.dailyWindow {
                 try? BlockList.scheduleDaily(window)
                 if window.contains(.now) { Protections.lock(ManagedSettingsStore(named: .daily), with: selection) }

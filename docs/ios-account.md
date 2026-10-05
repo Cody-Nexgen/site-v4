@@ -67,9 +67,10 @@ up in `backups/ios-account-2026-10-04/`.
 | activity `autofocus` | all day, repeating, with the `distracted` threshold event |
 | activity `autofocusEnd` | the 15-minute autofocus lock ending |
 | activity `emergencyEnd` | an emergency pass ending (started 16 min in the past: Screen Time needs 15) |
+| activity `breakEnd` | a session's break ending: the monitor locks the session's apps again (`BlockList.swift`) |
 
 The monitor (`Extensions/FocusMonitor`) handles `eventDidReachThreshold` (autofocus steps in) and the
-ends above. Apple limits a person to 20 monitored activities; FocuzNow uses at most 5.
+ends above. Apple limits a person to 20 monitored activities; FocuzNow uses at most 6.
 
 ## Not airtight (Apple's limits)
 - Anyone can switch FocuzNow off in Settings → Screen Time → Apps with Screen Time access, which removes

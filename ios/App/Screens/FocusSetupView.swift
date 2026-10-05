@@ -108,7 +108,7 @@ struct FocusSetupView: View {
         .background { SkyBackground(mood: .dusk) }
         .overlay(alignment: .bottom) {
             if model.session == nil {
-                HoldButton(title: "Hold to start \(GoalDial.format(model.sessionMinutes))", holdingTitle: "Lighting the lamp…", symbol: "light.beacon.max", duration: 0.9) {
+                HoldButton(title: "Hold to start \(GoalDial.format(model.sessionMinutes))", holdingTitle: "Charging your orb…", symbol: "bolt.fill", duration: 0.9) {
                     model.startSession()
                 }
                 .frame(maxWidth: 420)

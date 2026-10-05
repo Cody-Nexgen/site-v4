@@ -406,7 +406,6 @@ struct DeveloperModePage: View {
     @AppStorage("devMode") private var devMode = false
     @AppStorage("onboarded") private var onboarded = true
     @AppStorage("onboardingStep") private var onboardingStep = 0
-    @AppStorage("showFrameRate") private var showFrameRate = false
     @State private var sent = 0
 
     var body: some View {
@@ -421,10 +420,6 @@ struct DeveloperModePage: View {
                     NavigationLink { DeveloperView() } label: {
                         AccountRow(symbol: "wrench.and.screwdriver", title: "Developer tools", detail: "Permissions, Live Activity, Screen Time, diagnostics.")
                     }
-                    AccountDivider()
-                    AccountToggleRow(symbol: "speedometer", title: "Show frame rate",
-                                     detail: "Frames a second at the top of the screen, and how long the orb's world takes to draw. Smooth is 60.",
-                                     isOn: $showFrameRate)
                     AccountDivider()
                     Button {
                         onboardingStep = 0
@@ -443,7 +438,6 @@ struct DeveloperModePage: View {
             }
         }
         .animation(.spring(duration: 0.4), value: devMode)
-        .onChange(of: devMode) { _, on in if !on { showFrameRate = false } }
         .sensoryFeedback(.success, trigger: sent)
     }
 }

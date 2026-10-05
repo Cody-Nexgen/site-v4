@@ -76,7 +76,7 @@ move) renders in a browser: `node ios/Tools/stage-preview/shot.mjs ios/Tools/sta
 Its layout numbers are copied from `OrbStageLayout` and `FloatingRock`: change them in both places.
 
 Just the orb:
-The parts of `OrbShared.h` between `BEGIN SHARED ORB/WORLD` and `END SHARED ORB/WORLD` only use code
+The parts of `OrbShared.h` between `BEGIN SHARED ORB/WORLD/STAGE` and `END SHARED ORB/WORLD/STAGE` only use code
 Metal and GLSL both accept, so they can be rendered in a browser:
 
 ```
@@ -86,7 +86,7 @@ node ios/Tools/render-orb.mjs '[[0.12,3],[0.5,8],[1,14]]' 420 <out dir>
 Each `[energy, seconds]` pair becomes a PNG. It uses the global Playwright and the pre-installed Chromium.
 When editing the shared part: no `fmod`/`mod`, no `saturate`, matching argument types (`float3(t)` in
 `mix`, not a bare `t`), no program-scope constants (use `#define`), and no GLSL keywords as names
-(`out`, `in`, `sample`, `smooth`, `flat`).
+(`out`, `in`, `sample`, `smooth`, `flat`, and `half`, a type in Metal).
 
 ## Test on the iPhone
 1. Pull, `cd ios && xcodegen`, build. Settings → Replay the intro (or delete the app).

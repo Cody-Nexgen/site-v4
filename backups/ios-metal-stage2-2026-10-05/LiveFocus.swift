@@ -30,28 +30,12 @@ enum LiveFocus {
         )
     }
 
-    /// After a break starts or ends, or the session is extended. A break opens everything, or only
-    /// `breakApps`; the monitor locks them again when it ends, since you're usually off using them.
-    static func changed(_ session: FocusSession, selection: FamilyActivitySelection, breakApps: FamilyActivitySelection? = nil) {
-        if let breakStart = session.breakStartedAt {
-            if screenTimeApproved, let breakApps {
-                Protections.lock(store, with: selection, except: breakApps)
-            } else {
-                store.clearAllSettings()
-            }
-            if screenTimeApproved {
-                BlockList.scheduleBreakEnd(breakStart.addingTimeInterval(session.breakLength))
-                // The clock stops for the break, so the session ends that much later.
-                BlockList.scheduleSessionEnd(session.end.addingTimeInterval(session.breakLength))
-            }
+    /// After a break starts or ends, or the session is extended. Apps unlock during a break.
+    static func changed(_ session: FocusSession, selection: FamilyActivitySelection) {
+        if session.breakStartedAt != nil {
+            store.clearAllSettings()
         } else if screenTimeApproved {
-            BlockList.cancelBreakEnd()
-            // An emergency pass running: it locks the session again when it's over.
-            if EmergencyPass.activeUntil != nil {
-                EmergencyPass.lockWhenOver("focus")
-            } else {
-                Protections.lock(store, with: selection)
-            }
+            Protections.lock(store, with: selection)
             BlockList.scheduleSessionEnd(session.end)
         }
         let content = ActivityContent(state: state(for: session, locked: locked(selection), at: .now), staleDate: session.end.addingTimeInterval(60))
@@ -65,7 +49,6 @@ enum LiveFocus {
     static func ended(minutes: Int) {
         store.clearAllSettings()
         BlockList.cancelSessionEnd()
-        BlockList.cancelBreakEnd()
         let state = FocusActivityAttributes.ContentState(phase: .done, start: .now, end: .now, locked: 0, minutes: minutes)
         let content = ActivityContent(state: state, staleDate: nil)
         let running = Activity<FocusActivityAttributes>.activities

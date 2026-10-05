@@ -89,14 +89,25 @@ ticks that speed up.
 
 **Keeping it smooth (2026-10-05):** the stage was redrawing about twenty offscreen passes (blurs,
 masks, blended layers, SwiftUI shader effects) 120 times a second, and the owner saw 4 fps while
-scrolling; after a first round (below) it was still laggy. So the heavy part now draws in **one Metal
-pass** (`Design/StageView.metal` + `StageMetalView.swift`, like the lighthouse): the photo lit by the
-orb, the rocks, the world in the glass and the orb, at 2x instead of 3x, driven by the stage's own
-timeline. It uses the same shader code as before (`Design/OrbShared.h`, which the browser previews
-read too); if the pass can't start (`StageGPU.shared` is nil) the stage draws with the old SwiftUI
-effects. SwiftUI only draws light vector parts over it (the shaft, the ring's glow, the lightning,
-dust) and the sky under it. `node ios/Tools/stage-preview/shot.mjs` with `"METAL": true` renders the
-pass ported line for line, to check it without a Mac.
+scrolling; after two rounds it was still laggy, worse while scrolling. So now the **whole stage is one
+Metal pass that runs itself** (`Design/StageView.metal` + `StageMetalView.swift`, like the
+lighthouse): the sky above the photo and its stars, the photo lit by the orb, the light shaft, the
+ring's glow and strike flash, the rocks, dust, the lightning (bolts are built on the CPU, `OrbStage.arcs`
+/ `.reach`, and handed over as line segments), the world in the glass and the orb, at 2x. The MTKView
+keeps its own 60 fps loop and works out each frame itself (time, tilt, strike, bolts), so SwiftUI does
+**nothing per frame** on Today: it only hands over `StageInputs` when something changes. Only the
+onboarding's extras (the wide shot, the scattered lights, the forming orb's flashes, "touch it") are
+still SwiftUI, and only while they're on screen. The shader code is shared with the browser previews
+(`Design/OrbShared.h`, blocks ORB, WORLD and STAGE); if the pass can't start (`StageGPU.shared` is nil)
+the stage draws with the old SwiftUI views. `node ios/Tools/stage-preview/shot.mjs` with
+`"METAL": true` renders the pass ported line for line (`"STRIKE"`, `"TOUCH"`, `"PUSH"` too).
+
+Today's scroll position lives in `TodayScroll`, an observable only the stage and the header read:
+scrolling used to rebuild Today's whole body every frame (the cards, the chart). Touching the orb only
+rebuilds the stage. **Measure it:** You → Developer mode → **Show frame rate** puts a readout at the
+top (`Design/FrameRateMeter.swift`): the app's frames a second and its worst frame, then the stage's
+own frames, CPU and GPU time per frame. Smooth is 60 fps, a worst frame near 17 ms, and GPU time well
+under 16 ms.
 
 The first round, still in place: 60 fps at most; the stage stops when it's scrolled off screen,
 covered (Coach, a session) or on another tab (`OrbStage.paused`); fades in the shader (`fzPhotoFade`)

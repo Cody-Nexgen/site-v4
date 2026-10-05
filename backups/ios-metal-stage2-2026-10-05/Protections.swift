@@ -59,12 +59,6 @@ struct Protections: Codable, Equatable {
         store.application.denyAppRemoval = current.uninstallProtection ? true : nil
     }
 
-    /// The same, except what a break opens.
-    static func lock(_ store: ManagedSettingsStore, with selection: FamilyActivitySelection, except open: FamilyActivitySelection) {
-        BlockList.shield(store, with: selection, except: open)
-        store.application.denyAppRemoval = current.uninstallProtection ? true : nil
-    }
-
     /// The stores that lock apps (not the filter).
     static let lockStores: [ManagedSettingsStore.Name] = [.focus, .daily, .autofocus]
 
@@ -226,14 +220,6 @@ enum EmergencyPass {
         if unlocked.contains("daily"), let window = BlockList.dailyWindow, window.contains(.now) {
             Protections.lock(ManagedSettingsStore(named: .daily), with: selection)
         }
-    }
-
-    /// Something that should lock again while a pass is running (a break ending): the pass locks it
-    /// when it's over instead of cutting it short.
-    static func lockWhenOver(_ name: String) {
-        var unlocked = (defaults.array(forKey: unlockedKey) as? [String]) ?? []
-        if !unlocked.contains(name) { unlocked.append(name) }
-        defaults.set(unlocked, forKey: unlockedKey)
     }
 
     /// The app's backup for the monitor: relocks once the pass's time has passed.

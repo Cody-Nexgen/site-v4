@@ -288,7 +288,7 @@ struct AccountView: View {
             }
             .disabled(restoring)
             AccountDivider()
-            NavigationLink { AboutView() } label: { AccountRow(symbol: "light.beacon.max", title: "About FocuzNow") }
+            NavigationLink { AboutView() } label: { AccountRow(symbol: "info.circle", title: "About FocuzNow") }
             AccountDivider()
             NavigationLink { SettingsView() } label: { AccountRow(symbol: "slider.horizontal.3", title: "Preferences", detail: "Notifications, haptics, light or dark.") }
             AccountDivider()

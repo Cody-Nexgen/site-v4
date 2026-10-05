@@ -17,15 +17,6 @@ class FocusMonitorExtension: DeviceActivityMonitor {
         case .dailyBlock: ManagedSettingsStore(named: .daily).clearAllSettings()
         // A session ended while the app wasn't running: unlock what it locked.
         case .sessionEnd: ManagedSettingsStore(named: .focus).clearAllSettings()
-        // A break ran out while you were off using the apps it opened: lock the session's apps again
-        // (after an emergency pass, if one is running).
-        case .breakEnd:
-            guard let end = BlockList.sessionEnd, end > .now, let selection = BlockList.load() else { break }
-            if EmergencyPass.activeUntil != nil {
-                EmergencyPass.lockWhenOver("focus")
-            } else {
-                Protections.lock(ManagedSettingsStore(named: .focus), with: selection)
-            }
         // Autofocus's 15 minutes are up.
         case .autofocusEnd: ManagedSettingsStore(named: .autofocus).clearAllSettings()
         // The emergency pass ran out: lock again whatever should be locked.

@@ -242,15 +242,9 @@ struct OrbStage: View, Animatable {
     }
 
     var body: some View {
-        Group {
-            if StageGPU.shared != nil {
-                metalStage
-            } else {
-                // 60 frames a second at most: on a 120 Hz screen the lightning looks the same at half the work.
-                TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused || reduceMotion)) { context in
-                    scene(at: context.date, state)
-                }
-            }
+        // 60 frames a second at most: on a 120 Hz screen the lightning looks the same at half the work.
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused || reduceMotion)) { context in
+            scene(at: context.date, state)
         }
         .frame(width: layout.width, height: layout.height, alignment: .topLeading)
         .onChange(of: strike) { struckAt = .now }
@@ -263,73 +257,25 @@ struct OrbStage: View, Animatable {
         .accessibilityHidden(true)
     }
 
-    /// What changes with the time: the camera, the strike's flash, where the bobbing orb is.
-    private func frame(at now: Date, _ s: OrbStageState) -> StageFrame {
-        StageFrame(layout: layout, state: s, now: now, tilt: tilt.offset, look: look, still: reduceMotion,
-                   struckAt: struckAt, touch: touch)
-    }
-
-    /// With Metal (Today, and the onboarding): one pass draws the whole stage and runs itself at 60
-    /// frames a second, so SwiftUI does nothing per frame. Only the onboarding's extras (the wide shot,
-    /// the scattered lights, the forming orb's flashes, the "touch it" ring) draw in SwiftUI, while
-    /// they're on screen.
-    private var metalStage: some View {
-        let s = state
-        return ZStack(alignment: .topLeading) {
-            if s.dolly < 0.999 {
-                TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused || reduceMotion)) { context in
-                    let f = frame(at: context.date, s)
-                    WideShot(layout: layout, state: s, cam: f.cam, t: f.t)
-                }
-            }
-            StageMetalView(inputs: StageInputs(layout: layout, state: s, push: push, look: look, touch: touch,
-                                               struckAt: struckAt, still: reduceMotion),
-                           tilt: tilt, paused: paused)
-                .frame(width: layout.width, height: layout.height)
-            if s.scatter > 0.01 || (s.spark > 0.001 && s.formed < 0.999) || (s.formed > 0.5 && s.formed < 0.999) || hint {
-                TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused || reduceMotion)) { context in
-                    extras(at: context.date, s)
-                }
-            }
-        }
-    }
-
-    /// The onboarding's extras, over the Metal pass.
-    private func extras(at now: Date, _ s: OrbStageState) -> some View {
-        let f = frame(at: now, s)
-        return ZStack(alignment: .topLeading) {
-            if s.scatter > 0.01 {
-                Canvas { g, _ in
-                    drawLights(&g, t: f.t, now: now, state: s)
-                }
-                .frame(width: layout.width, height: max(layout.height, layout.screenHeight))
-                .blendMode(.plusLighter)
-            }
-            Group {
-                if s.spark > 0.001 && s.formed < 0.999 {
-                    hotPoint(s, at: f.orbAt)
-                }
-                if s.formed > 0.5 && s.formed < 0.999 {
-                    ripple(s, at: f.orbAt)
-                }
-                if hint {
-                    hintRing(t: f.t, at: f.orbAt)
-                }
-            }
-            .scaleEffect(1 + push, anchor: pushAnchor)
-        }
-        .frame(width: layout.width, height: layout.height, alignment: .topLeading)
-    }
-
-    /// One frame of the stage drawn by SwiftUI (when the Metal pass can't start).
+    /// One frame of the stage.
     private func scene(at now: Date, _ s: OrbStageState) -> some View {
-        let f = frame(at: now, s)
-        let t = f.t, cam = f.cam, boost = f.boost, flash = f.flash, pedShift = f.pedShift, orbAt = f.orbAt
+        // Absolute time, so a second stage (Today, after the onboarding) picks up where this was.
+        let t = CGFloat(reduceMotion ? 0 : now.timeIntervalSinceReferenceDate)
+        let cam = camera(t)
+        let boost = CGFloat(max(0, 1 - now.timeIntervalSince(struckAt) / 0.55))
+        let flash: CGFloat = max(boost, touch == nil ? 0 : 0.3 + 0.2 * sin(t * 37))
+        let pedShift = cam * OrbStageLayout.pedestalDepth
+        let bob: CGFloat = sin(t * 1.15) * 3 * CGFloat(s.formed)
+        let lead: CGFloat = OrbStageLayout.pedestalDepth + 0.08
+        let orbAt = CGPoint(x: layout.orbCenter.x + cam.width * lead, y: layout.orbCenter.y + bob + cam.height * lead)
         // The pedestal's lights and the orb only once the camera has arrived.
-        let close = Double(f.close)
+        let close = Double(fzSmooth(0.9, 1.0, CGFloat(s.dolly)))
         // The push grows everything at the pedestal's depth from the middle of its top.
         let grow = 1 + push
         let anchor = pushAnchor
+        // The photo, the rocks, the glass and the orb in one Metal pass when it's there; otherwise as
+        // SwiftUI shader effects (the same look, many more passes).
+        let metal = StageGPU.shared != nil
         return ZStack(alignment: .topLeading) {
             if s.dolly < 0.999 {
                 WideShot(layout: layout, state: s, cam: cam, t: t)
@@ -337,10 +283,18 @@ struct OrbStage: View, Animatable {
             SkyAbove(layout: layout, awake: s.awake)
                 .opacity(close * s.scene)
                 .offset(cam * 0.06)
-            StagePhoto(layout: layout, state: s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift,
-                       push: push, pushFrom: pushFrom)
-            NightSky(layout: layout, t: t, cam: cam, awake: s.awake)
-                .opacity(close * s.scene)
+            if metal {
+                NightSky(layout: layout, t: t, cam: cam, awake: s.awake)
+                    .opacity(close * s.scene)
+                StageMetalView(uniforms: stageUniforms(s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift),
+                               rocks: stageRocks(t: t, cam: cam, orbAt: orbAt, s: s, flash: flash))
+                    .frame(width: layout.width, height: layout.height)
+            } else {
+                StagePhoto(layout: layout, state: s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift,
+                           push: push, pushFrom: pushFrom)
+                NightSky(layout: layout, t: t, cam: cam, awake: s.awake)
+                    .opacity(close * s.scene)
+            }
             LightShaft(layout: layout)
                 .opacity(s.beam * (0.4 + 0.6 * s.awake) * close)
                 .offset(cam * 0.1)
@@ -353,22 +307,28 @@ struct OrbStage: View, Animatable {
             .opacity(close)
             .scaleEffect(grow, anchor: anchor)
 
-            rocks(front: false, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
+            if !metal {
+                rocks(front: false, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
+            }
 
             Group {
                 Canvas { g, _ in
                     drawDust(&g, t: t, cam: cam, power: CGFloat(s.beam * close))
-                    drawLightning(&g, Self.arcs(layout, t: t, orbAt: orbAt, ring: layout.ring + pedShift, state: s, boost: boost))
-                    drawLightning(&g, Self.reach(layout, t: t, orbAt: orbAt, touch: touch, state: s))
+                    drawArcs(&g, t: t, orbAt: orbAt, ring: layout.ring + pedShift, state: s, boost: boost)
+                    drawReach(&g, t: t, orbAt: orbAt, state: s)
                 }
                 .blendMode(.plusLighter)
 
-                refraction(s, at: orbAt)
-                orb(s, at: orbAt)
+                if !metal {
+                    refraction(s, at: orbAt)
+                    orb(s, at: orbAt)
+                }
             }
             .scaleEffect(grow, anchor: anchor)
 
-            rocks(front: true, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
+            if !metal {
+                rocks(front: true, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
+            }
 
             if s.scatter > 0.01 {
                 Canvas { g, _ in
@@ -391,6 +351,89 @@ struct OrbStage: View, Animatable {
             }
             .scaleEffect(grow, anchor: anchor)
         }
+    }
+
+    // MARK: The Metal pass's frame
+
+    /// Everything `StageView.metal` needs for this frame: what `StagePhoto`, `refraction` and `orb`
+    /// would have been given.
+    private func stageUniforms(_ s: OrbStageState, t: CGFloat, cam: CGSize, flash: CGFloat, orbAt: CGPoint, pedShift: CGSize) -> StageUniforms {
+        let d = CGFloat(s.dolly)
+        let c = layout.camera(d)
+        let pxScale = layout.scale * c.zoom / layout.dollyZoom
+        let size = CGSize(width: OrbStageLayout.imagePixels.width * pxScale, height: OrbStageLayout.imagePixels.height * pxScale)
+        let origin = CGPoint(x: c.ring.x - OrbStageLayout.ringPixels.x * pxScale, y: c.ring.y - OrbStageLayout.ringPixels.y * pxScale)
+        let ring = layout.ring + pedShift
+        let reveal = fzSmooth(0.45, 0.95, d)
+        // 32-bit floats in the shader: keep time small (it jumps once every 20 minutes).
+        let time = CGFloat(Double(t).truncatingRemainder(dividingBy: 1200))
+        let finger = touch.map { CGPoint(x: $0.x - orbAt.x, y: $0.y - orbAt.y) }
+        let awake = CGFloat(s.awake)
+        var u = StageUniforms()
+        u.view = fzFloat4(0, 0, 0, time)
+        u.photo = fzFloat4(origin.x, origin.y, pxScale, reveal * CGFloat(s.scene))
+        u.fade = fzFloat4(size.width, size.height, layout.fillsWidth ? 0 : 1, size.width * (0.4 + 3 * reveal))
+        u.camera = fzFloat4(cam.width, cam.height, 0, 0)
+        u.state = fzFloat4(CGFloat(s.energy), awake, flash, CGFloat(max(s.formed, s.spark * 0.5)))
+        u.orb = fzFloat4(orbAt.x, orbAt.y, layout.sphereRadius, layout.k)
+        u.ring = fzFloat4(ring.x, ring.y, layout.ringRadii.width, layout.ringRadii.height)
+        u.top = fzFloat4(layout.topRadii.width, layout.topRadii.height, layout.baseY + pedShift.height, layout.horizonY)
+        u.depthPx = fzFloat4(OrbStageLayout.horizonPixels, OrbStageLayout.imagePixels.height, OrbStageLayout.basePixels, 0)
+        u.pedPx = fzFloat4(OrbStageLayout.ringPixels.x, OrbStageLayout.ringPixels.y,
+                           OrbStageLayout.topRadiiPixels.width, OrbStageLayout.topRadiiPixels.height)
+        u.push = fzFloat4(pushFrom.x, pushFrom.y, push, OrbStageLayout.pedestalDepth)
+        u.orbView = fzFloat4(layout.orbViewSize * 1.5, CGFloat(s.formed), CGFloat(s.ring), 0)
+        u.touch = fzFloat4(finger?.x ?? 0, finger?.y ?? 0, finger == nil ? 0 : 1, 0)
+        u.glass = fzFloat4((0.55 + 0.45 * awake) * CGFloat(s.scene), 0.5 + 0.5 * awake, 0, 0)
+        return u
+    }
+
+    /// The rocks for this frame, where `rocks(front:)` would draw them, for the Metal pass.
+    private func stageRocks(t: CGFloat, cam: CGSize, orbAt: CGPoint, s: OrbStageState, flash: CGFloat) -> [StageRock] {
+        guard let gpu = StageGPU.shared else { return [] }
+        let radius = layout.sphereRadius
+        var list: [StageRock] = []
+        for r in FloatingRock.all {
+            let up = fzSmooth(r.from, r.to, CGFloat(s.lift))
+            let opacity = Double(up) * s.scene
+            guard opacity > 0.002 else { continue }
+            let x = layout.orbCenter.x + r.x * radius + cam.width * r.depth
+            let y = layout.orbCenter.y + r.y * radius + sin(t * 0.55 + r.phase) * 0.09 * radius
+                + (1 - up) * 1.4 * radius + cam.height * r.depth
+            let angle = r.sway * sin(t * 0.21 + r.phase) + (1 - up) * 24
+            let index = Int(r.image.dropFirst("OrbRock".count)) ?? 0
+            list.append(stageRock(index, width: r.width * radius, aspect: gpu.rockAspect[index], at: CGPoint(x: x, y: y),
+                                  angle: angle, orbAt: orbAt, s: s, flash: flash, opacity: opacity, blur: r.blur * layout.k,
+                                  zoom: pushZoom(r.depth), front: r.front))
+        }
+        // The pebble going round the orb: behind it, then in front.
+        let a = t * 0.62
+        let up = fzSmooth(0.55, 0.85, CGFloat(s.lift))
+        let opacity = Double(up) * s.scene
+        if opacity > 0.002 {
+            let x = orbAt.x + cos(a) * 1.6 * radius + cam.width * 0.05
+            let y = orbAt.y + sin(a) * 0.32 * radius - 0.1 * radius + cam.height * 0.05
+            list.append(stageRock(5, width: radius * 0.3 * (1 + 0.15 * sin(a)), aspect: gpu.rockAspect[5], at: CGPoint(x: x, y: y),
+                                  angle: a * 20, orbAt: orbAt, s: s, flash: flash, opacity: opacity, blur: 0,
+                                  zoom: 1 + push, front: sin(a) > 0))
+        }
+        return list
+    }
+
+    /// One rock, lit like `lit(...)` lights it, grown by the push from `pushFrom`.
+    private func stageRock(_ index: Int, width: CGFloat, aspect: CGFloat, at p: CGPoint, angle: CGFloat, orbAt: CGPoint,
+                           s: OrbStageState, flash: CGFloat, opacity: Double, blur: CGFloat, zoom: CGFloat, front: Bool) -> StageRock {
+        let dx = orbAt.x - p.x, dy = orbAt.y - p.y
+        let distance = max(hypot(dx, dy), 1)
+        let back = -angle * .pi / 180
+        let toLight = CGPoint(x: (dx * cos(back) - dy * sin(back)) / distance, y: (dx * sin(back) + dy * cos(back)) / distance)
+        let near = distance / layout.sphereRadius
+        let light = CGFloat(s.formed) * (0.25 + 0.85 * CGFloat(s.energy)) / (1 + near * near * 0.25) + flash * 0.5
+        let from = pushFrom
+        return StageRock(center: CGPoint(x: from.x + (p.x - from.x) * zoom, y: from.y + (p.y - from.y) * zoom),
+                         size: CGSize(width: width * zoom, height: width * aspect * zoom), angle: angle, opacity: opacity,
+                         blur: blur, toLight: toLight, light: light, dim: 0.62 + 0.38 * CGFloat(s.awake), front: front,
+                         texture: index)
     }
 
     /// The point the push grows things from (stage points): the middle of the pedestal's top. From
@@ -444,6 +487,14 @@ struct OrbStage: View, Animatable {
                 sphere.position(p)
             }
         }
+    }
+
+    /// The tilt of the phone, plus a slow drift like a camera held by hand.
+    private func camera(_ t: CGFloat) -> CGSize {
+        // The world shader can shift the photo by up to 32 points (its maxSampleOffset).
+        let lookY = min(max(look.height, -14), 14)
+        guard !reduceMotion else { return CGSize(width: 0, height: lookY) }
+        return CGSize(width: tilt.offset.width + 3 * sin(t * 0.13), height: tilt.offset.height + 2 * sin(t * 0.09 + 1) + lookY)
     }
 
     // MARK: The orb forming
@@ -546,23 +597,22 @@ struct OrbStage: View, Animatable {
 
     // MARK: Drawn every frame
 
-    static func hash(_ i: Int, _ k: Int) -> CGFloat {
+    private static func hash(_ i: Int, _ k: Int) -> CGFloat {
         let x = sin(CGFloat(i) * 12.9898 + CGFloat(k) * 78.233) * 43758.5453
         return x - floor(x)
     }
 
     /// Dust drifting up through the light, at different depths: the near specks bigger, softer and
     /// moving more with the camera.
-    static func dust(_ layout: OrbStageLayout, t: CGFloat, cam: CGSize, power: CGFloat) -> [DustSpeck] {
-        guard power > 0.01 else { return [] }
+    private func drawDust(_ g: inout GraphicsContext, t: CGFloat, cam: CGSize, power: CGFloat) {
+        guard power > 0.01 else { return }
         let ring = layout.ring
         let spread = layout.topRadii.width * 1.7
         let top = max(0, layout.imageFrame.minY)
         let bottom = layout.baseY + layout.ringRadii.height * 3
         let span = max(bottom - top, 1)
-        var specks: [DustSpeck] = []
         for i in 0..<44 {
-            let h1 = hash(i, 1), h2 = hash(i, 2), h3 = hash(i, 3), h4 = hash(i, 4), h5 = hash(i, 5)
+            let h1 = Self.hash(i, 1), h2 = Self.hash(i, 2), h3 = Self.hash(i, 3), h4 = Self.hash(i, 4), h5 = Self.hash(i, 5)
             let inBeam = i % 5 != 0
             let depth: CGFloat = 0.1 + 0.9 * h5
             let x0: CGFloat = inBeam ? ring.x + (h1 - 0.5) * spread : h1 * layout.width
@@ -573,20 +623,23 @@ struct OrbStage: View, Animatable {
             let twinkle: CGFloat = 0.5 + 0.5 * sin(t * (1 + 2 * h2) + h3 * 6.3)
             let edge: CGFloat = max(0, min((y - top) / 40, (bottom - y) / 40, 1))
             let alpha: CGFloat = power * (inBeam ? 0.55 : 0.3) * twinkle * edge * (1.15 - 0.6 * depth)
-            if alpha > 0.002 {
-                specks.append(DustSpeck(center: CGPoint(x: x, y: y), size: size, alpha: alpha, soft: depth > 0.75))
+            let rect = CGRect(x: x - size, y: y - size, width: size * 2, height: size * 2)
+            if depth > 0.75 {
+                // Out of focus: a soft disc.
+                g.fill(Path(ellipseIn: rect), with: .radialGradient(
+                    Gradient(colors: [.white.opacity(Double(alpha) * 0.7), .white.opacity(0)]),
+                    center: CGPoint(x: x, y: y), startRadius: 0, endRadius: size))
+            } else {
+                g.fill(Path(ellipseIn: rect.insetBy(dx: size / 2, dy: size / 2)), with: .color(.white.opacity(Double(alpha))))
             }
         }
-        return specks
     }
 
     /// Lightning from the underside of the orb down into the ring: two at first, four when charged,
     /// all four (thicker, brighter) for a moment after a strike. They re-strike 13 times a second.
-    /// Each one lights a soft spot where it touches the ring.
-    static func arcs(_ layout: OrbStageLayout, t: CGFloat, orbAt: CGPoint, ring: CGPoint, state s: OrbStageState,
-                     boost: CGFloat) -> (bolts: [Bolt], spots: [GlowSpot]) {
+    private func drawArcs(_ g: inout GraphicsContext, t: CGFloat, orbAt: CGPoint, ring: CGPoint, state s: OrbStageState, boost: CGFloat) {
         let power = CGFloat(s.arcs)
-        guard power > 0.01 else { return ([], []) }
+        guard power > 0.01 else { return }
         let rr = layout.ringRadii
         let radius: CGFloat = layout.sphereRadius * (0.12 + 0.88 * min(1, CGFloat(s.formed))) * 0.86
         let count = boost > 0.05 ? 4 : 2 + min(2, Int(s.energy * 2.99))
@@ -594,58 +647,79 @@ struct OrbStage: View, Animatable {
         // Degrees, 90 is straight at you: left, right, front left, front right.
         let ringAngles: [CGFloat] = [160, 20, 122, 58]
         let sphereAngles: [CGFloat] = [130, 50, 110, 70]
-        var bolts: [Bolt] = []
-        var spots: [GlowSpot] = []
+        let k = layout.k
         for i in 0..<count {
             let fi = CGFloat(i)
-            let flicker = hash(seed, i + 11)
+            let flicker = Self.hash(seed, i + 11)
             guard boost > 0.05 || flicker > 0.22 else { continue }
             let a: CGFloat = (ringAngles[i] + 7 * sin(t * 0.45 + fi * 1.7)) * .pi / 180
             let end = CGPoint(x: ring.x + rr.width * cos(a), y: ring.y + rr.height * sin(a))
             let b: CGFloat = (sphereAngles[i] + 6 * sin(t * 0.6 + fi)) * .pi / 180
             let begin = CGPoint(x: orbAt.x + radius * cos(b), y: orbAt.y + radius * sin(b))
             let strength: CGFloat = power * (0.6 + 0.4 * flicker) * (1 + 1.2 * boost)
-            bolts.append(bolt(from: begin, to: end, seed: seed &* 7 &+ i, strength: strength, width: 1 + 0.6 * boost))
-            spots.append(GlowSpot(center: end, radius: (9 + 6 * boost) * layout.k * 1.6, alpha: min(1, 0.8 * strength), squash: true))
+            strokeBolt(&g, from: begin, to: end, seed: seed &* 7 &+ i, strength: strength, width: 1 + 0.6 * boost)
+
+            // Where it touches the ring: a soft glow drawn as a gradient (a blurred layer per arc was
+            // up to eight extra passes a frame).
+            let glow: CGFloat = (9 + 6 * boost) * k * 1.6
+            var spot = g
+            spot.translateBy(x: end.x, y: end.y)
+            spot.scaleBy(x: 1, y: 0.5)
+            spot.fill(Path(ellipseIn: CGRect(x: -glow, y: -glow, width: glow * 2, height: glow * 2)),
+                      with: .radialGradient(Gradient(colors: [Color.fzMint.opacity(Double(min(1, 0.8 * strength))), Color.fzMint.opacity(0)]),
+                                            center: .zero, startRadius: 0, endRadius: glow))
         }
-        return (bolts, spots)
     }
 
     /// A finger off the orb: lightning leaves the glass and reaches for it. (On the orb, the lightning
     /// inside bends to it instead: that's in the orb's shader.)
-    static func reach(_ layout: OrbStageLayout, t: CGFloat, orbAt: CGPoint, touch: CGPoint?, state s: OrbStageState) -> (bolts: [Bolt], spots: [GlowSpot]) {
-        guard let touch, s.formed > 0.5 else { return ([], []) }
+    private func drawReach(_ g: inout GraphicsContext, t: CGFloat, orbAt: CGPoint, state s: OrbStageState) {
+        guard let touch, s.formed > 0.5 else { return }
         let dx = touch.x - orbAt.x, dy = touch.y - orbAt.y
+        let distance = hypot(dx, dy)
         let radius = layout.sphereRadius
-        guard hypot(dx, dy) > radius * 0.98 else { return ([], []) }
+        guard distance > radius * 0.98 else { return }
         let toward = atan2(dy, dx)
         let seed = Int(t * 15)
-        var bolts: [Bolt] = []
         for i in 0..<3 {
             let a = toward + (CGFloat(i) - 1) * 0.32
             let begin = CGPoint(x: orbAt.x + cos(a) * radius * 0.97, y: orbAt.y + sin(a) * radius * 0.97)
-            let end = CGPoint(x: touch.x + (hash(seed, i + 51) - 0.5) * 10, y: touch.y + (hash(seed, i + 61) - 0.5) * 10)
-            bolts.append(bolt(from: begin, to: end, seed: seed &* 3 &+ i, strength: 1.3, width: 1.2))
+            let end = CGPoint(x: touch.x + (Self.hash(seed, i + 51) - 0.5) * 10, y: touch.y + (Self.hash(seed, i + 61) - 0.5) * 10)
+            strokeBolt(&g, from: begin, to: end, seed: seed &* 3 &+ i, strength: 1.3, width: 1.2)
         }
-        return (bolts, [GlowSpot(center: touch, radius: 22 * layout.k, alpha: 0.8, squash: false)])
+        let glow = 22 * layout.k
+        g.fill(Path(ellipseIn: CGRect(x: touch.x - glow, y: touch.y - glow, width: glow * 2, height: glow * 2)),
+               with: .radialGradient(Gradient(colors: [Color.fzMint.opacity(0.8), Color.fzMint.opacity(0)]),
+                                     center: touch, startRadius: 0, endRadius: glow))
     }
 
-    /// One bolt: a jagged line, and now and then a short fork off its middle.
-    static func bolt(from begin: CGPoint, to end: CGPoint, seed: Int, strength: CGFloat, width: CGFloat) -> Bolt {
-        let points = jagged(from: begin, to: end, seed: seed, jag: 0.2)
-        var fork: [CGPoint] = []
-        if hash(seed, 31) > 0.4 {
+    private func strokeBolt(_ g: inout GraphicsContext, from begin: CGPoint, to end: CGPoint, seed: Int, strength: CGFloat, width: CGFloat) {
+        let k = layout.k
+        let points = Self.bolt(from: begin, to: end, seed: seed, jag: 0.2)
+        var path = Path()
+        path.addLines(points)
+        // The glow round the bolt: wide faint strokes under the bright core, no blur pass.
+        let glowWidth = (3 + 2 * (width - 1)) * k
+        let round = StrokeStyle(lineWidth: glowWidth * 3, lineCap: .round, lineJoin: .round)
+        g.stroke(path, with: .color(Color.fzMint.opacity(Double(min(1, 0.12 * strength)))), style: round)
+        g.stroke(path, with: .color(Color.fzMint.opacity(Double(min(1, 0.3 * strength)))),
+                 style: StrokeStyle(lineWidth: glowWidth * 1.4, lineCap: .round, lineJoin: .round))
+        g.stroke(path, with: .color(.white.opacity(Double(min(1, 0.95 * strength)))), lineWidth: width * k)
+
+        // A short fork off the middle now and then.
+        if Self.hash(seed, 31) > 0.4 {
             let from = points[points.count / 2]
             let dx = end.x - begin.x, dy = end.y - begin.y
-            let side: CGFloat = hash(seed, 41) > 0.5 ? 1 : -1
+            let side: CGFloat = Self.hash(seed, 41) > 0.5 ? 1 : -1
             let tip = CGPoint(x: from.x + dx * 0.35 - side * dy * 0.25, y: from.y + dy * 0.35 + side * dx * 0.25)
-            fork = jagged(from: from, to: tip, seed: seed &* 5 &+ 3, jag: 0.25)
+            var fork = Path()
+            fork.addLines(Self.bolt(from: from, to: tip, seed: seed &* 5 &+ 3, jag: 0.25))
+            g.stroke(fork, with: .color(.white.opacity(Double(min(1, 0.6 * strength)))), lineWidth: 0.8 * k)
         }
-        return Bolt(points: points, fork: fork, strength: strength, width: width)
     }
 
     /// A jagged line from a to b (midpoint displacement, four levels: 17 points).
-    static func jagged(from a: CGPoint, to b: CGPoint, seed: Int, jag: CGFloat) -> [CGPoint] {
+    private static func bolt(from a: CGPoint, to b: CGPoint, seed: Int, jag: CGFloat) -> [CGPoint] {
         var points = [a, b]
         var amount: CGFloat = hypot(b.x - a.x, b.y - a.y) * jag
         for level in 0..<4 {
@@ -662,52 +736,6 @@ struct OrbStage: View, Animatable {
             amount *= 0.5
         }
         return points
-    }
-
-    // MARK: Drawn by SwiftUI when the Metal pass isn't there
-
-    private func drawDust(_ g: inout GraphicsContext, t: CGFloat, cam: CGSize, power: CGFloat) {
-        for speck in Self.dust(layout, t: t, cam: cam, power: power) {
-            let size = speck.size
-            let rect = CGRect(x: speck.center.x - size, y: speck.center.y - size, width: size * 2, height: size * 2)
-            if speck.soft {
-                // Out of focus: a soft disc.
-                g.fill(Path(ellipseIn: rect), with: .radialGradient(
-                    Gradient(colors: [.white.opacity(Double(speck.alpha) * 0.7), .white.opacity(0)]),
-                    center: speck.center, startRadius: 0, endRadius: size))
-            } else {
-                g.fill(Path(ellipseIn: rect.insetBy(dx: size / 2, dy: size / 2)), with: .color(.white.opacity(Double(speck.alpha))))
-            }
-        }
-    }
-
-    private func drawLightning(_ g: inout GraphicsContext, _ light: (bolts: [Bolt], spots: [GlowSpot])) {
-        let k = layout.k
-        for bolt in light.bolts {
-            var path = Path()
-            path.addLines(bolt.points)
-            // The glow round the bolt: wide faint strokes under the bright core, no blur pass.
-            let glowWidth = (3 + 2 * (bolt.width - 1)) * k
-            g.stroke(path, with: .color(Color.fzMint.opacity(Double(min(1, 0.12 * bolt.strength)))),
-                     style: StrokeStyle(lineWidth: glowWidth * 3, lineCap: .round, lineJoin: .round))
-            g.stroke(path, with: .color(Color.fzMint.opacity(Double(min(1, 0.3 * bolt.strength)))),
-                     style: StrokeStyle(lineWidth: glowWidth * 1.4, lineCap: .round, lineJoin: .round))
-            g.stroke(path, with: .color(.white.opacity(Double(min(1, 0.95 * bolt.strength)))), lineWidth: bolt.width * k)
-            if !bolt.fork.isEmpty {
-                var fork = Path()
-                fork.addLines(bolt.fork)
-                g.stroke(fork, with: .color(.white.opacity(Double(min(1, 0.6 * bolt.strength)))), lineWidth: 0.8 * k)
-            }
-        }
-        for spot in light.spots {
-            var context = g
-            context.translateBy(x: spot.center.x, y: spot.center.y)
-            if spot.squash { context.scaleBy(x: 1, y: 0.5) }
-            let r = spot.radius
-            context.fill(Path(ellipseIn: CGRect(x: -r, y: -r, width: r * 2, height: r * 2)),
-                         with: .radialGradient(Gradient(colors: [Color.fzMint.opacity(Double(spot.alpha)), Color.fzMint.opacity(0)]),
-                                               center: .zero, startRadius: 0, endRadius: r))
-        }
     }
 
     /// Your focus, scattered: little lights across the landscape of the wide shot, flickering. When
@@ -774,7 +802,7 @@ struct OrbStage: View, Animatable {
 }
 
 /// A rock that lifts off the ground and floats near the orb as it charges.
-struct FloatingRock {
+private struct FloatingRock {
     let image: String
     /// Where it floats, in sphere radii from the orb's centre.
     let x: CGFloat

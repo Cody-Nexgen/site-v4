@@ -10,8 +10,6 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("onboarded") private var onboarded = false
     @AppStorage("appearance") private var appearance = "system"
-    /// Developer mode → Show frame rate.
-    @AppStorage("showFrameRate") private var showFrameRate = false
 
     /// Only on launches where you're already set up (the onboarding opens with its own Z).
     @State private var splash = UserDefaults.standard.bool(forKey: "onboarded")
@@ -34,11 +32,6 @@ struct RootView: View {
             if splash {
                 SplashView { splash = false }
                     .zIndex(1)
-            }
-        }
-        .overlay(alignment: .top) {
-            if showFrameRate {
-                FrameRatePill()
             }
         }
         .background(Color.black)

@@ -84,12 +84,12 @@ void main() {
   }
 
   // 1b. The sky above the photo (its top strip carried up the screen).
-  if (close > 0 && !P.METAL) { const cs = layer(1); const gs = cs.getContext('2d'); gs.scale(2, 2); const strip = 24 * L.k; const reach = Math.max(L.fr.y, 0) + 420; const dim = 0.62 + 0.38 * AW;
+  if (close > 0) { const cs = layer(1); const gs = cs.getContext('2d'); gs.scale(2, 2); const strip = 24 * L.k; const reach = Math.max(L.fr.y, 0) + 420; const dim = 0.62 + 0.38 * AW;
     gs.save(); gs.globalAlpha = close * P.SCENE; gs.filter = `blur(${5 * L.k}px) saturate(${0.5 + 0.5 * AW}) brightness(${dim})`;
     gs.drawImage(photo, 0, 0, L.IMG.w, strip / L.scale, L.fr.x + cam[0] * 0.06, L.fr.y + strip - (reach + strip) + cam[1] * 0.06, L.fr.w, reach + strip); gs.restore();
     gs.globalCompositeOperation = 'destination-in'; const gm = gs.createLinearGradient(0, L.fr.y + strip - reach - strip, 0, L.fr.y + strip); gm.addColorStop(0, 'rgba(0,0,0,0.5)'); gm.addColorStop(1, 'rgba(0,0,0,1)'); gs.fillStyle = gm; gs.fillRect(0, 0, W, L.fr.y + strip); }
 
-  // 2*. The Metal pass (StageView.metal), ported line for line: the whole stage in one.
+  // 2*. The Metal pass (StageView.metal), ported line for line: the photo, rocks, glass and orb in one.
   if (P.METAL) { drawMetalPass(photo, rocks); }
   // 2. The stage photo through the world shader.
   const cv = layer(2); if (P.METAL) cv.style.display = 'none'; const gl = cv.getContext('webgl2', {premultipliedAlpha: false});
@@ -127,7 +127,7 @@ void main() {
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 
   // 3. Light shaft, ring, slits.
-  const c3 = layer(3, 1 + PUSH); if (P.METAL) c3.style.display = 'none'; c3.style.mixBlendMode = 'screen'; const g3 = c3.getContext('2d'); g3.scale(2, 2);
+  const c3 = layer(3, 1 + PUSH); c3.style.mixBlendMode = 'screen'; const g3 = c3.getContext('2d'); g3.scale(2, 2);
   const k = L.k, ring = [L.ring[0] + pedShift[0], L.ring[1] + pedShift[1]];
   g3.save(); g3.globalAlpha = P.BEAM * (0.4 + 0.6 * AW) * close; g3.filter = `blur(${26 * k}px)`;
   const gr = g3.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, 'rgba(221,245,230,0.13)'); gr.addColorStop(0.5, 'rgba(221,245,230,0.05)'); gr.addColorStop(1, 'rgba(221,245,230,0.1)');
@@ -174,7 +174,7 @@ void main() {
   rocksLayer(false, 4);
 
   // 5. Dust and arcs.
-  const c5 = layer(5, 1 + PUSH); if (P.METAL) c5.style.display = 'none'; c5.style.mixBlendMode = 'screen'; const g5 = c5.getContext('2d'); g5.scale(2, 2);
+  const c5 = layer(5, 1 + PUSH); c5.style.mixBlendMode = 'screen'; const g5 = c5.getContext('2d'); g5.scale(2, 2);
   const top = Math.max(0, L.fr.y), bottom = L.base + L.rr[1] * 3, span = bottom - top, spread = L.topR[0] * 1.7;
   for (let i = 0; i < 44; i++) { const h1 = hash(i, 1), h2 = hash(i, 2), h3 = hash(i, 3), h4 = hash(i, 4), h5 = hash(i, 5); const inBeam = i % 5 != 0; const depth = 0.1 + 0.9 * h5;
     const x0 = inBeam ? L.ring[0] + (h1 - 0.5) * spread : h1 * W; const rise = h3 * span + T * (4 + 9 * h2); const y = bottom - (rise % span) + cam[1] * depth; const x = x0 + Math.sin(T * (0.3 + h4 * 0.4) + h1 * 6) * 10 + cam[0] * depth;
@@ -224,22 +224,17 @@ void main() {
   window.done = true;
 })();
 
-// The Metal pass (StageView.metal) ported line for line, with what StageMetalView.swift hands it each
-// frame: StageInputs.uniforms, the rocks, OrbStage.dust, the bolts of OrbStage.arcs and .reach.
+// The Metal pass, with the uniforms OrbStage.stageUniforms / stageRocks compute.
 function drawMetalPass(photo, rockImgs) {
   const c = layer(2); const gl = c.getContext('webgl2', {premultipliedAlpha: true});
-  const frag = PRE + `uniform sampler2D uPhoto, uR0, uR1, uR2, uR3, uR4, uR5;
-uniform vec4 uView, uPhotoU, uFade, uCam, uState, uOrb, uRing, uTop, uDepth, uPed, uPush, uOrbView, uTouch, uGlass, uSky, uShaft, uGlow, uCounts, uBoltBox, uDustBox;
-uniform vec4 uItems[640]; out vec4 o;
+  const frag = PRE + `uniform sampler2D uPhoto, uR0, uR1, uR2, uR3, uR4, uR5; uniform vec4 uView, uPhotoU, uFade, uCam, uState, uOrb, uRing, uTop, uDepth, uPed, uPush, uOrbView, uTouch, uGlass; uniform vec4 uRocks[24]; out vec4 o;
 ${window.WORLD_GLSL}
 ${window.ORB_GLSL}
-${window.STAGE_GLSL}
 vec4 tex(int i, vec2 uv, float lod) {
   if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return vec4(0.0);
   if (i == 0) return textureLod(uR0, uv, lod); if (i == 1) return textureLod(uR1, uv, lod); if (i == 2) return textureLod(uR2, uv, lod);
   if (i == 3) return textureLod(uR3, uv, lod); if (i == 4) return textureLod(uR4, uv, lod); return textureLod(uR5, uv, lod);
 }
-vec4 photoAt(vec2 uv, float lod) { return (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) ? vec4(0.0) : textureLod(uPhoto, uv, lod); }
 vec4 over(vec4 a, vec4 b) { return a + b * (1.0 - a.a); }
 vec4 rock(vec2 p, vec4 a, vec4 b, vec4 c, int ti) {
   vec2 d = p - a.xy; vec2 own = vec2(d.x * b.x + d.y * b.y, -d.x * b.y + d.y * b.x); vec2 uv = own / (a.zw * 2.0) + 0.5;
@@ -251,69 +246,31 @@ vec4 rock(vec2 p, vec4 a, vec4 b, vec4 c, int ti) {
   return vec4(rgb, alpha) * b.z;
 }
 vec4 rocksPass(vec4 col, vec2 p, int count, float front) {
-  for (int i = 0; i < 6; i++) { if (i >= count) break; vec4 e = uItems[i * 4 + 3]; if (e.x != front) continue;
-    col = over(rock(p, uItems[i * 4], uItems[i * 4 + 1], uItems[i * 4 + 2], int(e.y)), col); }
-  return col;
-}
-float dustPass(vec2 q, int start, int count, float px) {
-  float light = 0.0;
-  for (int i = 0; i < 64; i++) { if (i >= count) break; vec4 s = uItems[start + i]; float d = length(q - s.xy); if (d > s.z + px) continue;
-    light += s.w < 0.0 ? -s.w * 0.7 * max(0.0, 1.0 - d / s.z) : s.w * fzCover(d, s.z * 0.5, px); }
-  return min(light, 1.0);
-}
-vec4 lightningPass(vec2 q, int start, int count, int spotStart, int spotCount, float k, float px) {
-  vec3 mint = vec3(0.651, 0.902, 0.749); float wide = 0.0, mid = 0.0, core = 0.0, fork = 0.0;
-  for (int i = 0; i < 256; i++) { if (i >= count) break; vec4 ends = uItems[start + i * 2]; vec4 look = uItems[start + i * 2 + 1];
-    float d = fzSegment(q, ends.xy, ends.zw);
-    if (look.z > 0.5) { fork = max(fork, min(1.0, 0.6 * look.x) * fzCover(d, 0.4 * k, px)); continue; }
-    float glowWidth = (3.0 + 2.0 * (look.y - 1.0)) * k; if (d > glowWidth * 1.5 + px) continue;
-    wide = max(wide, min(1.0, 0.12 * look.x) * fzCover(d, glowWidth * 1.5, px));
-    mid = max(mid, min(1.0, 0.3 * look.x) * fzCover(d, glowWidth * 0.7, px));
-    core = max(core, min(1.0, 0.95 * look.x) * fzCover(d, look.y * k * 0.5, px)); }
-  vec4 col = vec4(mint * wide, wide); col = over(vec4(mint * mid, mid), col); col = over(vec4(core), col); col = over(vec4(fork), col);
-  for (int i = 0; i < 16; i++) { if (i >= spotCount) break; vec4 s = uItems[spotStart + i]; vec2 d = q - s.xy; if (s.z < 0.0) d.y *= 2.0;
-    float a = s.w * max(0.0, 1.0 - length(d) / abs(s.z)); col = over(vec4(mint * a, a), col); }
+  for (int i = 0; i < 6; i++) { if (i >= count) break; vec4 e = uRocks[i * 4 + 3]; if (e.x != front) continue;
+    col = over(rock(p, uRocks[i * 4], uRocks[i * 4 + 1], uRocks[i * 4 + 2], int(e.y)), col); }
   return col;
 }
 void main() {
-  vec2 p = vec2(gl_FragCoord.x, uView.y - gl_FragCoord.y) / uView.z; float px = 1.0 / uView.z; float t = uView.w; float k = uOrb.w;
-  int rockCount = int(uCounts.x), dustCount = int(uCounts.y), segmentCount = int(uCounts.z), spotCount = int(uCounts.w);
-  int dustStart = rockCount * 4, segStart = dustStart + dustCount, spotStart = segStart + segmentCount * 2;
-  float awake = uState.y; vec2 origin = uPhotoU.xy; float pxScale = uPhotoU.z; vec2 local = p - origin;
-  vec2 q = uPush.xy + (p - uPush.xy) / (1.0 + uPush.z); vec4 col = vec4(0.0);
-  float skyOn = uSky.w, photoTop = uSky.z;
-  if (skyOn > 0.002 && p.y < photoTop + uFade.y * 0.05) {
-    float sx = (p.x - uCam.x * 0.06 - uSky.x) / uSky.y; vec3 c = textureLod(uPhoto, vec2(sx, 0.012), 5.0).rgb;
-    float reach = max(photoTop, 0.0) + 420.0; float v = clamp((p.y - uCam.y * 0.06 - (photoTop - reach)) / reach, 0.0, 1.0);
-    c *= 0.5 + 0.5 * v; c = mix(vec3(dot(c, FZ_LUMA)), c, vec3(0.5 + 0.5 * awake)) * (0.62 + 0.38 * awake);
-    float sides = clamp(sx / 0.14, 0.0, 1.0) * clamp((1.0 - sx) / 0.14, 0.0, 1.0);
-    float a = skyOn * mix(step(0.0, sx) * step(sx, 1.0), sides, uFade.z); col = vec4(c, 1.0) * a; }
+  vec2 p = vec2(gl_FragCoord.x, uView.y - gl_FragCoord.y) / uView.z; float t = uView.w; int count = int(uCam.z); vec4 col = vec4(0.0);
+  vec2 origin = uPhotoU.xy; float pxScale = uPhotoU.z; vec2 local = p - origin;
   float m = fzPhotoFade(local, uFade, uPed.xy * pxScale) * uPhotoU.w;
   if (m > 0.002) { vec2 src = fzUnpush(local, vec4(uPush.xy - origin, uPush.zw), pxScale, uDepth, uPed); float depth = fzWorldDepth(src / pxScale, uDepth, uPed);
-    float lod = log2(max(1.0, 1.0 / (pxScale * uView.z))); vec4 c = photoAt((src - uCam.xy * depth) / uFade.xy, lod);
-    if (c.a > 0.002) { vec3 lit = fzWorld(c.rgb / c.a, origin + src, t, uState.x, awake, uState.z, uState.w, uOrbView.z, uOrb.xy, uOrb.z, uRing.xy, uRing.zw, uTop.xy, uTop.z, uTop.w, k);
-      col = over(vec4(lit * c.a, c.a) * m, col); } }
-  if (skyOn > 0.002) { float fadeEnd = photoTop + 70.0 * k;
-    if (p.y < fadeEnd) { vec2 sp = p - uCam.xy * 0.03; float star = fzStars(sp, t, k, px) * (1.0 - smoothstep(photoTop - 10.0, fadeEnd, sp.y)) * (0.6 + 0.4 * awake);
-      float width = uOrbView.w; vec2 hc = vec2(width * 0.5, photoTop - 160.0); vec2 he = (p - hc) / vec2(width * 0.9, 260.0);
-      float haze = (0.05 + 0.05 * awake) * max(0.0, 1.0 - length(p - hc) / (width * 0.9)) * (1.0 - smoothstep(0.92, 1.0, length(he))) * (1.0 - smoothstep(photoTop, fadeEnd, p.y));
-      col.rgb += (vec3(star) + vec3(0.749, 0.910, 0.824) * haze) * skyOn; } }
-  if (uShaft.x > 0.002) { vec2 ringAtRest = uRing.xy - uCam.xy * uPush.w; col.rgb += vec3(0.867, 0.961, 0.902) * fzShaft(q - uShaft.yz, ringAtRest, uTop.x, k, px) * uShaft.x; }
-  if (uGlow.y > 0.002 || uGlow.z > 0.002) { float reach = 10.0 * k; vec2 rd = abs(q - uRing.xy) - uRing.zw;
-    if (rd.x < reach && rd.y < reach) col.rgb += fzRingGlow(q, uRing, uGlow.x, uGlow.y, uGlow.z, k, px).rgb; }
-  col = rocksPass(col, p, rockCount, 0.0);
-  if (dustCount > 0 && q.y > uDustBox.x - px && q.y < uDustBox.y + px) col.rgb += vec3(dustPass(q, dustStart, dustCount, px));
-  if (q.x > uBoltBox.x && q.y > uBoltBox.y && q.x < uBoltBox.z && q.y < uBoltBox.w) col.rgb += lightningPass(q, segStart, segmentCount, spotStart, spotCount, k, px).rgb;
+    vec2 uv = (src - uCam.xy * depth) / uFade.xy; float lod = log2(max(1.0, 1.0 / (pxScale * uView.z)));
+    vec4 c = (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) ? vec4(0.0) : textureLod(uPhoto, uv, lod);
+    if (c.a > 0.002) { vec3 lit = fzWorld(c.rgb / c.a, origin + src, t, uState.x, uState.y, uState.z, uState.w, uOrbView.z, uOrb.xy, uOrb.z, uRing.xy, uRing.zw, uTop.xy, uTop.z, uTop.w, uOrb.w);
+      col = vec4(lit * c.a, c.a) * m; } }
+  col = rocksPass(col, p, count, 0.0);
   float formed = uOrbView.y;
-  if (formed > 0.001) { float shrink = 0.12 + 0.88 * formed; vec2 d = (q - uOrb.xy) / shrink; float ball = uOrb.z; float r = length(d);
-    if (formed > 0.05 && r < ball + 1.0) { vec2 w = uOrb.xy - 2.0 * d; vec4 seen = photoAt((w - origin) / uFade.xy, 1.0);
+  if (formed > 0.001) { vec2 q = uPush.xy + (p - uPush.xy) / (1.0 + uPush.z); float shrink = 0.12 + 0.88 * formed; vec2 d = (q - uOrb.xy) / shrink; float ball = uOrb.z; float r = length(d);
+    if (formed > 0.05 && r < ball + 1.0) { vec2 w = uOrb.xy - 2.0 * d; vec2 uv = (w - origin) / uFade.xy;
+      vec4 seen = (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) ? vec4(0.0) : textureLod(uPhoto, uv, 1.0);
       vec3 g = mix(vec3(dot(seen.rgb, FZ_LUMA)), seen.rgb, vec3(uGlass.y)) * vec3(0.78, 0.96, 0.86);
       float a = min(1.0, formed * 2.0) * uGlass.x * seen.a * (1.0 - smoothstep(ball - 1.0, ball, r)); col = over(vec4(g * a, a), col); }
     float side = uOrbView.x; vec2 op = d / (side * 0.5);
     if (abs(op.x) < 1.0 && abs(op.y) < 1.0) { vec3 finger = vec3(uTouch.xy / (side * 0.5), uTouch.z);
       vec4 ob = fzOrb(op, t, clamp(uState.x, 0.0, 1.0), 1.5 / (side * shrink), finger); col = over(ob * min(1.0, formed * 2.5), col); } }
-  col = rocksPass(col, p, rockCount, 1.0);
-  o = clamp(col, 0.0, 1.0);
+  col = rocksPass(col, p, count, 1.0);
+  o = col;
 }`;
   const pr = glProgram(gl, frag); const u = n => gl.getUniformLocation(pr, n);
   const mk = (img, unit, name) => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
@@ -322,73 +279,28 @@ void main() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); gl.uniform1i(u(name), unit); };
   mk(photo, 0, 'uPhoto'); rockImgs.forEach((img, i) => mk(img, i + 1, 'uR' + i));
   const [cc, z] = L.camera(d); const px = L.scale * z / L.zoom1; const origin = [cc[0] - L.RING.x * px, cc[1] - L.RING.y * px]; const reveal = sm(0.45, 0.95, d);
-  const k = L.k, R = L.R, ring = [L.ring[0] + pedShift[0], L.ring[1] + pedShift[1]];
-  // StageFrame: a strike's boost and the ring's flash, the world's flash.
-  const since = P.STRIKE == null ? 1e9 : P.STRIKE; const boost = Math.max(0, 1 - since / 0.55);
-  const ringFlash = since < 0.06 ? 0.9 * Math.max(0, since) / 0.06 : 0.9 * (1 - sm(0, 1, (since - 0.06) / 0.7));
-  const flash = Math.max(P.FLASH, boost, P.TOUCH ? 0.3 + 0.2 * Math.sin(T * 37) : 0);
-  const items = [];
-  // The rocks (StageInputs.rocks: FloatingRock.all, then the pebble).
-  const pushZoom = (dep) => 1 + PUSH * Math.min(dep / L.pedDepth, 1.8);
+  // The rocks, as OrbStage.stageRocks lists them (FloatingRock.all, then the pebble).
+  const list = []; const R = L.R; const pushZoom = (dep) => 1 + PUSH * Math.min(dep / L.pedDepth, 1.8);
   const add = (ti, w, x, y, angle, opacity, blur, zoom, front) => { const img = rockImgs[ti]; const dx = orbAt[0] - x, dy = orbAt[1] - y, dist = Math.max(Math.hypot(dx, dy), 1);
     const back = -angle * Math.PI / 180; const tl = [(dx * Math.cos(back) - dy * Math.sin(back)) / dist, (dx * Math.sin(back) + dy * Math.cos(back)) / dist];
-    const near = dist / R; const light = P.FORMED * (0.25 + 0.85 * E) / (1 + near * near * 0.25) + flash * 0.5; const dim = 0.62 + 0.38 * AW;
+    const near = dist / R; const light = P.FORMED * (0.25 + 0.85 * E) / (1 + near * near * 0.25) + P.FLASH * 0.5; const dim = 0.62 + 0.38 * AW;
     const cx = L.ring[0] + (x - L.ring[0]) * zoom, cy = L.ring[1] + (y - L.ring[1]) * zoom; const ww = w * zoom, hh = w * img.height / img.width * zoom;
     const a = angle * Math.PI / 180; const level = Math.log2(Math.max(img.width / (ww * 2), 1)) + Math.log2(1 + blur * 2);
-    items.push([cx, cy, ww / 2, hh / 2], [Math.cos(a), Math.sin(a), opacity, level], [tl[0], tl[1], light, dim], [front ? 1 : 0, ti, 0, 0]); };
+    list.push([cx, cy, ww / 2, hh / 2], [Math.cos(a), Math.sin(a), opacity, level], [tl[0], tl[1], light, dim], [front ? 1 : 0, ti, 0, 0]); };
   for (const [ti, rx, ry, rw, depth, blur, from, to, sway, phase, isFront] of [[0, -2.3, 0.25, 0.95, 0.32, 0, 0, 0.35, 5, 0.3, false], [1, 2.25, -0.6, 0.78, 0.28, 0.6, 0.15, 0.5, 4, 1.7, false], [4, -1.45, -1.55, 0.62, 0.25, 0.8, 0.3, 0.65, 8, 2.9, false], [2, -1.9, 2.5, 1.3, 0.75, 3, 0.1, 0.45, 3, 4.1, true], [3, 2.3, 1.9, 1.15, 0.6, 1.6, 0.4, 0.8, 3, 5.3, true]]) {
     const up = sm(from, to, LIFT); const op = up * P.SCENE; if (op <= 0.002) continue;
     const x = L.orb[0] + rx * R + cam[0] * depth; const y = L.orb[1] + ry * R + Math.sin(T * 0.55 + phase) * 0.09 * R + (1 - up) * 1.4 * R + cam[1] * depth;
-    add(ti, rw * R, x, y, sway * Math.sin(T * 0.21 + phase) + (1 - up) * 24, op, blur * k, pushZoom(depth), isFront); }
+    add(ti, rw * R, x, y, sway * Math.sin(T * 0.21 + phase) + (1 - up) * 24, op, blur * L.k, pushZoom(depth), isFront); }
   { const a = T * 0.62; const up = sm(0.55, 0.85, LIFT); const op = up * P.SCENE;
     if (op > 0.002) add(5, R * 0.3 * (1 + 0.15 * Math.sin(a)), orbAt[0] + Math.cos(a) * 1.6 * R + cam[0] * 0.05, orbAt[1] + Math.sin(a) * 0.32 * R - 0.1 * R + cam[1] * 0.05, a * 20, op, 0, 1 + PUSH, Math.sin(a) > 0); }
-  const rockCount = items.length / 4;
-  // The dust (OrbStage.dust).
-  const dust = []; const power = P.BEAM * close;
-  if (power > 0.01) { const top = Math.max(0, L.fr.y), bottom = L.base + L.rr[1] * 3, span = Math.max(bottom - top, 1), spread = L.topR[0] * 1.7;
-    for (let i = 0; i < 44; i++) { const h1 = hash(i, 1), h2 = hash(i, 2), h3 = hash(i, 3), h4 = hash(i, 4), h5 = hash(i, 5); const inBeam = i % 5 != 0; const depth = 0.1 + 0.9 * h5;
-      const x0 = inBeam ? L.ring[0] + (h1 - 0.5) * spread : h1 * W; const rise = h3 * span + T * (4 + 9 * h2); const y = bottom - (rise % span) + cam[1] * depth; const x = x0 + Math.sin(T * (0.3 + h4 * 0.4) + h1 * 6) * 10 + cam[0] * depth;
-      const size = (0.6 + 1.2 * h4) * (0.6 + 2.2 * depth * depth) * k; const tw = 0.5 + 0.5 * Math.sin(T * (1 + 2 * h2) + h3 * 6.3); const edge = Math.max(0, Math.min((y - top) / 40, (bottom - y) / 40, 1));
-      const alpha = power * (inBeam ? 0.55 : 0.3) * tw * edge * (1.15 - 0.6 * depth);
-      if (alpha > 0.002) dust.push([x, y, size, depth > 0.75 ? -alpha : alpha]); } }
-  dust.forEach(s => items.push(s));
-  // The bolts (OrbStage.arcs and .reach, OrbStage.bolt).
-  const jagged = (a, b, seed, jag) => { let pts = [a, b]; let amt = Math.hypot(b[0] - a[0], b[1] - a[1]) * jag; for (let l = 0; l < 4; l++) { const n = [pts[0]]; for (let i = 0; i < pts.length - 1; i++) { const p = pts[i], q = pts[i + 1]; const dx = q[0] - p[0], dy = q[1] - p[1]; const len = Math.max(Math.hypot(dx, dy), 0.001); const off = (hash(seed + l * 97, i) - 0.5) * 2 * amt; n.push([(p[0] + q[0]) / 2 - dy / len * off, (p[1] + q[1]) / 2 + dx / len * off]); n.push(q); } pts = n; amt *= 0.5; } return pts; };
-  const makeBolt = (a, b, seed, strength, width) => { const points = jagged(a, b, seed, 0.2); let fork = [];
-    if (hash(seed, 31) > 0.4) { const from = points[Math.floor(points.length / 2)]; const dx = b[0] - a[0], dy = b[1] - a[1]; const side = hash(seed, 41) > 0.5 ? 1 : -1;
-      fork = jagged(from, [from[0] + dx * 0.35 - side * dy * 0.25, from[1] + dy * 0.35 + side * dx * 0.25], seed * 5 + 3, 0.25); }
-    return {points, fork, strength, width}; };
-  const bolts = [], spots = [];
-  if (P.ARCS > 0.01) { const radius = R * (0.12 + 0.88 * Math.min(1, P.FORMED)) * 0.86; const count = boost > 0.05 ? 4 : 2 + Math.min(2, Math.floor(E * 2.99)); const seed = Math.floor(T * 13);
-    const ra = [160, 20, 122, 58], sa = [130, 50, 110, 70];
-    for (let i = 0; i < count; i++) { const fl = hash(seed, i + 11); if (!(boost > 0.05 || fl > 0.22)) continue;
-      const a = (ra[i] + 7 * Math.sin(T * 0.45 + i * 1.7)) * Math.PI / 180, end = [ring[0] + L.rr[0] * Math.cos(a), ring[1] + L.rr[1] * Math.sin(a)];
-      const b = (sa[i] + 6 * Math.sin(T * 0.6 + i)) * Math.PI / 180, begin = [orbAt[0] + radius * Math.cos(b), orbAt[1] + radius * Math.sin(b)];
-      const strength = P.ARCS * (0.6 + 0.4 * fl) * (1 + 1.2 * boost);
-      bolts.push(makeBolt(begin, end, seed * 7 + i, strength, 1 + 0.6 * boost)); spots.push([end[0], end[1], -(9 + 6 * boost) * k * 1.6, Math.min(1, 0.8 * strength)]); } }
-  if (P.TOUCH && P.FORMED > 0.5) { const dx = P.TOUCH[0] - orbAt[0], dy = P.TOUCH[1] - orbAt[1];
-    if (Math.hypot(dx, dy) > R * 0.98) { const toward = Math.atan2(dy, dx); const seed = Math.floor(T * 15);
-      for (let i = 0; i < 3; i++) { const a = toward + (i - 1) * 0.32; const begin = [orbAt[0] + Math.cos(a) * R * 0.97, orbAt[1] + Math.sin(a) * R * 0.97];
-        const end = [P.TOUCH[0] + (hash(seed, i + 51) - 0.5) * 10, P.TOUCH[1] + (hash(seed, i + 61) - 0.5) * 10]; bolts.push(makeBolt(begin, end, seed * 3 + i, 1.3, 1.2)); }
-      spots.push([P.TOUCH[0], P.TOUCH[1], 22 * k, 0.8]); } }
-  let box = null; let segments = 0; const grow = (x0, y0, x1, y1) => { box = box ? [Math.min(box[0], x0), Math.min(box[1], y0), Math.max(box[2], x1), Math.max(box[3], y1)] : [x0, y0, x1, y1]; };
-  for (const bolt of bolts) { const reachOut = (3 + 2 * (bolt.width - 1)) * k * 1.5 + 2;
-    for (const [line, fork] of [[bolt.points, 0], [bolt.fork, 1]]) { for (let i = 0; i + 1 < line.length; i++) { const a = line[i], b = line[i + 1];
-      items.push([a[0], a[1], b[0], b[1]], [bolt.strength, bolt.width, fork, 0]); grow(Math.min(a[0], b[0]) - reachOut, Math.min(a[1], b[1]) - reachOut, Math.max(a[0], b[0]) + reachOut, Math.max(a[1], b[1]) + reachOut); segments++; } } }
-  for (const s of spots) { items.push(s); const r = Math.abs(s[2]); grow(s[0] - r, s[1] - r, s[0] + r, s[1] + r); }
-  const dustTop = dust.length ? Math.min(...dust.map(s => s[1] - s[2])) : 0, dustBottom = dust.length ? Math.max(...dust.map(s => s[1] + s[2])) : -1;
-  if (items.length > 640) throw new Error('too many items: ' + items.length);
-  while (items.length < 640) items.push([0, 0, 0, 0]);
-  gl.uniform4fv(u('uItems'), new Float32Array(items.flat()));
+  const count = list.length / 4; while (list.length < 24) list.push([0, 0, 0, 0]);
+  gl.uniform4fv(u('uRocks'), new Float32Array(list.flat()));
   const v4 = (n, a) => gl.uniform4f(u(n), ...a);
   v4('uView', [W * 2, H * 2, 2, T % 1200]); v4('uPhotoU', [origin[0], origin[1], px, reveal * P.SCENE]); v4('uFade', [L.IMG.w * px, L.IMG.h * px, 0, L.IMG.w * px * (0.4 + 3 * reveal)]);
-  v4('uCam', [cam[0], cam[1], 0, 0]); v4('uState', [E, AW, flash, Math.max(P.FORMED, P.SPARK * 0.5)]); v4('uOrb', [orbAt[0], orbAt[1], R, k]);
-  v4('uRing', [ring[0], ring[1], L.rr[0], L.rr[1]]); v4('uTop', [L.topR[0], L.topR[1], L.base + pedShift[1], L.horizon]);
+  v4('uCam', [cam[0], cam[1], count, 0]); v4('uState', [E, AW, P.FLASH, Math.max(P.FORMED, P.SPARK * 0.5)]); v4('uOrb', [orbAt[0], orbAt[1], L.R, L.k]);
+  v4('uRing', [L.ring[0] + pedShift[0], L.ring[1] + pedShift[1], L.rr[0], L.rr[1]]); v4('uTop', [L.topR[0], L.topR[1], L.base + pedShift[1], L.horizon]);
   v4('uDepth', [440, 1402, 784, 0]); v4('uPed', [557.5, 570, 293.5, 69]); v4('uPush', [L.ring[0], L.ring[1], PUSH, L.pedDepth]);
-  v4('uOrbView', [R * 2 / 0.84 * 1.5, P.FORMED, P.RING, W]);
+  v4('uOrbView', [L.R * 2 / 0.84 * 1.5, P.FORMED, P.RING, 0]);
   v4('uTouch', P.TOUCH ? [P.TOUCH[0] - orbAt[0], P.TOUCH[1] - orbAt[1], 1, 0] : [0, 0, 0, 0]); v4('uGlass', [(0.55 + 0.45 * AW) * P.SCENE, 0.5 + 0.5 * AW, 0, 0]);
-  v4('uSky', [L.fr.x, L.fr.w, L.fr.y, close * P.SCENE]); v4('uShaft', [P.BEAM * (0.4 + 0.6 * AW) * close, cam[0] * 0.1, cam[1] * 0.1, 0]);
-  v4('uGlow', [P.RING, (0.45 + 0.55 * E) * close, ringFlash * close, 0]);
-  v4('uCounts', [rockCount, dust.length, segments, spots.length]); v4('uBoltBox', box || [0, 0, -1, -1]); v4('uDustBox', [dustTop, dustBottom, 0, 0]);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }

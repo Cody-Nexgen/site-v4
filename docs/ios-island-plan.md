@@ -270,6 +270,17 @@ until the photos land).
 - An island-style pill at the top: `🔒 6 locked`. Tap it to see the icons.
 - Cards (glass on iOS 26): the blocked apps (real icons), next break.
 - **Hold for a break**, End early.
+  - **Breaks ask what they're for (2026-10-05):** with Screen Time on, holding for a break opens a
+    sheet (`BreakAppsSheet` in `ActiveSessionView.swift`): **Everything** or **Just a few apps** (Apple's
+    app picker; remembered for the next break, `BlockList.breakPicks` / `breakOpensAll`). Picked apps
+    come off the shield and apps inside a locked category stay open as its exceptions
+    (`BlockList.shield(_:with:except:)`); everything else stays locked. The break panel shows what's
+    open and until when.
+  - The monitor locks them again when the break ends (`DeviceActivityName.breakEnd`), because you're
+    usually off in those apps and FocuzNow isn't running; before this, a break only ended when you came
+    back to the app. The session's end moves out by the break too, and a break counts as no longer
+    than its length however late you come back. Ending a break during an emergency pass leaves the
+    pass running; the pass locks the session again when it's over.
 - Leaving the app shows the **real Live Activity** (§6.1).
 
 ### 5.4 Session complete

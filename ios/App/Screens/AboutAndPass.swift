@@ -118,7 +118,7 @@ struct AboutView: View {
 
     private let features: [(symbol: String, title: String, detail: String)] = [
         ("shield.lefthalf.filled", "Block", "Apps and sites stay out of the way while you work."),
-        ("timer", "Focus", "Sessions with real breaks, and a lamp that stays lit."),
+        ("timer", "Focus", "Sessions with real breaks, and an orb that charges while you work."),
         ("checklist", "Plan", "Your day, your lists, your deadlines, in one place."),
         ("key.fill", "FocuzPass", "Passwords and passkeys, encrypted so only you can read them."),
         ("sparkles", "Coach", "Ask anything. It's especially good at plans."),
