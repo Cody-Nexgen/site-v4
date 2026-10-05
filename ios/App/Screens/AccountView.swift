@@ -174,7 +174,7 @@ struct AccountView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color(hex: 0x111214).opacity(0.85)))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.09)))
+        .fzEdgeLight(cornerRadius: 18)
     }
 
     // MARK: Autofocus
@@ -336,7 +336,7 @@ struct AccountView: View {
                 popups.withPin("Switching the filter off needs your PIN.") {
                     popups.show(FZPopup(symbol: "eye", tint: Color(hex: 0xF2CC86), title: "Turn the filter off?",
                                         message: "Adult sites will load again in Safari and in apps.",
-                                        primary: "Turn it off", destructive: true, secondary: "Keep it on",
+                                        primary: "Hold to turn it off", destructive: true, secondary: "Keep it on",
                                         onPrimary: { model.protections.adultFilter = false }))
                 }
             }
@@ -568,7 +568,7 @@ struct AccountView: View {
         if model.profile.appleLinked {
             popups.show(FZPopup(symbol: "apple.logo", tint: .white, title: "Apple's linked",
                                 message: "You can sign in with your Apple Account on any device.",
-                                primary: "Unlink", destructive: true, secondary: "Keep it",
+                                primary: "Hold to unlink", destructive: true, secondary: "Keep it",
                                 onPrimary: { model.profile.appleLinked = false }))
             return
         }
@@ -612,7 +612,7 @@ struct AccountView: View {
         popups.withPin("Deleting your account needs your PIN.") {
             popups.show(FZPopup(symbol: "trash.fill", tint: Theme.danger, title: "Delete everything?",
                                 message: "Your profile, photo, PIN, blocks and settings are wiped from this iPhone, and you start fresh. This can't be undone.",
-                                primary: "Delete everything", destructive: true, secondary: "Keep my account",
+                                primary: "Hold to delete", destructive: true, secondary: "Keep my account",
                                 onPrimary: { model.deleteAccount() }))
         }
     }
@@ -680,7 +680,7 @@ private struct AppleLinkButton: View {
         .signInWithAppleButtonStyle(.white)
         .frame(height: 54)
         .clipShape(Capsule())
-        .fzBottomGlow(strength: 0.8)
+        .fzBottomGlow(strength: 0.25)
         .padding(.top, 4)
     }
 }

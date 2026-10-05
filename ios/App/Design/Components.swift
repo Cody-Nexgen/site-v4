@@ -16,7 +16,7 @@ struct BeamButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .frame(height: 56)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(scheme == .dark ? Color.white : Color.fzInk))
-            .fzBottomGlow(strength: enabled ? (configuration.isPressed ? 1.4 : 1) : 0)
+            .fzPressGlow(configuration.isPressed, rest: enabled ? 0.18 : 0)
             .opacity(enabled ? 1 : 0.35)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(duration: 0.25), value: configuration.isPressed)
@@ -33,7 +33,7 @@ struct GlassPillStyle: ButtonStyle {
             .frame(height: 54)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.fzInk.opacity(0.06)))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.fzLine))
-            .fzBottomGlow(strength: 0.5)
+            .fzPressGlow(configuration.isPressed, rest: 0.1)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(duration: 0.25), value: configuration.isPressed)
     }

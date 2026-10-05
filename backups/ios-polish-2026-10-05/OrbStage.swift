@@ -225,9 +225,6 @@ struct OrbStage: View, Animatable {
     var hint = false
     /// Extra camera movement (points), from scrolling the page: the scene shifts by depth.
     var look: CGSize = .zero
-    /// Pulling Today down pushes the camera in: how much the pedestal (and the orb on it) has grown,
-    /// 0.2 = 20% bigger. Nearer things grow more, the far rocks and sky barely at all.
-    var push: CGFloat = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var struckAt = Date.distantPast
@@ -263,9 +260,6 @@ struct OrbStage: View, Animatable {
         let orbAt = CGPoint(x: layout.orbCenter.x + cam.width * lead, y: layout.orbCenter.y + bob + cam.height * lead)
         // The pedestal's lights and the orb only once the camera has arrived.
         let close = Double(fzSmooth(0.9, 1.0, CGFloat(s.dolly)))
-        // The push grows everything at the pedestal's depth from the middle of its top.
-        let grow = 1 + push
-        let anchor = pushAnchor
         return ZStack(alignment: .topLeading) {
             if s.dolly < 0.999 {
                 WideShot(layout: layout, state: s, cam: cam, t: t)
@@ -273,36 +267,30 @@ struct OrbStage: View, Animatable {
             SkyAbove(layout: layout, awake: s.awake)
                 .opacity(close * s.scene)
                 .offset(cam * 0.06)
-            StagePhoto(layout: layout, state: s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift,
-                       push: push, pushFrom: pushFrom)
+            StagePhoto(layout: layout, state: s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift)
             NightSky(layout: layout, t: t, cam: cam, awake: s.awake)
                 .opacity(close * s.scene)
             LightShaft(layout: layout)
                 .opacity(s.beam * (0.4 + 0.6 * s.awake) * close)
                 .offset(cam * 0.1)
-                .scaleEffect(grow, anchor: anchor)
             Group {
                 PedestalGlow(layout: layout, trace: s.ring, power: 0.45 + 0.55 * s.energy)
                 RingFlash(layout: layout, strike: strike)
             }
             .offset(pedShift)
             .opacity(close)
-            .scaleEffect(grow, anchor: anchor)
 
             rocks(front: false, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
 
-            Group {
-                Canvas { g, _ in
-                    drawDust(&g, t: t, cam: cam, power: CGFloat(s.beam * close))
-                    drawArcs(&g, t: t, orbAt: orbAt, ring: layout.ring + pedShift, state: s, boost: boost)
-                    drawReach(&g, t: t, orbAt: orbAt, state: s)
-                }
-                .blendMode(.plusLighter)
-
-                refraction(s, at: orbAt)
-                orb(s, at: orbAt)
+            Canvas { g, _ in
+                drawDust(&g, t: t, cam: cam, power: CGFloat(s.beam * close))
+                drawArcs(&g, t: t, orbAt: orbAt, ring: layout.ring + pedShift, state: s, boost: boost)
+                drawReach(&g, t: t, orbAt: orbAt, state: s)
             }
-            .scaleEffect(grow, anchor: anchor)
+            .blendMode(.plusLighter)
+
+            refraction(s, at: orbAt)
+            orb(s, at: orbAt)
 
             rocks(front: true, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
 
@@ -314,29 +302,12 @@ struct OrbStage: View, Animatable {
                 .blendMode(.plusLighter)
             }
 
-            Group {
-                hotPoint(s, at: orbAt)
-                ripple(s, at: orbAt)
-                if hint {
-                    hintRing(t: t, at: orbAt)
-                }
+            hotPoint(s, at: orbAt)
+            ripple(s, at: orbAt)
+            if hint {
+                hintRing(t: t, at: orbAt)
             }
-            .scaleEffect(grow, anchor: anchor)
         }
-    }
-
-    /// The point the push grows things from (stage points): the middle of the pedestal's top. From
-    /// inside the pedestal every edge of it moves outwards and only covers the ground behind; from
-    /// anywhere above, its back edge would slide down and uncover ground the photo doesn't have.
-    private var pushFrom: CGPoint { layout.ring }
-
-    private var pushAnchor: UnitPoint {
-        UnitPoint(x: pushFrom.x / layout.width, y: pushFrom.y / max(layout.height, 1))
-    }
-
-    /// How much bigger something at `depth` is with the push (`fzPushZoom` in OrbWorld.metal).
-    private func pushZoom(_ depth: CGFloat) -> CGFloat {
-        1 + push * min(depth / OrbStageLayout.pedestalDepth, 1.8)
     }
 
     /// What you see through the glass: the world behind the orb, upside down and squeezed, like a
@@ -446,7 +417,6 @@ struct OrbStage: View, Animatable {
         return lit(r.image, width: r.width * radius, at: CGPoint(x: x, y: y), angle: angle, orbAt: orbAt, s: s, flash: flash)
             .blur(radius: r.blur * layout.k)
             .opacity(Double(up) * s.scene)
-            .scaleEffect(pushZoom(r.depth), anchor: pushAnchor)
     }
 
     private func pebble(angle a: CGFloat, cam: CGSize, orbAt: CGPoint, s: OrbStageState, flash: CGFloat) -> some View {
@@ -456,7 +426,6 @@ struct OrbStage: View, Animatable {
         let y = orbAt.y + sin(a) * 0.32 * radius - 0.1 * radius + cam.height * 0.05
         return lit("OrbRock5", width: radius * 0.3 * (1 + 0.15 * sin(a)), at: CGPoint(x: x, y: y), angle: a * 20, orbAt: orbAt, s: s, flash: flash)
             .opacity(Double(up) * s.scene)
-            .scaleEffect(1 + push, anchor: pushAnchor)
     }
 
     /// A rock lit by the orb: brighter the nearer it is, with a mint rim on the edge that faces it.

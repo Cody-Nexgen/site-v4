@@ -4,8 +4,6 @@
 //   the orb mirrored in the polished top, fog drifting on the ground and glowing where the light
 //   reaches it, the whole world colder and darker while it's "asleep", and a depth-based shift of the
 //   photo for parallax (tilt the phone and near ground moves more than far rocks).
-// - Pulling Today down pushes the camera in: each point of the photo grows by how near it is, so the
-//   pedestal and the ground around it grow while the far rocks and the sky barely move.
 // - `rockLight` on each floating rock: a mint rim on the edge that faces the orb.
 //
 // Everything between BEGIN SHARED and END SHARED keeps to the subset Metal and GLSL share, like
@@ -79,43 +77,6 @@ static float fzWideZoom(float distance, float travel) {
     return distance / max(distance - travel, 0.06);
 }
 
-// Pulling Today down pushes the camera in: how much bigger a point at nearness d gets when the
-// pedestal (nearness dp) grows by `grow`. Far things barely move; the near ground grows most, capped so
-// it doesn't smear.
-static float fzPushZoom(float d, float grow, float dp) {
-    return 1.0 + grow * min(d / dp, 1.8);
-}
-
-// The same nearness with a hard edge round the pedestal, for the push: a soft edge stretches the photo
-// across it as the pedestal outgrows the ground behind, and its rim showed up twice. A little wide of
-// the measured edge, so the rim always goes with the pedestal.
-static float fzPushDepth(float2 ip, float4 depthPx, float4 pedPx) {
-    float ground = 0.06 + 0.94 * smoothstep(depthPx.x, depthPx.y, ip.y);
-    float footDepth = 0.06 + 0.94 * smoothstep(depthPx.x, depthPx.y, depthPx.z);
-    float2 q = (ip - pedPx.xy) / pedPx.zw;
-    float top = 1.0 - smoothstep(1.02, 1.05, length(q));
-    float body = (1.0 - smoothstep(pedPx.z * 1.06, pedPx.z * 1.08, abs(ip.x - pedPx.x)))
-               * smoothstep(pedPx.y - 4.0, pedPx.y + 4.0, ip.y)
-               * (1.0 - smoothstep(depthPx.z, depthPx.z + 18.0, ip.y));
-    return mix(ground, footDepth, max(top, body));
-}
-
-// Where the point now at `position` was before the push (`push`: the point it grows from, how much the
-// pedestal has grown, the pedestal's nearness). Starts from the pedestal's own zoom, so where the
-// grown pedestal now covers the ground behind it, the pedestal wins.
-static float2 fzUnpush(float2 position, float4 push, float pxScale, float4 depthPx, float4 pedPx) {
-    if (push.z < 0.0001) {
-        return position;
-    }
-    float2 f = push.xy;
-    float2 src = f + (position - f) / (1.0 + push.z);
-    for (int i = 0; i < 4; i++) {
-        float d = fzPushDepth(src / pxScale, depthPx, pedPx);
-        src = f + (position - f) / fzPushZoom(d, push.z, push.w);
-    }
-    return src;
-}
-
 // photo: the photo's colour at p. p and every place: stage points, y down. e: the orb's energy.
 // awake: how lit the world is (0 asleep). flash: a strike, 1 fading to 0. orbOn: how much of the orb
 // there is to give light. ringOn: how far the pedestal's ring is lit. k: the stage's scale.
@@ -173,20 +134,16 @@ static float3 fzWorld(float3 photo, float2 p, float t, float e, float awake, flo
 /// orb: x, y, radius, the stage's scale k. ring: x, y, radii (stage points, already shifted with
 /// the pedestal). topInfo: the top's radii, the foot's y, the horizon's y (stage points).
 /// depthPx and pedPx: see fzWorldDepth. on: how much orb there is to give light, how far the ring is lit.
-/// push: pulling Today down (see fzUnpush; x, y in the photo view's points). Everything else is
-/// worked out where the point was before the push, so the light stays on the things it lights.
 [[ stitchable ]] half4 orbWorld(float2 position, SwiftUI::Layer layer, float2 origin, float pxScale, float2 camera,
-                                float4 state, float4 orb, float4 ring, float4 topInfo, float4 depthPx, float4 pedPx, float2 on,
-                                float4 push) {
-    float2 src = fzUnpush(position, push, pxScale, depthPx, pedPx);
-    float depth = fzWorldDepth(src / pxScale, depthPx, pedPx);
-    half4 c = layer.sample(src - camera * depth);
+                                float4 state, float4 orb, float4 ring, float4 topInfo, float4 depthPx, float4 pedPx, float2 on) {
+    float depth = fzWorldDepth(position / pxScale, depthPx, pedPx);
+    half4 c = layer.sample(position - camera * depth);
     float a = float(c.a);
     if (a < 0.002) {
         return c;
     }
     float3 photo = float3(c.rgb) / a;
-    float3 col = fzWorld(photo, origin + src, state.x, state.y, state.z, state.w, on.x, on.y,
+    float3 col = fzWorld(photo, origin + position, state.x, state.y, state.z, state.w, on.x, on.y,
                          orb.xy, orb.z, ring.xy, ring.zw, topInfo.xy, topInfo.z, topInfo.w, orb.w);
     return half4(half3(col * a), c.a);
 }

@@ -1,9 +1,12 @@
 # The You tab (iOS, 2026-10-04)
 
 The fifth tab on iPhone (it replaced Coach, which now opens from the sparkles on Today and from You;
-on iPad Coach keeps its own tab). A night scene like Today: black, the orb's mint light behind your
-photo, dark glass cards. Every confirmation is an `FZPopup` (Liquid Glass over a glow, an icon, a
-button). The copy is written to sound like a person, with a bit of humour; keep it that way.
+on iPad Coach keeps its own tab). On iPhone the TabView has exactly these five tabs: tabs marked
+hidden still counted towards the five and put You inside a "More" tab, so the phone's TabView doesn't
+have the others (`MainTabs.phoneTabs`; iPad uses `sidebarTabs`). A night scene like Today: black, the
+orb's mint light behind your photo, dark glass cards. Every confirmation is an `FZPopup` (a glass sheet
+at the bottom with its colour glowing through it, an outlined icon, a button); destructive ones are
+press-and-hold. The copy is written to sound like a person, with a bit of humour; keep it that way.
 
 Code: `ios/App/Screens/AccountView.swift` (the tab), `AccountParts.swift` (rows, the ticket, the nudge
 preview, the profile editor), `ios/App/Model/PinLock.swift`, `ios/Shared/Blocking/Protections.swift`
@@ -89,6 +92,6 @@ ends above. Apple limits a person to 20 monitored activities; FocuzNow uses at m
 8. **Reload FocuzNow:** a spinner, then "All fresh".
 9. **Developer mode:** switch it on: three rows open under it.
 10. **Sign out:** the PIN, then a popup; the onboarding starts again. (Delete account does the same and
-    wipes everything; try it last.)
+    wipes everything; it's **Hold to delete**: the button fills red as you hold. Try it last.)
 11. Tell us if any popup looks off, or a switch flips back by itself when it shouldn't (it should only
     flip back when it's waiting for the PIN or a permission).

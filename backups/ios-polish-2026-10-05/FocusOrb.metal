@@ -65,13 +65,6 @@ static float orbRidge(float3 p) {
     return 1.0 - abs(n * 2.0 - 1.0);
 }
 
-// The angle of v, and 0 for no vector at all. Metal's fast maths makes atan2(0, 0) NaN (GLSL gives 0),
-// and one NaN times 0 still poisons everything it touches: with no finger down, the touch angle is
-// atan2(0, 0), and that blanked the whole inside of the orb on the iPhone while the browser was fine.
-static float orbAngle(float2 v) {
-    return dot(v, v) < 1e-12 ? 0.0 : atan2(v.y, v.x);
-}
-
 static float orbWrap(float a) {
     return a - FZ_TAU * floor((a + 3.14159265) / FZ_TAU);
 }
@@ -104,10 +97,10 @@ static float4 fzOrb(float2 p, float t, float e, float aa, float3 touch) {
 
     float2 q = p / FZ_ORB_R;
     float r = length(q);
-    float ang = orbAngle(q);
+    float ang = atan2(q.y, q.x);
     float charge = 0.35 + 0.65 * e;
     float2 tq = touch.xy / FZ_ORB_R;
-    float touchAng = orbAngle(tq);
+    float touchAng = atan2(tq.y, tq.x);
     float touchOn = touch.z;
 
     // Outside: the light it throws, flickering a little with the strikes.

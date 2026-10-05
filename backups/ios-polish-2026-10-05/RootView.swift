@@ -41,9 +41,9 @@ struct RootView: View {
     }
 }
 
-/// Today, Focus, Plan, Pass and You on iPhone; Coach opens as a sheet there (the sparkles on Today, or
-/// You → Coach). On iPad the TabView becomes a sidebar (`.sidebarAdaptable`) with Coach in the bar and
-/// the "More" pages as their own rows; on iPhone those are tiles in You.
+/// Today, Focus, Plan, Pass and You on iPhone. Coach opens as a sheet there (the sparkles on Today,
+/// or You → Coach); on iPad it keeps its place in the bar. On iPad the same TabView becomes a sidebar
+/// (`.sidebarAdaptable`) with the "More" pages as their own rows; on iPhone they're tiles in You.
 private struct MainTabs: View {
     @Environment(AppModel.self) private var model
     @Environment(PopupCenter.self) private var popups
@@ -53,56 +53,7 @@ private struct MainTabs: View {
 
     var body: some View {
         @Bindable var model = model
-        Group {
-            if sizeClass == .regular {
-                sidebarTabs
-            } else {
-                phoneTabs
-            }
-        }
-        .tint(Color.fzInk)
-        .fzMinimizeTabBarOnScroll()
-        .modifier(SessionAccessory(session: model.session, compact: sizeClass != .regular) { model.showSession = true })
-        .sheet(isPresented: $showCoach) {
-            NavigationStack { CoachView() }
-                .environment(model)
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(32)
-        }
-        .fullScreenCover(isPresented: $model.showSession) {
-            ActiveSessionView()
-                .environment(model)
-                .environment(popups)
-        }
-    }
-
-    private func openCoach() {
-        if sizeClass == .regular { tab = .coach } else { showCoach = true }
-    }
-
-    /// Exactly five. On iPhone, tabs marked hidden still count towards the five and pushed You into a
-    /// "More" tab, so the phone's TabView simply doesn't have the others.
-    private var phoneTabs: some View {
-        TabView(selection: $tab) {
-            Tab("Today", systemImage: "sun.max.fill", value: AppTab.today) {
-                NavigationStack { TodayView(openCoach: openCoach, startFocus: { tab = .focus }, open: { tab = $0 }) }
-            }
-            Tab("Focus", systemImage: "scope", value: AppTab.focus) {
-                NavigationStack { FocusSetupView() }
-            }
-            Tab("Plan", systemImage: "checklist", value: AppTab.plan) {
-                NavigationStack { PlanView() }
-            }
-            Tab("Pass", systemImage: "key.fill", value: AppTab.pass) {
-                PassView()
-            }
-            Tab("You", systemImage: "person.crop.circle.fill", value: AppTab.you) {
-                NavigationStack { AccountView(open: { tab = $0 }, openCoach: openCoach) }
-            }
-        }
-    }
-
-    private var sidebarTabs: some View {
+        let openCoach = { if sizeClass == .regular { tab = .coach } else { showCoach = true } }
         TabView(selection: $tab) {
             Tab("Today", systemImage: "sun.max.fill", value: AppTab.today) {
                 NavigationStack { TodayView(openCoach: openCoach, startFocus: { tab = .focus }, open: { tab = $0 }) }
@@ -119,6 +70,7 @@ private struct MainTabs: View {
             Tab("Coach", systemImage: "sparkles", value: AppTab.coach) {
                 NavigationStack { CoachView() }
             }
+            .defaultVisibility(sizeClass == .regular ? .visible : .hidden, for: .tabBar)
             Tab("You", systemImage: "person.crop.circle.fill", value: AppTab.you) {
                 NavigationStack { AccountView(open: { tab = $0 }, openCoach: openCoach) }
             }
@@ -147,6 +99,20 @@ private struct MainTabs: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .tint(Color.fzInk)
+        .fzMinimizeTabBarOnScroll()
+        .modifier(SessionAccessory(session: model.session, compact: sizeClass != .regular) { model.showSession = true })
+        .sheet(isPresented: $showCoach) {
+            NavigationStack { CoachView() }
+                .environment(model)
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(32)
+        }
+        .fullScreenCover(isPresented: $model.showSession) {
+            ActiveSessionView()
+                .environment(model)
+                .environment(popups)
+        }
     }
 }
 

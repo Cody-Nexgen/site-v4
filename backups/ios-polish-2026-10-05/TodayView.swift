@@ -29,14 +29,10 @@ struct TodayView: View {
             ScrollView {
                 ZStack(alignment: .top) {
                     stage(layout)
-                    // Pulled down, the header stays put with the scene (only the cards come down) and
-                    // fades as the orb comes closer.
                     header
                         .padding(.top, top + 6)
-                        .offset(y: min(scrollY, 0))
-                        .opacity(1 - 0.85 * Double(pullProgress))
                     content
-                        .padding(.top, layout.baseY + 2)
+                        .padding(.top, layout.baseY + 6)
                 }
                 .frame(width: outer.size.width)
             }
@@ -66,23 +62,21 @@ struct TodayView: View {
         }
     }
 
-    /// How far the page is pulled down past the top, 0 to 1 (eased, like a rubber band).
-    private var pullProgress: CGFloat { 1 - exp(-max(0, -scrollY) / 150) }
-
-    /// The orb's world, with depth as you scroll. Scrolled up, it drifts away at half speed (its camera
-    /// tilting a little) while the cards slide over it. Pulled down, it stays where it is and the
-    /// camera pushes in: the pedestal and the orb grow, the far rocks and the sky barely move, and the
-    /// cards come down to show more of the ground.
+    /// The orb's world, with depth as you scroll: scrolling up, it drifts away at half speed while the
+    /// cards slide over it; pulled down, it stays pinned to the top and swells (the sky carries on
+    /// above the photo, so there's no black).
     private func stage(_ layout: OrbStageLayout) -> some View {
-        let look = CGSize(width: 0, height: scrollY > 0 ? -scrollY * 0.12 : 0)
+        // Pulled down, the page (greeting included) comes down together and the camera inside the
+        // scene drops with it, so near things move more than far ones and the sky opens up above.
+        // Scrolled up, the scene drifts away at half speed while the cards slide over it.
+        let look = CGSize(width: 0, height: scrollY < 0 ? -scrollY * 0.35 : -scrollY * 0.12)
         return ZStack(alignment: .topLeading) {
-            OrbStage(layout: layout, state: .settled(Self.orbEnergy(model.focusScore)), strike: strike, touch: touchPoint,
-                     look: look, push: 0.28 * pullProgress)
+            OrbStage(layout: layout, state: .settled(Self.orbEnergy(model.focusScore)), strike: strike, touch: touchPoint, look: look)
             orbTouchArea(layout)
         }
         .frame(width: layout.width, height: layout.height, alignment: .topLeading)
         .coordinateSpace(.named("today"))
-        .offset(y: scrollY < 0 ? scrollY : scrollY * 0.5)
+        .offset(y: scrollY > 0 ? scrollY * 0.5 : 0)
     }
 
     /// Touch the orb: a strike, and the lightning follows your finger while you hold it.
@@ -173,50 +167,59 @@ struct TodayView: View {
         .frame(maxWidth: 560)
     }
 
-    /// The score on the ground in front of the pedestal, lit by the orb above it: part of the scene,
-    /// not a card on top of it.
+    /// The score in a glass card on the ground in front of the pedestal, with how today is going.
     private var scoreBlock: some View {
-        VStack(spacing: 4) {
-            Text("FOCUS SCORE")
-                .font(.caption2.weight(.semibold))
-                .tracking(2.4)
-                .foregroundStyle(.white.opacity(0.55))
-            Text("\(shownScore)")
-                .font(.fzDisplay(66, weight: .black))
-                .fzTight(66)
-                .monospacedDigit()
-                .foregroundStyle(LinearGradient(colors: [.white, Color(hex: 0xCFF5DE)], startPoint: .top, endPoint: .bottom))
-                .contentTransition(.numericText(value: Double(shownScore)))
-                .shadow(color: Color.fzMint.opacity(0.45), radius: 22)
-            HStack(spacing: 7) {
-                Text(Theme.orbWord(model.focusScore))
-                    .foregroundStyle(Color.fzMint)
-                Circle().fill(.white.opacity(0.3)).frame(width: 3, height: 3)
-                Label("\(model.streakDays)-day streak", systemImage: "flame.fill")
-                    .labelStyle(TrailingIconLabelStyle())
-                    .foregroundStyle(.white.opacity(0.75))
-            }
-            .font(.subheadline.weight(.semibold))
-            HStack(spacing: 10) {
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(.white.opacity(0.1))
-                        Capsule()
-                            .fill(Color.fzMint)
-                            .frame(width: max(4, proxy.size.width * min(1, model.goalProgress)))
-                            .shadow(color: Color.fzMint.opacity(0.6), radius: 5)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("FOCUS SCORE")
+                        .font(.caption2.weight(.semibold))
+                        .tracking(2)
+                        .foregroundStyle(.white.opacity(0.5))
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(shownScore)")
+                            .font(.fzDisplay(46, weight: .black))
+                            .fzTight(46)
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                            .contentTransition(.numericText(value: Double(shownScore)))
+                        Text(Theme.orbWord(model.focusScore))
+                            .font(.headline)
+                            .foregroundStyle(Color.fzMint)
                     }
                 }
-                .frame(width: 84, height: 4)
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 6) {
+                    statLine("flame.fill", "\(model.streakDays)-day streak")
+                    statLine("clock.fill", "\(GoalDial.format(model.focusedMinutesToday)) today")
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.08))
+                        Capsule()
+                            .fill(LinearGradient(colors: [Color.fzMint.opacity(0.6), Color.fzMint], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: max(6, proxy.size.width * min(1, model.goalProgress)))
+                            .shadow(color: Color.fzMint.opacity(0.5), radius: 6)
+                    }
+                }
+                .frame(height: 6)
                 Text(model.goalProgress >= 1 ? "Goal done. The orb is showing off." : "\(GoalDial.format(max(0, model.goalMinutes - model.focusedMinutesToday))) to today's goal")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.5))
             }
-            .padding(.top, 8)
         }
-        .frame(maxWidth: .infinity)
+        .fzGlassCard()
         .accessibilityElement(children: .combine)
         .riseIn(delay: 0.15)
+    }
+
+    private func statLine(_ symbol: String, _ text: String) -> some View {
+        Label(text, systemImage: symbol)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.white.opacity(0.75))
+            .labelStyle(TrailingIconLabelStyle())
     }
 
     private var startButton: some View {
@@ -278,7 +281,7 @@ struct TodayView: View {
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color(hex: 0x111214).opacity(0.88)))
-        .fzEdgeLight(cornerRadius: 24)
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.09)))
         .riseIn(delay: 0.35)
     }
 
@@ -316,7 +319,7 @@ struct TodayView: View {
             }
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(hex: 0x111214).opacity(0.88)))
-            .fzEdgeLight(cornerRadius: 20)
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.09)))
             .riseIn(delay: 0.45)
         }
     }
@@ -331,7 +334,7 @@ struct TodayView: View {
             }
             .padding(16)
             .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(hex: 0x111214).opacity(0.88)))
-            .fzEdgeLight(cornerRadius: 22)
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.09)))
             .riseIn(delay: 0.55)
         }
     }

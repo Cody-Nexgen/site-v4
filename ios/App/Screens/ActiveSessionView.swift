@@ -75,7 +75,7 @@ struct ActiveSessionView: View {
         popups.withPin("Ending early needs your PIN.") {
             popups.show(FZPopup(symbol: "flag.checkered", tint: Color(hex: 0xF2CC86), title: "End this one early?",
                                 message: "The time you've done still counts. Your tree just won't grow this round.",
-                                primary: "End session", destructive: true, secondary: "Keep going",
+                                primary: "Hold to end it", destructive: true, secondary: "Keep going",
                                 onPrimary: { withAnimation { model.endSession(completedFully: false) } }))
         }
     }

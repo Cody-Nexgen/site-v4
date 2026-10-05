@@ -53,6 +53,11 @@ onboarding and Today put the orb in exactly the same spot.
 Change `energy` inside `withAnimation` and it glides there. Reduce Motion freezes it on a still frame.
 
 ## Notes
+- **Fast maths (fixed 2026-10-05):** Metal compiles with fast maths, where `atan2(0, 0)` is NaN (GLSL
+  gives 0, so the browser preview looked fine). With no finger down, the touch angle was atan2(0, 0),
+  and one NaN times 0 is still NaN: the whole inside of the orb drew nothing on the iPhone (it looked
+  black, with only the world-through-the-glass showing). `orbAngle` returns 0 for no vector. Anything
+  new in the shared part: guard `atan2`, `normalize`, `pow` of a negative and divisions by zero.
 - `size` is the layout size; the sphere is about 84% of it and the glow spills past it, so the drawing is
   1.5× bigger and centred (it doesn't push anything around).
 - `FocusOrb.prepare()` compiles the shader early (the onboarding calls it on appear), so the first frame

@@ -38,8 +38,11 @@ const pedShift = [cam[0] * L.pedDepth, cam[1] * L.pedDepth];
 const bob = Math.sin(T * 1.15) * 3 * P.FORMED;
 const orbAt = [L.orb[0] + cam[0] * (L.pedDepth + 0.08), L.orb[1] + bob + cam[1] * (L.pedDepth + 0.08)];
 const close = sm(0.9, 1, d);
+// Pulled down: things grow from the middle of the pedestal's top by their nearness (OrbStage.pushZoom).
+const PUSH = P.PUSH || 0, pushFrom = L.ring;
+const pushZoom = (depth) => 1 + PUSH * Math.min(depth / L.pedDepth, 1.8);
 const root = document.getElementById('s');
-function layer(z) { const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2; Object.assign(c.style, {position: 'absolute', left: 0, top: 0, width: W + 'px', height: H + 'px', zIndex: z}); root.appendChild(c); return c; }
+function layer(z, grow = 1) { const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2; Object.assign(c.style, {position: 'absolute', left: 0, top: 0, width: W + 'px', height: H + 'px', zIndex: z, transformOrigin: pushFrom[0] + 'px ' + pushFrom[1] + 'px', transform: 'scale(' + grow + ')'}); root.appendChild(c); return c; }
 function load(src) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; }); }
 function hash(i, k) { const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); }
 
@@ -88,16 +91,17 @@ void main() {
 
   // 2. The stage photo through the world shader.
   const cv = layer(2); const gl = cv.getContext('webgl2', {premultipliedAlpha: false});
-  const pr = glProgram(gl, PRE + `uniform sampler2D uPhoto; uniform vec2 uOrigin, uFrameSize, uCam, uSize, uOn; uniform float uPx; uniform vec4 uState, uOrb, uRing, uTop, uDepth, uPed; uniform float uReveal, uRevealR; out vec4 o;
+  const pr = glProgram(gl, PRE + `uniform sampler2D uPhoto; uniform vec2 uOrigin, uFrameSize, uCam, uSize, uOn; uniform float uPx; uniform vec4 uState, uOrb, uRing, uTop, uDepth, uPed, uPush; uniform float uReveal, uRevealR; out vec4 o;
 ${window.WORLD_GLSL}
 void main() {
   vec2 p = vec2(gl_FragCoord.x, uSize.y * 2.0 - gl_FragCoord.y) / 2.0;
   vec2 local = p - uOrigin;
   if (local.x < 0.0 || local.y < 0.0 || local.x > uFrameSize.x || local.y > uFrameSize.y) { o = vec4(0); return; }
-  float depth = fzWorldDepth(local / uPx, uDepth, uPed);
-  vec2 src = (local - uCam * depth) / uFrameSize;
+  vec2 at = fzUnpush(local, uPush, uPx, uDepth, uPed);
+  float depth = fzWorldDepth(at / uPx, uDepth, uPed);
+  vec2 src = (at - uCam * depth) / uFrameSize;
   vec3 photo = texture(uPhoto, src).rgb;
-  vec3 c = fzWorld(photo, p, uState.x, uState.y, uState.z, uState.w, uOn.x, uOn.y, uOrb.xy, uOrb.z, uRing.xy, uRing.zw, uTop.xy, uTop.z, uTop.w, uOrb.w);
+  vec3 c = fzWorld(photo, uOrigin + at, uState.x, uState.y, uState.z, uState.w, uOn.x, uOn.y, uOrb.xy, uOrb.z, uRing.xy, uRing.zw, uTop.xy, uTop.z, uTop.w, uOrb.w);
   vec2 uv = local / uFrameSize;
   float fade = smoothstep(0.0, 0.05, uv.y) * (1.0 - smoothstep(0.68, 1.0, uv.y));
   float rd = length(local - vec2(557.5, 570.0) * uPx) / (uFrameSize.x * uRevealR);
@@ -119,11 +123,12 @@ void main() {
   gl.uniform4f(u('uDepth'), 440, 1402, 784, 0); gl.uniform4f(u('uPed'), 557.5, 570, 293.5, 69);
   gl.uniform2f(u('uOn'), Math.max(P.FORMED, P.SPARK * 0.5), P.RING);
   gl.uniform1f(u('uReveal'), reveal * P.SCENE); gl.uniform1f(u('uRevealR'), 0.4 + 3 * reveal);
+  gl.uniform4f(u('uPush'), pushFrom[0] - origin[0], pushFrom[1] - origin[1], PUSH, L.pedDepth);
   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 
   // 3. Light shaft, ring, slits.
-  const c3 = layer(3); c3.style.mixBlendMode = 'screen'; const g3 = c3.getContext('2d'); g3.scale(2, 2);
+  const c3 = layer(3, 1 + PUSH); c3.style.mixBlendMode = 'screen'; const g3 = c3.getContext('2d'); g3.scale(2, 2);
   const k = L.k, ring = [L.ring[0] + pedShift[0], L.ring[1] + pedShift[1]];
   g3.save(); g3.globalAlpha = P.BEAM * (0.4 + 0.6 * AW) * close; g3.filter = `blur(${26 * k}px)`;
   const gr = g3.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, 'rgba(221,245,230,0.13)'); gr.addColorStop(0.5, 'rgba(221,245,230,0.05)'); gr.addColorStop(1, 'rgba(221,245,230,0.1)');
@@ -135,6 +140,7 @@ void main() {
   // 4. Rocks (behind and in front), lit with a rim facing the orb.
   const ROCKS = [[0, -2.3, 0.25, 0.95, 0.32, 0, 0, 0.35, 5, 0.3, false], [1, 2.25, -0.6, 0.78, 0.28, 0.6, 0.15, 0.5, 4, 1.7, false], [4, -1.45, -1.55, 0.62, 0.25, 0.8, 0.3, 0.65, 8, 2.9, false],
                  [2, -1.9, 2.5, 1.3, 0.75, 3, 0.1, 0.45, 3, 4.1, true], [3, 2.3, 1.9, 1.15, 0.6, 1.6, 0.4, 0.8, 3, 5.3, true]];
+  let rockDepth = L.pedDepth;
   function drawRock(g, img, w, x, y, angle, blur, alpha) {
     const h = w * img.height / img.width;
     const dx = orbAt[0] - x, dy = orbAt[1] - y, dist = Math.max(Math.hypot(dx, dy), 1);
@@ -153,21 +159,22 @@ void main() {
     r.drawImage(img, 2, 2, w, h); r.globalCompositeOperation = 'source-in'; r.fillStyle = 'rgb(179,245,209)'; r.fillRect(0, 0, w + 4, h + 4);
     r.globalCompositeOperation = 'destination-out'; r.drawImage(img, 2 - ux * 2.5, 2 - uy * 2.5, w, h);
     o.globalCompositeOperation = 'lighter'; o.globalAlpha = Math.min(1, light); o.drawImage(rim, 0, 0, w + 4, h + 4);
-    g.save(); g.globalAlpha = alpha; g.filter = blur > 0 ? `blur(${blur}px)` : 'none'; g.translate(x, y); g.rotate(angle * Math.PI / 180); g.drawImage(off, -w / 2 - 2, -h / 2 - 2, w + 4, h + 4); g.restore();
+    g.save(); g.globalAlpha = alpha; g.filter = blur > 0 ? `blur(${blur}px)` : 'none';
+    const zr = pushZoom(rockDepth); g.translate(pushFrom[0], pushFrom[1]); g.scale(zr, zr); g.translate(-pushFrom[0], -pushFrom[1]); g.translate(x, y); g.rotate(angle * Math.PI / 180); g.drawImage(off, -w / 2 - 2, -h / 2 - 2, w + 4, h + 4); g.restore();
   }
   function rocksLayer(front, z) {
     const g = layer(z).getContext('2d'); g.scale(2, 2);
     for (const [i, rx, ry, rw, depth, blur, from, to, sway, phase, isFront] of ROCKS) { if (isFront !== front) continue;
       const up = sm(from, to, LIFT); const x = L.orb[0] + rx * L.R + cam[0] * depth;
       const y = L.orb[1] + ry * L.R + Math.sin(T * 0.55 + phase) * 0.09 * L.R + (1 - up) * 1.4 * L.R + cam[1] * depth;
-      drawRock(g, rocks[i], rw * L.R, x, y, sway * Math.sin(T * 0.21 + phase) + (1 - up) * 24, blur * k, up * P.SCENE); }
-    const a = T * 0.62; if ((Math.sin(a) > 0) === front) { const up = sm(0.55, 0.85, LIFT);
+      rockDepth = depth; drawRock(g, rocks[i], rw * L.R, x, y, sway * Math.sin(T * 0.21 + phase) + (1 - up) * 24, blur * k, up * P.SCENE); }
+    const a = T * 0.62; if ((Math.sin(a) > 0) === front) { const up = sm(0.55, 0.85, LIFT); rockDepth = L.pedDepth;
       drawRock(g, rocks[5], L.R * 0.3 * (1 + 0.15 * Math.sin(a)), orbAt[0] + Math.cos(a) * 1.6 * L.R + cam[0] * 0.05, orbAt[1] + Math.sin(a) * 0.32 * L.R - 0.1 * L.R, a * 20, 0, up * P.SCENE); }
   }
   rocksLayer(false, 4);
 
   // 5. Dust and arcs.
-  const c5 = layer(5); c5.style.mixBlendMode = 'screen'; const g5 = c5.getContext('2d'); g5.scale(2, 2);
+  const c5 = layer(5, 1 + PUSH); c5.style.mixBlendMode = 'screen'; const g5 = c5.getContext('2d'); g5.scale(2, 2);
   const top = Math.max(0, L.fr.y), bottom = L.base + L.rr[1] * 3, span = bottom - top, spread = L.topR[0] * 1.7;
   for (let i = 0; i < 44; i++) { const h1 = hash(i, 1), h2 = hash(i, 2), h3 = hash(i, 3), h4 = hash(i, 4), h5 = hash(i, 5); const inBeam = i % 5 != 0; const depth = 0.1 + 0.9 * h5;
     const x0 = inBeam ? L.ring[0] + (h1 - 0.5) * spread : h1 * W; const rise = h3 * span + T * (4 + 9 * h2); const y = bottom - (rise % span) + cam[1] * depth; const x = x0 + Math.sin(T * (0.3 + h4 * 0.4) + h1 * 6) * 10 + cam[0] * depth;
@@ -185,7 +192,7 @@ void main() {
       strokeBolt(begin, end, seed * 7 + i, P.ARCS * (0.6 + 0.4 * fl), 1); } }
 
   // 5b. Through the glass: the world behind it, upside down and squeezed.
-  if (P.FORMED > 0.05) { const cr = layer(6); const gr2 = cr.getContext('2d'); gr2.scale(2, 2); const sq = 0.5, ball = L.R; const f = L.fr;
+  if (P.FORMED > 0.05) { const cr = layer(6, 1 + PUSH); const gr2 = cr.getContext('2d'); gr2.scale(2, 2); const sq = 0.5, ball = L.R; const f = L.fr;
     gr2.save(); gr2.beginPath(); gr2.arc(orbAt[0], orbAt[1], ball * (0.12 + 0.88 * P.FORMED), 0, 7); gr2.clip();
     gr2.globalAlpha = Math.min(1, P.FORMED * 2) * (0.55 + 0.45 * AW) * P.SCENE; gr2.filter = `blur(1px) saturate(${0.5 + 0.5 * AW})`;
     gr2.translate(orbAt[0], orbAt[1]); gr2.scale(-1, -1);
@@ -193,7 +200,8 @@ void main() {
     gr2.restore(); gr2.globalCompositeOperation = 'multiply'; gr2.fillStyle = 'rgb(199,245,219)'; gr2.beginPath(); gr2.arc(orbAt[0], orbAt[1], ball, 0, 7); gr2.fill(); }
 
   // 6. The orb.
-  if (P.FORMED > 0.001) { const og = layer(6); const size = L.R * 2 / 0.84 * 1.5; og.width = size * 2; og.height = size * 2; Object.assign(og.style, {left: (orbAt[0] - size / 2) + 'px', top: (orbAt[1] - size / 2) + 'px', width: size + 'px', height: size + 'px'});
+  if (P.FORMED > 0.001) { const og = layer(6); const size = L.R * 2 / 0.84 * 1.5; og.width = size * 2; og.height = size * 2; Object.assign(og.style, {left: (orbAt[0] - size / 2) + 'px', top: (orbAt[1] - size / 2) + 'px', width: size + 'px', height: size + 'px',
+      transformOrigin: (pushFrom[0] - orbAt[0] + size / 2) + 'px ' + (pushFrom[1] - orbAt[1] + size / 2) + 'px', transform: 'scale(' + (1 + PUSH) + ')'});
     const g = og.getContext('webgl2', {premultipliedAlpha: true}); const p2 = glProgram(g, PRE + `uniform vec2 uSize; uniform float uT, uE; uniform vec3 uTouch; out vec4 o;\n${window.ORB_GLSL}\nvoid main(){ vec2 pos = vec2(gl_FragCoord.x, uSize.y - gl_FragCoord.y); float side = min(uSize.x, uSize.y); vec2 p = (pos - uSize*0.5)/(side*0.5); o = fzOrb(p, uT, uE, 4.5/side, uTouch); }`);
     g.uniform2f(g.getUniformLocation(p2, 'uSize'), size * 2, size * 2); g.uniform1f(g.getUniformLocation(p2, 'uT'), T % 1200); g.uniform1f(g.getUniformLocation(p2, 'uE'), E);
     const tc = P.TOUCH ? [(P.TOUCH[0] - orbAt[0]) / (size / 2), (P.TOUCH[1] - orbAt[1]) / (size / 2), 1] : [0, 0, 0]; g.uniform3f(g.getUniformLocation(p2, 'uTouch'), ...tc); g.drawArrays(g.TRIANGLES, 0, 3); }

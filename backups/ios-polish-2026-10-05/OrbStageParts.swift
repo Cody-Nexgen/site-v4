@@ -74,9 +74,9 @@ struct SkyAbove: View {
 }
 
 /// The stage photo through the world shader (`orbWorld`): lit by the orb, fog drifting, colder while
-/// the world is asleep, shifted in depth by the camera, grown by depth when Today is pulled down
-/// (`push`, from `pushFrom` in stage points). Faded into black at the top and bottom (and the sides on
-/// iPad). While the camera is still flying in, it opens out of the wide shot from the pedestal outwards.
+/// the world is asleep, shifted in depth by the camera. Faded into black at the top and bottom (and
+/// the sides on iPad). While the camera is still flying in, it opens out of the wide shot from the
+/// pedestal outwards.
 struct StagePhoto: View {
     let layout: OrbStageLayout
     let state: OrbStageState
@@ -85,8 +85,6 @@ struct StagePhoto: View {
     let flash: CGFloat
     let orbAt: CGPoint
     let pedShift: CGSize
-    var push: CGFloat = 0
-    var pushFrom: CGPoint = .zero
 
     var body: some View {
         let s = state
@@ -111,8 +109,7 @@ struct StagePhoto: View {
             .float4(layout.topRadii.width, layout.topRadii.height, layout.baseY + pedShift.height, layout.horizonY),
             .float4(OrbStageLayout.horizonPixels, OrbStageLayout.imagePixels.height, OrbStageLayout.basePixels, 0),
             .float4(OrbStageLayout.ringPixels.x, OrbStageLayout.ringPixels.y, OrbStageLayout.topRadiiPixels.width, OrbStageLayout.topRadiiPixels.height),
-            .float2(CGFloat(max(s.formed, s.spark * 0.5)), CGFloat(s.ring)),
-            .float4(pushFrom.x - origin.x, pushFrom.y - origin.y, push, OrbStageLayout.pedestalDepth)
+            .float2(CGFloat(max(s.formed, s.spark * 0.5)), CGFloat(s.ring))
         )
         Image("OrbStage")
             .resizable()

@@ -64,21 +64,27 @@ Returning users get the same bare-Z splash (about 2 s) over Today instead of the
 ## Today (the owner's dashboard mockup)
 `ios/App/Screens/TodayView.swift`: the Z logo and "FocuzNow", Coach (the sparkles; a sheet on iPhone),
 your photo (opens the You tab), "Afternoon, <name>" and a line that follows the score ("Your focus is
-building."), the orb on its pedestal as charged as your focus score, then a glass card on the ground:
-**FOCUS SCORE 82 Charged** (the 0–10 score × 10; words from `Theme.orbWord`), streak and time today on
-the right, and a mint bar to today's goal ("45m to today's goal" / "Goal done. The orb is showing
-off."). Then **Start 45m focus** (or **Back to your session**) and a Today card: the next event and
+building."), the orb on its pedestal as charged as your focus score, then the score on the ground in
+front of the pedestal, centred and lit like part of the scene (no card): **FOCUS SCORE**, **82**,
+"Charged · 6-day streak" (words from `Theme.orbWord`), and a short mint bar to today's goal ("45m to
+today's goal" / "Goal done. The orb is showing off."). Then **Start 45m focus** (or **Back to your session**) and a Today card: the next event and
 to-do (open Plan), apps blocked (opens Focus), screen time today (opens Stats). Friends focusing now
 and the day wave stay below it if they're on in Customize. Its world follows the score: a low score is
 a cold, foggy, still world, a high one is lit with rocks floating round the orb. Touch the orb there
 too. Scroll up and the scene drifts away at half speed (its camera tilts a little, so near things move
-more than far ones) while the cards slide over it; pull down and the page comes down together while
-the camera drops and the sky opens up above the photo (`SkyAbove` + `NightSky`: stars, no black, no
-zoom). Today is a night scene, so it stays dark in light mode too.
+more than far ones) while the cards slide over it. **Pull down** and the scene and header stay where
+they are (the header fades) while the camera pushes in: the pedestal and the orb grow, the far rocks
+and the sky barely move, and the cards come down to show more ground (`OrbStage.push`, `fzUnpush` in
+`OrbWorld.metal`: every point grows by its nearness, from the middle of the pedestal's top so its
+edges only ever cover the ground behind; the orb, its lights, the lightning and each rock scale with
+their own depth). Today is a night scene, so it stays dark in light mode too.
 
-All buttons have a glow under them (`FZKit.swift`, `.fzBottomGlow`, colour `Color.fzGlow`: mint, the
-orb's light; one line to change it). Popups are `FZPopup`s: Liquid Glass over a coloured glow, an icon,
-a title, a line or two and a button (`PopupCenter.show`).
+Buttons glow underneath when you press them (`FZKit.swift`, `.fzPressGlow`: a hint of light at rest
+that blooms over a quarter of a second; colour `Color.fzGlow`, mint, the orb's light). Popups are
+`FZPopup`s: a Liquid Glass sheet floating at the bottom, in reach of your thumb, its colour glowing up
+through it, an outlined icon, a title, a line or two and a button; drag it down or tap outside to
+close it. Anything that can't be undone (delete, end a session early, switch the filter off, unlink)
+is a **hold** button (`FZHoldButton`): light fills it as you hold, with ticks that speed up.
 
 ## The block screen
 When a blocked app opens, the shield (`Extensions/FocusShield`) is as plain as Apple allows (a
