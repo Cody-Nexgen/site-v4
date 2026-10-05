@@ -88,14 +88,23 @@ the filter off, unlink) is a red **hold** button (`FZHoldButton`): its orb swell
 ticks that speed up.
 
 **Keeping it smooth (2026-10-05):** the stage was redrawing about twenty offscreen passes (blurs,
-masks, blended layers) 120 times a second, and the owner saw 4 fps while scrolling. Now: the stage and
-the orb draw at 60 fps at most; the stage stops when it's scrolled off screen, covered (Coach, a
-session) or on another tab (`OrbStage.paused`); the photo's fades are worked out in the world shader
-(`fzPhotoFade`) instead of three masks; the light shaft, the ring glow, the lightning's glow and the
-sky above are drawn as gradients and layered strokes instead of blurs; the rocks are blurred inside
-their own shader; the phone's tilt no longer forces its own redraws; and Today stops updating its
-scroll position once the stage is gone. Keep new stage effects free of `.blur`, `.mask` and Canvas
-`addFilter`: they cost a pass every frame.
+masks, blended layers, SwiftUI shader effects) 120 times a second, and the owner saw 4 fps while
+scrolling; after a first round (below) it was still laggy. So the heavy part now draws in **one Metal
+pass** (`Design/StageView.metal` + `StageMetalView.swift`, like the lighthouse): the photo lit by the
+orb, the rocks, the world in the glass and the orb, at 2x instead of 3x, driven by the stage's own
+timeline. It uses the same shader code as before (`Design/OrbShared.h`, which the browser previews
+read too); if the pass can't start (`StageGPU.shared` is nil) the stage draws with the old SwiftUI
+effects. SwiftUI only draws light vector parts over it (the shaft, the ring's glow, the lightning,
+dust) and the sky under it. `node ios/Tools/stage-preview/shot.mjs` with `"METAL": true` renders the
+pass ported line for line, to check it without a Mac.
+
+The first round, still in place: 60 fps at most; the stage stops when it's scrolled off screen,
+covered (Coach, a session) or on another tab (`OrbStage.paused`); fades in the shader (`fzPhotoFade`)
+instead of masks; the light shaft, ring glow, lightning glow, sky, button glows and the score's glow
+are gradients and layered strokes instead of blurs and shadows; the rise-in animation no longer
+leaves a blur on every card; no Liquid Glass over the moving scene; the phone's tilt no longer forces
+its own redraws; Today stops tracking its scroll once the stage is gone. Keep new stage effects free
+of `.blur`, `.shadow`, `.mask`, Canvas `addFilter` and glass: each costs a pass every frame.
 
 ## The block screen
 When a blocked app opens, the shield (`Extensions/FocusShield`) is as plain as Apple allows (a

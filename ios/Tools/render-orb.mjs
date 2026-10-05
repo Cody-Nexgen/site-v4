@@ -1,4 +1,4 @@
-// Renders the focus orb (the SHARED part of App/Design/FocusOrb.metal) in headless Chromium with
+// Renders the focus orb (the SHARED ORB part of App/Design/OrbShared.h) in headless Chromium with
 // WebGL2, so the shader can be looked at without a Mac. Uses the global Playwright; no dependencies.
 //
 //   node ios/Tools/render-orb.mjs '[[0.12,3],[0.5,8],[1,14]]' 420 <out dir>
@@ -17,8 +17,8 @@ const require = createRequire(import.meta.url);
 const pw = process.env.PW || path.join(execSync('npm root -g').toString().trim(), 'playwright');
 const { chromium } = require(pw);
 
-const src = fs.readFileSync(path.join(here, '../App/Design/FocusOrb.metal'), 'utf8');
-const shared = src.split('// BEGIN SHARED')[1].split('// END SHARED')[0];
+const src = fs.readFileSync(path.join(here, '../App/Design/OrbShared.h'), 'utf8');
+const shared = src.split('// BEGIN SHARED ORB')[1].split('// END SHARED ORB')[0];
 const shots = JSON.parse(process.argv[2] || '[[0.12,3],[0.5,8],[1,14]]');
 const px = Number(process.argv[3] || 420);
 const out = path.resolve(process.argv[4] || '.');
@@ -32,6 +32,7 @@ precision highp float;
 #define float4 vec4
 #define float2x2 mat2
 #define static
+#define inline
 #define atan2 atan
 uniform vec2 uSize; uniform float uT; uniform float uE; uniform vec3 uTouch;
 out vec4 o;

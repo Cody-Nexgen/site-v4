@@ -3,8 +3,10 @@
 Your focus orb: a dark glass sphere holding live electricity. It's the hero of the onboarding ("This is
 your focus orb. Answer a few questions and watch it grow.") and will sit on the dashboard.
 
-Code: `ios/App/Design/FocusOrb.swift` (the SwiftUI view) and `ios/App/Design/FocusOrb.metal` (the
-shader, a SwiftUI colour effect). Use it as `FocusOrb(energy:size:)`. The v1 Canvas orb is backed up in
+Code: `ios/App/Design/OrbShared.h` (the orb itself, `fzOrb`, shared by everything below and the
+browser preview), `FocusOrb.metal` + `FocusOrb.swift` (a SwiftUI colour effect: Coach, and the stage
+when Metal can't start) and `StageView.metal` (on Today and in the onboarding the orb draws in the
+stage's single Metal pass). Use it as `FocusOrb(energy:size:)`. The v1 Canvas orb is backed up in
 `backups/ios-focus-orb-v1-2026-10-04/`.
 
 ## What's in it
@@ -74,8 +76,8 @@ move) renders in a browser: `node ios/Tools/stage-preview/shot.mjs ios/Tools/sta
 Its layout numbers are copied from `OrbStageLayout` and `FloatingRock`: change them in both places.
 
 Just the orb:
-The part of the shader between `BEGIN SHARED` and `END SHARED` only uses code Metal and GLSL both
-accept, so it can be rendered in a browser:
+The parts of `OrbShared.h` between `BEGIN SHARED ORB/WORLD` and `END SHARED ORB/WORLD` only use code
+Metal and GLSL both accept, so they can be rendered in a browser:
 
 ```
 node ios/Tools/render-orb.mjs '[[0.12,3],[0.5,8],[1,14]]' 420 <out dir>

@@ -273,9 +273,6 @@ struct OrbStage: View, Animatable {
         // The push grows everything at the pedestal's depth from the middle of its top.
         let grow = 1 + push
         let anchor = pushAnchor
-        // The photo, the rocks, the glass and the orb in one Metal pass when it's there; otherwise as
-        // SwiftUI shader effects (the same look, many more passes).
-        let metal = StageGPU.shared != nil
         return ZStack(alignment: .topLeading) {
             if s.dolly < 0.999 {
                 WideShot(layout: layout, state: s, cam: cam, t: t)
@@ -283,18 +280,10 @@ struct OrbStage: View, Animatable {
             SkyAbove(layout: layout, awake: s.awake)
                 .opacity(close * s.scene)
                 .offset(cam * 0.06)
-            if metal {
-                NightSky(layout: layout, t: t, cam: cam, awake: s.awake)
-                    .opacity(close * s.scene)
-                StageMetalView(uniforms: stageUniforms(s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift),
-                               rocks: stageRocks(t: t, cam: cam, orbAt: orbAt, s: s, flash: flash))
-                    .frame(width: layout.width, height: layout.height)
-            } else {
-                StagePhoto(layout: layout, state: s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift,
-                           push: push, pushFrom: pushFrom)
-                NightSky(layout: layout, t: t, cam: cam, awake: s.awake)
-                    .opacity(close * s.scene)
-            }
+            StagePhoto(layout: layout, state: s, t: t, cam: cam, flash: flash, orbAt: orbAt, pedShift: pedShift,
+                       push: push, pushFrom: pushFrom)
+            NightSky(layout: layout, t: t, cam: cam, awake: s.awake)
+                .opacity(close * s.scene)
             LightShaft(layout: layout)
                 .opacity(s.beam * (0.4 + 0.6 * s.awake) * close)
                 .offset(cam * 0.1)
@@ -307,9 +296,7 @@ struct OrbStage: View, Animatable {
             .opacity(close)
             .scaleEffect(grow, anchor: anchor)
 
-            if !metal {
-                rocks(front: false, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
-            }
+            rocks(front: false, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
 
             Group {
                 Canvas { g, _ in
@@ -319,16 +306,12 @@ struct OrbStage: View, Animatable {
                 }
                 .blendMode(.plusLighter)
 
-                if !metal {
-                    refraction(s, at: orbAt)
-                    orb(s, at: orbAt)
-                }
+                refraction(s, at: orbAt)
+                orb(s, at: orbAt)
             }
             .scaleEffect(grow, anchor: anchor)
 
-            if !metal {
-                rocks(front: true, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
-            }
+            rocks(front: true, t: t, cam: cam, orbAt: orbAt, s: s, flash: flash)
 
             if s.scatter > 0.01 {
                 Canvas { g, _ in
@@ -351,89 +334,6 @@ struct OrbStage: View, Animatable {
             }
             .scaleEffect(grow, anchor: anchor)
         }
-    }
-
-    // MARK: The Metal pass's frame
-
-    /// Everything `StageView.metal` needs for this frame: what `StagePhoto`, `refraction` and `orb`
-    /// would have been given.
-    private func stageUniforms(_ s: OrbStageState, t: CGFloat, cam: CGSize, flash: CGFloat, orbAt: CGPoint, pedShift: CGSize) -> StageUniforms {
-        let d = CGFloat(s.dolly)
-        let c = layout.camera(d)
-        let pxScale = layout.scale * c.zoom / layout.dollyZoom
-        let size = CGSize(width: OrbStageLayout.imagePixels.width * pxScale, height: OrbStageLayout.imagePixels.height * pxScale)
-        let origin = CGPoint(x: c.ring.x - OrbStageLayout.ringPixels.x * pxScale, y: c.ring.y - OrbStageLayout.ringPixels.y * pxScale)
-        let ring = layout.ring + pedShift
-        let reveal = fzSmooth(0.45, 0.95, d)
-        // 32-bit floats in the shader: keep time small (it jumps once every 20 minutes).
-        let time = CGFloat(Double(t).truncatingRemainder(dividingBy: 1200))
-        let finger = touch.map { CGPoint(x: $0.x - orbAt.x, y: $0.y - orbAt.y) }
-        let awake = CGFloat(s.awake)
-        var u = StageUniforms()
-        u.view = fzFloat4(0, 0, 0, time)
-        u.photo = fzFloat4(origin.x, origin.y, pxScale, reveal * CGFloat(s.scene))
-        u.fade = fzFloat4(size.width, size.height, layout.fillsWidth ? 0 : 1, size.width * (0.4 + 3 * reveal))
-        u.camera = fzFloat4(cam.width, cam.height, 0, 0)
-        u.state = fzFloat4(CGFloat(s.energy), awake, flash, CGFloat(max(s.formed, s.spark * 0.5)))
-        u.orb = fzFloat4(orbAt.x, orbAt.y, layout.sphereRadius, layout.k)
-        u.ring = fzFloat4(ring.x, ring.y, layout.ringRadii.width, layout.ringRadii.height)
-        u.top = fzFloat4(layout.topRadii.width, layout.topRadii.height, layout.baseY + pedShift.height, layout.horizonY)
-        u.depthPx = fzFloat4(OrbStageLayout.horizonPixels, OrbStageLayout.imagePixels.height, OrbStageLayout.basePixels, 0)
-        u.pedPx = fzFloat4(OrbStageLayout.ringPixels.x, OrbStageLayout.ringPixels.y,
-                           OrbStageLayout.topRadiiPixels.width, OrbStageLayout.topRadiiPixels.height)
-        u.push = fzFloat4(pushFrom.x, pushFrom.y, push, OrbStageLayout.pedestalDepth)
-        u.orbView = fzFloat4(layout.orbViewSize * 1.5, CGFloat(s.formed), CGFloat(s.ring), 0)
-        u.touch = fzFloat4(finger?.x ?? 0, finger?.y ?? 0, finger == nil ? 0 : 1, 0)
-        u.glass = fzFloat4((0.55 + 0.45 * awake) * CGFloat(s.scene), 0.5 + 0.5 * awake, 0, 0)
-        return u
-    }
-
-    /// The rocks for this frame, where `rocks(front:)` would draw them, for the Metal pass.
-    private func stageRocks(t: CGFloat, cam: CGSize, orbAt: CGPoint, s: OrbStageState, flash: CGFloat) -> [StageRock] {
-        guard let gpu = StageGPU.shared else { return [] }
-        let radius = layout.sphereRadius
-        var list: [StageRock] = []
-        for r in FloatingRock.all {
-            let up = fzSmooth(r.from, r.to, CGFloat(s.lift))
-            let opacity = Double(up) * s.scene
-            guard opacity > 0.002 else { continue }
-            let x = layout.orbCenter.x + r.x * radius + cam.width * r.depth
-            let y = layout.orbCenter.y + r.y * radius + sin(t * 0.55 + r.phase) * 0.09 * radius
-                + (1 - up) * 1.4 * radius + cam.height * r.depth
-            let angle = r.sway * sin(t * 0.21 + r.phase) + (1 - up) * 24
-            let index = Int(r.image.dropFirst("OrbRock".count)) ?? 0
-            list.append(stageRock(index, width: r.width * radius, aspect: gpu.rockAspect[index], at: CGPoint(x: x, y: y),
-                                  angle: angle, orbAt: orbAt, s: s, flash: flash, opacity: opacity, blur: r.blur * layout.k,
-                                  zoom: pushZoom(r.depth), front: r.front))
-        }
-        // The pebble going round the orb: behind it, then in front.
-        let a = t * 0.62
-        let up = fzSmooth(0.55, 0.85, CGFloat(s.lift))
-        let opacity = Double(up) * s.scene
-        if opacity > 0.002 {
-            let x = orbAt.x + cos(a) * 1.6 * radius + cam.width * 0.05
-            let y = orbAt.y + sin(a) * 0.32 * radius - 0.1 * radius + cam.height * 0.05
-            list.append(stageRock(5, width: radius * 0.3 * (1 + 0.15 * sin(a)), aspect: gpu.rockAspect[5], at: CGPoint(x: x, y: y),
-                                  angle: a * 20, orbAt: orbAt, s: s, flash: flash, opacity: opacity, blur: 0,
-                                  zoom: 1 + push, front: sin(a) > 0))
-        }
-        return list
-    }
-
-    /// One rock, lit like `lit(...)` lights it, grown by the push from `pushFrom`.
-    private func stageRock(_ index: Int, width: CGFloat, aspect: CGFloat, at p: CGPoint, angle: CGFloat, orbAt: CGPoint,
-                           s: OrbStageState, flash: CGFloat, opacity: Double, blur: CGFloat, zoom: CGFloat, front: Bool) -> StageRock {
-        let dx = orbAt.x - p.x, dy = orbAt.y - p.y
-        let distance = max(hypot(dx, dy), 1)
-        let back = -angle * .pi / 180
-        let toLight = CGPoint(x: (dx * cos(back) - dy * sin(back)) / distance, y: (dx * sin(back) + dy * cos(back)) / distance)
-        let near = distance / layout.sphereRadius
-        let light = CGFloat(s.formed) * (0.25 + 0.85 * CGFloat(s.energy)) / (1 + near * near * 0.25) + flash * 0.5
-        let from = pushFrom
-        return StageRock(center: CGPoint(x: from.x + (p.x - from.x) * zoom, y: from.y + (p.y - from.y) * zoom),
-                         size: CGSize(width: width * zoom, height: width * aspect * zoom), angle: angle, opacity: opacity,
-                         blur: blur, toLight: toLight, light: light, dim: 0.62 + 0.38 * CGFloat(s.awake), front: front,
-                         texture: index)
     }
 
     /// The point the push grows things from (stage points): the middle of the pedestal's top. From

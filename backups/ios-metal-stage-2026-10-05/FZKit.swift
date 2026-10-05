@@ -12,8 +12,6 @@ extension Color {
 // MARK: The glow under buttons
 
 /// Light pooling under a button and catching its bottom edge, like it's sitting on something lit.
-/// Soft gradients, not blurs: a blur is an extra pass every frame the screen redraws (and Today
-/// redraws every frame).
 struct BottomGlow: ViewModifier {
     var color: Color = .fzGlow
     var strength: Double = 1
@@ -21,12 +19,12 @@ struct BottomGlow: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(alignment: .bottom) {
-                Rectangle()
-                    .fill(EllipticalGradient(colors: [color.opacity(0.42 * strength), color.opacity(0)],
-                                             center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5))
-                    .frame(height: 58)
-                    .padding(.horizontal, 4)
-                    .offset(y: 16)
+                Ellipse()
+                    .fill(color.opacity(0.5 * strength))
+                    .frame(height: 26)
+                    .padding(.horizontal, 26)
+                    .offset(y: 14)
+                    .blur(radius: 16)
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .bottom) {
@@ -35,6 +33,7 @@ struct BottomGlow: ViewModifier {
                                          startPoint: .leading, endPoint: .trailing))
                     .frame(height: 1.5)
                     .padding(.horizontal, 18)
+                    .blur(radius: 0.6)
                     .allowsHitTesting(false)
             }
     }

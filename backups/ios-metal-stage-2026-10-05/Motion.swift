@@ -1,14 +1,13 @@
 import SwiftUI
 
-// MARK: Rise: things arrive rising and settling into place.
+// MARK: Rise: things arrive rising and settling. A short, light blur only, so text is always readable.
 
-/// Fading up and rising. (It used to blur a little too, but a blur stays on the view after it lands,
-/// radius 0 or not, and costs a pass on every frame the screen redraws: on Today, every frame.)
 struct BlurRise: ViewModifier {
     let amount: Double
 
     func body(content: Content) -> some View {
         content
+            .blur(radius: amount * 4)
             .opacity(1 - amount)
             .offset(y: amount * 18)
     }

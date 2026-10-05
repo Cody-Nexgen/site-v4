@@ -52,7 +52,7 @@ function glProgram(gl, frag) {
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   return pr;
 }
-const PRE = '#version 300 es\nprecision highp float;\n#define float2 vec2\n#define float3 vec3\n#define float4 vec4\n#define static\n#define atan2 atan\n';
+const PRE = '#version 300 es\nprecision highp float;\n#define float2 vec2\n#define float3 vec3\n#define float4 vec4\n#define static\n#define inline\n#define atan2 atan\n';
 
 (async () => {
   const [photo, wide, ...rocks] = await Promise.all([load('../../Art/orb-stage.jpg'), load('../../Art/orb-stage-wide.jpg'), ...[0, 1, 2, 3, 4, 5].map(i => load('../../App/Assets.xcassets/OrbRock' + i + '.imageset/orb-rock-' + i + '.png'))]);
@@ -89,8 +89,10 @@ void main() {
     gs.drawImage(photo, 0, 0, L.IMG.w, strip / L.scale, L.fr.x + cam[0] * 0.06, L.fr.y + strip - (reach + strip) + cam[1] * 0.06, L.fr.w, reach + strip); gs.restore();
     gs.globalCompositeOperation = 'destination-in'; const gm = gs.createLinearGradient(0, L.fr.y + strip - reach - strip, 0, L.fr.y + strip); gm.addColorStop(0, 'rgba(0,0,0,0.5)'); gm.addColorStop(1, 'rgba(0,0,0,1)'); gs.fillStyle = gm; gs.fillRect(0, 0, W, L.fr.y + strip); }
 
+  // 2*. The Metal pass (StageView.metal), ported line for line: the photo, rocks, glass and orb in one.
+  if (P.METAL) { drawMetalPass(photo, rocks); }
   // 2. The stage photo through the world shader.
-  const cv = layer(2); const gl = cv.getContext('webgl2', {premultipliedAlpha: false});
+  const cv = layer(2); if (P.METAL) cv.style.display = 'none'; const gl = cv.getContext('webgl2', {premultipliedAlpha: false});
   const pr = glProgram(gl, PRE + `uniform sampler2D uPhoto; uniform vec2 uOrigin, uFrameSize, uCam, uSize, uOn; uniform float uPx; uniform vec4 uState, uOrb, uRing, uTop, uDepth, uPed, uPush; uniform float uReveal, uRevealR; out vec4 o;
 ${window.WORLD_GLSL}
 void main() {
@@ -160,6 +162,7 @@ void main() {
     const zr = pushZoom(rockDepth); g.translate(pushFrom[0], pushFrom[1]); g.scale(zr, zr); g.translate(-pushFrom[0], -pushFrom[1]); g.translate(x, y); g.rotate(angle * Math.PI / 180); g.drawImage(off, -w / 2 - 2, -h / 2 - 2, w + 4, h + 4); g.restore();
   }
   function rocksLayer(front, z) {
+    if (P.METAL) return;
     const g = layer(z).getContext('2d'); g.scale(2, 2);
     for (const [i, rx, ry, rw, depth, blur, from, to, sway, phase, isFront] of ROCKS) { if (isFront !== front) continue;
       const up = sm(from, to, LIFT); const x = L.orb[0] + rx * L.R + cam[0] * depth;
@@ -189,7 +192,7 @@ void main() {
       strokeBolt(begin, end, seed * 7 + i, P.ARCS * (0.6 + 0.4 * fl), 1); } }
 
   // 5b. Through the glass: the world behind it, upside down and squeezed.
-  if (P.FORMED > 0.05) { const cr = layer(6, 1 + PUSH); const gr2 = cr.getContext('2d'); gr2.scale(2, 2); const sq = 0.5, ball = L.R; const f = L.fr;
+  if (P.FORMED > 0.05 && !P.METAL) { const cr = layer(6, 1 + PUSH); const gr2 = cr.getContext('2d'); gr2.scale(2, 2); const sq = 0.5, ball = L.R; const f = L.fr;
     gr2.save(); gr2.beginPath(); gr2.arc(orbAt[0], orbAt[1], ball * (0.12 + 0.88 * P.FORMED), 0, 7); gr2.clip();
     gr2.globalAlpha = Math.min(1, P.FORMED * 2) * (0.55 + 0.45 * AW) * P.SCENE; gr2.filter = `blur(1px) saturate(${0.5 + 0.5 * AW})`;
     gr2.translate(orbAt[0], orbAt[1]); gr2.scale(-1, -1);
@@ -197,7 +200,7 @@ void main() {
     gr2.restore(); gr2.globalCompositeOperation = 'multiply'; gr2.fillStyle = 'rgb(199,245,219)'; gr2.beginPath(); gr2.arc(orbAt[0], orbAt[1], ball, 0, 7); gr2.fill(); }
 
   // 6. The orb.
-  if (P.FORMED > 0.001) { const og = layer(6); const size = L.R * 2 / 0.84 * 1.5; og.width = size * 2; og.height = size * 2; Object.assign(og.style, {left: (orbAt[0] - size / 2) + 'px', top: (orbAt[1] - size / 2) + 'px', width: size + 'px', height: size + 'px',
+  if (P.FORMED > 0.001 && !P.METAL) { const og = layer(6); const size = L.R * 2 / 0.84 * 1.5; og.width = size * 2; og.height = size * 2; Object.assign(og.style, {left: (orbAt[0] - size / 2) + 'px', top: (orbAt[1] - size / 2) + 'px', width: size + 'px', height: size + 'px',
       transformOrigin: (pushFrom[0] - orbAt[0] + size / 2) + 'px ' + (pushFrom[1] - orbAt[1] + size / 2) + 'px', transform: 'scale(' + (1 + PUSH) + ')'});
     const g = og.getContext('webgl2', {premultipliedAlpha: true}); const p2 = glProgram(g, PRE + `uniform vec2 uSize; uniform float uT, uE; uniform vec3 uTouch; out vec4 o;\n${window.ORB_GLSL}\nvoid main(){ vec2 pos = vec2(gl_FragCoord.x, uSize.y - gl_FragCoord.y); float side = min(uSize.x, uSize.y); vec2 p = (pos - uSize*0.5)/(side*0.5); o = fzOrb(p, uT, uE, 4.5/side, uTouch); }`);
     g.uniform2f(g.getUniformLocation(p2, 'uSize'), size * 2, size * 2); g.uniform1f(g.getUniformLocation(p2, 'uT'), T % 1200); g.uniform1f(g.getUniformLocation(p2, 'uE'), E);
@@ -220,3 +223,84 @@ void main() {
       g8.fillStyle = `rgba(255,255,255,${0.95 * a})`; g8.beginPath(); g8.arc(s[0], s[1], size / 2, 0, 7); g8.fill(); } }
   window.done = true;
 })();
+
+// The Metal pass, with the uniforms OrbStage.stageUniforms / stageRocks compute.
+function drawMetalPass(photo, rockImgs) {
+  const c = layer(2); const gl = c.getContext('webgl2', {premultipliedAlpha: true});
+  const frag = PRE + `uniform sampler2D uPhoto, uR0, uR1, uR2, uR3, uR4, uR5; uniform vec4 uView, uPhotoU, uFade, uCam, uState, uOrb, uRing, uTop, uDepth, uPed, uPush, uOrbView, uTouch, uGlass; uniform vec4 uRocks[24]; out vec4 o;
+${window.WORLD_GLSL}
+${window.ORB_GLSL}
+vec4 tex(int i, vec2 uv, float lod) {
+  if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return vec4(0.0);
+  if (i == 0) return textureLod(uR0, uv, lod); if (i == 1) return textureLod(uR1, uv, lod); if (i == 2) return textureLod(uR2, uv, lod);
+  if (i == 3) return textureLod(uR3, uv, lod); if (i == 4) return textureLod(uR4, uv, lod); return textureLod(uR5, uv, lod);
+}
+vec4 over(vec4 a, vec4 b) { return a + b * (1.0 - a.a); }
+vec4 rock(vec2 p, vec4 a, vec4 b, vec4 c, int ti) {
+  vec2 d = p - a.xy; vec2 own = vec2(d.x * b.x + d.y * b.y, -d.x * b.y + d.y * b.x); vec2 uv = own / (a.zw * 2.0) + 0.5;
+  if (b.z < 0.002 || uv.x < -0.02 || uv.y < -0.02 || uv.x > 1.02 || uv.y > 1.02) return vec4(0.0);
+  vec4 col = tex(ti, uv, b.w); float alpha = col.a; if (alpha < 0.01) return vec4(0.0);
+  vec2 toward = c.xy / (a.zw * 2.0); float nr = tex(ti, uv + toward * 2.0, b.w).a; float fr = tex(ti, uv + toward * 6.0, b.w).a;
+  float rim = max(clamp(alpha - nr, 0.0, 1.0), clamp(alpha - fr, 0.0, 1.0) * 0.55); vec3 mint = vec3(0.70, 0.96, 0.82);
+  vec3 rgb = col.rgb * c.w * 0.62 * (vec3(1.0) + mint * c.z * 0.8) + mint * rim * c.z * alpha;
+  return vec4(rgb, alpha) * b.z;
+}
+vec4 rocksPass(vec4 col, vec2 p, int count, float front) {
+  for (int i = 0; i < 6; i++) { if (i >= count) break; vec4 e = uRocks[i * 4 + 3]; if (e.x != front) continue;
+    col = over(rock(p, uRocks[i * 4], uRocks[i * 4 + 1], uRocks[i * 4 + 2], int(e.y)), col); }
+  return col;
+}
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, uView.y - gl_FragCoord.y) / uView.z; float t = uView.w; int count = int(uCam.z); vec4 col = vec4(0.0);
+  vec2 origin = uPhotoU.xy; float pxScale = uPhotoU.z; vec2 local = p - origin;
+  float m = fzPhotoFade(local, uFade, uPed.xy * pxScale) * uPhotoU.w;
+  if (m > 0.002) { vec2 src = fzUnpush(local, vec4(uPush.xy - origin, uPush.zw), pxScale, uDepth, uPed); float depth = fzWorldDepth(src / pxScale, uDepth, uPed);
+    vec2 uv = (src - uCam.xy * depth) / uFade.xy; float lod = log2(max(1.0, 1.0 / (pxScale * uView.z)));
+    vec4 c = (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) ? vec4(0.0) : textureLod(uPhoto, uv, lod);
+    if (c.a > 0.002) { vec3 lit = fzWorld(c.rgb / c.a, origin + src, t, uState.x, uState.y, uState.z, uState.w, uOrbView.z, uOrb.xy, uOrb.z, uRing.xy, uRing.zw, uTop.xy, uTop.z, uTop.w, uOrb.w);
+      col = vec4(lit * c.a, c.a) * m; } }
+  col = rocksPass(col, p, count, 0.0);
+  float formed = uOrbView.y;
+  if (formed > 0.001) { vec2 q = uPush.xy + (p - uPush.xy) / (1.0 + uPush.z); float shrink = 0.12 + 0.88 * formed; vec2 d = (q - uOrb.xy) / shrink; float ball = uOrb.z; float r = length(d);
+    if (formed > 0.05 && r < ball + 1.0) { vec2 w = uOrb.xy - 2.0 * d; vec2 uv = (w - origin) / uFade.xy;
+      vec4 seen = (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) ? vec4(0.0) : textureLod(uPhoto, uv, 1.0);
+      vec3 g = mix(vec3(dot(seen.rgb, FZ_LUMA)), seen.rgb, vec3(uGlass.y)) * vec3(0.78, 0.96, 0.86);
+      float a = min(1.0, formed * 2.0) * uGlass.x * seen.a * (1.0 - smoothstep(ball - 1.0, ball, r)); col = over(vec4(g * a, a), col); }
+    float side = uOrbView.x; vec2 op = d / (side * 0.5);
+    if (abs(op.x) < 1.0 && abs(op.y) < 1.0) { vec3 finger = vec3(uTouch.xy / (side * 0.5), uTouch.z);
+      vec4 ob = fzOrb(op, t, clamp(uState.x, 0.0, 1.0), 1.5 / (side * shrink), finger); col = over(ob * min(1.0, formed * 2.5), col); } }
+  col = rocksPass(col, p, count, 1.0);
+  o = col;
+}`;
+  const pr = glProgram(gl, frag); const u = n => gl.getUniformLocation(pr, n);
+  const mk = (img, unit, name) => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img); gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); gl.uniform1i(u(name), unit); };
+  mk(photo, 0, 'uPhoto'); rockImgs.forEach((img, i) => mk(img, i + 1, 'uR' + i));
+  const [cc, z] = L.camera(d); const px = L.scale * z / L.zoom1; const origin = [cc[0] - L.RING.x * px, cc[1] - L.RING.y * px]; const reveal = sm(0.45, 0.95, d);
+  // The rocks, as OrbStage.stageRocks lists them (FloatingRock.all, then the pebble).
+  const list = []; const R = L.R; const pushZoom = (dep) => 1 + PUSH * Math.min(dep / L.pedDepth, 1.8);
+  const add = (ti, w, x, y, angle, opacity, blur, zoom, front) => { const img = rockImgs[ti]; const dx = orbAt[0] - x, dy = orbAt[1] - y, dist = Math.max(Math.hypot(dx, dy), 1);
+    const back = -angle * Math.PI / 180; const tl = [(dx * Math.cos(back) - dy * Math.sin(back)) / dist, (dx * Math.sin(back) + dy * Math.cos(back)) / dist];
+    const near = dist / R; const light = P.FORMED * (0.25 + 0.85 * E) / (1 + near * near * 0.25) + P.FLASH * 0.5; const dim = 0.62 + 0.38 * AW;
+    const cx = L.ring[0] + (x - L.ring[0]) * zoom, cy = L.ring[1] + (y - L.ring[1]) * zoom; const ww = w * zoom, hh = w * img.height / img.width * zoom;
+    const a = angle * Math.PI / 180; const level = Math.log2(Math.max(img.width / (ww * 2), 1)) + Math.log2(1 + blur * 2);
+    list.push([cx, cy, ww / 2, hh / 2], [Math.cos(a), Math.sin(a), opacity, level], [tl[0], tl[1], light, dim], [front ? 1 : 0, ti, 0, 0]); };
+  for (const [ti, rx, ry, rw, depth, blur, from, to, sway, phase, isFront] of [[0, -2.3, 0.25, 0.95, 0.32, 0, 0, 0.35, 5, 0.3, false], [1, 2.25, -0.6, 0.78, 0.28, 0.6, 0.15, 0.5, 4, 1.7, false], [4, -1.45, -1.55, 0.62, 0.25, 0.8, 0.3, 0.65, 8, 2.9, false], [2, -1.9, 2.5, 1.3, 0.75, 3, 0.1, 0.45, 3, 4.1, true], [3, 2.3, 1.9, 1.15, 0.6, 1.6, 0.4, 0.8, 3, 5.3, true]]) {
+    const up = sm(from, to, LIFT); const op = up * P.SCENE; if (op <= 0.002) continue;
+    const x = L.orb[0] + rx * R + cam[0] * depth; const y = L.orb[1] + ry * R + Math.sin(T * 0.55 + phase) * 0.09 * R + (1 - up) * 1.4 * R + cam[1] * depth;
+    add(ti, rw * R, x, y, sway * Math.sin(T * 0.21 + phase) + (1 - up) * 24, op, blur * L.k, pushZoom(depth), isFront); }
+  { const a = T * 0.62; const up = sm(0.55, 0.85, LIFT); const op = up * P.SCENE;
+    if (op > 0.002) add(5, R * 0.3 * (1 + 0.15 * Math.sin(a)), orbAt[0] + Math.cos(a) * 1.6 * R + cam[0] * 0.05, orbAt[1] + Math.sin(a) * 0.32 * R - 0.1 * R + cam[1] * 0.05, a * 20, op, 0, 1 + PUSH, Math.sin(a) > 0); }
+  const count = list.length / 4; while (list.length < 24) list.push([0, 0, 0, 0]);
+  gl.uniform4fv(u('uRocks'), new Float32Array(list.flat()));
+  const v4 = (n, a) => gl.uniform4f(u(n), ...a);
+  v4('uView', [W * 2, H * 2, 2, T % 1200]); v4('uPhotoU', [origin[0], origin[1], px, reveal * P.SCENE]); v4('uFade', [L.IMG.w * px, L.IMG.h * px, 0, L.IMG.w * px * (0.4 + 3 * reveal)]);
+  v4('uCam', [cam[0], cam[1], count, 0]); v4('uState', [E, AW, P.FLASH, Math.max(P.FORMED, P.SPARK * 0.5)]); v4('uOrb', [orbAt[0], orbAt[1], L.R, L.k]);
+  v4('uRing', [L.ring[0] + pedShift[0], L.ring[1] + pedShift[1], L.rr[0], L.rr[1]]); v4('uTop', [L.topR[0], L.topR[1], L.base + pedShift[1], L.horizon]);
+  v4('uDepth', [440, 1402, 784, 0]); v4('uPed', [557.5, 570, 293.5, 69]); v4('uPush', [L.ring[0], L.ring[1], PUSH, L.pedDepth]);
+  v4('uOrbView', [L.R * 2 / 0.84 * 1.5, P.FORMED, P.RING, 0]);
+  v4('uTouch', P.TOUCH ? [P.TOUCH[0] - orbAt[0], P.TOUCH[1] - orbAt[1], 1, 0] : [0, 0, 0, 0]); v4('uGlass', [(0.55 + 0.45 * AW) * P.SCENE, 0.5 + 0.5 * AW, 0, 0]);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}

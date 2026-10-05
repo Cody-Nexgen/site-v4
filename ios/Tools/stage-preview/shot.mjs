@@ -2,12 +2,14 @@
 //   node ios/Tools/stage-preview/shot.mjs shots.json <out dir>
 // shots.json is a list of frames: {"name": "today"} plus any of page.js's P values to change
 // (E energy, AWAKE, LIFT, DOLLY, SCATTER, GATHER seconds, CAM [x, y], TOUCH [x, y], FORMED, T time,
-// PUSH: Today pulled down, how much the pedestal has grown, 0.28 at most...).
+// PUSH: Today pulled down, how much the pedestal has grown, 0.28 at most; METAL: true draws the photo,
+// rocks, glass and orb the way StageView.metal does, in one pass, instead of as separate layers...).
 import { createRequire } from 'module'; import fs from 'fs'; import path from 'path'; import { execSync } from 'child_process'; import { fileURLToPath } from 'url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url); const { chromium } = require(process.env.PW || path.join(execSync('npm root -g').toString().trim(), 'playwright'));
-const strip = (f) => fs.readFileSync(f, 'utf8').split('// BEGIN SHARED')[1].split('// END SHARED')[0];
-const WORLD = strip(path.join(here, '../../App/Design/OrbWorld.metal')), ORB = strip(path.join(here, '../../App/Design/FocusOrb.metal'));
+const shared = fs.readFileSync(path.join(here, '../../App/Design/OrbShared.h'), 'utf8');
+const strip = (name) => shared.split('// BEGIN SHARED ' + name)[1].split('// END SHARED ' + name)[0];
+const WORLD = strip('WORLD'), ORB = strip('ORB');
 const shots = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const out = path.resolve(process.argv[3] || '.'); fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--allow-file-access-from-files'] });

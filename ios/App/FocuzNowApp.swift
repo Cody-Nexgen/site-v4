@@ -18,6 +18,8 @@ struct FocuzNowApp: App {
             RootView()
                 .environment(model)
                 .environment(popups)
+                // The orb stage's Metal pass (pipeline and textures), made while the splash plays.
+                .task { _ = StageGPU.shared }
         }
     }
 }

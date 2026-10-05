@@ -119,13 +119,13 @@ struct TodayView: View {
                     .foregroundStyle(.white)
                 Spacer()
                 Button(action: openCoach) {
-                    // Not Liquid Glass here: glass over the moving scene re-renders every frame.
                     Image(systemName: "sparkles")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 40, height: 40)
-                        .background(Circle().fill(Color.black.opacity(0.35)))
-                        .overlay(Circle().strokeBorder(.white.opacity(0.16)))
+                        .background(Circle().fill(.white.opacity(0.06)))
+                        .overlay(Circle().strokeBorder(.white.opacity(0.13)))
+                        .fzGlass(in: Circle(), interactive: true)
                 }
                 .buttonStyle(.pressable)
                 .accessibilityLabel("Coach")
@@ -191,15 +191,7 @@ struct TodayView: View {
                 .monospacedDigit()
                 .foregroundStyle(LinearGradient(colors: [.white, Color(hex: 0xCFF5DE)], startPoint: .top, endPoint: .bottom))
                 .contentTransition(.numericText(value: Double(shownScore)))
-                // The orb's light on it: a gradient behind, not a shadow (a shadow is a blur, redone
-                // every frame over the moving scene).
-                .background {
-                    Rectangle()
-                        .fill(EllipticalGradient(colors: [Color.fzMint.opacity(0.2), Color.fzMint.opacity(0)],
-                                                 center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5))
-                        .frame(width: 190, height: 110)
-                        .allowsHitTesting(false)
-                }
+                .shadow(color: Color.fzMint.opacity(0.45), radius: 22)
             HStack(spacing: 7) {
                 Text(Theme.orbWord(model.focusScore))
                     .foregroundStyle(Color.fzMint)
