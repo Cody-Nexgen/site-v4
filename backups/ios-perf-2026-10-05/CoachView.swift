@@ -12,9 +12,6 @@ struct CoachView: View {
 
     private let suggestions = ["Plan my afternoon", "Why do I keep getting distracted?", "Quiz me on chapter 4", "Make a study schedule"]
 
-    /// The chats sliding in and out: quick, no wobble.
-    private static let slide = Animation.snappy(duration: 0.26)
-
     var body: some View {
         ZStack(alignment: .leading) {
             SkyBackground(mood: .night, intensity: 0.7)
@@ -34,9 +31,9 @@ struct CoachView: View {
             if showLibrary {
                 Color.black.opacity(0.45)
                     .ignoresSafeArea()
-                    .onTapGesture { withAnimation(Self.slide) { showLibrary = false } }
+                    .onTapGesture { withAnimation(.smooth) { showLibrary = false } }
                     .transition(.opacity)
-                ChatLibrary(close: { withAnimation(Self.slide) { showLibrary = false } })
+                ChatLibrary(close: { withAnimation(.smooth) { showLibrary = false } })
                     .transition(.move(edge: .leading))
             }
         }
@@ -50,7 +47,7 @@ struct CoachView: View {
         HStack {
             GlassCircleButton(symbol: "line.3.horizontal", size: 44) {
                 focused = false
-                withAnimation(Self.slide) { showLibrary = true }
+                withAnimation(.smooth) { showLibrary = true }
             }
             .accessibilityLabel("Chats")
             Spacer()
@@ -76,21 +73,14 @@ struct CoachView: View {
     private var emptyState: some View {
         VStack(spacing: 18) {
             Spacer()
-            // Coach lives in your orb.
-            FocusOrb(energy: 0.55, size: 96)
+            LampGlow(size: 90)
+                .frame(width: 90, height: 90)
                 .riseIn()
-            VStack(spacing: 6) {
-                Text(hello.title)
-                    .font(.fzDisplay(30, weight: .bold))
-                    .fzTight(30)
-                    .foregroundStyle(Color.fzInk)
-                Text(hello.line)
-                    .font(.body)
-                    .foregroundStyle(Color.fzInk2)
-            }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 24)
-            .riseIn(delay: 0.15)
+            Text("Ready when you are, \(model.userName)")
+                .font(.fzDisplay(28))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Color.fzInk)
+                .riseIn(delay: 0.15)
             Spacer()
             ScrollView(.horizontal) {
                 HStack(spacing: 10) {
@@ -113,17 +103,6 @@ struct CoachView: View {
             .padding(.bottom, 10)
         }
         .id(model.currentConversationID)
-    }
-
-    /// What Coach says when there's nothing yet, by the time of day.
-    private var hello: (title: String, line: String) {
-        let name = model.userName
-        switch Calendar.current.component(.hour, from: .now) {
-        case 5..<12: return ("Morning, \(name).", "What's first today?")
-        case 12..<17: return ("Hey \(name).", "What are we getting done?")
-        case 17..<22: return ("Evening, \(name).", "Wrapping up, or just getting started?")
-        default: return ("Still up, \(name)?", "Let's make it quick. Then sleep.")
-        }
     }
 
     private func thread(_ conversation: Conversation) -> some View {
@@ -223,7 +202,8 @@ private struct Bubble: View {
 private struct ThinkingLine: View {
     var body: some View {
         HStack(spacing: 10) {
-            FocusOrb(energy: 0.85, size: 28)
+            LampGlow(size: 28)
+                .frame(width: 28, height: 28)
             Text("Thinking")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.fzInk3)
@@ -242,8 +222,7 @@ private struct ChatLibrary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
-                FocusOrb(energy: 0.5, size: 30)
+            HStack {
                 Text("Coach").font(.title2.weight(.bold)).foregroundStyle(Color.fzInk)
                 Spacer()
                 GlassCircleButton(symbol: "xmark", size: 38, action: close)
@@ -264,7 +243,7 @@ private struct ChatLibrary: View {
             SectionLabel("Recent").padding(.top, 18).padding(.leading, 14)
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(filtered) { conversation in
+                    ForEach(Array(filtered.enumerated()), id: \.element.id) { index, conversation in
                         Button {
                             model.currentConversationID = conversation.id
                             close()
@@ -279,13 +258,14 @@ private struct ChatLibrary: View {
                             .background(conversation.id == model.currentConversationID ? Color.fzSurface : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .buttonStyle(.plain)
+                        .riseIn(delay: 0.04 * Double(index))
                     }
                 }
             }
             .scrollIndicators(.hidden)
             Spacer(minLength: 0)
             HStack(spacing: 12) {
-                Avatar(name: model.userName, size: 40, image: model.profilePhoto)
+                Avatar(name: model.userName, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.userName).font(.headline).foregroundStyle(Color.fzInk)
                     Text(model.isPro ? "Pro" : "Free").font(.caption).foregroundStyle(Color.fzInk3)

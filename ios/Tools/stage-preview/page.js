@@ -102,11 +102,8 @@ void main() {
   vec2 src = (at - uCam * depth) / uFrameSize;
   vec3 photo = texture(uPhoto, src).rgb;
   vec3 c = fzWorld(photo, uOrigin + at, uState.x, uState.y, uState.z, uState.w, uOn.x, uOn.y, uOrb.xy, uOrb.z, uRing.xy, uRing.zw, uTop.xy, uTop.z, uTop.w, uOrb.w);
-  vec2 uv = local / uFrameSize;
-  float fade = smoothstep(0.0, 0.05, uv.y) * (1.0 - smoothstep(0.68, 1.0, uv.y));
-  float rd = length(local - vec2(557.5, 570.0) * uPx) / (uFrameSize.x * uRevealR);
-  float rad = 1.0 - smoothstep(0.7, 1.0, rd);
-  o = vec4(c, fade * rad * uReveal);
+  float m = fzPhotoFade(local, vec4(uFrameSize, 0.0, uFrameSize.x * uRevealR), vec2(557.5, 570.0) * uPx);
+  o = vec4(c, m * uReveal);
 }`);
   const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, photo);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);

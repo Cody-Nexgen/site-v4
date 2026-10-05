@@ -5,8 +5,6 @@ import SwiftUI
 extension Color {
     /// The light under every button (and behind popups). One place to change it.
     static let fzGlow = Color.fzMint
-    /// Things that can't be undone: the hold button's words and orb, the popup's icon.
-    static let fzRed = Color(hex: 0xFF5C5C)
 }
 
 // MARK: The glow under buttons
@@ -192,9 +190,8 @@ extension View {
     func fzPopupHost(layer: Int = 0) -> some View { modifier(PopupHost(layer: layer)) }
 }
 
-/// A sheet of Liquid Glass attached to the bottom of the screen, in reach of your thumb: an outlined
-/// icon in the popup's colour, a title, a line or two, and buttons with an orb of the action's colour
-/// at their foot. Drag it down (or tap outside) to close it, if it has a way out.
+/// A sheet of Liquid Glass floating at the bottom, in reach of your thumb, with its colour glowing up
+/// from behind it. Drag it down (or tap outside) to close it, if it has a way out.
 private struct PopupView: View {
     let popup: FZPopup
     @Environment(PopupCenter.self) private var center
@@ -205,13 +202,15 @@ private struct PopupView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.black.opacity(shown ? 0.5 : 0)
+            Color.black.opacity(shown ? 0.55 : 0)
                 .ignoresSafeArea()
                 // Tapping outside closes a popup that has a way out, without pressing either button.
                 .onTapGesture { if closable { center.dismiss() } }
 
-            sheet
-                .offset(y: shown ? drag : 700)
+            card
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
+                .offset(y: shown ? drag : 560)
                 .gesture(
                     DragGesture(minimumDistance: 10)
                         .onChanged { value in
@@ -230,13 +229,12 @@ private struct PopupView: View {
                 )
         }
         .environment(\.colorScheme, .dark)
-        .onAppear { withAnimation(.spring(duration: 0.45, bounce: 0.1)) { shown = true } }
+        .onAppear { withAnimation(.spring(duration: 0.5, bounce: 0.16)) { shown = true } }
         .sensoryFeedback(.impact(weight: .light), trigger: shown)
     }
 
-    private var sheet: some View {
-        let shape = UnevenRoundedRectangle(topLeadingRadius: 34, bottomLeadingRadius: 0, bottomTrailingRadius: 0,
-                                           topTrailingRadius: 34, style: .continuous)
+    private var card: some View {
+        let shape = RoundedRectangle(cornerRadius: 38, style: .continuous)
         return VStack(spacing: 0) {
             if closable {
                 Capsule()
@@ -246,11 +244,12 @@ private struct PopupView: View {
             }
             VStack(spacing: 12) {
                 Image(systemName: popup.symbol)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(popup.destructive ? Color.fzRed : popup.tint)
-                    .frame(width: 60, height: 60)
-                    .background(Circle().fill((popup.destructive ? Color.fzRed : popup.tint).opacity(0.1)))
-                    .overlay(Circle().strokeBorder((popup.destructive ? Color.fzRed : popup.tint).opacity(0.4), lineWidth: 1))
+                    .font(.system(size: 25, weight: .semibold))
+                    .foregroundStyle(popup.tint)
+                    .frame(width: 64, height: 64)
+                    .background(Circle().fill(popup.tint.opacity(0.14)))
+                    .overlay(Circle().strokeBorder(popup.tint.opacity(0.45), lineWidth: 1.2))
+                    .shadow(color: popup.tint.opacity(0.45), radius: 18)
                     .padding(.bottom, 2)
                 Text(popup.title)
                     .font(.fzDisplay(23, weight: .bold))
@@ -258,7 +257,7 @@ private struct PopupView: View {
                     .multilineTextAlignment(.center)
                 Text(popup.message)
                     .font(.body)
-                    .foregroundStyle(.white.opacity(0.68))
+                    .foregroundStyle(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 if let extra = popup.extra {
@@ -271,7 +270,7 @@ private struct PopupView: View {
                             FZHoldButton(title: primary) { finish(popup.onPrimary) }
                         } else {
                             Button(primary) { finish(popup.onPrimary) }
-                                .buttonStyle(FZOrbButtonStyle(color: popup.tint))
+                                .buttonStyle(FZPrimaryButtonStyle(glow: popup.tint))
                         }
                     }
                     if let secondary = popup.secondary {
@@ -287,24 +286,32 @@ private struct PopupView: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, closable ? 14 : 24)
-            .padding(.bottom, 10)
+            .padding(.bottom, 14)
         }
-        .frame(maxWidth: 560)
-        .frame(maxWidth: .infinity)
-        // The glass runs on under the home indicator, to the bottom edge.
+        .frame(maxWidth: 520)
         .background {
-            ZStack(alignment: .top) {
-                shape.fill(Color(hex: 0x121416).opacity(0.72))
-                // A hint of the popup's colour from the top, nothing more.
-                LinearGradient(colors: [(popup.destructive ? Color.fzRed : popup.tint).opacity(0.1), .clear],
-                               startPoint: .top, endPoint: .center)
+            ZStack {
+                shape.fill(Color(hex: 0x15171A).opacity(0.5))
+                // The popup's colour glowing up through the glass from the top.
+                LinearGradient(stops: [.init(color: popup.tint.opacity(0.34), location: 0),
+                                       .init(color: popup.tint.opacity(0.08), location: 0.45),
+                                       .init(color: .clear, location: 0.8)],
+                               startPoint: .top, endPoint: .bottom)
                     .clipShape(shape)
+                    .phaseAnimator([0.8, 1.0]) { glow, phase in glow.opacity(phase) } animation: { _ in .easeInOut(duration: 2.4) }
             }
-            .fzGlass(in: shape)
-            .overlay(shape.stroke(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0)], startPoint: .top, endPoint: .center),
-                                  lineWidth: 1))
-            .frame(maxWidth: 560)
-            .ignoresSafeArea(edges: .bottom)
+        }
+        .fzGlass(in: shape)
+        .fzEdgeLight(cornerRadius: 38)
+        .background(alignment: .top) {
+            // ...and spilling out round it.
+            Ellipse()
+                .fill(popup.tint.opacity(0.3))
+                .frame(height: 180)
+                .padding(.horizontal, 30)
+                .offset(y: -50)
+                .blur(radius: 50)
+                .allowsHitTesting(false)
         }
     }
 
@@ -314,56 +321,11 @@ private struct PopupView: View {
     }
 }
 
-/// A popup's button: dark glass, the words in the action's colour, and an orb of that colour glowing
-/// softly at its foot. Pressing it brightens the orb.
-struct FZOrbButtonStyle: ButtonStyle {
-    var color: Color
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundStyle(color)
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background {
-                ZStack {
-                    Capsule().fill(.white.opacity(0.06))
-                    FZButtonOrb(color: color, glow: configuration.isPressed ? 1 : 0.45)
-                        .animation(configuration.isPressed ? .easeOut(duration: 0.2) : .easeOut(duration: 0.45), value: configuration.isPressed)
-                }
-                .clipShape(Capsule())
-            }
-            .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
-            .contentShape(Capsule())
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.spring(duration: 0.25), value: configuration.isPressed)
-    }
-}
-
-/// The orb at a button's foot: a soft ball of colour, half below the bottom edge (the capsule clips it).
-/// `glow` 0...1.5: how big and bright it is.
-struct FZButtonOrb: View {
-    var color: Color
-    var glow: Double
-
-    var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width * (0.3 + 0.32 * glow)
-            Rectangle()
-                .fill(EllipticalGradient(colors: [color.opacity(min(0.85, 0.35 + 0.4 * glow)), color.opacity(0)],
-                                         center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5))
-                .frame(width: width, height: proxy.size.height * 1.4)
-                .position(x: proxy.size.width / 2, y: proxy.size.height * 1.02)
-        }
-        .allowsHitTesting(false)
-    }
-}
-
-/// Press and hold to confirm something that can't be undone: the red orb at its foot swells as you
-/// hold, with ticks that speed up. Let go early and it shrinks back.
+/// Press and hold to confirm something that can't be undone: light fills the button from the left and
+/// glows along its bottom as you hold, with ticks that speed up. Let go early and it drains away.
 struct FZHoldButton: View {
     let title: String
-    var tint: Color = .fzRed
+    var tint: Color = Theme.danger
     var duration: Double = 1.0
     let action: () -> Void
 
@@ -374,45 +336,49 @@ struct FZHoldButton: View {
     @State private var tickTask: Task<Void, Never>?
 
     var body: some View {
-        Text(pressing ? "Keep holding…" : title)
-            .font(.headline)
-            .foregroundStyle(tint)
-            .contentTransition(.interpolate)
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background {
-                ZStack {
-                    Capsule().fill(.white.opacity(0.06))
-                    FZButtonOrb(color: tint, glow: 0.45 + 1.05 * Double(progress))
-                }
-                .clipShape(Capsule())
+        ZStack {
+            Capsule().fill(.white.opacity(0.05))
+            GeometryReader { proxy in
+                Capsule()
+                    .fill(LinearGradient(colors: [tint.opacity(0.16), tint.opacity(0.45)], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(proxy.size.height, proxy.size.width * progress))
+                    .opacity(progress > 0.001 ? 1 : 0)
             }
-            .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
-            .scaleEffect(pressing ? 0.98 : 1)
-            .animation(.spring(duration: 0.3), value: pressing)
-            .contentShape(Capsule())
-            .onLongPressGesture(minimumDuration: duration, maximumDistance: 60) {
+            .clipShape(Capsule())
+            Text(pressing ? "Keep holding…" : title)
+                .font(.headline)
+                .foregroundStyle(tint)
+                .contentTransition(.interpolate)
+        }
+        .frame(height: 54)
+        .overlay(Capsule().strokeBorder(.white.opacity(0.13)))
+        .fzGlass(in: Capsule())
+        .fzBottomGlow(tint, strength: 0.12 + 1.3 * Double(progress))
+        .scaleEffect(pressing ? 0.975 : 1)
+        .animation(.spring(duration: 0.3), value: pressing)
+        .contentShape(Capsule())
+        .onLongPressGesture(minimumDuration: duration, maximumDistance: 60) {
+            tickTask?.cancel()
+            done += 1
+            action()
+        } onPressingChanged: { isPressing in
+            pressing = isPressing
+            if isPressing {
+                withAnimation(.linear(duration: duration)) { progress = 1 }
+                startTicks()
+            } else {
                 tickTask?.cancel()
-                done += 1
-                action()
-            } onPressingChanged: { isPressing in
-                pressing = isPressing
-                if isPressing {
-                    withAnimation(.linear(duration: duration)) { progress = 1 }
-                    startTicks()
-                } else {
-                    tickTask?.cancel()
-                    withAnimation(.spring(duration: 0.45)) { progress = 0 }
-                }
+                withAnimation(.spring(duration: 0.45)) { progress = 0 }
             }
-            .sensoryFeedback(.impact(weight: .light, intensity: 0.6), trigger: ticks)
-            .sensoryFeedback(.success, trigger: done)
-            .accessibilityLabel(title)
-            .accessibilityHint("Press and hold")
-            .accessibilityAction { action() }
+        }
+        .sensoryFeedback(.impact(weight: .light, intensity: 0.6), trigger: ticks)
+        .sensoryFeedback(.success, trigger: done)
+        .accessibilityLabel(title)
+        .accessibilityHint("Press and hold")
+        .accessibilityAction { action() }
     }
 
-    /// Haptic ticks that speed up as the orb swells.
+    /// Haptic ticks that speed up as the light fills it.
     private func startTicks() {
         tickTask?.cancel()
         tickTask = Task { @MainActor in

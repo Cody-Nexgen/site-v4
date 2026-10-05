@@ -116,18 +116,6 @@ static float2 fzUnpush(float2 position, float4 push, float pxScale, float4 depth
     return src;
 }
 
-// The photo's own fades: into black at the top and bottom, at the sides on iPad (fade.z 1), and the
-// reveal out of the wide shot (a circle round the pedestal, radius fade.w). They were three SwiftUI
-// masks, each an extra full-size pass every frame. pos: the photo view's points. fade.xy: its size.
-static float fzPhotoFade(float2 pos, float4 fade, float2 revealAt) {
-    float v = pos.y / fade.y;
-    float a = clamp(v / 0.05, 0.0, 1.0) * clamp((1.0 - v) / 0.32, 0.0, 1.0);
-    float u = pos.x / fade.x;
-    a *= mix(1.0, clamp(u / 0.14, 0.0, 1.0) * clamp((1.0 - u) / 0.14, 0.0, 1.0), fade.z);
-    a *= 1.0 - clamp((length(pos - revealAt) / max(fade.w, 1.0) - 0.7) / 0.3, 0.0, 1.0);
-    return a;
-}
-
 // photo: the photo's colour at p. p and every place: stage points, y down. e: the orb's energy.
 // awake: how lit the world is (0 asleep). flash: a strike, 1 fading to 0. orbOn: how much of the orb
 // there is to give light. ringOn: how far the pedestal's ring is lit. k: the stage's scale.
@@ -187,25 +175,20 @@ static float3 fzWorld(float3 photo, float2 p, float t, float e, float awake, flo
 /// depthPx and pedPx: see fzWorldDepth. on: how much orb there is to give light, how far the ring is lit.
 /// push: pulling Today down (see fzUnpush; x, y in the photo view's points). Everything else is
 /// worked out where the point was before the push, so the light stays on the things it lights.
-/// fade: see fzPhotoFade.
 [[ stitchable ]] half4 orbWorld(float2 position, SwiftUI::Layer layer, float2 origin, float pxScale, float2 camera,
                                 float4 state, float4 orb, float4 ring, float4 topInfo, float4 depthPx, float4 pedPx, float2 on,
-                                float4 push, float4 fade) {
-    float m = fzPhotoFade(position, fade, pedPx.xy * pxScale);
-    if (m < 0.002) {
-        return half4(0.0);
-    }
+                                float4 push) {
     float2 src = fzUnpush(position, push, pxScale, depthPx, pedPx);
     float depth = fzWorldDepth(src / pxScale, depthPx, pedPx);
     half4 c = layer.sample(src - camera * depth);
     float a = float(c.a);
     if (a < 0.002) {
-        return half4(0.0);
+        return c;
     }
     float3 photo = float3(c.rgb) / a;
     float3 col = fzWorld(photo, origin + src, state.x, state.y, state.z, state.w, on.x, on.y,
                          orb.xy, orb.z, ring.xy, ring.zw, topInfo.xy, topInfo.z, topInfo.w, orb.w);
-    return half4(half3(col * a * m), half(a * m));
+    return half4(half3(col * a), c.a);
 }
 
 /// The wide shot as the camera flies in: everything grows from the pedestal by its own distance, so
@@ -231,20 +214,9 @@ static float3 fzWorld(float3 photo, float2 p, float t, float e, float awake, flo
 
 /// A floating rock: a mint rim on the edge that faces the orb (`toLight`, a unit vector in the rock's
 /// own unrotated points), `light` 0...1 how much of the orb's light reaches it, `dim` how dark the
-/// world is around it, `blur` how out of focus it is (points; done here, not as a SwiftUI blur,
-/// which would be another pass every frame).
-[[ stitchable ]] half4 rockLight(float2 position, SwiftUI::Layer layer, float2 toLight, float light, float dim, float blur) {
+/// world is around it.
+[[ stitchable ]] half4 rockLight(float2 position, SwiftUI::Layer layer, float2 toLight, float light, float dim) {
     half4 c = layer.sample(position);
-    if (blur > 0.05) {
-        // Thirteen taps: the middle, and two rings of six.
-        half4 sum = c * 2.0h;
-        for (int i = 0; i < 6; i++) {
-            float a = float(i) * 1.0471976;
-            float2 d = float2(cos(a), sin(a)) * blur;
-            sum += layer.sample(position + d * 0.5) + layer.sample(position + d) * 0.75h;
-        }
-        c = sum / 12.5h;
-    }
     float a = float(c.a);
     if (a < 0.01) {
         return c;

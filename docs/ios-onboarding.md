@@ -81,10 +81,21 @@ their own depth). Today is a night scene, so it stays dark in light mode too.
 
 Buttons glow underneath when you press them (`FZKit.swift`, `.fzPressGlow`: a hint of light at rest
 that blooms over a quarter of a second; colour `Color.fzGlow`, mint, the orb's light). Popups are
-`FZPopup`s: a Liquid Glass sheet floating at the bottom, in reach of your thumb, its colour glowing up
-through it, an outlined icon, a title, a line or two and a button; drag it down or tap outside to
-close it. Anything that can't be undone (delete, end a session early, switch the filter off, unlink)
-is a **hold** button (`FZHoldButton`): light fills it as you hold, with ticks that speed up.
+`FZPopup`s: a Liquid Glass sheet attached to the bottom edge, in reach of your thumb, with an outlined
+icon, a title, a line or two, and buttons with a soft orb of the action's colour at their foot; drag
+it down or tap outside to close it. Anything that can't be undone (delete, end a session early, switch
+the filter off, unlink) is a red **hold** button (`FZHoldButton`): its orb swells as you hold, with
+ticks that speed up.
+
+**Keeping it smooth (2026-10-05):** the stage was redrawing about twenty offscreen passes (blurs,
+masks, blended layers) 120 times a second, and the owner saw 4 fps while scrolling. Now: the stage and
+the orb draw at 60 fps at most; the stage stops when it's scrolled off screen, covered (Coach, a
+session) or on another tab (`OrbStage.paused`); the photo's fades are worked out in the world shader
+(`fzPhotoFade`) instead of three masks; the light shaft, the ring glow, the lightning's glow and the
+sky above are drawn as gradients and layered strokes instead of blurs; the rocks are blurred inside
+their own shader; the phone's tilt no longer forces its own redraws; and Today stops updating its
+scroll position once the stage is gone. Keep new stage effects free of `.blur`, `.mask` and Canvas
+`addFilter`: they cost a pass every frame.
 
 ## The block screen
 When a blocked app opens, the shield (`Extensions/FocusShield`) is as plain as Apple allows (a

@@ -13,6 +13,8 @@ struct AccountView: View {
     @Environment(PopupCenter.self) private var popups
     @Environment(\.openURL) private var openURL
     @AppStorage("devMode") private var devMode = false
+    @AppStorage("onboarded") private var onboarded = true
+    @AppStorage("onboardingStep") private var onboardingStep = 0
     let open: (AppTab) -> Void
     let openCoach: () -> Void
 
@@ -20,11 +22,15 @@ struct AccountView: View {
     @State private var showPro = false
     @State private var photoItem: PhotosPickerItem?
     @State private var pinOn = PinLock.isSet
+    @State private var pinResetAt = PinLock.resetAt
     @State private var passesLeft = EmergencyPass.left
     @State private var passBack = EmergencyPass.nextBack
     @State private var passUntil = EmergencyPass.activeUntil
+    /// Which autofocus line the preview shows.
+    @State private var line = 0
     @State private var reloading = false
     @State private var restoring = false
+    @State private var sentNudge = 0
 
     var body: some View {
         ScrollView {
@@ -33,7 +39,8 @@ struct AccountView: View {
                 StartedCard(startedHours: model.phoneHoursGuess, todayMinutes: model.screenTimeMinutes, since: model.profile.memberSince)
                     .riseIn(delay: 0.06)
                 shortcuts.riseIn(delay: 0.12)
-                settings
+                autofocus
+                advanced
                 support
                 other
                 account
@@ -53,6 +60,7 @@ struct AccountView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $editing) { ProfileEditor().environment(model) }
         .sheet(isPresented: $showPro) { ProView().environment(model) }
+        .sensoryFeedback(.success, trigger: sentNudge)
         .onChange(of: photoItem) { _, item in
             Task {
                 if let data = try? await item?.loadTransferable(type: Data.self) {
@@ -82,6 +90,7 @@ struct AccountView: View {
 
     private func refresh() {
         pinOn = PinLock.isSet
+        pinResetAt = PinLock.resetAt
         passesLeft = EmergencyPass.left
         passBack = EmergencyPass.nextBack
         passUntil = EmergencyPass.activeUntil
@@ -168,31 +177,201 @@ struct AccountView: View {
         .fzEdgeLight(cornerRadius: 18)
     }
 
-    // MARK: Settings (each opens its own page)
+    // MARK: Autofocus
 
-    private var settings: some View {
+    private var autofocus: some View {
         let protections = model.protections
-        return AccountSection("Settings") {
-            NavigationLink { AutofocusPage(open: open) } label: {
-                AccountRow(symbol: "wand.and.stars", title: "Autofocus", detail: "A tap on the shoulder when scrolling runs long.",
-                           value: protections.autofocus ? GoalDial.format(protections.autofocusMinutes) : "Off")
-            }
-            AccountDivider()
-            NavigationLink { UninstallProtectionPage() } label: {
-                AccountRow(symbol: "lock.shield", title: "Uninstall protection", detail: "No deleting apps while they're blocked.",
-                           value: protections.uninstallProtection ? "On" : "Off")
-            }
-            AccountDivider()
-            NavigationLink { AdultFilterPage() } label: {
-                AccountRow(symbol: "eye.slash", title: "Adult site filter", detail: "Apple's own filter, all day.",
-                           value: protections.adultFilter ? "On" : "Off")
-            }
-            AccountDivider()
-            NavigationLink { PinPage() } label: {
-                AccountRow(symbol: "circle.grid.3x3", title: "PIN code", detail: "Between you and the ways out.",
-                           value: pinOn ? "On" : "Off")
+        let lines = Autofocus.lines(minutes: protections.autofocusMinutes, locked: protections.autofocusLocks)
+        let shown = lines[line % lines.count]
+        return AccountSection("Autofocus", footer: protections.autofocus ? "Counts time in the apps on your block list, every day from midnight." : nil) {
+            AccountToggleRow(symbol: "wand.and.stars", title: "Autofocus",
+                             detail: "When scrolling runs long, FocuzNow taps you on the shoulder.", isOn: autofocusBinding)
+            if protections.autofocus {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        label("Step in after")
+                        HStack(spacing: 8) {
+                            ForEach([30, 60, 120, 180], id: \.self) { minutes in
+                                AccountChip(title: GoalDial.format(minutes), selected: protections.autofocusMinutes == minutes) {
+                                    model.protections.autofocusMinutes = minutes
+                                }
+                            }
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        label("Then")
+                        HStack(spacing: 10) {
+                            AutofocusOption(symbol: "bell.fill", title: "Just nudge me", detail: "A notification. You decide.",
+                                            selected: !protections.autofocusLocks) { model.protections.autofocusLocks = false }
+                            AutofocusOption(symbol: "lock.fill", title: "Lock them", detail: "15 minutes off, no arguing.",
+                                            selected: protections.autofocusLocks) { model.protections.autofocusLocks = true }
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        label("What it sounds like")
+                        NudgePreview(title: shown.title, message: shown.body)
+                            .id(line)
+                            .transition(.blurRise)
+                            .onTapGesture { withAnimation(.spring(duration: 0.45)) { line += 1 } }
+                        HStack(spacing: 10) {
+                            Button {
+                                withAnimation(.spring(duration: 0.45)) { line += 1 }
+                            } label: {
+                                Label("Another one", systemImage: "shuffle")
+                            }
+                            .buttonStyle(FZGlassButtonStyle(height: 44))
+                            Button {
+                                sendTestNudge(explain: true)
+                            } label: {
+                                Label("Send me one", systemImage: "paperplane.fill")
+                            }
+                            .buttonStyle(FZGlassButtonStyle(height: 44))
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 18)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(.spring(duration: 0.45), value: protections.autofocus)
+    }
+
+    /// A real nudge in 4 seconds, so you can lock the phone and see it like the real thing.
+    private func sendTestNudge(explain: Bool) {
+        Task {
+            let center = UNUserNotificationCenter.current()
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            guard await center.notificationSettings().authorizationStatus == .authorized else {
+                popups.show(FZPopup(symbol: "bell.slash.fill", title: "Notifications are off",
+                                    message: "Autofocus talks to you through notifications. Switch them on for FocuzNow in Settings.",
+                                    primary: "Open Settings",
+                                    onPrimary: { openURL(URL(string: UIApplication.openSettingsURLString)!) }))
+                return
+            }
+            Autofocus.notify(minutes: model.protections.autofocusMinutes, locked: model.protections.autofocusLocks, after: 4)
+            sentNudge += 1
+            if explain {
+                popups.show(FZPopup(symbol: "bell.badge.fill", title: "Incoming in 4 seconds",
+                                    message: "Lock your phone to see it the way you'll see the real thing.",
+                                    primary: "Okay", secondary: nil))
+            }
+        }
+    }
+
+    private var autofocusBinding: Binding<Bool> {
+        Binding {
+            model.protections.autofocus
+        } set: { on in
+            if on {
+                turnOnAutofocus()
+            } else {
+                popups.withPin("Switching autofocus off needs your PIN.") { model.protections.autofocus = false }
+            }
+        }
+    }
+
+    private func turnOnAutofocus() {
+        guard BlockList.count(model.selection) > 0 else {
+            popups.show(FZPopup(symbol: "square.stack.3d.up.fill", title: "Pick your time sinks first",
+                                message: "Autofocus watches the apps on your block list. Choose them in Focus, then come back.",
+                                primary: "Pick apps", onPrimary: { open(.focus) }))
+            return
+        }
+        withScreenTime {
+            Task {
+                _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+                withAnimation(.spring(duration: 0.45)) { model.protections.autofocus = true }
+            }
+        }
+    }
+
+    // MARK: Advanced
+
+    private var advanced: some View {
+        AccountSection("Advanced") {
+            AccountToggleRow(symbol: "lock.shield", title: "Uninstall protection",
+                             detail: "While apps are blocked, nothing can be deleted. Holding an icon only offers Remove from Home Screen.",
+                             isOn: uninstallBinding)
+            AccountDivider()
+            AccountToggleRow(symbol: "eye.slash", title: "Adult site filter",
+                             detail: "Apple's own filter for adult sites, in Safari and in apps. On all the time, not just during sessions.",
+                             isOn: filterBinding)
+            AccountDivider()
+            Button(action: pinTapped) {
+                AccountRow(symbol: "circle.grid.3x3", title: "PIN code", detail: pinDetail, value: pinOn ? "On" : "Off")
+            }
+        }
+    }
+
+    private var pinDetail: String {
+        if let pinResetAt { return "Switches itself off \(pinResetAt.formatted(date: .abbreviated, time: .shortened))." }
+        return "Asked for before ending early, switching these off, or signing out."
+    }
+
+    private var uninstallBinding: Binding<Bool> {
+        Binding {
+            model.protections.uninstallProtection
+        } set: { on in
+            if on {
+                withScreenTime { model.protections.uninstallProtection = true }
+            } else if Protections.isBlocking {
+                popups.show(FZPopup(symbol: "lock.shield.fill", title: "Not while you're blocked",
+                                    message: "Uninstall protection can come off once this block ends. That's kind of the point.",
+                                    primary: "Fair enough", secondary: nil))
+            } else {
+                popups.withPin("Switching uninstall protection off needs your PIN.") { model.protections.uninstallProtection = false }
+            }
+        }
+    }
+
+    private var filterBinding: Binding<Bool> {
+        Binding {
+            model.protections.adultFilter
+        } set: { on in
+            if on {
+                withScreenTime { model.protections.adultFilter = true }
+            } else {
+                popups.withPin("Switching the filter off needs your PIN.") {
+                    popups.show(FZPopup(symbol: "eye", tint: Color(hex: 0xF2CC86), title: "Turn the filter off?",
+                                        message: "Adult sites will load again in Safari and in apps.",
+                                        primary: "Hold to turn it off", destructive: true, secondary: "Keep it on",
+                                        onPrimary: { model.protections.adultFilter = false }))
+                }
+            }
+        }
+    }
+
+    private func pinTapped() {
+        guard pinOn else {
+            choosePin(title: "Set a PIN", message: "Four digits you'll remember. Or let a friend pick it and keep it from you, which works even better.")
+            return
+        }
+        popups.show(FZPopup(symbol: "circle.grid.3x3.fill", title: "Your PIN",
+                            message: "Change it, or switch it off. Either way, the current one first.",
+                            primary: "Change PIN", secondary: "Switch it off",
+                            onPrimary: {
+                                popups.withPin("Enter the PIN you have now.") {
+                                    choosePin(title: "New PIN", message: "Four new digits. The old one works until you've typed these twice.")
+                                }
+                            },
+                            onSecondary: {
+                                popups.withPin("Enter your PIN to switch it off.") {
+                                    PinLock.clear()
+                                    refresh()
+                                }
+                            }))
+    }
+
+    private func choosePin(title: String, message: String) {
+        popups.show(FZPopup(symbol: "circle.grid.3x3.fill", title: title, message: message, secondary: "Cancel",
+                            extra: AnyView(PinPad(mode: .create) {
+                                refresh()
+                                popups.show(FZPopup(symbol: "checkmark", title: "PIN's on",
+                                                    message: "Ending early, switching protections off and signing out now need it.",
+                                                    primary: "Nice", secondary: nil))
+                            })))
     }
 
     // MARK: Support
@@ -211,10 +390,31 @@ struct AccountView: View {
                 }
                 .disabled(reloading)
                 AccountDivider()
-                NavigationLink { DeveloperModePage() } label: {
-                    AccountRow(symbol: "hammer", title: "Developer mode", detail: "Tools for testing and fixing.", value: devMode ? "On" : "Off")
+                AccountToggleRow(symbol: "hammer", title: "Developer mode", detail: devMode ? nil : "Tools for testing. Nothing here is dangerous.", isOn: $devMode)
+                if devMode {
+                    VStack(spacing: 0) {
+                        AccountDivider()
+                        NavigationLink { DeveloperView() } label: {
+                            AccountRow(symbol: "wrench.and.screwdriver", title: "Developer tools", detail: "Permissions, Live Activity, Screen Time, diagnostics.")
+                        }
+                        AccountDivider()
+                        Button {
+                            onboardingStep = 0
+                            onboarded = false
+                        } label: {
+                            AccountRow(symbol: "arrow.counterclockwise", title: "Replay the intro", chevron: false)
+                        }
+                        AccountDivider()
+                        Button {
+                            sendTestNudge(explain: false)
+                        } label: {
+                            AccountRow(symbol: "bell.badge", title: "Test an autofocus nudge", detail: "Arrives in 4 seconds.", chevron: false)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
+            .animation(.spring(duration: 0.4), value: devMode)
 
             EmergencyPassTicket(holder: model.userName, left: passesLeft, nextBack: passBack, activeUntil: passUntil, use: usePass)
         }
@@ -410,7 +610,7 @@ struct AccountView: View {
             return
         }
         popups.withPin("Deleting your account needs your PIN.") {
-            popups.show(FZPopup(symbol: "trash.fill", tint: .fzRed, title: "Delete everything?",
+            popups.show(FZPopup(symbol: "trash.fill", tint: Theme.danger, title: "Delete everything?",
                                 message: "Your profile, photo, PIN, blocks and settings are wiped from this iPhone, and you start fresh. This can't be undone.",
                                 primary: "Hold to delete", destructive: true, secondary: "Keep my account",
                                 onPrimary: { model.deleteAccount() }))
@@ -445,6 +645,22 @@ struct AccountView: View {
 
     private var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+    }
+
+    /// Runs `then` once FocuzNow may use Screen Time, asking first if it hasn't yet.
+    private func withScreenTime(_ then: @escaping () -> Void) {
+        if LiveFocus.screenTimeApproved { then(); return }
+        Task {
+            try? await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+            if LiveFocus.screenTimeApproved {
+                then()
+            } else {
+                popups.show(FZPopup(symbol: "hourglass", title: "This needs Screen Time",
+                                    message: "FocuzNow uses Apple's Screen Time to do this. You can allow it in Settings → Screen Time.",
+                                    primary: "Open Settings",
+                                    onPrimary: { openURL(URL(string: UIApplication.openSettingsURLString)!) }))
+            }
+        }
     }
 }
 

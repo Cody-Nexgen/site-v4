@@ -46,29 +46,30 @@ struct WideShot: View {
 }
 
 /// The sky above the stage photo: its top edge carried on up the screen (the light from above with
-/// it), so there's never just black above the scene. Graded like the photo. Drawn as gradients of the
-/// photo's own top-edge colours (sampled from `orb-stage.jpg`): no image, blur or mask to redo every
-/// frame. Re-sample them if the photo changes.
+/// it), so there's never just black above the scene, even pulled down. Graded like the photo.
 struct SkyAbove: View {
     let layout: OrbStageLayout
     let awake: Double
 
-    /// The photo's top 30 pixels, averaged into nine columns.
-    private static let edge: [UInt32] = [0x050A0B, 0x070D0D, 0x0B1011, 0x1A2323, 0x232D2E, 0x111919, 0x080E0E, 0x050B0B, 0x040809]
-
     var body: some View {
         let f = layout.imageFrame
+        let strip = 24 * layout.k
         let reach = max(f.minY, 0) + 420
         let dim = 0.62 + 0.38 * awake
-        ZStack {
-            LinearGradient(colors: Self.edge.map { Color(hex: $0) }, startPoint: .leading, endPoint: .trailing)
-            // Into black going up, a little lighter where it meets the photo.
-            LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom)
-        }
-        .saturation(0.5 + 0.5 * awake)
-        .colorMultiply(Color(white: dim))
-        .frame(width: f.width, height: reach + 2)
-        .position(x: f.midX, y: f.minY - reach / 2 + 1)
+        Image("OrbStage")
+            .resizable()
+            .frame(width: f.width, height: f.height)
+            .frame(width: f.width, height: strip, alignment: .top)
+            .clipped()
+            .scaleEffect(x: 1, y: (reach + strip) / strip, anchor: .bottom)
+            .blur(radius: 5 * layout.k)
+            .saturation(0.5 + 0.5 * awake)
+            .colorMultiply(Color(white: dim))
+            .mask {
+                LinearGradient(colors: [.black.opacity(0.5), .black], startPoint: .top, endPoint: .bottom)
+                    .scaleEffect(x: 1, y: (reach + strip) / strip, anchor: .bottom)
+            }
+            .position(x: f.midX, y: f.minY + strip / 2)
     }
 }
 
@@ -76,7 +77,6 @@ struct SkyAbove: View {
 /// the world is asleep, shifted in depth by the camera, grown by depth when Today is pulled down
 /// (`push`, from `pushFrom` in stage points). Faded into black at the top and bottom (and the sides on
 /// iPad). While the camera is still flying in, it opens out of the wide shot from the pedestal outwards.
-/// The fades are worked out in the shader (`fzPhotoFade`): as masks they cost three extra passes a frame.
 struct StagePhoto: View {
     let layout: OrbStageLayout
     let state: OrbStageState
@@ -99,6 +99,8 @@ struct StagePhoto: View {
         let reveal = fzSmooth(0.45, 0.95, d)
         // The shader works in 32-bit floats: keep time small (it jumps once every 20 minutes).
         let time = CGFloat(Double(t).truncatingRemainder(dividingBy: 1200))
+        let center = UnitPoint(x: OrbStageLayout.ringPixels.x / OrbStageLayout.imagePixels.width,
+                               y: OrbStageLayout.ringPixels.y / OrbStageLayout.imagePixels.height)
         let shader = ShaderLibrary.orbWorld(
             .float2(origin.x, origin.y),
             .float(pxScale),
@@ -110,14 +112,29 @@ struct StagePhoto: View {
             .float4(OrbStageLayout.horizonPixels, OrbStageLayout.imagePixels.height, OrbStageLayout.basePixels, 0),
             .float4(OrbStageLayout.ringPixels.x, OrbStageLayout.ringPixels.y, OrbStageLayout.topRadiiPixels.width, OrbStageLayout.topRadiiPixels.height),
             .float2(CGFloat(max(s.formed, s.spark * 0.5)), CGFloat(s.ring)),
-            .float4(pushFrom.x - origin.x, pushFrom.y - origin.y, push, OrbStageLayout.pedestalDepth),
-            .float4(size.width, size.height, layout.fillsWidth ? 0 : 1, size.width * (0.4 + 3 * reveal))
+            .float4(pushFrom.x - origin.x, pushFrom.y - origin.y, push, OrbStageLayout.pedestalDepth)
         )
         Image("OrbStage")
             .resizable()
             .interpolation(.high)
             .frame(width: size.width, height: size.height)
             .layerEffect(shader, maxSampleOffset: CGSize(width: 32, height: 32))
+            .mask {
+                LinearGradient(stops: [
+                    .init(color: .clear, location: 0), .init(color: .black, location: 0.05),
+                    .init(color: .black, location: 0.68), .init(color: .clear, location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+            }
+            .mask {
+                LinearGradient(stops: layout.fillsWidth ? [.init(color: .black, location: 0), .init(color: .black, location: 1)] : [
+                    .init(color: .clear, location: 0), .init(color: .black, location: 0.14),
+                    .init(color: .black, location: 0.86), .init(color: .clear, location: 1),
+                ], startPoint: .leading, endPoint: .trailing)
+            }
+            .mask {
+                RadialGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
+                               center: center, startRadius: 0, endRadius: size.width * (0.4 + 3 * reveal))
+            }
             .opacity(Double(reveal) * s.scene)
             .position(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
     }
@@ -165,37 +182,27 @@ struct NightSky: View {
     }
 }
 
-/// A soft shaft of light falling from the top onto the pedestal. Its soft edge is six nested shafts,
-/// each a little wider and fainter: a blur this big was the most expensive thing on the screen.
+/// A soft shaft of light falling from the top onto the pedestal.
 struct LightShaft: View {
     let layout: OrbStageLayout
 
     var body: some View {
-        let light = Color(hex: 0xDDF5E6)
-        ZStack {
-            ForEach(0..<6, id: \.self) { i in
-                shaft(grow: 26 * layout.k * (CGFloat(i) / 5 * 2 - 1))
-                    .fill(LinearGradient(colors: [light.opacity(0.13 / 3), light.opacity(0.05 / 3), light.opacity(0.1 / 3)],
-                                         startPoint: .top, endPoint: .bottom))
-            }
-        }
-        .blendMode(.plusLighter)
-        .allowsHitTesting(false)
-    }
-
-    /// From well above the top of the screen, so pulling the page down never shows its end.
-    private func shaft(grow: CGFloat) -> Path {
         let ring = layout.ring
         let narrow = layout.topRadii.width * 0.35
         let wide = layout.topRadii.width * 1.05
-        var p = Path()
-        p.addLines([
-            CGPoint(x: ring.x - narrow * 0.8 - grow, y: -420), CGPoint(x: ring.x + narrow * 0.8 + grow, y: -420),
-            CGPoint(x: ring.x + narrow + grow, y: 0), CGPoint(x: ring.x + wide + grow, y: ring.y),
-            CGPoint(x: ring.x - wide - grow, y: ring.y), CGPoint(x: ring.x - narrow - grow, y: 0),
-        ])
-        p.closeSubpath()
-        return p
+        let light = Color(hex: 0xDDF5E6)
+        // From well above the top of the screen, so pulling the page down never shows its end.
+        Path { p in
+            p.addLines([
+                CGPoint(x: ring.x - narrow * 0.8, y: -420), CGPoint(x: ring.x + narrow * 0.8, y: -420),
+                CGPoint(x: ring.x + narrow, y: 0), CGPoint(x: ring.x + wide, y: ring.y),
+                CGPoint(x: ring.x - wide, y: ring.y), CGPoint(x: ring.x - narrow, y: 0),
+            ])
+            p.closeSubpath()
+        }
+        .fill(LinearGradient(colors: [light.opacity(0.13), light.opacity(0.05), light.opacity(0.1)], startPoint: .top, endPoint: .bottom))
+        .blur(radius: 26 * layout.k)
+        .blendMode(.plusLighter)
     }
 }
 
@@ -212,15 +219,12 @@ struct PedestalGlow: View {
         let k = layout.k
         let lit = min(max(trace, 0), 1)
         ZStack(alignment: .topLeading) {
-            // Its glow: wider, fainter strokes under it (a blur would be another pass every frame).
-            ForEach(0..<2, id: \.self) { i in
-                RingTrace(trace: lit)
-                    .stroke(Color.fzMint.opacity(i == 0 ? 0.16 : 0.3),
-                            style: StrokeStyle(lineWidth: (i == 0 ? 9 : 5.5) * k, lineCap: .round))
-                    .frame(width: rr.width * 2, height: rr.height * 2)
-                    .position(ring)
-                    .opacity(power)
-            }
+            RingTrace(trace: lit)
+                .stroke(Color.fzMint.opacity(0.75), style: StrokeStyle(lineWidth: 3.5 * k, lineCap: .round))
+                .blur(radius: 3.5 * k)
+                .frame(width: rr.width * 2, height: rr.height * 2)
+                .position(ring)
+                .opacity(power)
             RingTrace(trace: lit)
                 .stroke(Color(hex: 0xEFFFF5), style: StrokeStyle(lineWidth: 1.4 * k, lineCap: .round))
                 .frame(width: rr.width * 2, height: rr.height * 2)
@@ -230,13 +234,12 @@ struct PedestalGlow: View {
             // The two heads of light while it runs round.
             ForEach([1.0, -1.0], id: \.self) { side in
                 let a = Double.pi / 2 + side * Double.pi * lit
-                if lit > 0 && lit < 1 {
-                    Circle()
-                        .fill(RadialGradient(colors: [.white, Color.fzMint.opacity(0.6), Color.fzMint.opacity(0)],
-                                             center: .center, startRadius: 0, endRadius: 9 * k))
-                        .frame(width: 18 * k, height: 18 * k)
-                        .position(x: ring.x + rr.width * cos(a), y: ring.y + rr.height * sin(a))
-                }
+                Circle()
+                    .fill(.white)
+                    .frame(width: 5 * k, height: 5 * k)
+                    .shadow(color: Color.fzMint, radius: 6 * k)
+                    .position(x: ring.x + rr.width * cos(a), y: ring.y + rr.height * sin(a))
+                    .opacity(lit > 0 && lit < 1 ? 1 : 0)
             }
 
         }
@@ -275,10 +278,9 @@ struct RingFlash: View {
     let strike: Int
 
     var body: some View {
-        ZStack {
-            Ellipse().stroke(.white.opacity(0.25), lineWidth: 10 * layout.k)
-            Ellipse().stroke(.white.opacity(0.6), lineWidth: 3 * layout.k)
-        }
+        Ellipse()
+            .stroke(.white, lineWidth: 3 * layout.k)
+            .blur(radius: 4 * layout.k)
             .frame(width: layout.ringRadii.width * 2, height: layout.ringRadii.height * 2)
             .position(layout.ring)
             .keyframeAnimator(initialValue: 0.0, trigger: strike) { content, value in

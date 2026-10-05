@@ -11,8 +11,6 @@ struct FocusOrb: View, Animatable {
     var energy: Double
     var size: CGFloat
     var touch: CGPoint? = nil
-    /// Holds still (off screen, or under a sheet).
-    var paused = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// So a change to `energy` inside `withAnimation` glides instead of jumping.
@@ -26,8 +24,7 @@ struct FocusOrb: View, Animatable {
 
     var body: some View {
         let canvas = size * Self.spill
-        // 60 frames a second at most: the same lightning at half the work on a 120 Hz screen.
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused || reduceMotion)) { context in
+        TimelineView(.animation(paused: reduceMotion)) { context in
             // Absolute time, so a second orb (Today, after the onboarding) carries on the same pattern.
             // Wrapped small because the shader works in 32-bit floats: it jumps once every 20 minutes.
             let t = reduceMotion ? 12 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1200)
@@ -47,6 +44,6 @@ struct FocusOrb: View, Animatable {
         try? await ShaderLibrary.focusOrb(.float2(1, 1), .float(0), .float(0), .float3(0, 0, 0)).compile(as: .colorEffect)
         try? await ShaderLibrary.orbWorld(.float2(0, 0), .float(1), .float2(0, 0), .float4(0, 0, 0, 0), .float4(0, 0, 1, 1),
                                           .float4(0, 0, 1, 1), .float4(1, 1, 0, 0), .float4(0, 1, 0, 0), .float4(0, 0, 1, 1),
-                                          .float2(0, 0), .float4(0, 0, 0, 1), .float4(1, 1, 0, 1)).compile(as: .layerEffect)
+                                          .float2(0, 0), .float4(0, 0, 0, 1)).compile(as: .layerEffect)
     }
 }

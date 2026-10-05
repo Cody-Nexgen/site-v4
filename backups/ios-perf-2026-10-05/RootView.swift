@@ -76,12 +76,6 @@ private struct MainTabs: View {
         }
     }
 
-    /// Today, with its stage stopped while Coach or a session covers it, or another tab is showing.
-    private var today: some View {
-        TodayView(openCoach: openCoach, startFocus: { tab = .focus }, open: { tab = $0 },
-                  covered: showCoach || model.showSession || tab != .today)
-    }
-
     private func openCoach() {
         if sizeClass == .regular { tab = .coach } else { showCoach = true }
     }
@@ -91,7 +85,7 @@ private struct MainTabs: View {
     private var phoneTabs: some View {
         TabView(selection: $tab) {
             Tab("Today", systemImage: "sun.max.fill", value: AppTab.today) {
-                NavigationStack { today }
+                NavigationStack { TodayView(openCoach: openCoach, startFocus: { tab = .focus }, open: { tab = $0 }) }
             }
             Tab("Focus", systemImage: "scope", value: AppTab.focus) {
                 NavigationStack { FocusSetupView() }
@@ -111,7 +105,7 @@ private struct MainTabs: View {
     private var sidebarTabs: some View {
         TabView(selection: $tab) {
             Tab("Today", systemImage: "sun.max.fill", value: AppTab.today) {
-                NavigationStack { today }
+                NavigationStack { TodayView(openCoach: openCoach, startFocus: { tab = .focus }, open: { tab = $0 }) }
             }
             Tab("Focus", systemImage: "scope", value: AppTab.focus) {
                 NavigationStack { FocusSetupView() }

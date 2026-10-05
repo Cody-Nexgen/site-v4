@@ -64,6 +64,7 @@ Change `energy` inside `withAnimation` and it glides there. Reduce Motion freeze
   doesn't stutter.
 - Time is passed as seconds since the view appeared, wrapped every 20 minutes, because the shader uses
   32-bit floats. The pattern jumps once at the wrap; nobody stares that long.
+- It draws at most 60 times a second and holds still when `paused` (the stage passes it on).
 - Cost: it runs per pixel on the GPU. If it ever stutters or warms an older phone (iPhone XS/XR are the
   oldest on iOS 18), lower the tendril count (the loop's `8`) or the haze octaves first.
 

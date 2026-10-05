@@ -19,13 +19,11 @@ struct AccountSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !title.isEmpty {
-                Text(title.uppercased())
-                    .font(.caption2.weight(.semibold))
-                    .tracking(1.6)
-                    .foregroundStyle(.white.opacity(0.45))
-                    .padding(.leading, 6)
-            }
+            Text(title.uppercased())
+                .font(.caption2.weight(.semibold))
+                .tracking(1.6)
+                .foregroundStyle(.white.opacity(0.45))
+                .padding(.leading, 6)
             VStack(spacing: 0) { content }
                 .fzGlassCard(cornerRadius: 24, padding: 0)
             if let footer {

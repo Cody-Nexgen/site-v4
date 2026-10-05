@@ -228,9 +228,6 @@ struct OrbStage: View, Animatable {
     /// Pulling Today down pushes the camera in: how much the pedestal (and the orb on it) has grown,
     /// 0.2 = 20% bigger. Nearer things grow more, the far rocks and sky barely at all.
     var push: CGFloat = 0
-    /// Stops drawing (scrolled off screen, or covered by a sheet): the stage is the most expensive
-    /// thing in the app, so it never runs when nobody can see it.
-    var paused = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var struckAt = Date.distantPast
@@ -242,17 +239,13 @@ struct OrbStage: View, Animatable {
     }
 
     var body: some View {
-        // 60 frames a second at most: on a 120 Hz screen the lightning looks the same at half the work.
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused || reduceMotion)) { context in
+        TimelineView(.animation(paused: reduceMotion)) { context in
             scene(at: context.date, state)
         }
         .frame(width: layout.width, height: layout.height, alignment: .topLeading)
         .onChange(of: strike) { struckAt = .now }
-        .onAppear { if !reduceMotion && !paused { tilt.start() } }
+        .onAppear { if !reduceMotion { tilt.start() } }
         .onDisappear { tilt.stop() }
-        .onChange(of: paused) { _, now in
-            if now { tilt.stop() } else if !reduceMotion { tilt.start() }
-        }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -322,12 +315,8 @@ struct OrbStage: View, Animatable {
             }
 
             Group {
-                if s.spark > 0.001 && s.formed < 0.999 {
-                    hotPoint(s, at: orbAt)
-                }
-                if s.formed > 0.5 && s.formed < 0.999 {
-                    ripple(s, at: orbAt)
-                }
+                hotPoint(s, at: orbAt)
+                ripple(s, at: orbAt)
                 if hint {
                     hintRing(t: t, at: orbAt)
                 }
@@ -367,6 +356,7 @@ struct OrbStage: View, Animatable {
                 .clipShape(Circle())
                 .saturation(0.5 + 0.5 * s.awake)
                 .colorMultiply(Color(red: 0.78, green: 0.96, blue: 0.86))
+                .blur(radius: 1)
                 .scaleEffect(0.12 + 0.88 * s.formed)
                 .opacity(min(1, s.formed * 2) * (0.55 + 0.45 * s.awake) * s.scene)
                 .position(p)
@@ -376,16 +366,11 @@ struct OrbStage: View, Animatable {
     @ViewBuilder
     private func orb(_ s: OrbStageState, at p: CGPoint) -> some View {
         if s.formed > 0.001 {
-            let sphere = FocusOrb(energy: s.energy, size: layout.orbViewSize, touch: touch.map { CGPoint(x: $0.x - p.x, y: $0.y - p.y) },
-                                  paused: paused)
+            FocusOrb(energy: s.energy, size: layout.orbViewSize, touch: touch.map { CGPoint(x: $0.x - p.x, y: $0.y - p.y) })
                 .scaleEffect(0.12 + 0.88 * s.formed)
                 .opacity(min(1, s.formed * 2.5))
-            // Out of focus only while it forms (a blur, even of 0, can cost a pass every frame).
-            if s.formed < 0.999 {
-                sphere.blur(radius: (1 - min(1, s.formed)) * 10).position(p)
-            } else {
-                sphere.position(p)
-            }
+                .blur(radius: (1 - min(1, s.formed)) * 10)
+                .position(p)
         }
     }
 
@@ -458,8 +443,8 @@ struct OrbStage: View, Animatable {
         let y = layout.orbCenter.y + r.y * radius + sin(t * 0.55 + r.phase) * 0.09 * radius
             + (1 - up) * 1.4 * radius + cam.height * r.depth
         let angle = r.sway * sin(t * 0.21 + r.phase) + (1 - up) * 24
-        return lit(r.image, width: r.width * radius, at: CGPoint(x: x, y: y), angle: angle, orbAt: orbAt, s: s, flash: flash,
-                   blur: r.blur * layout.k)
+        return lit(r.image, width: r.width * radius, at: CGPoint(x: x, y: y), angle: angle, orbAt: orbAt, s: s, flash: flash)
+            .blur(radius: r.blur * layout.k)
             .opacity(Double(up) * s.scene)
             .scaleEffect(pushZoom(r.depth), anchor: pushAnchor)
     }
@@ -475,8 +460,7 @@ struct OrbStage: View, Animatable {
     }
 
     /// A rock lit by the orb: brighter the nearer it is, with a mint rim on the edge that faces it.
-    private func lit(_ image: String, width: CGFloat, at p: CGPoint, angle: CGFloat, orbAt: CGPoint, s: OrbStageState, flash: CGFloat,
-                     blur: CGFloat = 0) -> some View {
+    private func lit(_ image: String, width: CGFloat, at p: CGPoint, angle: CGFloat, orbAt: CGPoint, s: OrbStageState, flash: CGFloat) -> some View {
         let dx = orbAt.x - p.x, dy = orbAt.y - p.y
         let distance = max(hypot(dx, dy), 1)
         // The way to the orb, in the rock's own (unrotated) frame.
@@ -489,8 +473,8 @@ struct OrbStage: View, Animatable {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: width)
-            .layerEffect(ShaderLibrary.rockLight(.float2(toLight.x, toLight.y), .float(light), .float(dim), .float(blur)),
-                         maxSampleOffset: CGSize(width: 8 + blur, height: 8 + blur))
+            .layerEffect(ShaderLibrary.rockLight(.float2(toLight.x, toLight.y), .float(light), .float(dim)),
+                         maxSampleOffset: CGSize(width: 8, height: 8))
             .rotationEffect(.degrees(Double(angle)))
             .position(p)
     }
@@ -559,15 +543,13 @@ struct OrbStage: View, Animatable {
             let strength: CGFloat = power * (0.6 + 0.4 * flicker) * (1 + 1.2 * boost)
             strokeBolt(&g, from: begin, to: end, seed: seed &* 7 &+ i, strength: strength, width: 1 + 0.6 * boost)
 
-            // Where it touches the ring: a soft glow drawn as a gradient (a blurred layer per arc was
-            // up to eight extra passes a frame).
-            let glow: CGFloat = (9 + 6 * boost) * k * 1.6
-            var spot = g
-            spot.translateBy(x: end.x, y: end.y)
-            spot.scaleBy(x: 1, y: 0.5)
-            spot.fill(Path(ellipseIn: CGRect(x: -glow, y: -glow, width: glow * 2, height: glow * 2)),
-                      with: .radialGradient(Gradient(colors: [Color.fzMint.opacity(Double(min(1, 0.8 * strength))), Color.fzMint.opacity(0)]),
-                                            center: .zero, startRadius: 0, endRadius: glow))
+            // Where it touches the ring.
+            let glow: CGFloat = (9 + 6 * boost) * k
+            g.drawLayer { layer in
+                layer.addFilter(.blur(radius: glow * 0.6))
+                layer.fill(Path(ellipseIn: CGRect(x: end.x - glow, y: end.y - glow * 0.5, width: glow * 2, height: glow)),
+                           with: .color(Color.fzMint.opacity(Double(min(1, 0.8 * strength)))))
+            }
         }
     }
 
@@ -598,12 +580,10 @@ struct OrbStage: View, Animatable {
         let points = Self.bolt(from: begin, to: end, seed: seed, jag: 0.2)
         var path = Path()
         path.addLines(points)
-        // The glow round the bolt: wide faint strokes under the bright core, no blur pass.
-        let glowWidth = (3 + 2 * (width - 1)) * k
-        let round = StrokeStyle(lineWidth: glowWidth * 3, lineCap: .round, lineJoin: .round)
-        g.stroke(path, with: .color(Color.fzMint.opacity(Double(min(1, 0.12 * strength)))), style: round)
-        g.stroke(path, with: .color(Color.fzMint.opacity(Double(min(1, 0.3 * strength)))),
-                 style: StrokeStyle(lineWidth: glowWidth * 1.4, lineCap: .round, lineJoin: .round))
+        g.drawLayer { layer in
+            layer.addFilter(.blur(radius: 3.5 * k))
+            layer.stroke(path, with: .color(Color.fzMint.opacity(Double(min(1, 0.7 * strength)))), lineWidth: (3 + 2 * (width - 1)) * k)
+        }
         g.stroke(path, with: .color(.white.opacity(Double(min(1, 0.95 * strength)))), lineWidth: width * k)
 
         // A short fork off the middle now and then.
@@ -736,9 +716,7 @@ private struct FloatingRock {
 @MainActor
 @Observable
 final class StageTilt {
-    /// Not observed: the stage reads it on each frame it draws anyway. Observed, its 60 updates a
-    /// second each forced an extra redraw, out of step with the stage's own.
-    @ObservationIgnored var offset: CGSize = .zero
+    var offset: CGSize = .zero
     @ObservationIgnored private let motion = CMMotionManager()
     @ObservationIgnored private var rest: CMAcceleration?
 

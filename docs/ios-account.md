@@ -4,9 +4,10 @@ The fifth tab on iPhone (it replaced Coach, which now opens from the sparkles on
 on iPad Coach keeps its own tab). On iPhone the TabView has exactly these five tabs: tabs marked
 hidden still counted towards the five and put You inside a "More" tab, so the phone's TabView doesn't
 have the others (`MainTabs.phoneTabs`; iPad uses `sidebarTabs`). A night scene like Today: black, the
-orb's mint light behind your photo, dark glass cards. Every confirmation is an `FZPopup` (a glass sheet
-at the bottom with its colour glowing through it, an outlined icon, a button); destructive ones are
-press-and-hold. The copy is written to sound like a person, with a bit of humour; keep it that way.
+orb's mint light behind your photo, dark glass cards. Every confirmation is an `FZPopup`: a glass sheet
+attached to the bottom edge (only a hint of its colour), an outlined icon, and buttons with an orb of
+the action's colour glowing at their foot (`FZOrbButtonStyle`); destructive ones are press-and-hold,
+red (`FZHoldButton`, `Color.fzRed`), and the red orb swells as you hold. The copy is written to sound like a person, with a bit of humour; keep it that way.
 
 Code: `ios/App/Screens/AccountView.swift` (the tab), `AccountParts.swift` (rows, the ticket, the nudge
 preview, the profile editor), `ios/App/Model/PinLock.swift`, `ios/Shared/Blocking/Protections.swift`
@@ -21,11 +22,14 @@ up in `backups/ios-account-2026-10-04/`.
 - **Where you started:** the onboarding's "How long are you on your phone a day?" next to today so far,
   with a line about it. (Today's screen time is still sample data.)
 - **Shortcuts:** Coach, Stats, Friends, Forest, Shop, Customize (what used to be behind the avatar).
+- **Settings:** each one is a row showing its state ("On", "1h", "Off"); tapping it opens its own page
+  (`AccountPages.swift`, `SettingPage`): a big icon that lights up while it's on, a line about it, the
+  switch, every option, and how it works. Developer mode works the same way, from Support.
 - **Autofocus:** when the block list has been used for 30 min / 1 h / 2 h / 3 h in a day, a nudge
   ("You've used distracting apps for an hour already!!!") and, if you pick **Lock them**, 15 minutes
   locked. A live preview of the notification (tap for another line) and **Send me one** (a real one in
   4 s). The lines are in `Autofocus.lines`. Needs Screen Time, notifications and a block list.
-- **Advanced:**
+- **Protections** (also pages from Settings):
   - **Uninstall protection:** whenever anything is locked (a session, the daily block, autofocus),
     apps can't be deleted (`denyAppRemoval`): holding an icon only offers Remove from Home Screen, and
     Settings → General → iPhone Storage can't delete either. It can't be switched off while a block is
@@ -38,8 +42,8 @@ up in `backups/ios-account-2026-10-04/`.
     24 hours later (on purpose: long enough for the urge to pass).
 - **Support:** Get help (mail to support@focuznow.com), **Reload FocuzNow** (re-applies the session
   lock, the daily block, autofocus, the filter and uninstall protection, for when something looks
-  stuck), **Developer mode** (switching it on opens Developer tools, Replay the intro and a test nudge
-  right there), and the **emergency pass**: a ticket with three punch holes. Three a week; each unlocks
+  stuck), **Developer mode** (its page: the switch, then Developer tools, Replay the intro and a test
+  nudge), and the **emergency pass**: a ticket with three punch holes. Three a week; each unlocks
   everything for 5 minutes, then the monitor locks again only what was locked (a session on a break
   stays unlocked), and the app does the same as a backup if it's open. A pass comes back 7 days after
   it's used. It costs 2 points of focus score. No PIN: it's for emergencies.

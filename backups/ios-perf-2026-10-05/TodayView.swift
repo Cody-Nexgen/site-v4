@@ -10,8 +10,6 @@ struct TodayView: View {
     let openCoach: () -> Void
     let startFocus: () -> Void
     let open: (AppTab) -> Void
-    /// Something covers Today (Coach's sheet, a session): the stage stops drawing.
-    var covered = false
     @State private var shownScore = 0
     @State private var touchPoint: CGPoint?
     @State private var strike = 0
@@ -45,9 +43,7 @@ struct TodayView: View {
             .scrollIndicators(.hidden)
             .ignoresSafeArea(edges: .top)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                // Held at the bottom of the stage once it's scrolled away, so scrolling the cards
-                // further doesn't rebuild the page on every frame.
-                min(geometry.contentOffset.y + geometry.contentInsets.top, layout.height)
+                geometry.contentOffset.y + geometry.contentInsets.top
             } action: { _, y in
                 scrollY = y
             }
@@ -81,7 +77,7 @@ struct TodayView: View {
         let look = CGSize(width: 0, height: scrollY > 0 ? -scrollY * 0.12 : 0)
         return ZStack(alignment: .topLeading) {
             OrbStage(layout: layout, state: .settled(Self.orbEnergy(model.focusScore)), strike: strike, touch: touchPoint,
-                     look: look, push: 0.28 * pullProgress, paused: covered || scrollY >= layout.height * 0.9)
+                     look: look, push: 0.28 * pullProgress)
             orbTouchArea(layout)
         }
         .frame(width: layout.width, height: layout.height, alignment: .topLeading)
