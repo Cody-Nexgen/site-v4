@@ -16,7 +16,6 @@ struct TodayView: View {
     /// Read only by the stage and the header, never by this view's body: scrolling then doesn't rebuild
     /// the cards and the chart on every frame.
     @State private var scroll = TodayScroll()
-    @State private var showingStats = false
 
     /// How charged the orb is for a focus score (0–10).
     static func orbEnergy(_ score: Double) -> Double { min(1, max(0.08, score / 10)) }
@@ -114,49 +113,71 @@ struct TodayView: View {
 
     // MARK: Under the stage
 
-    /// Everything under the orb is the same night, lit by it (`LitKit.swift`): the score on the ground in
-    /// front of the pedestal, the ring button, one machined panel for today, friends with a lit ring, and
-    /// the day as a line of light. No grey cards, no white button.
     private var content: some View {
         VStack(spacing: 22) {
             scoreBlock
             startButton
-                .padding(.bottom, 8)
-            todayPanel
+            todayCard
             friendsNow
             dayWave
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 40)
         .frame(maxWidth: 560)
-        .navigationDestination(isPresented: $showingStats) { StatsView() }
     }
 
-    /// The score on the ground in front of the pedestal, lit from above: an instrument's readout.
+    /// The score on the ground in front of the pedestal, lit by the orb above it: part of the scene,
+    /// not a card on top of it.
     private var scoreBlock: some View {
-        let done = model.goalProgress >= 1
-        return VStack(spacing: 4) {
-            Engraved("Focus score")
+        VStack(spacing: 4) {
+            Text("FOCUS SCORE")
+                .font(.caption2.weight(.semibold))
+                .tracking(2.4)
+                .foregroundStyle(.white.opacity(0.55))
             Text("\(shownScore)")
-                .font(.fzDisplay(72, weight: .black))
-                .fzTight(72)
+                .font(.fzDisplay(66, weight: .black))
+                .fzTight(66)
                 .monospacedDigit()
-                .foregroundStyle(.fzLitFromAbove)
+                .foregroundStyle(LinearGradient(colors: [.white, Color(hex: 0xCFF5DE)], startPoint: .top, endPoint: .bottom))
                 .contentTransition(.numericText(value: Double(shownScore)))
-            HStack(spacing: 8) {
-                Engraved(Theme.orbWord(model.focusScore), color: .fzMint, size: 11)
+                // The orb's light on it: a gradient behind, not a shadow (a shadow is a blur, redone
+                // every frame over the moving scene).
+                .background {
+                    Rectangle()
+                        .fill(EllipticalGradient(colors: [Color.fzMint.opacity(0.2), Color.fzMint.opacity(0)],
+                                                 center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5))
+                        .frame(width: 190, height: 110)
+                        .allowsHitTesting(false)
+                }
+            HStack(spacing: 7) {
+                Text(Theme.orbWord(model.focusScore))
+                    .foregroundStyle(Color.fzMint)
                 Circle().fill(.white.opacity(0.3)).frame(width: 3, height: 3)
-                Engraved("\(model.streakDays)-day streak", color: Color.fzNightInk.opacity(0.72), size: 11)
+                Label("\(model.streakDays)-day streak", systemImage: "flame.fill")
+                    .labelStyle(TrailingIconLabelStyle())
+                    .foregroundStyle(.white.opacity(0.75))
             }
-            .padding(.top, 4)
-            LitGroove(progress: model.goalProgress)
-                .padding(.top, 10)
-            HStack {
-                Engraved("\(GoalDial.format(model.focusedMinutesToday)) focused", size: 10)
-                Spacer()
-                Engraved(done ? "Goal done" : "\(GoalDial.format(max(0, model.goalMinutes - model.focusedMinutesToday))) to goal",
-                         color: done ? .fzMint : Color.fzNightInk.opacity(0.46), size: 10)
+            .font(.subheadline.weight(.semibold))
+            HStack(spacing: 10) {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.1))
+                        // Its glow is a wider faint capsule, not a shadow (a blur pass as it scrolls).
+                        Capsule()
+                            .fill(Color.fzMint.opacity(0.25))
+                            .frame(width: max(4, proxy.size.width * min(1, model.goalProgress)) + 6, height: 10)
+                            .offset(x: -3)
+                        Capsule()
+                            .fill(Color.fzMint)
+                            .frame(width: max(4, proxy.size.width * min(1, model.goalProgress)))
+                    }
+                }
+                .frame(width: 84, height: 4)
+                Text(model.goalProgress >= 1 ? "Goal done. The orb is showing off." : "\(GoalDial.format(max(0, model.goalMinutes - model.focusedMinutesToday))) to today's goal")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
             }
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
@@ -170,127 +191,67 @@ struct TodayView: View {
             Label(model.session != nil ? "Back to your session" : "Start \(GoalDial.format(model.selectedPreset.minutes)) focus",
                   systemImage: model.session != nil ? "timer" : "play.fill")
         }
-        .buttonStyle(FZRingButtonStyle())
-        .frame(maxWidth: 380)
+        .buttonStyle(FZPrimaryButtonStyle(height: 58))
+        .frame(maxWidth: 360)
         .riseIn(delay: 0.25)
     }
 
-    // MARK: Today
+    // MARK: Today card
 
-    /// Today on one machined panel, four readouts cut apart by grooves: what's next, the top to-do,
-    /// what's locked, and screen time.
-    private var todayPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var todayCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Engraved("Today")
+                Text("Today")
+                    .font(.fzDisplay(21, weight: .bold))
+                    .foregroundStyle(.white)
                 Spacer()
                 Button { open(.plan) } label: {
-                    Engraved("See plan →", color: Color.fzNightInk.opacity(0.62))
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
+                    HStack(spacing: 4) {
+                        Text("See all")
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.55))
                 }
                 .buttonStyle(.plain)
             }
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    nextCell
-                    GrooveLine(vertical: true)
-                    todoCell
+            .padding(.bottom, 6)
+
+            if let event = model.events.first {
+                Button { open(.plan) } label: {
+                    TodayRow(symbol: "book", title: event.title, detail: "\(PlanView.time(event.startHour))\(event.place.map { " · \($0)" } ?? "")")
                 }
-                .fixedSize(horizontal: false, vertical: true)
-                GrooveLine()
-                HStack(spacing: 0) {
-                    lockedCell
-                    GrooveLine(vertical: true)
-                    screenTimeCell
-                }
-                .fixedSize(horizontal: false, vertical: true)
+                .buttonStyle(.pressable)
+                rowDivider
             }
-            .fzPlate()
+            if let todo = model.todos.first(where: { !$0.done }) {
+                Button { open(.plan) } label: {
+                    TodayRow(symbol: "checkmark.square", title: todo.title, detail: todo.due.map { "Due \($0.lowercased())" } ?? todo.list)
+                }
+                .buttonStyle(.pressable)
+                rowDivider
+            }
+            Button { open(.focus) } label: {
+                TodayRow(symbol: "shield.lefthalf.filled", title: model.blockedCount == 1 ? "1 app blocked" : "\(model.blockedCount) apps blocked", detail: "Distracting apps")
+            }
+            .buttonStyle(.pressable)
+            rowDivider
+            NavigationLink { StatsView() } label: {
+                TodayRow(symbol: "chart.bar.fill", title: GoalDial.format(model.screenTimeMinutes), detail: "Screen time today")
+            }
+            .buttonStyle(.pressable)
         }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color(hex: 0x111214).opacity(0.88)))
+        .fzEdgeLight(cornerRadius: 24)
         .riseIn(delay: 0.35)
     }
 
-    private func cell<Content: View>(_ action: @escaping () -> Void, @ViewBuilder content: () -> Content) -> some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
-                content()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(EdgeInsets(top: 16, leading: 16, bottom: 18, trailing: 14))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.pressable)
-    }
-
-    private func cellTitle(_ text: String) -> some View {
-        Text(text)
-            .font(.fzDisplay(17, weight: .bold))
-            .foregroundStyle(Color.fzNightInk)
-            .lineLimit(2)
-            .multilineTextAlignment(.leading)
-    }
-
-    private func cellDetail(_ text: String) -> some View {
-        Text(text)
-            .font(.footnote)
-            .foregroundStyle(Color.fzNightInk.opacity(0.55))
-            .lineLimit(1)
-    }
-
-    private var nextCell: some View {
-        let event = model.events.first
-        return cell({ open(.plan) }) {
-            HStack(spacing: 4) {
-                Engraved("Next", size: 10)
-                Spacer(minLength: 4)
-                if let event {
-                    Engraved(PlanView.time(event.startHour), color: .fzMint, size: 10)
-                }
-            }
-            cellTitle(event?.title ?? "Nothing planned")
-            cellDetail(event.map(Self.detail) ?? "Your day is open")
-        }
-    }
-
-    private var todoCell: some View {
-        let todo = model.todos.first { !$0.done }
-        return cell({ open(.plan) }) {
-            Engraved("To do", size: 10)
-            cellTitle(todo?.title ?? "All done")
-            cellDetail(todo.map(Self.detail) ?? "Nothing left on your list")
-        }
-    }
-
-    /// "Library · 1h".
-    private static func detail(_ event: EventItem) -> String {
-        var parts: [String] = []
-        if let place = event.place { parts.append(place) }
-        parts.append(GoalDial.format(Int(event.hours * 60)))
-        return parts.joined(separator: " · ")
-    }
-
-    /// "Due today", or its list.
-    private static func detail(_ todo: TodoItem) -> String {
-        if let due = todo.due { return "Due \(due.lowercased())" }
-        return todo.list
-    }
-
-    private var lockedCell: some View {
-        cell({ open(.focus) }) {
-            Engraved("Locked", size: 10)
-            AppStack(apps: model.blockedApps, size: 26, limit: 4)
-                .padding(.vertical, 1)
-            cellDetail(model.blockedCount == 1 ? "1 app" : "\(model.blockedCount) apps")
-        }
-    }
-
-    private var screenTimeCell: some View {
-        cell({ showingStats = true }) {
-            Engraved("Screen time", size: 10)
-            cellTitle(GoalDial.format(model.screenTimeMinutes))
-            cellDetail("Today so far")
-        }
+    private var rowDivider: some View {
+        Rectangle()
+            .fill(.white.opacity(0.08))
+            .frame(height: 1)
+            .padding(.leading, 60)
     }
 
     // MARK: Below the fold (Customize can turn these off)
@@ -299,23 +260,28 @@ struct TodayView: View {
     private var friendsNow: some View {
         let focusing = model.friends.filter { $0.focusingNow && !$0.isMe }
         if model.homeShowsFriends && !focusing.isEmpty {
-            HStack(spacing: 14) {
-                HStack(spacing: 8) {
+            HStack(spacing: 12) {
+                HStack(spacing: -10) {
                     ForEach(focusing) { friend in
-                        Avatar(name: friend.name, size: 36)
-                            .fzLiveRing()
+                        Avatar(name: friend.name, size: 38)
+                            .overlay(Circle().strokeBorder(Color.black, lineWidth: 2.5))
                     }
                 }
-                .padding(.leading, 5)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(focusing.map(\.name).formatted(.list(type: .and)))
-                        .font(.fzDisplay(15, weight: .bold))
-                        .foregroundStyle(Color.fzNightInk)
-                    Engraved("Focusing right now", size: 10)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("focusing right now")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.55))
                 }
-                Spacer(minLength: 0)
+                Spacer()
+                Circle().fill(Color.fzMint).frame(width: 7, height: 7)
+                    .phaseAnimator([0.3, 1.0]) { dot, phase in dot.opacity(phase) } animation: { _ in .easeInOut(duration: 1.1) }
             }
-            .accessibilityElement(children: .combine)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(hex: 0x111214).opacity(0.88)))
+            .fzEdgeLight(cornerRadius: 20)
             .riseIn(delay: 0.45)
         }
     }
@@ -323,16 +289,14 @@ struct TodayView: View {
     @ViewBuilder
     private var dayWave: some View {
         if model.homeShowsWave {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Engraved("Your day")
-                    Spacer()
-                    Engraved("Sharpest at \(DayWave.label(DayWave.peak(model.wave)))", color: Color.fzNightInk.opacity(0.62))
-                }
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Focus through the day")
                 DayWave(points: model.wave)
-                    .frame(height: 104)
+                    .frame(height: 110)
             }
-            .padding(.top, 6)
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(hex: 0x111214).opacity(0.88)))
+            .fzEdgeLight(cornerRadius: 22)
             .riseIn(delay: 0.55)
         }
     }
@@ -424,6 +388,40 @@ private struct TodayStage: View {
     }
 }
 
+/// One line of the Today card: an icon tile, a title and a detail, and a chevron.
+private struct TodayRow: View {
+    let symbol: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(.white.opacity(0.06)))
+                .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(.white.opacity(0.1)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+    }
+}
+
 /// A thin track toward today's goal that fills on appear.
 struct GoalTrack: View {
     let progress: Double
@@ -470,5 +468,15 @@ struct TodoRow: View {
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.success, trigger: todo.done)
+    }
+}
+
+/// "6-day streak 🔥" with the icon after the text.
+private struct TrailingIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            configuration.title
+            configuration.icon.foregroundStyle(Color.fzMint)
+        }
     }
 }
