@@ -3,8 +3,8 @@ import SwiftUI
 // The pieces of the "lit by the orb" look (2026-10-05, docs/ios-lit-look.md). Below the orb everything
 // is the same night: dark machined plates that catch the orb's light, lines cut into them, and light
 // that lives in those grooves (progress, the picked option, the start ring, like the ring on the
-// pedestal's top). The orb's light comes through its glass split round the colour wheel (mint, aqua,
-// blue, violet, pink, gold: `fzPrism` in OrbShared.h), so the light everywhere carries those colours. Labels are
+// pedestal's top). The orb's light comes through its glass split into a prism (mint, aqua, periwinkle,
+// violet, rose: `fzPrism` in OrbShared.h), so the light everywhere carries those colours. Labels are
 // Satoshi in sentence case, never grey monospaced capitals. All of it is gradients and strokes: no
 // blur, shadow or mask, so none of it costs a pass per frame while it scrolls over the moving stage.
 
@@ -19,16 +19,14 @@ extension Color {
     /// The floor of a groove.
     static let fzGrooveFloor = Color(hex: 0x030404)
 
-    // The orb's light split by its glass, round the whole colour wheel (`fzPrism` in OrbShared.h).
-    static let fzWheelMint = Color(hex: 0x8EF0C0)
-    static let fzAqua = Color(hex: 0x6FE0FF)
-    static let fzPeri = Color(hex: 0x7A8CFF)
-    static let fzViolet = Color(hex: 0xB57BFF)
-    static let fzRose = Color(hex: 0xFF6FC8)
-    static let fzGold = Color(hex: 0xFFC46B)
+    // The prism, after the mint (`fzMint`): the orb's light split by its glass.
+    static let fzAqua = Color(hex: 0x7DE3F2)
+    static let fzPeri = Color(hex: 0x8FA8FF)
+    static let fzViolet = Color(hex: 0xBD99FF)
+    static let fzRose = Color(hex: 0xFF99C7)
 
-    /// Mint round to gold, in order.
-    static let fzPrism: [Color] = [.fzWheelMint, .fzAqua, .fzPeri, .fzViolet, .fzRose, .fzGold]
+    /// Mint to rose, in order.
+    static let fzPrism: [Color] = [.fzMint, .fzAqua, .fzPeri, .fzViolet, .fzRose]
 }
 
 extension ShapeStyle where Self == LinearGradient {
@@ -49,9 +47,9 @@ extension ShapeStyle where Self == LinearGradient {
 }
 
 extension ShapeStyle where Self == AngularGradient {
-    /// The wheel all the way round (someone focusing).
+    /// The prism all the way round (a ring, someone focusing).
     static var fzPrismRing: AngularGradient {
-        AngularGradient(colors: Color.fzPrism + [.fzWheelMint], center: .center)
+        AngularGradient(colors: Color.fzPrism + [.fzViolet, .fzPeri, .fzAqua, .fzMint], center: .center)
     }
 }
 
@@ -210,10 +208,10 @@ struct LitGroove: View {
     }
 }
 
-/// The main action: a capsule of dark glass with the orb's colours glowing inside it from below (no
-/// outline), a sheen across its top, and the light spilling onto the ground under it. Pressed, the
-/// light inside swells.
-struct FZLightButtonStyle: ButtonStyle {
+/// The main action, from the pedestal: a dark machined capsule with a ring of the orb's split light
+/// cut into it, like the groove on the pedestal's top, the prism pooling on the ground under it.
+/// Pressed, the ring runs hot.
+struct FZRingButtonStyle: ButtonStyle {
     var height: CGFloat = 62
     @Environment(\.isEnabled) private var enabled
 
@@ -221,160 +219,47 @@ struct FZLightButtonStyle: ButtonStyle {
         let pressed = configuration.isPressed
         configuration.label
             .font(.fzDisplay(17, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(pressed ? Color.white : Color.fzNightInk)
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(alignment: .bottom) {
-                LightPool(strength: pressed ? 1.4 : 1)
-                    .padding(.horizontal, pressed ? 10 : 26)
-                    .offset(y: 30)
+                // The light it throws on the ground: aqua one side, violet the other.
+                HStack(spacing: -40) {
+                    Rectangle()
+                        .fill(EllipticalGradient(colors: [Color.fzAqua.opacity(pressed ? 0.32 : 0.2), Color.fzAqua.opacity(0)],
+                                                 center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5))
+                    Rectangle()
+                        .fill(EllipticalGradient(colors: [Color.fzViolet.opacity(pressed ? 0.32 : 0.2), Color.fzViolet.opacity(0)],
+                                                 center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5))
+                }
+                .frame(height: 46)
+                .padding(.horizontal, pressed ? 10 : 26)
+                .offset(y: 30)
+                .allowsHitTesting(false)
             }
             .background {
-                LitGlass(glow: pressed ? 1.35 : 1)
+                Capsule()
+                    .fill(LinearGradient(colors: [Color(hex: pressed ? 0x252B2E : 0x1D2222), Color(hex: 0x0B0D0D)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .overlay(Capsule().strokeBorder(LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.02), .black.opacity(0.6)],
+                                                                   startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                    .overlay(Capsule().stroke(Color.black, lineWidth: 1))
+            }
+            .overlay {
+                ZStack {
+                    Capsule().inset(by: 6).stroke(.fzPrismRing, lineWidth: 7).opacity(pressed ? 0.34 : 0.14)
+                    Capsule().inset(by: 6).stroke(.fzPrismRing, lineWidth: 3.5).opacity(pressed ? 0.55 : 0.26)
+                    Capsule().inset(by: 6).stroke(.fzPrismRing, lineWidth: 1.6)
+                    if pressed {
+                        Capsule().inset(by: 6).stroke(Color.fzHot.opacity(0.6), lineWidth: 1)
+                    }
+                }
+                .allowsHitTesting(false)
             }
             .opacity(enabled ? 1 : 0.4)
             .contentShape(Capsule())
             .scaleEffect(pressed ? 0.97 : 1)
             .animation(pressed ? .easeOut(duration: 0.15) : .spring(duration: 0.45), value: pressed)
-    }
-}
-
-/// The glass of a lit button: dark, with three pools of the orb's colours glowing up inside it from
-/// its bottom edge, and a sheen across its top. No outline, no mask (plain fills of the capsule).
-struct LitGlass: View {
-    var glow: Double = 1
-
-    var body: some View {
-        Capsule()
-            .fill(LinearGradient(colors: [Color(hex: 0x1C1F24), Color(hex: 0x0C0D10)], startPoint: .top, endPoint: .bottom))
-            .overlay(pool(.fzAqua, at: 0.16))
-            .overlay(pool(.fzViolet, at: 0.5))
-            .overlay(pool(.fzRose, at: 0.84))
-            .overlay {
-                Capsule()
-                    .fill(LinearGradient(stops: [.init(color: .white.opacity(0.2), location: 0),
-                                                 .init(color: .white.opacity(0.04), location: 0.45),
-                                                 .init(color: .clear, location: 0.55)],
-                                         startPoint: .top, endPoint: .bottom))
-                    .padding(1.5)
-            }
-    }
-
-    private func pool(_ color: Color, at x: CGFloat) -> some View {
-        Capsule().fill(RadialGradient(colors: [color.opacity(0.6 * glow), color.opacity(0)],
-                                      center: UnitPoint(x: x, y: 1.05), startRadius: 0, endRadius: 74))
-    }
-}
-
-/// A hold's progress inside the glass: a pill of the whole colour wheel growing from the left.
-struct LitFill: View {
-    var progress: CGFloat
-
-    var body: some View {
-        GeometryReader { proxy in
-            let h = proxy.size.height
-            Capsule()
-                .fill(LinearGradient(colors: Color.fzPrism, startPoint: .leading, endPoint: .trailing))
-                .opacity(0.55)
-                .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.35), .clear], startPoint: .top, endPoint: .center)))
-                .padding(5)
-                .frame(width: max(h, proxy.size.width * progress), alignment: .leading)
-                .opacity(progress > 0.001 ? 1 : 0)
-        }
-        .allowsHitTesting(false)
-    }
-}
-
-/// The light a lit button throws on the ground under it: aqua one side, pink the other.
-struct LightPool: View {
-    var strength: Double = 1
-
-    var body: some View {
-        HStack(spacing: -40) {
-            Rectangle()
-                .fill(EllipticalGradient(colors: [Color.fzAqua.opacity(0.24 * strength), Color.fzAqua.opacity(0)],
-                                         center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5))
-            Rectangle()
-                .fill(EllipticalGradient(colors: [Color.fzRose.opacity(0.22 * strength), Color.fzRose.opacity(0)],
-                                         center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5))
-        }
-        .frame(height: 46)
-        .allowsHitTesting(false)
-    }
-}
-
-/// Press and hold: the glass fills with the orb's colours from left to right, with haptic ticks that
-/// speed up, then `action`. Let go early and it drains.
-struct LightHoldButton: View {
-    let title: String
-    var holdingTitle: String? = nil
-    var symbol: String? = nil
-    var duration: Double = 1
-    let action: () -> Void
-
-    @State private var progress: CGFloat = 0
-    @State private var pressing = false
-    @State private var fired = 0
-    @State private var ticks = 0
-    @State private var tickTask: Task<Void, Never>?
-
-    var body: some View {
-        HStack(spacing: 9) {
-            if let symbol { Image(systemName: symbol) }
-            Text(pressing ? (holdingTitle ?? title) : title)
-                .contentTransition(.interpolate)
-        }
-        .font(.fzDisplay(17, weight: .bold))
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
-        .frame(height: 62)
-        .background(alignment: .bottom) {
-            LightPool(strength: 0.6 + 0.9 * Double(progress))
-                .padding(.horizontal, 26)
-                .offset(y: 30)
-        }
-        .background {
-            ZStack(alignment: .leading) {
-                LitGlass(glow: 0.7 + 0.6 * Double(progress))
-                LitFill(progress: progress)
-            }
-        }
-        .scaleEffect(pressing ? 0.975 : 1)
-        .animation(.spring(duration: 0.3), value: pressing)
-        .contentShape(Capsule())
-        .onLongPressGesture(minimumDuration: duration, maximumDistance: 60) {
-            fired += 1
-            tickTask?.cancel()
-            action()
-        } onPressingChanged: { isPressing in
-            pressing = isPressing
-            if isPressing {
-                withAnimation(.linear(duration: duration)) { progress = 1 }
-                startTicks()
-            } else {
-                tickTask?.cancel()
-                withAnimation(.spring(duration: 0.45)) { progress = 0 }
-            }
-        }
-        .sensoryFeedback(.impact(weight: .light, intensity: 0.6), trigger: ticks)
-        .sensoryFeedback(.success, trigger: fired)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityHint("Press and hold")
-        .accessibilityAction { action() }
-    }
-
-    private func startTicks() {
-        tickTask?.cancel()
-        tickTask = Task { @MainActor in
-            let start = Date.now
-            while !Task.isCancelled {
-                let t = Date.now.timeIntervalSince(start) / duration
-                if t >= 1 { break }
-                ticks += 1
-                try? await Task.sleep(for: .milliseconds(Int(170 - 120 * t)))
-            }
-        }
     }
 }
 

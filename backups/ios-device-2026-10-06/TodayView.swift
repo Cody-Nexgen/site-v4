@@ -172,7 +172,7 @@ struct TodayView: View {
             Label(model.session != nil ? "Back to your session" : "Start \(GoalDial.format(model.selectedPreset.minutes)) focus",
                   systemImage: model.session != nil ? "timer" : "play.fill")
         }
-        .buttonStyle(FZLightButtonStyle())
+        .buttonStyle(FZRingButtonStyle())
         .frame(maxWidth: 380)
         .riseIn(delay: 0.25)
     }

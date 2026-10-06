@@ -308,7 +308,7 @@ void main() {
   float formed = uOrbView.y;
   if (formed > 0.001) { float shrink = 0.12 + 0.88 * formed; vec2 d = (q - uOrb.xy) / shrink; float ball = uOrb.z; float r = length(d);
     if (formed > 0.05 && r < ball + 1.0) { vec2 w = uOrb.xy - 2.0 * d; vec4 seen = photoAt((w - origin) / uFade.xy, 1.0);
-      vec3 g = mix(vec3(dot(seen.rgb, FZ_LUMA)), seen.rgb, vec3(uGlass.y * (1.0 - 0.7 * fzSpread(uState.x)))) * mix(vec3(0.78, 0.96, 0.86), vec3(0.86, 0.84, 0.98), vec3(fzSpread(uState.x)));
+      vec3 g = mix(vec3(dot(seen.rgb, FZ_LUMA)), seen.rgb, vec3(uGlass.y)) * mix(vec3(0.78, 0.96, 0.86), vec3(0.86, 0.84, 0.98), vec3(fzSpread(uState.x)));
       float a = min(1.0, formed * 2.0) * uGlass.x * seen.a * (1.0 - smoothstep(ball - 1.0, ball, r)); col = over(vec4(g * a, a), col); }
     float side = uOrbView.x; vec2 op = d / (side * 0.5);
     if (abs(op.x) < 1.0 && abs(op.y) < 1.0) { vec3 finger = vec3(uTouch.xy / (side * 0.5), uTouch.z);

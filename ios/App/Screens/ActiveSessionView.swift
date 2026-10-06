@@ -139,7 +139,8 @@ struct ActiveSessionView: View {
             .padding(.top, 20)
 
             if session.difficulty != .lockedIn {
-                HoldButton(title: "Hold for a break", holdingTitle: "Okay, breathe…", duration: session.difficulty == .easy ? 0.5 : 1.2) {
+                LightHoldButton(title: "Hold for a break", holdingTitle: "Okay, breathe…", symbol: "cup.and.saucer.fill",
+                                duration: session.difficulty == .easy ? 0.5 : 1.2) {
                     // With real locks, it asks what the break is for: everything, or just a few apps.
                     if model.breakAsksWhichApps {
                         choosingBreak = true
@@ -296,10 +297,11 @@ struct SessionClock: View {
     var body: some View {
         switch style {
         case .big:
-            // A number with depth, lit from above (`DimensionalNumber`).
-            DimensionalNumber(text: FocusSession.clock(remaining), size: remaining >= 3600 ? 72 : 96, depth: 5)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            // The same timer you set it on, counting down (`TimerDevice`).
+            let total = Int(remaining.rounded(.up))
+            TimerDevice(minutes: total / 60, seconds: total % 60, running: true)
+                .frame(height: 176)
+                .frame(maxWidth: .infinity)
         case .minimal:
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Remaining").font(.title3).foregroundStyle(.white.opacity(0.55))

@@ -281,8 +281,7 @@ fragment half4 fzStageFragment(StageOut in [[stage_in]],
             // The world behind it, upside down and squeezed, like a crystal ball (the plain photo).
             float2 w = u.orb.xy - 2.0 * d;
             float4 seen = float4(photo.sample(s, (w - origin) / u.fade.xy, level(1.0)));
-            // (Charged, the green world in the glass greys out so the orb's own colours lead.)
-            float3 g = mix(float3(dot(seen.rgb, FZ_LUMA)), seen.rgb, float3(u.glass.y * (1.0 - 0.7 * fzSpread(u.state.x))))
+            float3 g = mix(float3(dot(seen.rgb, FZ_LUMA)), seen.rgb, float3(u.glass.y))
                      * mix(float3(0.78, 0.96, 0.86), float3(0.86, 0.84, 0.98), float3(fzSpread(u.state.x)));
             float a = min(1.0, formed * 2.0) * u.glass.x * seen.a * (1.0 - smoothstep(ball - 1.0, ball, r));
             col = fzOver(float4(g * a, a), col);

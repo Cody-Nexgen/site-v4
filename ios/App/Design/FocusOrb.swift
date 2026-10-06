@@ -47,7 +47,7 @@ struct FocusOrb: View, Animatable {
         // The stage's Metal pass: its pipeline and textures.
         _ = StageGPU.shared
         try? await ShaderLibrary.focusOrb(.float2(1, 1), .float(0), .float(0), .float3(0, 0, 0)).compile(as: .colorEffect)
-        try? await ShaderLibrary.focusDial(.float2(1, 1), .float(0), .float(0), .float2(0, 0)).compile(as: .colorEffect)
+        try? await ShaderLibrary.focusTimer(.float2(1, 1), .float4(0, 0, 0, 0), .float(0), .float2(0, 0), .float(1)).compile(as: .colorEffect)
         try? await ShaderLibrary.orbWorld(.float2(0, 0), .float(1), .float2(0, 0), .float4(0, 0, 0, 0), .float4(0, 0, 1, 1),
                                           .float4(0, 0, 1, 1), .float4(1, 1, 0, 0), .float4(0, 1, 0, 0), .float4(0, 0, 1, 1),
                                           .float2(0, 0), .float4(0, 0, 0, 1), .float4(1, 1, 0, 1)).compile(as: .layerEffect)
